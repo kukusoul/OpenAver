@@ -24,8 +24,6 @@ function searchPage() {
         ...window.SearchStateMixin_Bridge,
         ...window.SearchStateMixin_GridMode,
 
-        _navStateSaved: false,
-
         // ===== Lifecycle =====
         async init() {
             // 1. 初始化舊 JS 的 DOM references（必須在 DOM ready 後）
@@ -50,13 +48,20 @@ function searchPage() {
             // 6. Watch state 變化並自動儲存
             this.setupAutoSave();
 
-            // 7. 監聽離開前儲存（安全網 — sidebar 沒攔到時兜底）
-            window.addEventListener('beforeunload', () => this._saveAndCleanupForNav());
-
-            // 暴露全域清理函數（供 base.html sidebar 使用）
-            window.cleanupSearchBeforeLeave = () => {
-                this._saveAndCleanupForNav();
-            };
+            // 7. 接入 page lifecycle（取代 cleanupSearchBeforeLeave + beforeunload）
+            window.__registerPage({
+                beforeLeave: () => {
+                    this.saveState();
+                    return true;  // search 不阻止導航，只做保存
+                },
+                onBeforeUnload: () => {
+                    this.saveState();
+                    return null;  // search 不觸發原生提示
+                },
+                cleanup: () => {
+                    this.cleanupForNavigation();  // 關 SSE + abort fallback + requestId++
+                }
+            });
 
             // 8. T1d: 監聽 pywebview-files 事件
             window.addEventListener('pywebview-files', async (e) => {
@@ -64,16 +69,5 @@ function searchPage() {
             });
         },
 
-        /**
-         * 導航前保存 + 清理（one-shot：只執行一次）
-         * sidebar click 先呼叫，beforeunload 再呼叫時跳過。
-         */
-        _saveAndCleanupForNav() {
-            if (this._navStateSaved) return;  // 已保存過，跳過
-            this._navStateSaved = true;
-
-            this.saveState();               // 先存（activeEventSource 仍在 → pageState=loading → 走 snapshot）
-            this.cleanupForNavigation();    // 再關 SSE + requestId++
-        }
     };
 }
