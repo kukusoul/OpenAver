@@ -704,6 +704,18 @@ class TestSearchCoreFacade:
             "T3.2 Step 3 應已移除，直接使用 Alpine this.xxx"
         )
 
+    def test_search_core_has_legacy_state_fallback(self):
+        """core.js 的 window.SearchCore 必須包含 _legacyState fallback（Alpine 未 boot 時的安全預設值）"""
+        js_file = PROJECT_ROOT / "web/static/js/pages/search/core.js"
+        content = js_file.read_text(encoding='utf-8')
+        assert '_legacyState' in content, (
+            "core.js 缺少 _legacyState — SearchCore.state getter 在 Alpine 未 boot 時"
+            "必須回傳有穩定形狀的物件（含 searchResults: [], fileList: [] 等）"
+        )
+        # 確認 _legacyState 包含關鍵欄位
+        assert 'searchResults: []' in content, "_legacyState 缺少 searchResults: []"
+        assert 'fileList: []' in content, "_legacyState 缺少 fileList: []"
+
 
 class TestPageLifecycleGuard:
     """page-lifecycle.js 存在性守衛 — 確保 script tag 及三頁 __registerPage 呼叫不被移除"""

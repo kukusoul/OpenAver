@@ -387,14 +387,32 @@ async function translateBatch(titles) {
 
 // === 暴露介面 ===
 window.SearchCore = {
+    // Alpine 未 boot 時的安全 fallback（穩定形狀，避免 TypeError）
+    _legacyState: {
+        searchResults: [],
+        currentIndex: 0,
+        currentQuery: '',
+        currentOffset: 0,
+        hasMoreResults: false,
+        isLoadingMore: false,
+        isSearchingFile: false,
+        fileList: [],
+        currentFileIndex: 0,
+        listMode: null,
+        appConfig: null,
+        isTranslating: false,
+        currentMode: '',
+        batchState: {},
+        PAGE_SIZE: 20
+    },
     // 狀態（供其他模組讀寫）— T3.2: 代理 Alpine reactive proxy
     get state() {
         const el = document.querySelector('.search-container[x-data]');
         if (el && el._x_dataStack) {
             return Alpine.$data(el);  // 直接回傳 Alpine reactive proxy
         }
-        // Alpine 未 boot 時回傳空物件（不應在正常使用情境發生）
-        return {};
+        // Alpine 未 boot 時回傳 _legacyState（穩定形狀，不報錯）
+        return this._legacyState;
     },
     // DOM 引用
     get dom() { return dom; },
