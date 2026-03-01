@@ -90,6 +90,7 @@ window.SearchStateMixin_Base = function() {
         // ===== Search State Machine =====
         requestId: 0,              // 搜尋請求計數器（防競態）
         activeEventSource: null,   // 當前 SSE 連線
+        _activeConnections: [],    // Array<EventSource> — 追蹤所有進行中的 SSE 連線
         _searchSnapshot: null,     // cancelSearch 用的狀態快照
 
         // ===== T2a: Display Mode State =====

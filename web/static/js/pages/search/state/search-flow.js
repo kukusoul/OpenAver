@@ -97,14 +97,15 @@ window.SearchStateMixin_SearchFlow = {
 
         // 檔案列表由 x-show 自動隱藏（listMode=null, fileList=[]）
 
-        // 6. 建立 SSE 連線
-        this.activeEventSource = new EventSource(`/api/search/stream?q=${encodeURIComponent(query)}`);
+        // 6. 建立 SSE 連線並追蹤
+        this.activeEventSource = this._trackConnection(new EventSource(`/api/search/stream?q=${encodeURIComponent(query)}`));
         const eventSource = this.activeEventSource;
 
         eventSource.onmessage = (event) => {
             // 檢查是否已被取消
             if (currentRequestId !== this.requestId) {
                 eventSource.close();
+                this._untrackConnection(eventSource);
                 return;
             }
 
@@ -120,6 +121,7 @@ window.SearchStateMixin_SearchFlow = {
                 }
                 else if (data.type === 'result') {
                     eventSource.close();
+                    this._untrackConnection(eventSource);
                     this.activeEventSource = null;
 
                     if (data.success && data.data && data.data.length > 0) {
@@ -161,6 +163,7 @@ window.SearchStateMixin_SearchFlow = {
                 }
                 else if (data.type === 'error') {
                     eventSource.close();
+                    this._untrackConnection(eventSource);
                     this.activeEventSource = null;
                     this._searchSnapshot = null; // Fix 2: 清空 snapshot（搜尋錯誤）
                     this.errorText = data.message || '搜尋失敗';  // T6c: Alpine state
@@ -175,10 +178,12 @@ window.SearchStateMixin_SearchFlow = {
             // 檢查是否已被取消
             if (currentRequestId !== this.requestId) {
                 eventSource.close();
+                this._untrackConnection(eventSource);
                 return;
             }
 
             eventSource.close();
+            this._untrackConnection(eventSource);
             this.activeEventSource = null;
             this.fallbackSearch(query, currentRequestId); // Fix 3: 傳入 requestId
         };
@@ -261,6 +266,7 @@ window.SearchStateMixin_SearchFlow = {
     cancelSearch() {
         if (this.activeEventSource) {
             this.activeEventSource.close();
+            this._untrackConnection(this.activeEventSource);
             this.activeEventSource = null;
         }
         this.requestId++;
@@ -298,10 +304,10 @@ window.SearchStateMixin_SearchFlow = {
      * 離頁前清理 SSE（不還原 snapshot，因為離頁時會另外 saveState）
      */
     cleanupForNavigation() {
-        if (this.activeEventSource) {
-            this.activeEventSource.close();
-            this.activeEventSource = null;
-        }
+        // _closeAllConnections() 包含 activeEventSource 和 searchForFile() 的 ES
+        this._closeAllConnections();
+        this.activeEventSource = null;   // 維持單一引用清零（語義清晰）
+
         // 取消進行中的 REST fallback fetch
         if (this._fallbackAbortController) {
             this._fallbackAbortController.abort();
@@ -309,6 +315,38 @@ window.SearchStateMixin_SearchFlow = {
         }
         this.requestId++;  // 讓進行中的 onmessage/onerror callback 失效
         // 也讓進行中的 fallbackSearch() 的 savedRequestId check 失效
+    },
+
+    // ===== T4.1: EventSource 集中追蹤方法 =====
+
+    /**
+     * 追蹤 EventSource 連線，加入 _activeConnections 陣列
+     * @param {EventSource} es - 要追蹤的 EventSource 實例
+     * @returns {EventSource} 回傳 es 本身，讓呼叫側可以鏈式賦值
+     */
+    _trackConnection(es) {
+        this._activeConnections.push(es);
+        return es;
+    },
+
+    /**
+     * 從 _activeConnections 移除 EventSource（不關閉連線）
+     * @param {EventSource} es - 要移除的 EventSource 實例
+     */
+    _untrackConnection(es) {
+        this._activeConnections = this._activeConnections.filter(c => c !== es);
+    },
+
+    /**
+     * 關閉並清空所有追蹤中的 EventSource 連線
+     */
+    _closeAllConnections() {
+        this._activeConnections.forEach(c => {
+            if (c.readyState !== EventSource.CLOSED) {
+                c.close();
+            }
+        });
+        this._activeConnections = [];
     },
 
     /**

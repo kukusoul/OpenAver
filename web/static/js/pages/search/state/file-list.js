@@ -50,7 +50,7 @@ window.SearchStateMixin_FileList = {
         }
 
         return new Promise((resolve) => {
-            const eventSource = new EventSource(`/api/search/stream?q=${encodeURIComponent(file.number)}`);
+            const eventSource = this._trackConnection(new EventSource(`/api/search/stream?q=${encodeURIComponent(file.number)}`));
 
             eventSource.onmessage = (event) => {
                 try {
@@ -65,6 +65,7 @@ window.SearchStateMixin_FileList = {
                     }
                     else if (data.type === 'result') {
                         eventSource.close();
+                        this._untrackConnection(eventSource);
                         this.isSearchingFile = false;
                         this.searchingFileDirection = null;
                         this.listMode = 'file';
@@ -102,6 +103,7 @@ window.SearchStateMixin_FileList = {
                     }
                     else if (data.type === 'error') {
                         eventSource.close();
+                        this._untrackConnection(eventSource);
                         this.isSearchingFile = false;
                         this.searchingFileDirection = null;
                         file.searched = true;
@@ -122,6 +124,7 @@ window.SearchStateMixin_FileList = {
 
             eventSource.onerror = () => {
                 eventSource.close();
+                this._untrackConnection(eventSource);
                 this.isSearchingFile = false;
                 this.searchingFileDirection = null;
                 file.searched = true;

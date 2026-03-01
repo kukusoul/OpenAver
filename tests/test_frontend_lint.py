@@ -749,6 +749,62 @@ class TestPageLifecycleGuard:
             "showcase/core.js 缺少 __registerPage 呼叫 — Showcase lightbox cleanup lifecycle 會失效"
 
 
+class TestEventSourceTracking:
+    """T4.1 守衛 — 所有 EventSource 建立都透過 _trackConnection 包裝"""
+
+    def test_base_has_active_connections(self):
+        """base.js 必須有 _activeConnections: [] 初始值"""
+        js_file = PROJECT_ROOT / "web/static/js/pages/search/state/base.js"
+        content = js_file.read_text(encoding='utf-8')
+        assert '_activeConnections' in content, \
+            "base.js 缺少 _activeConnections 初始值 — T4.1 集中追蹤 EventSource"
+
+    def test_search_flow_has_track_methods(self):
+        """search-flow.js 必須定義 _trackConnection / _untrackConnection / _closeAllConnections"""
+        js_file = PROJECT_ROOT / "web/static/js/pages/search/state/search-flow.js"
+        content = js_file.read_text(encoding='utf-8')
+        for method in ('_trackConnection', '_untrackConnection', '_closeAllConnections'):
+            assert method in content, \
+                f"search-flow.js 缺少 {method} — T4.1 連線追蹤方法"
+
+    def test_do_search_uses_track_connection(self):
+        """doSearch() 的 new EventSource 必須包在 _trackConnection(...) 內"""
+        js_file = PROJECT_ROOT / "web/static/js/pages/search/state/search-flow.js"
+        content = js_file.read_text(encoding='utf-8')
+        # 確認有 _trackConnection(new EventSource( 的用法
+        assert '_trackConnection(new EventSource(' in content, \
+            "search-flow.js 的 doSearch() 未使用 _trackConnection 包裝 EventSource"
+
+    def test_file_list_uses_track_connection(self):
+        """searchForFile() 的 new EventSource 必須包在 _trackConnection(...) 內"""
+        js_file = PROJECT_ROOT / "web/static/js/pages/search/state/file-list.js"
+        content = js_file.read_text(encoding='utf-8')
+        assert '_trackConnection(' in content, \
+            "file-list.js 的 searchForFile() 未使用 _trackConnection 包裝 EventSource"
+
+    def test_cleanup_calls_close_all_connections(self):
+        """cleanupForNavigation() 必須呼叫 _closeAllConnections()"""
+        js_file = PROJECT_ROOT / "web/static/js/pages/search/state/search-flow.js"
+        content = js_file.read_text(encoding='utf-8')
+        assert '_closeAllConnections()' in content, \
+            "search-flow.js 的 cleanupForNavigation() 未呼叫 _closeAllConnections()"
+
+    def test_no_bare_new_event_source_in_search_state(self):
+        """search/state/ 下所有 JS 的 new EventSource 都應在 _trackConnection 內"""
+        state_dir = PROJECT_ROOT / "web/static/js/pages/search/state"
+        violations = []
+        for js_file in state_dir.glob("*.js"):
+            content = js_file.read_text(encoding='utf-8')
+            # 找 new EventSource( 但不在 _trackConnection 同行
+            for i, line in enumerate(content.splitlines(), 1):
+                if 'new EventSource(' in line and '_trackConnection' not in line:
+                    violations.append(f"{js_file.name}:{i} — {line.strip()[:80]}")
+        assert len(violations) == 0, (
+            f"發現 {len(violations)} 個 bare new EventSource（未包在 _trackConnection 內）:\n"
+            + "\n".join(f"  - {v}" for v in violations)
+        )
+
+
 class TestWindowGlobalCleanup:
     """T3.3 守衛 — bridge.js 不再設定多餘的 window.xxx 全域函數"""
 
