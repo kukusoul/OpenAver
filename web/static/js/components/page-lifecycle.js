@@ -65,12 +65,6 @@
             _doCleanup();
             return true;
         }
-
-        // Compatibility shim：Scanner 尚未 registerPage，走舊路徑
-        // （Scanner 接入 lifecycle 後移除整個 shim）
-        if (typeof window.confirmLeavingScanner === 'function' && !window.confirmLeavingScanner(href)) {
-            return false;
-        }
         return true;
     }
 

@@ -500,35 +500,35 @@ function scannerPage() {
         await this.$nextTick();
         this.restoreLogs();
 
-        // 暴露全域檢查函式
-        window.confirmLeavingScanner = (targetUrl) => {
-            const guard = this.shouldWarnBeforeLeave();
-            if (guard.shouldWarn) {
-                if (guard.useModal) {
-                    this.pendingNavigationUrl = targetUrl;
-                    this.dirtyCheckModalOpen = true;
-                    return false;
-                } else {
-                    const confirmed = confirm(guard.message + '確定要離開嗎？');
-                    if (confirmed) {
-                        this._skipBeforeUnload = true;
+        // T5.1: 接入統一 page lifecycle
+        if (window.__registerPage) {
+            window.__registerPage({
+                beforeLeave: (href) => {
+                    const guard = this.shouldWarnBeforeLeave();
+                    if (guard.shouldWarn) {
+                        if (guard.useModal) {
+                            this.pendingNavigationUrl = href;
+                            this.dirtyCheckModalOpen = true;
+                            return false;
+                        } else {
+                            return confirm(guard.message + '確定要離開嗎？');
+                        }
                     }
-                    return confirmed;
+                    return true;
+                },
+                onBeforeUnload: () => {
+                    const guard = this.shouldWarnBeforeLeave();
+                    if (guard.shouldWarn) return guard.message;
+                    return null;
+                },
+                cleanup: () => {
+                    if (this.eventSource) { this.eventSource.close(); this.eventSource = null; }
+                    clearTimeout(this._toastTimer);
+                    clearTimeout(this.logTimer);
+                    clearTimeout(this.previewDebounceTimer);
                 }
-            }
-            return true;
-        };
-
-        // beforeunload 警告
-        window.addEventListener('beforeunload', (e) => {
-            if (this._skipBeforeUnload) return;
-            const guard = this.shouldWarnBeforeLeave();
-            if (guard.shouldWarn) {
-                e.preventDefault();
-                e.returnValue = guard.message;
-                return e.returnValue;
-            }
-        });
+            });
+        }
     },
 
     // ===== Leave Guard =====

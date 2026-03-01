@@ -748,6 +748,44 @@ class TestPageLifecycleGuard:
         assert '__registerPage' in content, \
             "showcase/core.js 缺少 __registerPage 呼叫 — Showcase lightbox cleanup lifecycle 會失效"
 
+    def test_scanner_html_calls_register_page(self):
+        """scanner.html 必須呼叫 __registerPage"""
+        html_file = PROJECT_ROOT / "web" / "templates" / "scanner.html"
+        content = html_file.read_text(encoding='utf-8')
+        assert '__registerPage' in content, \
+            "scanner.html 缺少 __registerPage 呼叫 — Scanner lifecycle 未接入統一機制"
+
+
+class TestScannerLifecycleGuard:
+    """T5.1 守衛 — Scanner 已接入 __registerPage，不再使用舊 shim"""
+
+    SCANNER_HTML = PROJECT_ROOT / "web" / "templates" / "scanner.html"
+    PAGE_LIFECYCLE_JS = PROJECT_ROOT / "web" / "static" / "js" / "components" / "page-lifecycle.js"
+
+    def test_scanner_no_confirm_leaving_scanner(self):
+        """scanner.html 不含 confirmLeavingScanner（舊 shim 已刪除）"""
+        content = self.SCANNER_HTML.read_text(encoding='utf-8')
+        assert 'confirmLeavingScanner' not in content, \
+            "scanner.html 仍含 confirmLeavingScanner — T5.1 應已刪除舊離頁 shim"
+
+    def test_scanner_no_self_added_beforeunload(self):
+        """scanner.html 不自掛 addEventListener('beforeunload'（由 page-lifecycle.js 統一管理）"""
+        content = self.SCANNER_HTML.read_text(encoding='utf-8')
+        assert "addEventListener('beforeunload'" not in content, \
+            "scanner.html 仍自掛 beforeunload listener — T5.1 應刪除，改由 onBeforeUnload hook 處理"
+
+    def test_scanner_no_skip_before_unload(self):
+        """scanner.html 不含 _skipBeforeUnload（隨舊 shim 一起刪除）"""
+        content = self.SCANNER_HTML.read_text(encoding='utf-8')
+        assert '_skipBeforeUnload' not in content, \
+            "scanner.html 仍含 _skipBeforeUnload — T5.1 應已隨舊 shim 一起刪除"
+
+    def test_page_lifecycle_no_confirm_leaving_scanner_shim(self):
+        """page-lifecycle.js 不含 confirmLeavingScanner compatibility shim"""
+        content = self.PAGE_LIFECYCLE_JS.read_text(encoding='utf-8')
+        assert 'confirmLeavingScanner' not in content, \
+            "page-lifecycle.js 仍含 confirmLeavingScanner shim — T5.1 Scanner 接入後應刪除"
+
 
 class TestEventSourceTracking:
     """T4.1 守衛 — 所有 EventSource 建立都透過 _trackConnection 包裝"""
