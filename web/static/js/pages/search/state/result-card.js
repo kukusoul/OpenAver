@@ -231,16 +231,8 @@ window.SearchStateMixin_ResultCard = {
         this._toast.type = type;
         this._toast.visible = true;
 
-        // 清除舊的 timer
-        if (this._toastTimer) {
-            clearTimeout(this._toastTimer);
-        }
-
-        // 設定自動隱藏
-        this._toastTimer = setTimeout(() => {
-            this._toast.visible = false;
-            this._toastTimer = null;
-        }, duration);
+        // T4.2: 使用 _setTimer 管理（自動取代舊 timer，離頁時可統一清除）
+        this._setTimer('toast', () => { this._toast.visible = false; }, duration);
     },
 
     // ===== T1c: Cover Error =====

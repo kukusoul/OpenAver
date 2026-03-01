@@ -275,9 +275,9 @@
     sidebarCollapsed: {{ sidebar_collapsed|default(false)|tojson }},
     mobileMenuOpen: false,
     handleNavClick(event, href) {
-        if (typeof window.confirmLeavingSettings === 'function' && !window.confirmLeavingSettings(href)) {
-            event.preventDefault();
-        } else if (typeof window.confirmLeavingScanner === 'function' && !window.confirmLeavingScanner(href)) {
+        // 開新分頁（Ctrl/Cmd-click, 中鍵）不觸發清理
+        if (event.ctrlKey || event.metaKey || event.shiftKey || event.button !== 0) return;
+        if (window.__leavePage && !window.__leavePage(href)) {
             event.preventDefault();
         }
     }
@@ -454,6 +454,8 @@
     <script defer src="/static/js/components/motion-prefs.js"></script>
     <!-- Motion Adapter — shared GSAP wrappers (T5) -->
     <script defer src="/static/js/components/motion-adapter.js"></script>
+    <!-- Page Lifecycle Manager (T2.1) -->
+    <script defer src="/static/js/components/page-lifecycle.js"></script>
 
     <!-- Alpine Plugins (must load before Alpine Core) -->
     <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/persist@3.x.x/dist/cdn.min.js"></script>

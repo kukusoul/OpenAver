@@ -500,35 +500,35 @@ function scannerPage() {
         await this.$nextTick();
         this.restoreLogs();
 
-        // 暴露全域檢查函式
-        window.confirmLeavingScanner = (targetUrl) => {
-            const guard = this.shouldWarnBeforeLeave();
-            if (guard.shouldWarn) {
-                if (guard.useModal) {
-                    this.pendingNavigationUrl = targetUrl;
-                    this.dirtyCheckModalOpen = true;
-                    return false;
-                } else {
-                    const confirmed = confirm(guard.message + '確定要離開嗎？');
-                    if (confirmed) {
-                        this._skipBeforeUnload = true;
+        // T5.1: 接入統一 page lifecycle
+        if (window.__registerPage) {
+            window.__registerPage({
+                beforeLeave: (href) => {
+                    const guard = this.shouldWarnBeforeLeave();
+                    if (guard.shouldWarn) {
+                        if (guard.useModal) {
+                            this.pendingNavigationUrl = href;
+                            this.dirtyCheckModalOpen = true;
+                            return false;
+                        } else {
+                            return confirm(guard.message + '確定要離開嗎？');
+                        }
                     }
-                    return confirmed;
+                    return true;
+                },
+                onBeforeUnload: () => {
+                    const guard = this.shouldWarnBeforeLeave();
+                    if (guard.shouldWarn) return guard.message;
+                    return null;
+                },
+                cleanup: () => {
+                    if (this.eventSource) { this.eventSource.close(); this.eventSource = null; }
+                    clearTimeout(this._toastTimer);
+                    clearTimeout(this.logTimer);
+                    clearTimeout(this.previewDebounceTimer);
                 }
-            }
-            return true;
-        };
-
-        // beforeunload 警告
-        window.addEventListener('beforeunload', (e) => {
-            if (this._skipBeforeUnload) return;
-            const guard = this.shouldWarnBeforeLeave();
-            if (guard.shouldWarn) {
-                e.preventDefault();
-                e.returnValue = guard.message;
-                return e.returnValue;
-            }
-        });
+            });
+        }
     },
 
     // ===== Leave Guard =====
@@ -780,7 +780,13 @@ function scannerPage() {
         await this.loadConfig();
         this.dirtyCheckModalOpen = false;
         if (this.pendingNavigationUrl) {
-            window.location.href = this.pendingNavigationUrl;
+            const url = this.pendingNavigationUrl;
+            // dirty state cleared by loadConfig(); beforeLeave will now return true
+            // → __leavePage triggers _doCleanup (closes eventSource + clears timers)
+            if (window.__leavePage) {
+                window.__leavePage(url);
+            }
+            window.location.href = url;
         }
     },
 
@@ -789,7 +795,13 @@ function scannerPage() {
         if (saved) {
             this.dirtyCheckModalOpen = false;
             if (this.pendingNavigationUrl) {
-                window.location.href = this.pendingNavigationUrl;
+                const url = this.pendingNavigationUrl;
+                // dirty state cleared by saveConfig(); beforeLeave will now return true
+                // → __leavePage triggers _doCleanup (closes eventSource + clears timers)
+                if (window.__leavePage) {
+                    window.__leavePage(url);
+                }
+                window.location.href = url;
             }
         }
         // If save failed, modal stays open, user sees toast error
@@ -978,9 +990,6 @@ function scannerPage() {
         // 設置 localStorage 標記
         localStorage.setItem('avlist_generating', 'true');
 
-        // 同步全域變數（過渡期）
-        window.isGenerating = true;
-
         try {
             this.eventSource = new EventSource('/api/gallery/generate');
 
@@ -1005,8 +1014,6 @@ function scannerPage() {
                     localStorage.setItem('avlist_generating', 'false');
                     localStorage.setItem('avlist_last_status', '完成');
                     localStorage.removeItem('avlist_state');  // 清除 viewer 狀態
-
-                    window.isGenerating = false;
 
                     // 處理 NFO 更新提示
                     if (data.session_update && data.session_update.count > 0) {
@@ -1035,7 +1042,6 @@ function scannerPage() {
                     this.addLog('error', '錯誤: ' + data.message);
                     this.flushLogs();
                     localStorage.setItem('avlist_generating', 'false');
-                    window.isGenerating = false;
                 }
             };
 
@@ -1047,12 +1053,10 @@ function scannerPage() {
                 this.addLog('error', '連線中斷');
                 this.flushLogs();
                 localStorage.setItem('avlist_generating', 'false');
-                window.isGenerating = false;
             };
         } catch (e) {
             this.state = 'error';
             localStorage.setItem('avlist_generating', 'false');
-            window.isGenerating = false;
             alert('發生錯誤: ' + e.message);
         }
     },
@@ -1075,7 +1079,6 @@ function scannerPage() {
         this.clearLogs();
 
         localStorage.setItem('avlist_generating', 'true');
-        window.isGenerating = true;
 
         try {
             this.eventSource = new EventSource('/api/gallery/update');
@@ -1099,7 +1102,6 @@ function scannerPage() {
 
                     localStorage.setItem('avlist_generating', 'false');
                     localStorage.setItem('avlist_last_status', data.message || '完成');
-                    window.isGenerating = false;
 
                     this.showToast('補全完成！請重新產生列表以更新', 'success');
                     if (data.message) {
@@ -1117,7 +1119,6 @@ function scannerPage() {
                     this.addLog('error', '錯誤: ' + data.message);
                     this.flushLogs();
                     localStorage.setItem('avlist_generating', 'false');
-                    window.isGenerating = false;
                 }
             };
 
@@ -1129,12 +1130,10 @@ function scannerPage() {
                 this.addLog('error', '連線中斷');
                 this.flushLogs();
                 localStorage.setItem('avlist_generating', 'false');
-                window.isGenerating = false;
             };
         } catch (e) {
             this.state = 'error';
             localStorage.setItem('avlist_generating', 'false');
-            window.isGenerating = false;
             alert('發生錯誤: ' + e.message);
         }
     },
@@ -1155,7 +1154,6 @@ function scannerPage() {
         this.clearLogs();
 
         localStorage.setItem('avlist_generating', 'true');
-        window.isGenerating = true;
 
         try {
             this.eventSource = new EventSource('/api/gallery/jellyfin-update');
@@ -1179,7 +1177,6 @@ function scannerPage() {
 
                     localStorage.setItem('avlist_generating', 'false');
                     localStorage.setItem('avlist_last_status', data.message || '完成');
-                    window.isGenerating = false;
 
                     this.showToast('補齊完成！', 'success');
                     if (data.message) {
@@ -1196,7 +1193,6 @@ function scannerPage() {
                     this.addLog('error', '錯誤: ' + data.message);
                     this.flushLogs();
                     localStorage.setItem('avlist_generating', 'false');
-                    window.isGenerating = false;
                 }
             };
 
@@ -1208,12 +1204,10 @@ function scannerPage() {
                 this.addLog('error', '連線中斷');
                 this.flushLogs();
                 localStorage.setItem('avlist_generating', 'false');
-                window.isGenerating = false;
             };
         } catch (e) {
             this.state = 'error';
             localStorage.setItem('avlist_generating', 'false');
-            window.isGenerating = false;
             alert('發生錯誤: ' + e.message);
         }
     },

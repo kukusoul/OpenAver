@@ -45,6 +45,7 @@ window.SearchStateMixin_Batch = {
 
         // 並行處理，一次 2 個
         const concurrency = 2;
+        let aborted = false;
         for (let i = 0; i < currentBatch.length; i += concurrency) {
             // 支援暫停
             if (batch.isPaused) {
@@ -57,6 +58,8 @@ window.SearchStateMixin_Batch = {
                     }, 100);
                 });
             }
+            // cleanup 已設 isProcessing=false → 中斷 loop，不繼續發新工作
+            if (!batch.isProcessing) { aborted = true; break; }
 
             const chunk = currentBatch.slice(i, Math.min(i + concurrency, currentBatch.length));
 
@@ -73,17 +76,19 @@ window.SearchStateMixin_Batch = {
 
                 batch.processed++;
             }));
+            // cleanup 在 chunk 執行中發生 → SSE 被關掉，Promise.all resolve 後檢查
+            if (!batch.isProcessing) { aborted = true; break; }
         }
 
         // 批次處理完成
         this.isSearchingFile = false;
-        this._syncToCore();
         batch.isProcessing = false;
         batch.isPaused = false;
 
-        // 顯示完成統計
-        const totalProcessed = batch.success + batch.failed;
-        alert(`批次搜尋完成！\n成功: ${batch.success}\n失敗: ${batch.failed}`);
+        // 顯示完成統計（cleanup 中斷時不顯示）
+        if (!aborted) {
+            alert(`批次搜尋完成！\n成功: ${batch.success}\n失敗: ${batch.failed}`);
+        }
 
         // 重置 total
         batch.total = 0;
@@ -119,6 +124,7 @@ window.SearchStateMixin_Batch = {
         ts.failed = 0;
 
         const isGemini = this.appConfig?.translate?.provider === 'gemini';
+        let aborted = false;
 
         for (const result of translatableResults) {
             if (ts.isPaused) {
@@ -131,6 +137,8 @@ window.SearchStateMixin_Batch = {
                     }, 100);
                 });
             }
+            // cleanup 已設 isProcessing=false → 中斷 loop，不繼續發新 fetch
+            if (!ts.isProcessing) { aborted = true; break; }
 
             try {
                 const response = await fetch('/api/translate', {
@@ -141,7 +149,8 @@ window.SearchStateMixin_Batch = {
                         mode: 'translate',
                         actors: result.actors,
                         number: result.number
-                    })
+                    }),
+                    signal: this._getAbortSignal('translateAll')  // T4.3
                 });
                 const data = await response.json();
                 if (data.success && data.result && !data.skipped) {
@@ -151,6 +160,7 @@ window.SearchStateMixin_Batch = {
                     ts.failed++;
                 }
             } catch (err) {
+                if (err.name === 'AbortError') { aborted = true; break; }  // T4.3: 離頁 abort → 結束 loop
                 ts.failed++;
             }
 
@@ -161,9 +171,12 @@ window.SearchStateMixin_Batch = {
             }
         }
 
+        this._clearAbort('translateAll');  // T4.3: 清除 registry（與其他 fetch 的 finally 一致）
         ts.isProcessing = false;
         ts.isPaused = false;
-        this.showToast(`翻譯完成：成功 ${ts.success}，失敗 ${ts.failed}`, ts.failed > 0 ? 'warning' : 'success');
+        if (!aborted) {  // T4.3: abort 時不顯示 toast（DOM 可能已不可用）
+            this.showToast(`翻譯完成：成功 ${ts.success}，失敗 ${ts.failed}`, ts.failed > 0 ? 'warning' : 'success');
+        }
         ts.total = 0;
     },
 
@@ -190,7 +203,6 @@ window.SearchStateMixin_Batch = {
             this.searchResults = file.searchResults;
             this.currentIndex = 0;
             this.coverError = '';
-            this._syncToCore({ skipFileList: true });  // scrape 迴圈中，fileList 不變
 
             const metadata = { ...file.searchResults[0] };
 

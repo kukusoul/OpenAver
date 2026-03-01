@@ -3,43 +3,6 @@
  * 包含：舊 JS 與 Alpine 的橋接層（setupBridgeLayer）
  */
 window.SearchStateMixin_Bridge = {
-    /**
-     * 同步 Alpine state 到 core.js module vars
-     *
-     * 集中式 state sync helper，取代散落在各 mixin 的手動 coreState 賦值。
-     *
-     * @param {Object} options - 可選配置
-     * @param {boolean} options.skipFileList - 跳過 fileList 陣列同步（效能優化，僅同步索引）
-     */
-    _syncToCore(options = {}) {
-        const coreState = window.SearchCore?.state;
-        if (!coreState) {
-            console.warn('[Alpine] _syncToCore: window.SearchCore.state not available');
-            return;
-        }
-
-        // === 核心搜尋狀態（永遠同步） ===
-        coreState.searchResults = this.searchResults;
-        coreState.currentIndex = this.currentIndex;
-        coreState.currentQuery = this.currentQuery;
-        coreState.currentOffset = this.currentOffset;
-        coreState.hasMoreResults = this.hasMoreResults;
-        coreState.isLoadingMore = this.isLoadingMore;
-        coreState.listMode = this.listMode;
-
-        // === 檔案列表狀態（可選同步） ===
-        if (!options.skipFileList) {
-            coreState.fileList = this.fileList;
-            coreState.currentFileIndex = this.currentFileIndex;
-        } else {
-            // skipFileList: 只同步索引（輕量，適用於純導航操作）
-            coreState.currentFileIndex = this.currentFileIndex;
-        }
-
-        // === 內部狀態標記 ===
-        coreState.isSearchingFile = this.isSearchingFile;
-    },
-
     // ===== Bridge Layer =====
     // 修正 2: 簡化 Bridge Layer（不覆寫 window.SearchCore.state）
     setupBridgeLayer() {
@@ -53,55 +16,8 @@ window.SearchStateMixin_Bridge = {
             window.SearchCore.clearState = () => this.clearState();
         }
 
-        // T1b: 新增搜尋流程 bridge
-        // 讓舊 JS 可以觸發 Alpine 搜尋
-        if (window.SearchCore) {
-            window.SearchCore.doSearch = (query) => this.doSearch(query);
-        }
         if (window.SearchUI) {
             window.SearchUI.navigateResult = (delta) => this.navigate(delta);
-        }
-
-        // Fix 1: 新增 file.js 需要的進度函數 bridge
-        if (window.SearchCore) {
-            window.SearchCore.initProgress = (query) => {
-                this.progressLog = '搜尋中...';
-                this.currentMode = '';
-                this.detailDone = 0;
-                this.detailTotal = 0;
-                this.currentQuery = query;
-            };
-            window.SearchCore.updateLog = (msg) => {
-                this.progressLog = msg;
-            };
-            window.SearchCore.handleSearchStatus = (source, status) => {
-                this.handleSearchStatus(source, status);
-            };
-        }
-
-        // T1c: 覆寫全域函數，指向 Alpine methods
-        window.translateWithAI = () => this.translateWithAI();
-        window.startEditTitle = () => this.startEditTitle();
-        window.confirmEditTitle = () => this.confirmEditTitle();
-        window.cancelEditTitle = () => this.cancelEditTitle();
-        window.startEditChineseTitle = () => this.startEditChineseTitle();
-        window.confirmEditChineseTitle = () => this.confirmEditChineseTitle();
-        window.cancelEditChineseTitle = () => this.cancelEditChineseTitle();
-        window.showAddTagInput = () => this.showAddTagInput();
-        window.confirmAddTag = () => this.confirmAddTag();
-        window.cancelAddTag = () => this.cancelAddTag();
-        window.removeUserTag = (tag) => this.removeUserTag(tag);
-
-        // T1d: file.js functions now in Alpine
-        if (window.SearchFile) {
-            window.SearchFile.switchToFile = (index, position, showFullLoading) =>
-                this.switchToFile(index, position, showFullLoading);
-            window.SearchFile.searchAll = () => this.searchAll();
-            window.SearchFile.scrapeAll = () => this.scrapeAll();
-            window.SearchFile.setFileList = (paths) => this.setFileList(paths);
-            window.SearchFile.handleFileDrop = (files) => this.handleFileDrop(files);
-            window.SearchFile.renderFileList = () => {}; // no-op
-            window.SearchFile.renderSearchResultsList = () => {}; // no-op
         }
 
         // T6b: Toast bridge（供外部 JS 如 ui.js 的 showSourceToast 使用）

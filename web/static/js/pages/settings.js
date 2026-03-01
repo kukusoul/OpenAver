@@ -73,6 +73,7 @@ function settingsPage() {
         // ===== Dirty Check State =====
         savedState: null,
         pendingNavigationUrl: '',
+        _configLoading: true,  // 初始 true，loadConfig 完成後 false
 
         // ===== Constants =====
 
@@ -121,6 +122,7 @@ function settingsPage() {
 
         // ===== Computed Properties =====
         get isDirty() {
+            if (this._configLoading) return false;
             if (!this.savedState) return false;
             return JSON.stringify(this.form) !== JSON.stringify(this.savedState);
         },
@@ -207,19 +209,30 @@ function settingsPage() {
                 }
             });
 
-            // 暴露全域檢查函式（供 base.html sidebar 使用）
-            window.confirmLeavingSettings = (targetUrl) => {
-                if (this.isDirty) {
-                    this.pendingNavigationUrl = targetUrl;
-                    this.dirtyCheckModalOpen = true;
-                    return false;  // 阻止導航
-                }
-                return true;  // 允許導航
-            };
+            // 接入 page lifecycle（取代 window.confirmLeavingSettings）
+            if (window.__registerPage) {
+                window.__registerPage({
+                    beforeLeave: (href) => {
+                        if (!this.isDirty) return true;
+                        this.pendingNavigationUrl = href;
+                        this.dirtyCheckModalOpen = true;
+                        return false;
+                    },
+                    onBeforeUnload: () => {
+                        if (this.isDirty) return '您有未儲存的設定變更';
+                        return null;
+                    },
+                    cleanup: () => {
+                        if (this._toastTimer) clearTimeout(this._toastTimer);
+                    }
+                });
+            }
         },
 
         // ===== Methods =====
         async loadConfig() {
+            // 鎖定表單（載入期間不可操作）
+            this._configLoading = true;
             // 清空快照（載入期間不判定 dirty）
             this.savedState = null;
 
@@ -239,6 +252,7 @@ function settingsPage() {
                     this.form.translateEnabled = config.translate.enabled;
                     this.form.translateProvider = config.translate.provider || 'ollama';
                     this.form.ollamaUrl = config.translate.ollama?.url || config.translate.ollama_url || 'http://localhost:11434';
+                    this.form.ollamaModel = config.translate.ollama?.model || config.translate.ollama_model || '';
                     this.form.geminiApiKey = config.translate.gemini?.api_key || '';
 
                     // Gemini model 預設填入
@@ -291,18 +305,22 @@ function settingsPage() {
                     this.form.defaultPage = defaultPage;
                     // sidebar_collapsed 已移除（由 Alpine $persist + localStorage 驅動）
 
-                    // 自動載入 Ollama 模型列表
+                    // 建立初始快照（dirty check 基準）— 必須在解鎖前建立
+                    this.savedState = JSON.parse(JSON.stringify(this.form));
+                    // 解鎖表單（config hydrate 完成）
+                    this._configLoading = false;
+
+                    // 背景載入 Ollama 模型列表（不阻塞表單）
                     const ollamaUrl = config.translate.ollama?.url || config.translate.ollama_url;
                     const ollamaModel = config.translate.ollama?.model || config.translate.ollama_model;
                     if (ollamaUrl && config.translate.provider === 'ollama') {
-                        await this.loadOllamaModels(ollamaUrl, ollamaModel);
+                        this.loadOllamaModels(ollamaUrl, ollamaModel);  // 不 await
                     }
-
-                    // 建立初始快照（dirty check 基準）
-                    this.savedState = JSON.parse(JSON.stringify(this.form));
                 }
             } catch (e) {
                 console.error('載入設定失敗:', e);
+            } finally {
+                this._configLoading = false;
             }
         },
 

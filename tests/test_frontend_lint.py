@@ -670,3 +670,492 @@ class TestScannerClearCache:
         html = (PROJECT_ROOT / 'web/templates/scanner.html').read_text(encoding='utf-8')
         assert "/api/gallery/cache" in html
         assert "DELETE" in html
+
+
+class TestSearchCoreFacade:
+    """T3.2 守衛 — SearchCore.state 已降級為只讀 Alpine proxy façade"""
+
+    def test_search_core_state_uses_alpine_proxy(self):
+        """core.js 的 window.SearchCore.state getter 必須使用 Alpine.$data 代理"""
+        js_file = PROJECT_ROOT / "web/static/js/pages/search/core.js"
+        content = js_file.read_text(encoding='utf-8')
+        assert 'Alpine.$data' in content, (
+            "core.js 的 SearchCore.state getter 未使用 Alpine.$data — "
+            "T3.2 Step 1 應已將 state getter 改為代理 Alpine proxy"
+        )
+
+    def test_sync_to_core_is_noop(self):
+        """bridge.js 不含 coreState.xxx = 賦值（_syncToCore 已是 no-op）"""
+        js_file = PROJECT_ROOT / "web/static/js/pages/search/state/bridge.js"
+        content = js_file.read_text(encoding='utf-8')
+        # 匹配 coreState.xxx = （非 ?.、非 == 的賦值）
+        violations = re.findall(r'coreState\.\w+\s*=(?!=)', content)
+        assert len(violations) == 0, (
+            f"bridge.js 的 _syncToCore 仍含 {len(violations)} 個 coreState 賦值 "
+            f"（應已改為 no-op）: {violations}"
+        )
+
+    def test_persistence_no_corestate_fallback(self):
+        """persistence.js 的 saveState() 不含 coreState?. fallback（已改為直接用 Alpine state）"""
+        js_file = PROJECT_ROOT / "web/static/js/pages/search/state/persistence.js"
+        content = js_file.read_text(encoding='utf-8')
+        assert 'coreState?.' not in content, (
+            "persistence.js 仍含 coreState?. fallback — "
+            "T3.2 Step 3 應已移除，直接使用 Alpine this.xxx"
+        )
+
+    def test_search_core_has_legacy_state_fallback(self):
+        """core.js 的 window.SearchCore 必須包含 _legacyState fallback（Alpine 未 boot 時的安全預設值）"""
+        js_file = PROJECT_ROOT / "web/static/js/pages/search/core.js"
+        content = js_file.read_text(encoding='utf-8')
+        assert '_legacyState' in content, (
+            "core.js 缺少 _legacyState — SearchCore.state getter 在 Alpine 未 boot 時"
+            "必須回傳有穩定形狀的物件（含 searchResults: [], fileList: [] 等）"
+        )
+        # 確認 _legacyState 包含關鍵欄位
+        assert 'searchResults: []' in content, "_legacyState 缺少 searchResults: []"
+        assert 'fileList: []' in content, "_legacyState 缺少 fileList: []"
+
+
+class TestPageLifecycleGuard:
+    """page-lifecycle.js 存在性守衛 — 確保 script tag 及三頁 __registerPage 呼叫不被移除"""
+
+    def test_base_html_loads_page_lifecycle(self):
+        """base.html 必須引用 page-lifecycle.js"""
+        base_html = PROJECT_ROOT / "web" / "templates" / "base.html"
+        content = base_html.read_text(encoding='utf-8')
+        assert 'page-lifecycle.js' in content, \
+            "base.html 缺少 page-lifecycle.js script tag — 刪除會導致三頁 __registerPage 呼叫靜默失敗"
+
+    def test_settings_js_calls_register_page(self):
+        """settings.js 必須呼叫 __registerPage"""
+        js_file = PROJECT_ROOT / "web" / "static" / "js" / "pages" / "settings.js"
+        content = js_file.read_text(encoding='utf-8')
+        assert '__registerPage' in content, \
+            "settings.js 缺少 __registerPage 呼叫 — dirty-check lifecycle 會失效"
+
+    def test_search_state_index_calls_register_page(self):
+        """search/state/index.js 必須呼叫 __registerPage"""
+        js_file = PROJECT_ROOT / "web" / "static" / "js" / "pages" / "search" / "state" / "index.js"
+        content = js_file.read_text(encoding='utf-8')
+        assert '__registerPage' in content, \
+            "search/state/index.js 缺少 __registerPage 呼叫 — Search 離頁 save/cleanup 會失效"
+
+    def test_showcase_core_calls_register_page(self):
+        """showcase/core.js 必須呼叫 __registerPage"""
+        js_file = PROJECT_ROOT / "web" / "static" / "js" / "pages" / "showcase" / "core.js"
+        content = js_file.read_text(encoding='utf-8')
+        assert '__registerPage' in content, \
+            "showcase/core.js 缺少 __registerPage 呼叫 — Showcase lightbox cleanup lifecycle 會失效"
+
+    def test_scanner_html_calls_register_page(self):
+        """scanner.html 必須呼叫 __registerPage"""
+        html_file = PROJECT_ROOT / "web" / "templates" / "scanner.html"
+        content = html_file.read_text(encoding='utf-8')
+        assert '__registerPage' in content, \
+            "scanner.html 缺少 __registerPage 呼叫 — Scanner lifecycle 未接入統一機制"
+
+
+class TestScannerLifecycleGuard:
+    """T5.1 守衛 — Scanner 已接入 __registerPage，不再使用舊 shim"""
+
+    SCANNER_HTML = PROJECT_ROOT / "web" / "templates" / "scanner.html"
+    PAGE_LIFECYCLE_JS = PROJECT_ROOT / "web" / "static" / "js" / "components" / "page-lifecycle.js"
+
+    def test_scanner_no_confirm_leaving_scanner(self):
+        """scanner.html 不含 confirmLeavingScanner（舊 shim 已刪除）"""
+        content = self.SCANNER_HTML.read_text(encoding='utf-8')
+        assert 'confirmLeavingScanner' not in content, \
+            "scanner.html 仍含 confirmLeavingScanner — T5.1 應已刪除舊離頁 shim"
+
+    def test_scanner_no_self_added_beforeunload(self):
+        """scanner.html 不自掛 addEventListener('beforeunload'（由 page-lifecycle.js 統一管理）"""
+        content = self.SCANNER_HTML.read_text(encoding='utf-8')
+        assert "addEventListener('beforeunload'" not in content, \
+            "scanner.html 仍自掛 beforeunload listener — T5.1 應刪除，改由 onBeforeUnload hook 處理"
+
+    def test_scanner_no_skip_before_unload(self):
+        """scanner.html 不含 _skipBeforeUnload（隨舊 shim 一起刪除）"""
+        content = self.SCANNER_HTML.read_text(encoding='utf-8')
+        assert '_skipBeforeUnload' not in content, \
+            "scanner.html 仍含 _skipBeforeUnload — T5.1 應已隨舊 shim 一起刪除"
+
+    def test_page_lifecycle_no_confirm_leaving_scanner_shim(self):
+        """page-lifecycle.js 不含 confirmLeavingScanner compatibility shim"""
+        content = self.PAGE_LIFECYCLE_JS.read_text(encoding='utf-8')
+        assert 'confirmLeavingScanner' not in content, \
+            "page-lifecycle.js 仍含 confirmLeavingScanner shim — T5.1 Scanner 接入後應刪除"
+
+
+class TestEventSourceTracking:
+    """T4.1 守衛 — 所有 EventSource 建立都透過 _trackConnection 包裝"""
+
+    def test_base_has_active_connections(self):
+        """base.js 必須有 _activeConnections: [] 初始值"""
+        js_file = PROJECT_ROOT / "web/static/js/pages/search/state/base.js"
+        content = js_file.read_text(encoding='utf-8')
+        assert '_activeConnections' in content, \
+            "base.js 缺少 _activeConnections 初始值 — T4.1 集中追蹤 EventSource"
+
+    def test_search_flow_has_track_methods(self):
+        """search-flow.js 必須定義 _trackConnection / _untrackConnection / _closeAllConnections"""
+        js_file = PROJECT_ROOT / "web/static/js/pages/search/state/search-flow.js"
+        content = js_file.read_text(encoding='utf-8')
+        for method in ('_trackConnection', '_untrackConnection', '_closeAllConnections'):
+            assert method in content, \
+                f"search-flow.js 缺少 {method} — T4.1 連線追蹤方法"
+
+    def test_do_search_uses_track_connection(self):
+        """doSearch() 的 new EventSource 必須包在 _trackConnection(...) 內"""
+        js_file = PROJECT_ROOT / "web/static/js/pages/search/state/search-flow.js"
+        content = js_file.read_text(encoding='utf-8')
+        # 確認有 _trackConnection(new EventSource( 的用法
+        assert '_trackConnection(new EventSource(' in content, \
+            "search-flow.js 的 doSearch() 未使用 _trackConnection 包裝 EventSource"
+
+    def test_file_list_uses_track_connection(self):
+        """searchForFile() 的 new EventSource 必須包在 _trackConnection(...) 內"""
+        js_file = PROJECT_ROOT / "web/static/js/pages/search/state/file-list.js"
+        content = js_file.read_text(encoding='utf-8')
+        assert '_trackConnection(' in content, \
+            "file-list.js 的 searchForFile() 未使用 _trackConnection 包裝 EventSource"
+
+    def test_cleanup_calls_close_all_connections(self):
+        """cleanupForNavigation() 必須呼叫 _closeAllConnections()"""
+        js_file = PROJECT_ROOT / "web/static/js/pages/search/state/search-flow.js"
+        content = js_file.read_text(encoding='utf-8')
+        assert '_closeAllConnections()' in content, \
+            "search-flow.js 的 cleanupForNavigation() 未呼叫 _closeAllConnections()"
+
+    def test_no_bare_new_event_source_in_search_state(self):
+        """search/state/ 下所有 JS 的 new EventSource 都應在 _trackConnection 內"""
+        state_dir = PROJECT_ROOT / "web/static/js/pages/search/state"
+        violations = []
+        for js_file in state_dir.glob("*.js"):
+            content = js_file.read_text(encoding='utf-8')
+            # 找 new EventSource( 但不在 _trackConnection 同行
+            for i, line in enumerate(content.splitlines(), 1):
+                if 'new EventSource(' in line and '_trackConnection' not in line:
+                    violations.append(f"{js_file.name}:{i} — {line.strip()[:80]}")
+        assert len(violations) == 0, (
+            f"發現 {len(violations)} 個 bare new EventSource（未包在 _trackConnection 內）:\n"
+            + "\n".join(f"  - {v}" for v in violations)
+        )
+
+
+class TestTimerTracking:
+    """T4.2 守衛 — 所有 setTimeout 都透過 _timers registry 管理"""
+
+    def test_base_has_timers_registry(self):
+        """base.js 必須有 _timers: {} 初始值"""
+        js_file = PROJECT_ROOT / "web/static/js/pages/search/state/base.js"
+        content = js_file.read_text(encoding='utf-8')
+        assert '_timers: {}' in content, \
+            "base.js 缺少 _timers: {} — T4.2 集中追蹤 setTimeout"
+
+    def test_base_no_toast_timer(self):
+        """base.js 不再有 _toastTimer: null 宣告（已由 _timers registry 取代）"""
+        js_file = PROJECT_ROOT / "web/static/js/pages/search/state/base.js"
+        content = js_file.read_text(encoding='utf-8')
+        assert '_toastTimer: null' not in content, \
+            "base.js 仍含 _toastTimer: null — T4.2 應已移除，改用 _timers registry"
+
+    def test_search_flow_has_set_timer(self):
+        """search-flow.js 必須定義 _setTimer method"""
+        js_file = PROJECT_ROOT / "web/static/js/pages/search/state/search-flow.js"
+        content = js_file.read_text(encoding='utf-8')
+        assert '_setTimer(' in content, \
+            "search-flow.js 缺少 _setTimer method — T4.2 timer registry"
+
+    def test_search_flow_has_clear_all_timers(self):
+        """search-flow.js 必須定義 _clearAllTimers method"""
+        js_file = PROJECT_ROOT / "web/static/js/pages/search/state/search-flow.js"
+        content = js_file.read_text(encoding='utf-8')
+        assert '_clearAllTimers(' in content, \
+            "search-flow.js 缺少 _clearAllTimers method — T4.2 timer registry"
+
+    def test_cleanup_calls_clear_all_timers(self):
+        """cleanupForNavigation() 必須呼叫 _clearAllTimers()"""
+        js_file = PROJECT_ROOT / "web/static/js/pages/search/state/search-flow.js"
+        content = js_file.read_text(encoding='utf-8')
+        assert '_clearAllTimers()' in content, \
+            "search-flow.js 的 cleanupForNavigation() 未呼叫 _clearAllTimers()"
+
+    def test_result_card_no_manual_toast_timer(self):
+        """result-card.js 不再有 _toastTimer = 手動賦值（改用 _setTimer）"""
+        js_file = PROJECT_ROOT / "web/static/js/pages/search/state/result-card.js"
+        content = js_file.read_text(encoding='utf-8')
+        assert '_toastTimer =' not in content, \
+            "result-card.js 仍含 _toastTimer = 手動賦值 — T4.2 應改用 _setTimer('toast', ...)"
+
+    def test_result_card_uses_set_timer(self):
+        """result-card.js 的 showToast() 必須使用 _setTimer"""
+        js_file = PROJECT_ROOT / "web/static/js/pages/search/state/result-card.js"
+        content = js_file.read_text(encoding='utf-8')
+        assert "_setTimer('toast'" in content, \
+            "result-card.js 的 showToast() 未使用 _setTimer('toast', ...) — T4.2"
+
+    def test_persistence_uses_set_timer(self):
+        """persistence.js 的 setupAutoSave() 必須使用 _setTimer（不再用 saveTimeout local variable）"""
+        js_file = PROJECT_ROOT / "web/static/js/pages/search/state/persistence.js"
+        content = js_file.read_text(encoding='utf-8')
+        assert "_setTimer('autosave'" in content, \
+            "persistence.js 的 setupAutoSave() 未使用 _setTimer('autosave', ...) — T4.2"
+        assert 'saveTimeout' not in content, \
+            "persistence.js 仍含 saveTimeout local variable — T4.2 應已移除"
+
+    def test_file_list_uses_set_timer(self):
+        """file-list.js 的 loadFavorite() 必須使用 _setTimer"""
+        js_file = PROJECT_ROOT / "web/static/js/pages/search/state/file-list.js"
+        content = js_file.read_text(encoding='utf-8')
+        assert "_setTimer('loadFavorite'" in content, \
+            "file-list.js 的 loadFavorite() 未使用 _setTimer('loadFavorite', ...) — T4.2"
+
+
+class TestWindowGlobalCleanup:
+    """T3.3 守衛 — bridge.js 不再設定多餘的 window.xxx 全域函數"""
+
+    BRIDGE_JS = PROJECT_ROOT / "web/static/js/pages/search/state/bridge.js"
+    FILE_LIST_JS = PROJECT_ROOT / "web/static/js/pages/search/state/file-list.js"
+    PERSISTENCE_JS = PROJECT_ROOT / "web/static/js/pages/search/state/persistence.js"
+    SEARCH_FLOW_JS = PROJECT_ROOT / "web/static/js/pages/search/state/search-flow.js"
+    INIT_JS = PROJECT_ROOT / "web/static/js/pages/search/init.js"
+
+    def test_bridge_no_window_edit_tag_functions(self):
+        """bridge.js 不應設定 translateWithAI / startEditTitle / confirmEditTitle 等 11 個全域函數"""
+        content = self.BRIDGE_JS.read_text(encoding='utf-8')
+        forbidden = [
+            'window.translateWithAI',
+            'window.startEditTitle',
+            'window.confirmEditTitle',
+            'window.cancelEditTitle',
+            'window.startEditChineseTitle',
+            'window.confirmEditChineseTitle',
+            'window.cancelEditChineseTitle',
+            'window.showAddTagInput',
+            'window.confirmAddTag',
+            'window.cancelAddTag',
+            'window.removeUserTag',
+        ]
+        found = [f for f in forbidden if f in content]
+        assert len(found) == 0, (
+            f"bridge.js 仍設定 {len(found)} 個多餘全域函數（HTML 已用 Alpine @click）: {found}"
+        )
+
+    def test_bridge_no_window_searchcore_progress_bridge(self):
+        """bridge.js 不應設定 window.SearchCore.initProgress / updateLog / handleSearchStatus"""
+        content = self.BRIDGE_JS.read_text(encoding='utf-8')
+        forbidden = [
+            'window.SearchCore.initProgress',
+            'window.SearchCore.updateLog',
+            'window.SearchCore.handleSearchStatus',
+        ]
+        found = [f for f in forbidden if f in content]
+        assert len(found) == 0, (
+            f"bridge.js 仍設定 {len(found)} 個 SearchCore bridge（應由 file-list.js 直接呼叫 Alpine method）: {found}"
+        )
+
+    def test_file_list_calls_this_progress_methods(self):
+        """file-list.js 的 searchForFile() 應直接呼叫 this.initProgress / this.updateLog / this.handleSearchStatus"""
+        content = self.FILE_LIST_JS.read_text(encoding='utf-8')
+        assert 'this.initProgress(' in content, \
+            "file-list.js 缺少 this.initProgress() — 應直接呼叫 Alpine method，不透過 window.SearchCore"
+        assert 'this.updateLog(' in content, \
+            "file-list.js 缺少 this.updateLog() — 應直接呼叫 Alpine method，不透過 window.SearchCore"
+        assert 'this.handleSearchStatus(' in content, \
+            "file-list.js 缺少 this.handleSearchStatus() — 應直接呼叫 Alpine method，不透過 window.SearchCore"
+
+    def test_file_list_no_searchcore_progress_calls(self):
+        """file-list.js 不應再透過 window.SearchCore 呼叫進度函數"""
+        content = self.FILE_LIST_JS.read_text(encoding='utf-8')
+        forbidden = [
+            'window.SearchCore.initProgress',
+            'window.SearchCore.updateLog',
+            'window.SearchCore.handleSearchStatus',
+        ]
+        found = [f for f in forbidden if f in content]
+        assert len(found) == 0, (
+            f"file-list.js 仍透過 window.SearchCore 呼叫 {len(found)} 個進度函數: {found}"
+        )
+
+    def test_no_window_searchcore_update_clear_button(self):
+        """Alpine mixins 不應再呼叫 window.SearchCore.updateClearButton()"""
+        targets = [self.FILE_LIST_JS, self.PERSISTENCE_JS, self.SEARCH_FLOW_JS]
+        violations = []
+        for js_file in targets:
+            content = js_file.read_text(encoding='utf-8')
+            if 'window.SearchCore.updateClearButton' in content:
+                violations.append(js_file.name)
+        assert len(violations) == 0, (
+            f"以下檔案仍呼叫 window.SearchCore.updateClearButton()（應改為 this.hasContent = ...）: {violations}"
+        )
+
+    def test_init_no_progress_fallback(self):
+        """init.js 不應再包含 initProgress / updateLog / handleSearchStatus 的防呆 fallback"""
+        content = self.INIT_JS.read_text(encoding='utf-8')
+        forbidden = ['window.SearchCore.initProgress =', 'window.SearchCore.updateLog =',
+                     'window.SearchCore.handleSearchStatus =']
+        found = [f for f in forbidden if f in content]
+        assert len(found) == 0, (
+            f"init.js 仍包含 {len(found)} 個防呆 fallback（bridge 移除後不再需要）: {found}"
+        )
+
+
+class TestFetchAbortController:
+    """T4.3 守衛 — fetch 可取消化（AbortController per-key）"""
+    BASE_JS = PROJECT_ROOT / "web/static/js/pages/search/state/base.js"
+    SEARCH_FLOW_JS = PROJECT_ROOT / "web/static/js/pages/search/state/search-flow.js"
+    NAVIGATION_JS = PROJECT_ROOT / "web/static/js/pages/search/state/navigation.js"
+    BATCH_JS = PROJECT_ROOT / "web/static/js/pages/search/state/batch.js"
+    FILE_LIST_JS = PROJECT_ROOT / "web/static/js/pages/search/state/file-list.js"
+
+    def test_base_has_abort_controllers(self):
+        """base.js 必須有 _abortControllers: {} 初始值"""
+        content = self.BASE_JS.read_text(encoding='utf-8')
+        assert '_abortControllers: {}' in content
+
+    def test_search_flow_has_get_abort_signal(self):
+        """search-flow.js 必須定義 _getAbortSignal method"""
+        content = self.SEARCH_FLOW_JS.read_text(encoding='utf-8')
+        assert '_getAbortSignal(' in content
+
+    def test_search_flow_has_abort_all_fetches(self):
+        """search-flow.js 必須定義 _abortAllFetches method"""
+        content = self.SEARCH_FLOW_JS.read_text(encoding='utf-8')
+        assert '_abortAllFetches(' in content
+
+    def test_cleanup_calls_abort_all_fetches(self):
+        """cleanupForNavigation() 必須呼叫 _abortAllFetches()"""
+        content = self.SEARCH_FLOW_JS.read_text(encoding='utf-8')
+        assert '_abortAllFetches()' in content
+
+    def test_load_more_uses_abort_signal(self):
+        """loadMore() 的 fetch 必須傳 signal"""
+        content = self.NAVIGATION_JS.read_text(encoding='utf-8')
+        assert "_getAbortSignal('loadMore')" in content
+
+    def test_load_more_handles_abort_error(self):
+        """loadMore() 的 catch 必須處理 AbortError"""
+        content = self.NAVIGATION_JS.read_text(encoding='utf-8')
+        assert 'AbortError' in content
+
+    def test_translate_all_uses_abort_signal(self):
+        """translateAll() 的 fetch 必須傳 signal"""
+        content = self.BATCH_JS.read_text(encoding='utf-8')
+        assert "_getAbortSignal('translateAll')" in content
+
+    def test_translate_all_handles_abort_error(self):
+        """translateAll() 的 catch 必須處理 AbortError"""
+        content = self.BATCH_JS.read_text(encoding='utf-8')
+        assert 'AbortError' in content
+
+    def test_set_file_list_uses_abort_signal(self):
+        """setFileList() 的 filter-files fetch 必須傳 signal"""
+        content = self.FILE_LIST_JS.read_text(encoding='utf-8')
+        assert "_getAbortSignal('setFileList')" in content
+
+    def test_set_file_list_handles_abort_error(self):
+        """setFileList() 的 filter-files catch 必須處理 AbortError"""
+        # 確認 file-list.js 的 filter-files catch 有 AbortError guard
+        # 用 content 中 AbortError 出現至少 2 次（setFileList + loadFavorite）
+        content = self.FILE_LIST_JS.read_text(encoding='utf-8')
+        assert content.count('AbortError') >= 2
+
+    def test_load_favorite_uses_abort_signal(self):
+        """loadFavorite() 的 fetch 必須傳 signal"""
+        content = self.FILE_LIST_JS.read_text(encoding='utf-8')
+        assert "_getAbortSignal('loadFavorite')" in content
+
+
+class TestScannerDeadCodeGuard:
+    """T5.2 守衛 — Scanner 已移除 window.isGenerating 死碼"""
+
+    SCANNER_HTML = PROJECT_ROOT / "web" / "templates" / "scanner.html"
+
+    def test_scanner_no_window_is_generating(self):
+        """scanner.html 不含 window.isGenerating（Alpine getter 已完全取代）"""
+        content = self.SCANNER_HTML.read_text(encoding='utf-8')
+        assert 'window.isGenerating' not in content, \
+            "scanner.html 仍含 window.isGenerating — T5.2 應已移除所有死碼賦值"
+
+
+class TestSearchMigrationDeadCode:
+    """T5.3 守衛 — Search 遷移殘留清除（T5.3a + T5.3b）"""
+
+    CORE_JS = PROJECT_ROOT / "web/static/js/pages/search/core.js"
+    BRIDGE_JS = PROJECT_ROOT / "web/static/js/pages/search/state/bridge.js"
+    FILE_JS = PROJECT_ROOT / "web/static/js/pages/search/file.js"
+
+    # ===== T5.3a 守衛 =====
+
+    def test_core_no_savestate_stub(self):
+        """core.js 不含 saveState / restoreState 空殼函數定義"""
+        content = self.CORE_JS.read_text(encoding='utf-8')
+        assert 'function saveState()' not in content, \
+            "core.js 仍含 function saveState() 空殼 — T5.3a 應已刪除"
+        assert 'function restoreState()' not in content, \
+            "core.js 仍含 function restoreState() 空殼 — T5.3a 應已刪除"
+        assert 'T3.2: dead code' not in content, \
+            "core.js 仍含 T3.2 dead code 註解 — T5.3a 應已刪除"
+
+    def test_core_no_null_progress_slots(self):
+        """core.js 不含 initProgress / updateLog / handleSearchStatus null slot"""
+        content = self.CORE_JS.read_text(encoding='utf-8')
+        assert 'initProgress: null' not in content, \
+            "core.js 仍含 initProgress: null slot — T5.3a 應已刪除"
+        assert 'updateLog: null' not in content, \
+            "core.js 仍含 updateLog: null slot — T5.3a 應已刪除"
+        assert 'handleSearchStatus: null' not in content, \
+            "core.js 仍含 handleSearchStatus: null slot — T5.3a 應已刪除"
+
+    def test_bridge_no_render_noop(self):
+        """bridge.js 不含 renderFileList / renderSearchResultsList no-op 覆寫"""
+        content = self.BRIDGE_JS.read_text(encoding='utf-8')
+        assert 'renderFileList' not in content, \
+            "bridge.js 仍含 renderFileList no-op 覆寫 — T5.3a 應已刪除"
+        assert 'renderSearchResultsList' not in content, \
+            "bridge.js 仍含 renderSearchResultsList no-op 覆寫 — T5.3a 應已刪除"
+
+    def test_file_no_render_stubs(self):
+        """file.js 不含 renderFileList / renderSearchResultsList 空函數定義"""
+        content = self.FILE_JS.read_text(encoding='utf-8')
+        assert 'renderFileList' not in content, \
+            "file.js 仍含 renderFileList 空函數定義 — T5.3a 應已刪除"
+        assert 'renderSearchResultsList' not in content, \
+            "file.js 仍含 renderSearchResultsList 空函數定義 — T5.3a 應已刪除"
+
+    # ===== T5.3b 守衛 =====
+
+    def test_core_no_dosearch_null_slot(self):
+        """core.js 不含 doSearch: null slot"""
+        content = self.CORE_JS.read_text(encoding='utf-8')
+        assert 'doSearch: null' not in content, \
+            "core.js 仍含 doSearch: null slot — T5.3b 應已刪除"
+
+    def test_bridge_no_searchfile_stubs(self):
+        """bridge.js 不含 SearchFile bridge stub 轉發"""
+        content = self.BRIDGE_JS.read_text(encoding='utf-8')
+        assert 'window.SearchFile.switchToFile' not in content, \
+            "bridge.js 仍含 window.SearchFile.switchToFile — T5.3b 應已刪除"
+        assert 'window.SearchFile.searchAll' not in content, \
+            "bridge.js 仍含 window.SearchFile.searchAll — T5.3b 應已刪除"
+        assert 'window.SearchFile.scrapeAll' not in content, \
+            "bridge.js 仍含 window.SearchFile.scrapeAll — T5.3b 應已刪除"
+        assert 'window.SearchFile.setFileList' not in content, \
+            "bridge.js 仍含 window.SearchFile.setFileList — T5.3b 應已刪除"
+        assert 'window.SearchFile.handleFileDrop' not in content, \
+            "bridge.js 仍含 window.SearchFile.handleFileDrop — T5.3b 應已刪除"
+
+    def test_file_no_bridge_stubs(self):
+        """file.js 不含 bridge stub 空函數定義"""
+        content = self.FILE_JS.read_text(encoding='utf-8')
+        assert 'switchToFile: function()' not in content, \
+            "file.js 仍含 switchToFile: function() 空函數 — T5.3b 應已刪除"
+        assert 'searchAll: function()' not in content, \
+            "file.js 仍含 searchAll: function() 空函數 — T5.3b 應已刪除"
+        assert 'scrapeAll: function()' not in content, \
+            "file.js 仍含 scrapeAll: function() 空函數 — T5.3b 應已刪除"
+        assert 'setFileList: function()' not in content, \
+            "file.js 仍含 setFileList: function() 空函數 — T5.3b 應已刪除"
+        assert 'handleFileDrop: function()' not in content, \
+            "file.js 仍含 handleFileDrop: function() 空函數 — T5.3b 應已刪除"

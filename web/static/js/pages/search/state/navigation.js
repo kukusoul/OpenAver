@@ -36,7 +36,6 @@ window.SearchStateMixin_Navigation = {
         // 正常範圍內導航
         if (newIndex >= 0 && newIndex < this.searchResults.length) {
             this.currentIndex = newIndex;
-            this._syncToCore({ skipFileList: true });  // 導航頻繁，跳過 fileList
 
             // Reset cover error on navigation
             this.coverError = '';
@@ -56,10 +55,12 @@ window.SearchStateMixin_Navigation = {
 
         this.isLoadingMore = true;
         const newOffset = this.currentOffset + this.PAGE_SIZE;
+        const loadMoreSignal = this._getAbortSignal('loadMore');
 
         try {
             const response = await fetch(
-                `/api/search?q=${encodeURIComponent(this.currentQuery)}&offset=${newOffset}&limit=${this.PAGE_SIZE}`
+                `/api/search?q=${encodeURIComponent(this.currentQuery)}&offset=${newOffset}&limit=${this.PAGE_SIZE}`,
+                { signal: loadMoreSignal }
             );
             const data = await response.json();
 
@@ -68,7 +69,6 @@ window.SearchStateMixin_Navigation = {
                 this.currentOffset = newOffset;
                 this.hasMoreResults = data.has_more;
                 this.currentIndex = this.searchResults.length - data.data.length;
-                this._syncToCore({ skipFileList: true });  // load more 不涉及 fileList
 
                 if (window.SearchUI?.preloadImages) {
                     window.SearchUI.preloadImages(this.currentIndex + 1, 5);
@@ -82,10 +82,11 @@ window.SearchStateMixin_Navigation = {
                 this.hasMoreResults = false;
             }
         } catch (err) {
+            if (err.name === 'AbortError') return;  // T4.3: 靜默忽略取消
             console.error('載入更多失敗:', err);
         } finally {
             this.isLoadingMore = false;
-            this._syncToCore({ skipFileList: true });
+            this._clearAbort('loadMore', loadMoreSignal);  // T4.3: 操作完成清除 registry（比對 signal 避免刪掉新請求）
         }
     },
 

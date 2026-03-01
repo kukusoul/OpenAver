@@ -97,14 +97,15 @@ window.SearchStateMixin_SearchFlow = {
 
         // 檔案列表由 x-show 自動隱藏（listMode=null, fileList=[]）
 
-        // 6. 建立 SSE 連線
-        this.activeEventSource = new EventSource(`/api/search/stream?q=${encodeURIComponent(query)}`);
+        // 6. 建立 SSE 連線並追蹤
+        this.activeEventSource = this._trackConnection(new EventSource(`/api/search/stream?q=${encodeURIComponent(query)}`));
         const eventSource = this.activeEventSource;
 
         eventSource.onmessage = (event) => {
             // 檢查是否已被取消
             if (currentRequestId !== this.requestId) {
                 eventSource.close();
+                this._untrackConnection(eventSource);
                 return;
             }
 
@@ -120,6 +121,7 @@ window.SearchStateMixin_SearchFlow = {
                 }
                 else if (data.type === 'result') {
                     eventSource.close();
+                    this._untrackConnection(eventSource);
                     this.activeEventSource = null;
 
                     if (data.success && data.data && data.data.length > 0) {
@@ -129,7 +131,6 @@ window.SearchStateMixin_SearchFlow = {
                         this.hasMoreResults = data.has_more || false;
                         this.actressProfile = data.actress_profile || null;  // T2d: 寫入女優資料
                         this.listMode = 'search';
-                        this._syncToCore();
 
                         // 查詢本地狀態（非同步）
                         if (window.SearchCore?.checkLocalStatus) {
@@ -147,8 +148,7 @@ window.SearchStateMixin_SearchFlow = {
                             window.SearchUI.preloadImages(1, 5);
                         }
                         this.listMode = 'search';
-                        this.hasContent = true;
-                        window.SearchCore.updateClearButton();
+                        this.hasContent = this.searchResults.length > 0 || this.fileList.length > 0;
                         this._searchSnapshot = null; // Fix 2: 清空 snapshot（搜尋成功）
                         // Reset edit states
                         this.coverError = '';
@@ -163,6 +163,7 @@ window.SearchStateMixin_SearchFlow = {
                 }
                 else if (data.type === 'error') {
                     eventSource.close();
+                    this._untrackConnection(eventSource);
                     this.activeEventSource = null;
                     this._searchSnapshot = null; // Fix 2: 清空 snapshot（搜尋錯誤）
                     this.errorText = data.message || '搜尋失敗';  // T6c: Alpine state
@@ -177,10 +178,12 @@ window.SearchStateMixin_SearchFlow = {
             // 檢查是否已被取消
             if (currentRequestId !== this.requestId) {
                 eventSource.close();
+                this._untrackConnection(eventSource);
                 return;
             }
 
             eventSource.close();
+            this._untrackConnection(eventSource);
             this.activeEventSource = null;
             this.fallbackSearch(query, currentRequestId); // Fix 3: 傳入 requestId
         };
@@ -195,8 +198,13 @@ window.SearchStateMixin_SearchFlow = {
         // T4: 重置 rotating border 動畫追蹤
         this._localBorderPlayed = {};
 
+        // 建立 AbortController（離頁時可取消）
+        this._fallbackAbortController = new AbortController();
+
         try {
-            const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+            const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`, {
+                signal: this._fallbackAbortController.signal
+            });
             const data = await response.json();
 
             // Fix 3: 檢查是否已被新搜尋取代
@@ -212,7 +220,6 @@ window.SearchStateMixin_SearchFlow = {
                 this.hasMoreResults = data.has_more || false;
                 this.actressProfile = data.actress_profile || null;  // T2d: 寫入女優資料
                 this.listMode = 'search';
-                this._syncToCore();
 
                 // 查詢本地狀態
                 if (window.SearchCore?.checkLocalStatus) {
@@ -230,8 +237,7 @@ window.SearchStateMixin_SearchFlow = {
                     window.SearchUI.preloadImages(1, 5);
                 }
                 this.listMode = 'search';
-                this.hasContent = true;
-                window.SearchCore.updateClearButton();
+                this.hasContent = this.searchResults.length > 0 || this.fileList.length > 0;
                 this._searchSnapshot = null; // Fix 2: 清空 snapshot（搜尋成功）
                 // Reset edit states
                 this.coverError = '';
@@ -244,6 +250,8 @@ window.SearchStateMixin_SearchFlow = {
                 window.SearchUI.showState('error');
             }
         } catch (err) {
+            // AbortError：離頁或新搜尋取消，靜默忽略
+            if (err.name === 'AbortError') return;
             // Fix 3: 舊請求失敗不覆蓋新搜尋畫面
             if (savedRequestId !== this.requestId) return;
             this._searchSnapshot = null;
@@ -258,9 +266,15 @@ window.SearchStateMixin_SearchFlow = {
     cancelSearch() {
         if (this.activeEventSource) {
             this.activeEventSource.close();
+            this._untrackConnection(this.activeEventSource);
             this.activeEventSource = null;
         }
         this.requestId++;
+        // 取消進行中的 REST fallback fetch
+        if (this._fallbackAbortController) {
+            this._fallbackAbortController.abort();
+            this._fallbackAbortController = null;
+        }
 
         // 還原到搜尋前的狀態
         const snap = this._searchSnapshot;
@@ -277,7 +291,6 @@ window.SearchStateMixin_SearchFlow = {
             this.displayMode = snap.displayMode || 'detail';
             this.currentMode = snap.currentMode || '';
             this.errorText = snap.errorText || '';
-            this._syncToCore();
 
             // 還原顯示
             window.SearchUI.showState(snap.pageState);
@@ -285,6 +298,144 @@ window.SearchStateMixin_SearchFlow = {
             window.SearchUI.showState('empty');
         }
         this._searchSnapshot = null;
+    },
+
+    /**
+     * 離頁前清理 SSE（不還原 snapshot，因為離頁時會另外 saveState）
+     */
+    cleanupForNavigation() {
+        // _closeAllConnections() 包含 activeEventSource 和 searchForFile() 的 ES
+        this._closeAllConnections();
+        this.activeEventSource = null;   // 維持單一引用清零（語義清晰）
+
+        // 取消進行中的 REST fallback fetch
+        if (this._fallbackAbortController) {
+            this._fallbackAbortController.abort();
+            this._fallbackAbortController = null;
+        }
+        this.requestId++;  // 讓進行中的 onmessage/onerror callback 失效
+        // 也讓進行中的 fallbackSearch() 的 savedRequestId check 失效
+
+        // T4.2: 清除所有 setTimeout timer
+        this._clearAllTimers();
+
+        // T4.3: 取消所有 fetch（loadMore / translateAll / setFileList / loadFavorite）
+        this._abortAllFetches();
+
+        // T4.2: 讓 batch/translate 的 checkInterval 自清（setPaused=false 讓條件成立）
+        this.batchState.isProcessing = false;
+        this.batchState.isPaused = false;
+        this.translateState.isProcessing = false;
+        this.translateState.isPaused = false;
+    },
+
+    // ===== T4.1: EventSource 集中追蹤方法 =====
+
+    /**
+     * 追蹤 EventSource 連線，加入 _activeConnections 陣列
+     * @param {EventSource} es - 要追蹤的 EventSource 實例
+     * @returns {EventSource} 回傳 es 本身，讓呼叫側可以鏈式賦值
+     */
+    _trackConnection(es) {
+        this._activeConnections.push(es);
+        return es;
+    },
+
+    /**
+     * 從 _activeConnections 移除 EventSource（不關閉連線）
+     * @param {EventSource} es - 要移除的 EventSource 實例
+     */
+    _untrackConnection(es) {
+        this._activeConnections = this._activeConnections.filter(c => c !== es);
+    },
+
+    /**
+     * 關閉並清空所有追蹤中的 EventSource 連線
+     */
+    _closeAllConnections() {
+        this._activeConnections.forEach(c => {
+            if (c.readyState !== EventSource.CLOSED) {
+                c.close();
+            }
+        });
+        this._activeConnections = [];
+    },
+
+    // ===== T4.2: Timer 集中追蹤方法 =====
+
+    /**
+     * 設定具名 timer（自動取代同 key 的舊 timer）
+     * @param {string} key - timer 識別碼（如 'toast', 'autosave', 'loadFavorite'）
+     * @param {Function} fn - 回調函數
+     * @param {number} delay - 延遲毫秒
+     */
+    _setTimer(key, fn, delay) {
+        if (this._timers[key]) clearTimeout(this._timers[key]);
+        this._timers[key] = setTimeout(() => {
+            delete this._timers[key];
+            fn();
+        }, delay);
+    },
+
+    /**
+     * 清除所有 registry 中的 timer（離頁時呼叫）
+     */
+    _clearAllTimers() {
+        Object.values(this._timers).forEach(clearTimeout);
+        this._timers = {};
+    },
+
+    // ===== T4.3: Fetch AbortController 集中追蹤方法 =====
+
+    /**
+     * 取得指定 key 的 AbortSignal（自動 abort 並取代同 key 的舊 controller）
+     * @param {string} key - fetch 識別碼（如 'loadMore', 'translateAll', 'setFileList', 'loadFavorite'）
+     * @returns {AbortSignal}
+     */
+    _getAbortSignal(key) {
+        if (this._abortControllers[key]) this._abortControllers[key].abort();
+        this._abortControllers[key] = new AbortController();
+        return this._abortControllers[key].signal;
+    },
+
+    /**
+     * 從 registry 移除指定 key 的 AbortController（fetch 完成後呼叫）
+     * 只清除持有指定 signal 的 controller，避免刪掉新請求的 controller
+     * @param {string} key - fetch 識別碼
+     * @param {AbortSignal} [signal] - 呼叫 _getAbortSignal 時取得的 signal；若省略則無條件刪除
+     */
+    _clearAbort(key, signal) {
+        if (!signal || (this._abortControllers[key] && this._abortControllers[key].signal === signal)) {
+            delete this._abortControllers[key];
+        }
+    },
+
+    /**
+     * 取消並清空所有 registry 中的 fetch（離頁時呼叫）
+     */
+    _abortAllFetches() {
+        Object.values(this._abortControllers).forEach(c => c.abort());
+        this._abortControllers = {};
+    },
+
+    /**
+     * 初始化搜尋進度顯示（T3.3: 從 bridge.js 搬移）
+     * @param {string} query - 搜尋番號
+     */
+    initProgress(query) {
+        this.progressLog = '搜尋中...';
+        this.currentMode = '';
+        this.detailDone = 0;
+        this.detailTotal = 0;
+        this.currentQuery = query;
+    },
+
+    /**
+     * 更新進度記錄文字（T3.3: 從 bridge.js 搬移）
+     * @param {string} msg - 進度訊息
+     */
+    updateLog(msg) {
+        this.progressLog = msg;
     },
 
     /**

@@ -26,7 +26,6 @@ window.SearchStateMixin_Persistence = {
             if (this.appConfig?.search?.gallery_mode_enabled === false) {
                 this.displayMode = 'detail';
             }
-            this._syncToCore();
 
             // 還原搜尋框輸入值
             if (state.queryValue) {
@@ -45,13 +44,12 @@ window.SearchStateMixin_Persistence = {
                 if (currentFile?.searchResults?.length > 0) {
                     this.searchResults = currentFile.searchResults;
                     this.hasMoreResults = currentFile.hasMoreResults || false;
-                    this._syncToCore();
                     window.SearchUI.showState('result');
                 }
             }
 
-            // 同步 clear button（.hidden toggling + Alpine hasContent）
-            window.SearchCore.updateClearButton();
+            // 同步 clear button（直接計算 hasContent）
+            this.hasContent = this.searchResults.length > 0 || this.fileList.length > 0;
 
             console.log('[Alpine] State restored from sessionStorage');
         } catch (e) {
@@ -61,18 +59,38 @@ window.SearchStateMixin_Persistence = {
     },
 
     saveState() {
-        // T1a: 從 core.js module vars 讀取（它們是 source of truth）
-        // Alpine state 可能是 stale（core.js 函數直接改 module vars，不經過 Alpine）
-        const coreState = window.SearchCore?.state;
+        // 搜尋進行中：用 _searchSnapshot 保存（上一輪完整一致狀態）
+        // 條件：snapshot 存在 + pageState 仍是 loading（覆蓋 SSE 和 REST fallback 兩條路徑）
+        if (this._searchSnapshot && this.pageState === 'loading') {
+            const snap = this._searchSnapshot;
+            const state = {
+                searchResults: snap.searchResults,
+                currentIndex: snap.currentIndex,
+                currentQuery: snap.currentQuery,
+                currentOffset: snap.currentOffset,
+                hasMoreResults: snap.hasMoreResults,
+                fileList: snap.fileList,
+                currentFileIndex: snap.currentFileIndex,
+                listMode: snap.listMode,
+                queryValue: snap.currentQuery,    // 上一輪的 query
+                displayMode: snap.displayMode,
+                currentMode: snap.currentMode,
+                actressProfile: snap.actressProfile
+            };
+            sessionStorage.setItem(this.STATE_KEY, JSON.stringify(state));
+            return;
+        }
+
+        // T3.2 Step 3: SearchCore.state 已代理 Alpine，直接用 Alpine state
         const state = {
-            searchResults: coreState?.searchResults ?? this.searchResults,
-            currentIndex: coreState?.currentIndex ?? this.currentIndex,
-            currentQuery: coreState?.currentQuery ?? this.currentQuery,
-            currentOffset: coreState?.currentOffset ?? this.currentOffset,
-            hasMoreResults: coreState?.hasMoreResults ?? this.hasMoreResults,
-            fileList: coreState?.fileList ?? this.fileList,
-            currentFileIndex: coreState?.currentFileIndex ?? this.currentFileIndex,
-            listMode: coreState?.listMode ?? this.listMode,
+            searchResults: this.searchResults,
+            currentIndex: this.currentIndex,
+            currentQuery: this.currentQuery,
+            currentOffset: this.currentOffset,
+            hasMoreResults: this.hasMoreResults,
+            fileList: this.fileList,
+            currentFileIndex: this.currentFileIndex,
+            listMode: this.listMode,
             queryValue: this.searchQuery,
             displayMode: this.displayMode,
             currentMode: this.currentMode,  // T3 fix: 持久化搜尋模式
@@ -87,10 +105,9 @@ window.SearchStateMixin_Persistence = {
 
     setupAutoSave() {
         // Watch 主要狀態變化並自動儲存（debounce 100ms）
-        let saveTimeout;
+        // T4.2: 改用 _setTimer 取代 local debounce variable，支援離頁統一清除
         const debouncedSave = () => {
-            clearTimeout(saveTimeout);
-            saveTimeout = setTimeout(() => this.saveState(), 100);
+            this._setTimer('autosave', () => this.saveState(), 100);
         };
 
         this.$watch('searchResults', debouncedSave);
