@@ -279,10 +279,15 @@
 
             if (cover && !skipCover) {
                 // C6: 不使用 rotationX/Y/Z，使用 x 軸位移
-                tl.from(cover, { x: -40, opacity: 0, duration: dur, ease: ease });
+                // fromTo 明確指定終值，避免 playInfoExit 殘留 opacity:0 造成目標值錯誤
+                tl.fromTo(cover,
+                    { x: -40, opacity: 0 },
+                    { x: 0, opacity: 1, duration: dur, ease: ease });
             }
             if (info) {
-                tl.from(info, { y: 30, opacity: 0, duration: dur * 0.8, ease: ease },
+                tl.fromTo(info,
+                    { y: 30, opacity: 0 },
+                    { y: 0, opacity: 1, duration: dur * 0.8, ease: ease },
                     (cover && !skipCover) ? ('-=' + (dur * 0.6)) : 0);
             }
 

@@ -489,6 +489,9 @@
                      await new Promise(r => requestAnimationFrame(r));
                      const detailElL2 = this.$refs.detail;
                      if (detailElL2) {
+                         // 預隱藏 info，避免 nextTick+rAF 到 playDetailEntry 之間閃現
+                         var l2InfoEl = detailElL2.querySelector('.av-card-full-info');
+                         if (l2InfoEl) gsap.set(l2InfoEl, { opacity: 0 });
                          window.MotionLab.playDetailEntry(detailElL2, Object.assign({}, this.params, { skipCover: true }));
                      }
                      return;
@@ -506,6 +509,10 @@
 
                      const detailElCF = this.$refs.detail;
                      if (!detailElCF) return;
+
+                     // 預隱藏 info，避免轉場期間閃現
+                     var cfInfoEl = detailElCF.querySelector('.av-card-full-info');
+                     if (cfInfoEl) gsap.set(cfInfoEl, { opacity: 0 });
 
                      var cfToCapture = window.MotionLab.captureCoverRect(detailElCF, null);
                      var cfToEl = cfToCapture ? cfToCapture.el : null;
@@ -535,6 +542,10 @@
 
                  const detailEl = this.$refs.detail;
                  if (!detailEl) return;
+
+                 // 預隱藏 info，避免轉場期間閃現
+                 var infoEl = detailEl.querySelector('.av-card-full-info');
+                 if (infoEl) gsap.set(infoEl, { opacity: 0 });
 
                  if (fromCapture) {
                      // 量測 to rect（detail 封面）
@@ -584,6 +595,7 @@
          async onPrev() {
              if (!this.hasVideos || typeof window.MotionLab === 'undefined') return;
              if (this.mode !== 'detail' || this.selectedIndex <= 0) return;
+             if (this.isTransitioning) return;
              if (this.isNavigating) return;
              this.isNavigating = true;
              try {
@@ -603,6 +615,7 @@
          async onNext() {
              if (!this.hasVideos || typeof window.MotionLab === 'undefined') return;
              if (this.mode !== 'detail' || this.selectedIndex >= this.videos.length - 1) return;
+             if (this.isTransitioning) return;
              if (this.isNavigating) return;
              this.isNavigating = true;
              try {
@@ -873,13 +886,13 @@
         </button>
 
         <button class="control-btn"
-                :disabled="!hasVideos || isNavigating"
+                :disabled="!hasVideos || isNavigating || isTransitioning"
                 @click="onPrev()">
             <i class="bi bi-chevron-left"></i> Prev
         </button>
 
         <button class="control-btn"
-                :disabled="!hasVideos || isNavigating"
+                :disabled="!hasVideos || isNavigating || isTransitioning"
                 @click="onNext()">
             <i class="bi bi-chevron-right"></i> Next
         </button>
