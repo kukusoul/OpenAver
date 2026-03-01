@@ -780,7 +780,13 @@ function scannerPage() {
         await this.loadConfig();
         this.dirtyCheckModalOpen = false;
         if (this.pendingNavigationUrl) {
-            window.location.href = this.pendingNavigationUrl;
+            const url = this.pendingNavigationUrl;
+            // dirty state cleared by loadConfig(); beforeLeave will now return true
+            // → __leavePage triggers _doCleanup (closes eventSource + clears timers)
+            if (window.__leavePage) {
+                window.__leavePage(url);
+            }
+            window.location.href = url;
         }
     },
 
@@ -789,7 +795,13 @@ function scannerPage() {
         if (saved) {
             this.dirtyCheckModalOpen = false;
             if (this.pendingNavigationUrl) {
-                window.location.href = this.pendingNavigationUrl;
+                const url = this.pendingNavigationUrl;
+                // dirty state cleared by saveConfig(); beforeLeave will now return true
+                // → __leavePage triggers _doCleanup (closes eventSource + clears timers)
+                if (window.__leavePage) {
+                    window.__leavePage(url);
+                }
+                window.location.href = url;
             }
         }
         // If save failed, modal stays open, user sees toast error
