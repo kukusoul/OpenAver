@@ -399,13 +399,31 @@
              easing: 'back.out(1.2)',
              flipMode: 'Flip',
              reducedMotionSim: false,
-             speed: 0.5
+             speed: 0.5,
+             detailSpeed: 1.5
          },
          videos: [],
          loading: true,
+         isNavigating: false,
 
          init() {
              this.fetchVideos();
+             // 鍵盤 ←/→ 快捷鍵
+             this._onKeyDown = (e) => {
+                 if (this.mode !== 'detail') return;
+                 // 排除表單元素，避免劫持 slider/select/input 的方向鍵
+                 const tag = e.target.tagName;
+                 if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' || tag === 'BUTTON' || e.target.isContentEditable) return;
+                 if (e.key === 'ArrowLeft') this.onPrev();
+                 if (e.key === 'ArrowRight') this.onNext();
+             };
+             window.addEventListener('keydown', this._onKeyDown);
+         },
+
+         destroy() {
+             if (this._onKeyDown) {
+                 window.removeEventListener('keydown', this._onKeyDown);
+             }
          },
 
          async fetchVideos() {
@@ -457,33 +475,41 @@
              });
          },
 
-         onPrev() {
+         async onPrev() {
              if (!this.hasVideos || typeof window.MotionLab === 'undefined') return;
-             if (this.mode === 'detail' && this.selectedIndex > 0) {
+             if (this.mode !== 'detail' || this.selectedIndex <= 0) return;
+             if (this.isNavigating) return;
+             this.isNavigating = true;
+             try {
                  const detailEl = this.$refs.detail;
                  const cardEl = detailEl ? detailEl.querySelector('.av-card-full') : null;
-                 if (cardEl) {
-                     window.MotionLab.playSlideOut(cardEl, 'right', this.params)
-                         .then(() => {
-                             this.selectedIndex--;
-                             this.$nextTick(() => window.MotionLab.playSlideIn(cardEl, 'left', this.params));
-                         });
-                 }
+                 if (!cardEl) return;
+                 await window.MotionLab.playSlideOut(cardEl, 'prev', this.params);
+                 this.selectedIndex--;
+                 await this.$nextTick();
+                 const tweenPrev = window.MotionLab.playSlideIn(cardEl, 'prev', this.params);
+                 if (tweenPrev) await tweenPrev;
+             } finally {
+                 this.isNavigating = false;
              }
          },
 
-         onNext() {
+         async onNext() {
              if (!this.hasVideos || typeof window.MotionLab === 'undefined') return;
-             if (this.mode === 'detail' && this.selectedIndex < this.videos.length - 1) {
+             if (this.mode !== 'detail' || this.selectedIndex >= this.videos.length - 1) return;
+             if (this.isNavigating) return;
+             this.isNavigating = true;
+             try {
                  const detailEl = this.$refs.detail;
                  const cardEl = detailEl ? detailEl.querySelector('.av-card-full') : null;
-                 if (cardEl) {
-                     window.MotionLab.playSlideOut(cardEl, 'left', this.params)
-                         .then(() => {
-                             this.selectedIndex++;
-                             this.$nextTick(() => window.MotionLab.playSlideIn(cardEl, 'right', this.params));
-                         });
-                 }
+                 if (!cardEl) return;
+                 await window.MotionLab.playSlideOut(cardEl, 'next', this.params);
+                 this.selectedIndex++;
+                 await this.$nextTick();
+                 const tweenNext = window.MotionLab.playSlideIn(cardEl, 'next', this.params);
+                 if (tweenNext) await tweenNext;
+             } finally {
+                 this.isNavigating = false;
              }
          },
 
@@ -504,6 +530,7 @@
              const detailEl = this.$refs.detail;
              window.MotionLab.resetAll(gridEl, detailEl);
              this.mode = 'grid';
+             this.isNavigating = false;
          }
      }"
      x-cloak>
@@ -560,13 +587,22 @@
             <span class="control-value" x-text="params.clipRevealDur.toFixed(2) + 's'"></span>
         </div>
 
-        <!-- Speed slider -->
+        <!-- Burst speed slider -->
         <div class="control-group">
-            <span class="control-label">Speed</span>
+            <span class="control-label">Burst</span>
             <input type="range" class="control-slider"
                    min="0.1" max="2.0" step="0.1"
                    x-model.number="params.speed">
             <span class="control-value" x-text="params.speed.toFixed(1) + 'x'"></span>
+        </div>
+
+        <!-- Detail speed slider -->
+        <div class="control-group">
+            <span class="control-label">Detail</span>
+            <input type="range" class="control-slider"
+                   min="0.5" max="2.0" step="0.1"
+                   x-model.number="params.detailSpeed">
+            <span class="control-value" x-text="params.detailSpeed.toFixed(1) + 'x'"></span>
         </div>
 
         <!-- Easing select -->
@@ -617,13 +653,13 @@
         </button>
 
         <button class="control-btn"
-                :disabled="!hasVideos"
+                :disabled="!hasVideos || isNavigating"
                 @click="onPrev()">
             <i class="bi bi-chevron-left"></i> Prev
         </button>
 
         <button class="control-btn"
-                :disabled="!hasVideos"
+                :disabled="!hasVideos || isNavigating"
                 @click="onNext()">
             <i class="bi bi-chevron-right"></i> Next
         </button>

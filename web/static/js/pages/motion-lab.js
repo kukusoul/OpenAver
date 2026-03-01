@@ -207,6 +207,7 @@
 
             var dur = params.duration || 0.6;
             var ease = params.easing || 'power3.out';
+            var detailSpeed = params.detailSpeed || 1;
 
             if (cover) {
                 // C6: 不使用 rotationX/Y/Z，使用 x 軸位移
@@ -217,18 +218,20 @@
                     cover ? ('-=' + (dur * 0.6)) : 0);
             }
 
+            tl.timeScale(detailSpeed);
             return tl;
         },
 
         /**
          * 滑出動畫（返回 Promise — C1 合規：onComplete 只 resolve，不改 Alpine 狀態）
          * @param {Element} containerEl - 容器
-         * @param {'left'|'right'} direction - 滑出方向
+         * @param {'next'|'prev'} direction - 語義方向：'next' 往左滑出，'prev' 往右滑出
          * @param {object} params - { duration, easing, reducedMotionSim }
          * @returns {Promise}
          */
         playSlideOut: function (containerEl, direction, params) {
             params = params || {};
+            var detailSpeed = params.detailSpeed || 1;
 
             return new Promise(function (resolve) {
                 if (!containerEl) {
@@ -246,7 +249,7 @@
                 }
 
                 var dur = (params.duration || 0.6) * 0.5;
-                var xTo = direction === 'left' ? '-50%' : '50%';
+                var xTo = direction === 'next' ? -40 : 40;
 
                 gsap.to(containerEl, {
                     x: xTo,
@@ -254,14 +257,14 @@
                     duration: dur,
                     ease: 'power2.in',
                     onComplete: resolve  // C1: onComplete 只 resolve Promise
-                });
+                }).timeScale(detailSpeed);
             });
         },
 
         /**
          * 滑入動畫
          * @param {Element} containerEl - 容器
-         * @param {'left'|'right'} direction - 來自方向
+         * @param {'next'|'prev'} direction - 語義方向：'next' 從右滑入，'prev' 從左滑入
          * @param {object} params - { duration, easing, reducedMotionSim }
          * @returns {gsap.core.Tween}
          */
@@ -280,13 +283,14 @@
             }
 
             var dur = (params.duration || 0.6) * 0.5;
-            var xFrom = direction === 'left' ? '-50%' : '50%';
+            var xFrom = direction === 'next' ? 40 : -40;
             var ease = params.easing || 'power3.out';
+            var detailSpeed = params.detailSpeed || 1;
 
             return gsap.fromTo(containerEl,
                 { x: xFrom, opacity: 0 },
                 { x: 0, opacity: 1, duration: dur, ease: ease }
-            );
+            ).timeScale(detailSpeed);
         },
 
         /**
