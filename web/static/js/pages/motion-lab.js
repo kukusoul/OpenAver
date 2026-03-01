@@ -213,7 +213,7 @@
                 tl.from(cover, { x: -40, opacity: 0, duration: dur, ease: ease });
             }
             if (info) {
-                tl.from(info, { y: 30, opacity: 0, duration: dur * 0.8 },
+                tl.from(info, { y: 30, opacity: 0, duration: dur * 0.8, ease: ease },
                     cover ? ('-=' + (dur * 0.6)) : 0);
             }
 

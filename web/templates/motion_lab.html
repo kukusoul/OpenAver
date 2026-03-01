@@ -488,7 +488,14 @@
          },
 
          onToggleMode() {
-             this.mode = this.mode === 'grid' ? 'detail' : 'grid';
+             const toDetail = this.mode === 'grid';
+             this.mode = toDetail ? 'detail' : 'grid';
+             if (toDetail && this.hasVideos && typeof window.MotionLab !== 'undefined') {
+                 this.$nextTick(() => {
+                     const detailEl = this.$refs.detail;
+                     if (detailEl) window.MotionLab.playDetailEntry(detailEl, this.params);
+                 });
+             }
          },
 
          onReset() {
