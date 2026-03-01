@@ -45,6 +45,7 @@ window.SearchStateMixin_Batch = {
 
         // 並行處理，一次 2 個
         const concurrency = 2;
+        let aborted = false;
         for (let i = 0; i < currentBatch.length; i += concurrency) {
             // 支援暫停
             if (batch.isPaused) {
@@ -57,6 +58,8 @@ window.SearchStateMixin_Batch = {
                     }, 100);
                 });
             }
+            // cleanup 已設 isProcessing=false → 中斷 loop，不繼續發新工作
+            if (!batch.isProcessing) { aborted = true; break; }
 
             const chunk = currentBatch.slice(i, Math.min(i + concurrency, currentBatch.length));
 
@@ -73,6 +76,8 @@ window.SearchStateMixin_Batch = {
 
                 batch.processed++;
             }));
+            // cleanup 在 chunk 執行中發生 → SSE 被關掉，Promise.all resolve 後檢查
+            if (!batch.isProcessing) { aborted = true; break; }
         }
 
         // 批次處理完成
@@ -80,9 +85,10 @@ window.SearchStateMixin_Batch = {
         batch.isProcessing = false;
         batch.isPaused = false;
 
-        // 顯示完成統計
-        const totalProcessed = batch.success + batch.failed;
-        alert(`批次搜尋完成！\n成功: ${batch.success}\n失敗: ${batch.failed}`);
+        // 顯示完成統計（cleanup 中斷時不顯示）
+        if (!aborted) {
+            alert(`批次搜尋完成！\n成功: ${batch.success}\n失敗: ${batch.failed}`);
+        }
 
         // 重置 total
         batch.total = 0;
@@ -131,6 +137,8 @@ window.SearchStateMixin_Batch = {
                     }, 100);
                 });
             }
+            // cleanup 已設 isProcessing=false → 中斷 loop，不繼續發新 fetch
+            if (!ts.isProcessing) { aborted = true; break; }
 
             try {
                 const response = await fetch('/api/translate', {

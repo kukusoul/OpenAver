@@ -188,12 +188,13 @@ window.SearchStateMixin_FileList = {
 
     async setFileList(paths) {
         // 呼叫過濾 API
+        const setFileListSignal = this._getAbortSignal('setFileList');  // T4.3
         try {
             const resp = await fetch('/api/search/filter-files', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ paths }),
-                signal: this._getAbortSignal('setFileList')  // T4.3
+                signal: setFileListSignal
             });
             const result = await resp.json();
 
@@ -216,7 +217,7 @@ window.SearchStateMixin_FileList = {
             if (err.name === 'AbortError') return;  // T4.3: 新搜尋取代，靜默退出
             console.error('Filter API error:', err);
         } finally {
-            this._clearAbort('setFileList');  // T4.3: 操作完成清除 registry
+            this._clearAbort('setFileList', setFileListSignal);  // T4.3: 操作完成清除 registry（比對 signal 避免刪掉新請求）
         }
 
         // 使用後端 API 批次解析所有檔名
@@ -341,9 +342,10 @@ window.SearchStateMixin_FileList = {
 
     async loadFavorite() {
         this.isLoadingFavorite = true;
+        const loadFavoriteSignal = this._getAbortSignal('loadFavorite');  // T4.3
         try {
             const resp = await fetch('/api/search/favorite-files', {
-                signal: this._getAbortSignal('loadFavorite')  // T4.3
+                signal: loadFavoriteSignal
             });
             const result = await resp.json();
 
@@ -367,7 +369,7 @@ window.SearchStateMixin_FileList = {
             alert('載入失敗：' + err.message);
         } finally {
             this.isLoadingFavorite = false;
-            this._clearAbort('loadFavorite');  // T4.3: 操作完成清除 registry
+            this._clearAbort('loadFavorite', loadFavoriteSignal);  // T4.3: 操作完成清除 registry（比對 signal 避免刪掉新請求）
         }
     }
 };

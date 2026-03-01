@@ -400,10 +400,14 @@ window.SearchStateMixin_SearchFlow = {
 
     /**
      * 從 registry 移除指定 key 的 AbortController（fetch 完成後呼叫）
+     * 只清除持有指定 signal 的 controller，避免刪掉新請求的 controller
      * @param {string} key - fetch 識別碼
+     * @param {AbortSignal} [signal] - 呼叫 _getAbortSignal 時取得的 signal；若省略則無條件刪除
      */
-    _clearAbort(key) {
-        delete this._abortControllers[key];
+    _clearAbort(key, signal) {
+        if (!signal || (this._abortControllers[key] && this._abortControllers[key].signal === signal)) {
+            delete this._abortControllers[key];
+        }
     },
 
     /**

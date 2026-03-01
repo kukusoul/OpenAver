@@ -55,11 +55,12 @@ window.SearchStateMixin_Navigation = {
 
         this.isLoadingMore = true;
         const newOffset = this.currentOffset + this.PAGE_SIZE;
+        const loadMoreSignal = this._getAbortSignal('loadMore');
 
         try {
             const response = await fetch(
                 `/api/search?q=${encodeURIComponent(this.currentQuery)}&offset=${newOffset}&limit=${this.PAGE_SIZE}`,
-                { signal: this._getAbortSignal('loadMore') }
+                { signal: loadMoreSignal }
             );
             const data = await response.json();
 
@@ -85,7 +86,7 @@ window.SearchStateMixin_Navigation = {
             console.error('載入更多失敗:', err);
         } finally {
             this.isLoadingMore = false;
-            this._clearAbort('loadMore');  // T4.3: 操作完成清除 registry
+            this._clearAbort('loadMore', loadMoreSignal);  // T4.3: 操作完成清除 registry（比對 signal 避免刪掉新請求）
         }
     },
 
