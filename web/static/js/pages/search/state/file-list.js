@@ -348,8 +348,8 @@ window.SearchStateMixin_FileList = {
 
             await this.setFileList(result.files);
 
-            // 自動開始搜尋
-            setTimeout(() => {
+            // 自動開始搜尋（T4.2: 改用 _setTimer，離頁時可統一清除）
+            this._setTimer('loadFavorite', () => {
                 const searchableFiles = this.fileList.filter(f => f.number && !f.searched);
                 if (searchableFiles.length > 0) {
                     this.searchAll();

@@ -105,10 +105,9 @@ window.SearchStateMixin_Persistence = {
 
     setupAutoSave() {
         // Watch 主要狀態變化並自動儲存（debounce 100ms）
-        let saveTimeout;
+        // T4.2: 改用 _setTimer 取代 local debounce variable，支援離頁統一清除
         const debouncedSave = () => {
-            clearTimeout(saveTimeout);
-            saveTimeout = setTimeout(() => this.saveState(), 100);
+            this._setTimer('autosave', () => this.saveState(), 100);
         };
 
         this.$watch('searchResults', debouncedSave);

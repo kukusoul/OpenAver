@@ -69,7 +69,7 @@ window.SearchStateMixin_Base = function() {
             type: 'success',  // 'success' | 'error' | 'warning' | 'info'
             visible: false
         },
-        _toastTimer: null,  // setTimeout ID for auto-hide
+        _timers: {},  // Timer registry：{ [key: string]: number }（setTimeout ID）
 
         // ===== T1d: File List State =====
         dragActive: false,

@@ -315,6 +315,15 @@ window.SearchStateMixin_SearchFlow = {
         }
         this.requestId++;  // 讓進行中的 onmessage/onerror callback 失效
         // 也讓進行中的 fallbackSearch() 的 savedRequestId check 失效
+
+        // T4.2: 清除所有 setTimeout timer
+        this._clearAllTimers();
+
+        // T4.2: 讓 batch/translate 的 checkInterval 自清（setPaused=false 讓條件成立）
+        this.batchState.isProcessing = false;
+        this.batchState.isPaused = false;
+        this.translateState.isProcessing = false;
+        this.translateState.isPaused = false;
     },
 
     // ===== T4.1: EventSource 集中追蹤方法 =====
@@ -347,6 +356,30 @@ window.SearchStateMixin_SearchFlow = {
             }
         });
         this._activeConnections = [];
+    },
+
+    // ===== T4.2: Timer 集中追蹤方法 =====
+
+    /**
+     * 設定具名 timer（自動取代同 key 的舊 timer）
+     * @param {string} key - timer 識別碼（如 'toast', 'autosave', 'loadFavorite'）
+     * @param {Function} fn - 回調函數
+     * @param {number} delay - 延遲毫秒
+     */
+    _setTimer(key, fn, delay) {
+        if (this._timers[key]) clearTimeout(this._timers[key]);
+        this._timers[key] = setTimeout(() => {
+            delete this._timers[key];
+            fn();
+        }, delay);
+    },
+
+    /**
+     * 清除所有 registry 中的 timer（離頁時呼叫）
+     */
+    _clearAllTimers() {
+        Object.values(this._timers).forEach(clearTimeout);
+        this._timers = {};
     },
 
     /**

@@ -805,6 +805,75 @@ class TestEventSourceTracking:
         )
 
 
+class TestTimerTracking:
+    """T4.2 守衛 — 所有 setTimeout 都透過 _timers registry 管理"""
+
+    def test_base_has_timers_registry(self):
+        """base.js 必須有 _timers: {} 初始值"""
+        js_file = PROJECT_ROOT / "web/static/js/pages/search/state/base.js"
+        content = js_file.read_text(encoding='utf-8')
+        assert '_timers: {}' in content, \
+            "base.js 缺少 _timers: {} — T4.2 集中追蹤 setTimeout"
+
+    def test_base_no_toast_timer(self):
+        """base.js 不再有 _toastTimer: null 宣告（已由 _timers registry 取代）"""
+        js_file = PROJECT_ROOT / "web/static/js/pages/search/state/base.js"
+        content = js_file.read_text(encoding='utf-8')
+        assert '_toastTimer: null' not in content, \
+            "base.js 仍含 _toastTimer: null — T4.2 應已移除，改用 _timers registry"
+
+    def test_search_flow_has_set_timer(self):
+        """search-flow.js 必須定義 _setTimer method"""
+        js_file = PROJECT_ROOT / "web/static/js/pages/search/state/search-flow.js"
+        content = js_file.read_text(encoding='utf-8')
+        assert '_setTimer(' in content, \
+            "search-flow.js 缺少 _setTimer method — T4.2 timer registry"
+
+    def test_search_flow_has_clear_all_timers(self):
+        """search-flow.js 必須定義 _clearAllTimers method"""
+        js_file = PROJECT_ROOT / "web/static/js/pages/search/state/search-flow.js"
+        content = js_file.read_text(encoding='utf-8')
+        assert '_clearAllTimers(' in content, \
+            "search-flow.js 缺少 _clearAllTimers method — T4.2 timer registry"
+
+    def test_cleanup_calls_clear_all_timers(self):
+        """cleanupForNavigation() 必須呼叫 _clearAllTimers()"""
+        js_file = PROJECT_ROOT / "web/static/js/pages/search/state/search-flow.js"
+        content = js_file.read_text(encoding='utf-8')
+        assert '_clearAllTimers()' in content, \
+            "search-flow.js 的 cleanupForNavigation() 未呼叫 _clearAllTimers()"
+
+    def test_result_card_no_manual_toast_timer(self):
+        """result-card.js 不再有 _toastTimer = 手動賦值（改用 _setTimer）"""
+        js_file = PROJECT_ROOT / "web/static/js/pages/search/state/result-card.js"
+        content = js_file.read_text(encoding='utf-8')
+        assert '_toastTimer =' not in content, \
+            "result-card.js 仍含 _toastTimer = 手動賦值 — T4.2 應改用 _setTimer('toast', ...)"
+
+    def test_result_card_uses_set_timer(self):
+        """result-card.js 的 showToast() 必須使用 _setTimer"""
+        js_file = PROJECT_ROOT / "web/static/js/pages/search/state/result-card.js"
+        content = js_file.read_text(encoding='utf-8')
+        assert "_setTimer('toast'" in content, \
+            "result-card.js 的 showToast() 未使用 _setTimer('toast', ...) — T4.2"
+
+    def test_persistence_uses_set_timer(self):
+        """persistence.js 的 setupAutoSave() 必須使用 _setTimer（不再用 saveTimeout local variable）"""
+        js_file = PROJECT_ROOT / "web/static/js/pages/search/state/persistence.js"
+        content = js_file.read_text(encoding='utf-8')
+        assert "_setTimer('autosave'" in content, \
+            "persistence.js 的 setupAutoSave() 未使用 _setTimer('autosave', ...) — T4.2"
+        assert 'saveTimeout' not in content, \
+            "persistence.js 仍含 saveTimeout local variable — T4.2 應已移除"
+
+    def test_file_list_uses_set_timer(self):
+        """file-list.js 的 loadFavorite() 必須使用 _setTimer"""
+        js_file = PROJECT_ROOT / "web/static/js/pages/search/state/file-list.js"
+        content = js_file.read_text(encoding='utf-8')
+        assert "_setTimer('loadFavorite'" in content, \
+            "file-list.js 的 loadFavorite() 未使用 _setTimer('loadFavorite', ...) — T4.2"
+
+
 class TestWindowGlobalCleanup:
     """T3.3 守衛 — bridge.js 不再設定多餘的 window.xxx 全域函數"""
 
