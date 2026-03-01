@@ -1065,3 +1065,15 @@ class TestFetchAbortController:
         """loadFavorite() 的 fetch 必須傳 signal"""
         content = self.FILE_LIST_JS.read_text(encoding='utf-8')
         assert "_getAbortSignal('loadFavorite')" in content
+
+
+class TestScannerDeadCodeGuard:
+    """T5.2 守衛 — Scanner 已移除 window.isGenerating 死碼"""
+
+    SCANNER_HTML = PROJECT_ROOT / "web" / "templates" / "scanner.html"
+
+    def test_scanner_no_window_is_generating(self):
+        """scanner.html 不含 window.isGenerating（Alpine getter 已完全取代）"""
+        content = self.SCANNER_HTML.read_text(encoding='utf-8')
+        assert 'window.isGenerating' not in content, \
+            "scanner.html 仍含 window.isGenerating — T5.2 應已移除所有死碼賦值"

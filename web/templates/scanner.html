@@ -978,9 +978,6 @@ function scannerPage() {
         // 設置 localStorage 標記
         localStorage.setItem('avlist_generating', 'true');
 
-        // 同步全域變數（過渡期）
-        window.isGenerating = true;
-
         try {
             this.eventSource = new EventSource('/api/gallery/generate');
 
@@ -1005,8 +1002,6 @@ function scannerPage() {
                     localStorage.setItem('avlist_generating', 'false');
                     localStorage.setItem('avlist_last_status', '完成');
                     localStorage.removeItem('avlist_state');  // 清除 viewer 狀態
-
-                    window.isGenerating = false;
 
                     // 處理 NFO 更新提示
                     if (data.session_update && data.session_update.count > 0) {
@@ -1035,7 +1030,6 @@ function scannerPage() {
                     this.addLog('error', '錯誤: ' + data.message);
                     this.flushLogs();
                     localStorage.setItem('avlist_generating', 'false');
-                    window.isGenerating = false;
                 }
             };
 
@@ -1047,12 +1041,10 @@ function scannerPage() {
                 this.addLog('error', '連線中斷');
                 this.flushLogs();
                 localStorage.setItem('avlist_generating', 'false');
-                window.isGenerating = false;
             };
         } catch (e) {
             this.state = 'error';
             localStorage.setItem('avlist_generating', 'false');
-            window.isGenerating = false;
             alert('發生錯誤: ' + e.message);
         }
     },
@@ -1075,7 +1067,6 @@ function scannerPage() {
         this.clearLogs();
 
         localStorage.setItem('avlist_generating', 'true');
-        window.isGenerating = true;
 
         try {
             this.eventSource = new EventSource('/api/gallery/update');
@@ -1099,7 +1090,6 @@ function scannerPage() {
 
                     localStorage.setItem('avlist_generating', 'false');
                     localStorage.setItem('avlist_last_status', data.message || '完成');
-                    window.isGenerating = false;
 
                     this.showToast('補全完成！請重新產生列表以更新', 'success');
                     if (data.message) {
@@ -1117,7 +1107,6 @@ function scannerPage() {
                     this.addLog('error', '錯誤: ' + data.message);
                     this.flushLogs();
                     localStorage.setItem('avlist_generating', 'false');
-                    window.isGenerating = false;
                 }
             };
 
@@ -1129,12 +1118,10 @@ function scannerPage() {
                 this.addLog('error', '連線中斷');
                 this.flushLogs();
                 localStorage.setItem('avlist_generating', 'false');
-                window.isGenerating = false;
             };
         } catch (e) {
             this.state = 'error';
             localStorage.setItem('avlist_generating', 'false');
-            window.isGenerating = false;
             alert('發生錯誤: ' + e.message);
         }
     },
@@ -1155,7 +1142,6 @@ function scannerPage() {
         this.clearLogs();
 
         localStorage.setItem('avlist_generating', 'true');
-        window.isGenerating = true;
 
         try {
             this.eventSource = new EventSource('/api/gallery/jellyfin-update');
@@ -1179,7 +1165,6 @@ function scannerPage() {
 
                     localStorage.setItem('avlist_generating', 'false');
                     localStorage.setItem('avlist_last_status', data.message || '完成');
-                    window.isGenerating = false;
 
                     this.showToast('補齊完成！', 'success');
                     if (data.message) {
@@ -1196,7 +1181,6 @@ function scannerPage() {
                     this.addLog('error', '錯誤: ' + data.message);
                     this.flushLogs();
                     localStorage.setItem('avlist_generating', 'false');
-                    window.isGenerating = false;
                 }
             };
 
@@ -1208,12 +1192,10 @@ function scannerPage() {
                 this.addLog('error', '連線中斷');
                 this.flushLogs();
                 localStorage.setItem('avlist_generating', 'false');
-                window.isGenerating = false;
             };
         } catch (e) {
             this.state = 'error';
             localStorage.setItem('avlist_generating', 'false');
-            window.isGenerating = false;
             alert('發生錯誤: ' + e.message);
         }
     },
