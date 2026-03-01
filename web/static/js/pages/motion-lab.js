@@ -598,6 +598,66 @@
         },
 
         /**
+         * 單卡 Stream-in 進場動畫
+         * 動畫目標為卡片內的圖片區域（.av-card-preview-img），番號 footer 固定不動。
+         * C1: onComplete 只 resolve Promise（此函數不返回 Promise，但不改 Alpine 狀態）
+         * C4: 開頭 killTweensOf(imgEl)
+         * C6: 不使用 rotationX/Y/Z
+         * @param {Element} cardEl - .av-card-preview 元素（整張卡）
+         * @param {'fadeScale'|'fadeUp'|'reveal'} style - 動畫風格
+         * @param {object} params - Alpine 傳入的 params 物件（含 reducedMotionSim）
+         * @returns {gsap.core.Tween|null} - reduced-motion 時返回 null
+         */
+        playCardStreamIn: function (cardEl, style, params) {
+            params = params || {};
+
+            // null guard
+            if (!cardEl) return null;
+
+            // 動畫目標：圖片區域，番號 footer 保持錨定不動
+            var imgEl = cardEl.querySelector('.av-card-preview-img') || cardEl;
+
+            // C4: 清除舊動畫
+            gsap.killTweensOf(imgEl);
+
+            // Reduced Motion 降級：瞬間顯示，不播動畫
+            if (shouldSkip(params)) {
+                gsap.set(imgEl, { opacity: 1, scale: 1, clipPath: 'none', y: 0 });
+                return null;
+            }
+
+            style = style || 'fadeScale';
+
+            if (style === 'fadeScale') {
+                return gsap.fromTo(imgEl,
+                    { opacity: 0, scale: 0.92 },
+                    { opacity: 1, scale: 1, duration: 0.3, ease: 'power2.out' }
+                );
+            }
+
+            if (style === 'fadeUp') {
+                return gsap.fromTo(imgEl,
+                    { opacity: 0, y: 20 },
+                    { opacity: 1, y: 0, duration: 0.35, ease: 'power3.out' }
+                );
+            }
+
+            if (style === 'reveal') {
+                // C6: clip-path 展開，無旋轉、無位移
+                return gsap.fromTo(imgEl,
+                    { clipPath: 'inset(100% 0 0 0)' },
+                    { clipPath: 'inset(0% 0% 0% 0%)', duration: 0.4, ease: 'power2.out' }
+                );
+            }
+
+            // 未知 style 降級為 fadeScale
+            return gsap.fromTo(imgEl,
+                { opacity: 0, scale: 0.92 },
+                { opacity: 1, scale: 1, duration: 0.3, ease: 'power2.out' }
+            );
+        },
+
+        /**
          * 初始化 GSDevTools（只在 GSDevTools 可用時執行）
          * @param {gsap.core.Timeline} timeline - 要載入到 DevTools 的 timeline
          */
