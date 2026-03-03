@@ -192,6 +192,7 @@
     padding: 0.75rem 1rem;
     gap: 0.75rem;
     min-height: 0;
+    position: relative;
 }
 
 /* 假搜尋框 */
@@ -251,9 +252,44 @@
     position: relative;
 }
 
-/* Rotating Border overlay：staging card 需要 overflow visible 讓 ::before 伸出邊界 */
-.motion-lab-grid .av-card-preview.rotating-border-spotlight {
-    overflow: visible;
+/* Staging Anchor — overlay layer，浮在 preview 區上方，不佔 flex flow 空間 */
+.staging-anchor {
+    position: absolute;
+    top: 60px;          /* 搜尋框下方（搜尋框 44px 高 + 12px padding + 4px gap） */
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10;
+    pointer-events: none;   /* 不攔截 grid 互動 */
+}
+
+.staging-anchor .av-card-preview {
+    min-width: 280px;
+    position: relative;
+    border-radius: 8px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-light);
+    pointer-events: auto;   /* staging card 本身可正常互動與動畫渲染 */
+}
+
+.staging-anchor .av-card-preview-img {
+    position: relative;
+    aspect-ratio: 3/2;
+    overflow: hidden;
+    background: var(--bg-tertiary);
+}
+
+.staging-anchor .av-card-preview-footer {
+    padding: 0.35rem 0.5rem;
+}
+
+.staging-anchor .av-num {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    display: block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 /* Staging counter badge（staging card 內嵌版） */
@@ -1001,11 +1037,27 @@
              this._burstBatchIndex = 0;
              this.stagingCurrentCover = null;
              this.stagingCurrentNum = null;
+             // 重置 staging card 寬度（由 onStagingBurst 動態量測設定）
+             const stagingCardResetEl = this.$refs.stagingCard;
+             if (stagingCardResetEl) {
+                 stagingCardResetEl.style.width = '';
+             }
              // 清除 GSAP 殘留
              if (typeof window.MotionLab !== 'undefined') {
                  const stagingGridEl = this.$refs.stagingGrid;
                  if (stagingGridEl) {
                      window.MotionLab.resetAll(stagingGridEl, null);
+                 }
+                 // 清理 staging anchor 內 staging card 的 GSAP 殘留
+                 const stagingCardEl = this.$refs.stagingCard;
+                 if (stagingCardEl) {
+                     gsap.killTweensOf(stagingCardEl);
+                     gsap.set(stagingCardEl, { clearProps: 'transform,opacity,zIndex' });
+                     const stagingImgEl = this.$refs.stagingImg;
+                     if (stagingImgEl) {
+                         gsap.killTweensOf(stagingImgEl);
+                         gsap.set(stagingImgEl, { clearProps: 'opacity' });
+                     }
                  }
              }
          },
@@ -1035,7 +1087,7 @@
              if (!stagingGridEl) return;
 
              // 取本批填入的 slot 對應 DOM 元素（排除 staging card 本身）
-             const allCards = stagingGridEl.querySelectorAll('.av-card-preview:not([data-staging])');
+             const allCards = stagingGridEl.querySelectorAll('.av-card-preview');
              const newCardEls = batch.map(function (item) {
                  return allCards[item.slot] || null;
              }).filter(Boolean);
@@ -1063,6 +1115,14 @@
              if (!this.videos.length) return;
 
              this.stagingRunning = true;
+
+             // 動態量測 grid 卡片寬度，套到 staging card（§8）
+             await this.$nextTick();
+             const firstGridCard = this.$refs.stagingGrid.querySelector('.av-card-preview');
+             if (firstGridCard && this.$refs.stagingCard) {
+                 const cardWidth = firstGridCard.getBoundingClientRect().width;
+                 this.$refs.stagingCard.style.width = cardWidth + 'px';
+             }
 
              // 捕獲本次執行的 run token
              const runId = this._stagingRunId;
@@ -1483,17 +1543,12 @@
             </template>
         </div>
 
-        <!-- Staging Burst Grid 區（tab=staging） -->
-        <div class="motion-lab-grid"
-             x-ref="stagingGrid"
-             x-show="tab === 'staging'">
-
-            <!-- Staging Card — grid slot 0，與普通卡片等寬 -->
+        <!-- Staging Anchor — 獨立中央容器（不佔 stagingGrid flow） -->
+        <div class="staging-anchor"
+             x-show="tab === 'staging' && (stagingRunning || stagingFilled > 0)">
             <div class="av-card-preview rotating-border-spotlight"
                  :class="{ active: stagingRunning && !params.reducedMotionSim }"
                  x-ref="stagingCard"
-                 data-staging="true"
-                 x-show="stagingRunning || stagingFilled > 0"
                  style="border-radius: 8px;">
                 <div class="av-card-preview-img">
                     <img x-ref="stagingImg"
@@ -1516,6 +1571,12 @@
                           x-show="stagingFilled > 0"></span>
                 </div>
             </div>
+        </div>
+
+        <!-- Staging Burst Grid 區（tab=staging） -->
+        <div class="motion-lab-grid"
+             x-ref="stagingGrid"
+             x-show="tab === 'staging'">
 
             <template x-for="(card, index) in stagingCards" :key="card ? card.path : 'empty_' + index">
                 <div class="av-card-preview">
