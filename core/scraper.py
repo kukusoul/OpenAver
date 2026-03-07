@@ -693,9 +693,7 @@ def smart_search(query: str, limit: int = 20, offset: int = 0, status_callback: 
     # 2. 局部搜尋
     elif is_partial_number(query):
         if offset > 0: return []
-        if status_callback: status_callback('javbus', 'searching')
-        results = search_partial(query)
-        if status_callback: status_callback('done', f'found:{len(results)}')
+        results = search_partial(query, status_callback=status_callback, result_callback=result_callback)
         for r in results: r['_mode'] = 'partial'
         return results
 
