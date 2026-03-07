@@ -291,21 +291,41 @@ def search_jav_single_source(number: str, source: str, proxy_url: str = '') -> O
     return search_jav(number, source=source, proxy_url=proxy_url)
 
 
-def search_partial(partial: str) -> List[Dict[str, Any]]:
+def search_partial(partial: str,
+                   status_callback: Optional[Callable[[str, str], None]] = None,
+                   result_callback: Optional[Callable[[int, Any], None]] = None) -> List[Dict[str, Any]]:
     """局部搜尋"""
     candidates = expand_partial_number(partial)
     results = []
 
+    if status_callback:
+        status_callback('javbus', 'searching')
+
+    # Seed callback: 通知前端準備 skeleton grid
+    if candidates and result_callback:
+        result_callback(-1, candidates)
+
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        futures = {executor.submit(search_jav, num): num for num in candidates}
+        # 記錄 slot index 以支援 result_callback 正確定位
+        futures = {}
+        for idx, num in enumerate(candidates):
+            future = executor.submit(search_jav, num, 'javbus')
+            futures[future] = (idx, num)
+
         for future in as_completed(futures):
+            idx, num = futures[future]
             try:
                 data = future.result()
                 if data and data.get('title'):
                     results.append(data)
+                    if result_callback:
+                        result_callback(idx, data)
             except Exception:
                 pass
             time.sleep(REQUEST_DELAY)
+
+    if status_callback:
+        status_callback('done', f'found:{len(results)}')
 
     return sort_results_by_date(results)
 
