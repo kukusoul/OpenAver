@@ -85,8 +85,19 @@ window.SearchStateMixin_GridMode = {
             return;
         }
         if (this.lightboxIndex > 0) {
-            this.lightboxIndex--;
-            this.currentIndex = this.lightboxIndex;
+            // U11b: skip _failed items going backwards
+            let newIdx = this.lightboxIndex - 1;
+            while (newIdx >= 0 && this.searchResults[newIdx]._failed) {
+                newIdx--;
+            }
+            if (newIdx >= 0) {
+                this.lightboxIndex = newIdx;
+                this.currentIndex = newIdx;
+            } else if (this.actressProfile) {
+                // all items before current are _failed, jump to actress photo
+                this.lightboxIndex = -1;
+            }
+            // else: no valid items and no actress → don't move
         }
     },
 
@@ -95,14 +106,26 @@ window.SearchStateMixin_GridMode = {
      */
     nextLightboxVideo() {
         if (this.lightboxIndex === -1) {
-            // At actress photo → go to first cover
-            this.lightboxIndex = 0;
-            this.currentIndex = 0;
+            // U11b: from actress photo, find first non-_failed item
+            const firstValid = this.searchResults.findIndex(r => !r._failed);
+            if (firstValid !== -1) {
+                this.lightboxIndex = firstValid;
+                this.currentIndex = firstValid;
+            }
+            // else: no valid items → don't move
             return;
         }
         if (this.lightboxIndex < this.searchResults.length - 1) {
-            this.lightboxIndex++;
-            this.currentIndex = this.lightboxIndex;
+            // U11b: skip _failed items going forward
+            let newIdx = this.lightboxIndex + 1;
+            while (newIdx < this.searchResults.length && this.searchResults[newIdx]._failed) {
+                newIdx++;
+            }
+            if (newIdx < this.searchResults.length) {
+                this.lightboxIndex = newIdx;
+                this.currentIndex = newIdx;
+            }
+            // else: no more valid items → don't move
         }
     },
 

@@ -10,7 +10,12 @@ window.SearchStateMixin_Navigation = {
      * @param {number} delta - 偏移量（-1 = 上一個，1 = 下一個）
      */
     navigate(delta) {
-        const newIndex = this.currentIndex + delta;
+        let newIndex = this.currentIndex + delta;
+
+        // U11b: skip _failed items (C30)
+        while (newIndex >= 0 && newIndex < this.searchResults.length && this.searchResults[newIndex]._failed) {
+            newIndex += delta;
+        }
 
         // 往左且已在第一個 → 切換到上一個檔案
         if (delta < 0 && newIndex < 0) {
