@@ -10,6 +10,7 @@ import json
 import httpx
 
 from core.logger import get_logger
+from core.video_extensions import DEFAULT_VIDEO_EXTENSIONS
 
 logger = get_logger(__name__)
 
@@ -36,7 +37,7 @@ class ScraperConfig(BaseModel):
     create_nfo: bool = True
     max_title_length: int = 50
     max_filename_length: int = 60
-    video_extensions: List[str] = [".mp4", ".avi", ".mkv", ".wmv", ".rmvb", ".flv", ".mov", ".m4v", ".ts"]
+    video_extensions: List[str] = list(DEFAULT_VIDEO_EXTENSIONS)
     suffix_keywords: List[str] = ["-cd1", "-cd2", "-4k", "-uc"]
     jellyfin_mode: bool = False
 

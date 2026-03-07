@@ -9,10 +9,11 @@ import subprocess
 import webview
 from pathlib import Path
 from core.path_utils import uri_to_fs_path
+from core.video_extensions import DEFAULT_VIDEO_EXTENSIONS, get_video_extensions
 from webview.dom import DOMEventHandler
 
-# 支援的影片副檔名
-VIDEO_EXTENSIONS = {'.mp4', '.avi', '.mkv', '.wmv', '.rmvb', '.flv', '.mov', '.m4v', '.ts'}
+# 支援的影片副檔名（from core.video_extensions Single Source of Truth）
+VIDEO_EXTENSIONS = set(DEFAULT_VIDEO_EXTENSIONS)
 
 # 全域 window 參考（由 launcher/standalone 設定）
 _window = None
@@ -29,9 +30,16 @@ def get_window():
     return _window
 
 
-def is_video_file(filename):
-    """檢查是否為影片檔案"""
+def is_video_file(filename, extensions=None):
+    """檢查是否為影片檔案
+
+    Args:
+        filename: 檔案名稱
+        extensions: 可選的副檔名集合，未提供時使用模組級 VIDEO_EXTENSIONS 預設值
+    """
     ext = os.path.splitext(filename)[1].lower()
+    if extensions is not None:
+        return ext in extensions
     return ext in VIDEO_EXTENSIONS
 
 
@@ -44,7 +52,10 @@ class Api:
         Returns: 選取的檔案路徑陣列（Windows 路徑）
         """
         window = get_window()
-        file_types = ('影片檔案 (*.mp4;*.avi;*.mkv;*.wmv;*.rmvb;*.flv;*.mov;*.m4v;*.ts)',
+        # Dynamically build file filter from config (fallback to DEFAULT_VIDEO_EXTENSIONS)
+        exts = self._get_video_extensions()
+        ext_filter = ';'.join(f'*{ext}' for ext in sorted(exts))
+        file_types = (f'影片檔案 ({ext_filter})',
                       '所有檔案 (*.*)')
         result = window.create_file_dialog(
             webview.OPEN_DIALOG,
@@ -64,11 +75,12 @@ class Api:
         result = window.create_file_dialog(webview.FOLDER_DIALOG)
         if result and len(result) > 0:
             folder_path = result[0]
-            # 展開第一層影片檔案
+            # 用 config-driven extensions 展開第一層影片檔案
+            exts = self._get_video_extensions()
             files = []
             for f in os.listdir(folder_path):
                 file_path = os.path.join(folder_path, f)
-                if os.path.isfile(file_path) and is_video_file(f):
+                if os.path.isfile(file_path) and is_video_file(f, exts):
                     files.append(file_path)
             # 返回資料夾路徑和檔案列表（Scanner 用 folder，Search 用 files）
             return {"folder": folder_path, "files": files}
@@ -155,6 +167,22 @@ class Api:
         except Exception:
             return False
 
+    def _get_video_extensions(self):
+        """Get video extensions from config, fallback to DEFAULT_VIDEO_EXTENSIONS"""
+        try:
+            possible_paths = [
+                Path(__file__).parent.parent / 'web' / 'config.json',
+                Path(__file__).parent / 'config.json',
+            ]
+            for config_path in possible_paths:
+                if config_path.exists():
+                    with open(config_path, 'r', encoding='utf-8') as f:
+                        config = json.load(f)
+                        return get_video_extensions(config)
+        except Exception:
+            pass
+        return set(DEFAULT_VIDEO_EXTENSIONS)
+
     def _get_player_path(self):
         """從設定檔讀取播放器路徑"""
         try:
@@ -173,6 +201,23 @@ class Api:
         return ''
 
 
+def _load_config_extensions():
+    """Load video extensions from config file (for module-level functions)."""
+    try:
+        possible_paths = [
+            Path(__file__).parent.parent / 'web' / 'config.json',
+            Path(__file__).parent / 'config.json',
+        ]
+        for config_path in possible_paths:
+            if config_path.exists():
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                    return get_video_extensions(config)
+    except Exception:
+        pass
+    return set(DEFAULT_VIDEO_EXTENSIONS)
+
+
 def on_drop(e):
     """處理拖放事件，取得完整路徑並傳給前端（支援多檔案和資料夾）"""
     window = get_window()
@@ -185,6 +230,9 @@ def on_drop(e):
     expanded_paths = []  # 影片檔案路徑（給 search 用）
     folder_paths = []    # 資料夾路徑（給 scanner 用）
 
+    # 用 config-driven extensions
+    exts = _load_config_extensions()
+
     for file_info in files:
         win_path = file_info.get('pywebviewFullPath', '')
         if not win_path:
@@ -196,7 +244,7 @@ def on_drop(e):
             # 資料夾：展開第一層影片檔案（給 search 用）
             for f in os.listdir(win_path):
                 file_win_path = os.path.join(win_path, f)
-                if os.path.isfile(file_win_path) and is_video_file(f):
+                if os.path.isfile(file_win_path) and is_video_file(f, exts):
                     expanded_paths.append(file_win_path)
         else:
             # 檔案：直接加入

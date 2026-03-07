@@ -494,6 +494,65 @@ class TestSearchStreamSSE:
             assert 'source' in event
             assert 'status' in event
 
+class TestFilterFilesStrmExemption:
+    """Test /api/search/filter-files with .strm min_size exemption"""
+
+    def test_strm_not_filtered_by_min_size(self, client, tmp_path, monkeypatch):
+        """.strm file should NOT be filtered by min_size setting"""
+        # Create a .strm file (100 bytes)
+        strm_file = tmp_path / "test.strm"
+        strm_file.write_bytes(b'http://example.com/video.mp4')
+
+        # Create config with .strm in video_extensions and min_size_mb=1
+        test_config = {
+            "scraper": {"video_extensions": [".mp4", ".strm"]},
+            "gallery": {"min_size_mb": 1},
+        }
+
+        def mock_load_config():
+            return test_config
+        monkeypatch.setattr("web.routers.config.load_config", mock_load_config)
+
+        response = client.post(
+            "/api/search/filter-files",
+            json={"paths": [str(strm_file)]}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert len(data["files"]) == 1, \
+            ".strm file should NOT be filtered by min_size (ZERO_SIZE_EXTENSIONS exemption)"
+        assert data["rejected"]["size"] == 0
+
+    def test_small_mp4_still_filtered_by_min_size(self, client, tmp_path, monkeypatch):
+        """A small .mp4 file should still be filtered by min_size"""
+        # Create a small .mp4 file (100 bytes)
+        mp4_file = tmp_path / "small.mp4"
+        mp4_file.write_bytes(b'\x00' * 100)
+
+        test_config = {
+            "scraper": {"video_extensions": [".mp4", ".strm"]},
+            "gallery": {"min_size_mb": 1},
+        }
+
+        def mock_load_config():
+            return test_config
+        monkeypatch.setattr("web.routers.config.load_config", mock_load_config)
+
+        response = client.post(
+            "/api/search/filter-files",
+            json={"paths": [str(mp4_file)]}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["files"]) == 0, \
+            "Small .mp4 file should be filtered by min_size"
+        assert data["rejected"]["size"] == 1
+
+
+class TestSearchStreamSSEProtocol:
+    """測試 /api/search/stream SSE 協議行為 — seed event 結構與欄位"""
+
     def test_seed_event_has_mode_total_slots(self, client):
         """seed event 應包含 mode、total、slots 欄位"""
         ids = ['SONE-100', 'SONE-101']

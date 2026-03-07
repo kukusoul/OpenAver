@@ -14,6 +14,7 @@ from typing import Dict, List, Optional, Tuple
 from core.logger import get_logger
 from core.nfo_utils import sanitize_nfo_bytes
 from core.path_utils import to_file_uri
+from core.video_extensions import DEFAULT_VIDEO_EXTENSIONS, ZERO_SIZE_EXTENSIONS
 
 logger = get_logger(__name__)
 
@@ -71,12 +72,8 @@ class VideoInfo:
         return cls(**d)
 
 
-# 支援的影片副檔名
-VIDEO_EXTENSIONS = {
-    '.mp4', '.avi', '.mkv', '.wmv', '.flv', '.mov',
-    '.rmvb', '.rm', '.mpg', '.mpeg', '.vob', '.ts',
-    '.m2ts', '.divx', '.asf', '.iso', '.m4v'
-}
+# 支援的影片副檔名（from core.video_extensions Single Source of Truth）
+VIDEO_EXTENSIONS = set(DEFAULT_VIDEO_EXTENSIONS)
 
 # 支援的圖片副檔名（按優先順序排列，JPG 優先）
 IMAGE_EXTENSIONS = ('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp')
@@ -117,7 +114,7 @@ def fast_scan_directory(directory: str, extensions: set, min_size_bytes: int = 0
                                     pass
                             elif ext in extensions:
                                 stat = entry.stat()
-                                if min_size_bytes <= 0 or stat.st_size >= min_size_bytes:
+                                if min_size_bytes <= 0 or ext in ZERO_SIZE_EXTENSIONS or stat.st_size >= min_size_bytes:
                                     dir_files.append({
                                         'path': entry.path,
                                         'mtime': stat.st_mtime,
@@ -451,7 +448,8 @@ class VideoScanner:
 
     def scan_to_sqlite(self, directory: str, db_path: 'Path' = None,
                        min_size_mb: int = 0,
-                       progress_callback: callable = None) -> dict:
+                       progress_callback: callable = None,
+                       video_extensions: set = None) -> dict:
         """掃描目錄並寫入 SQLite
 
         Args:
@@ -459,6 +457,7 @@ class VideoScanner:
             db_path: SQLite 資料庫路徑（預設為 output/openaver.db）
             min_size_mb: 最小檔案大小 (MB)
             progress_callback: 進度回調函數，簽名: (current, total, filename) -> None
+            video_extensions: 影片副檔名集合（預設使用 VIDEO_EXTENSIONS）
 
         Returns:
             dict: {'inserted': int, 'updated': int, 'deleted': int, 'total': int}
@@ -476,10 +475,11 @@ class VideoScanner:
 
         repo = VideoRepository(db_path)
         min_size_bytes = min_size_mb * 1024 * 1024
+        extensions = video_extensions if video_extensions is not None else VIDEO_EXTENSIONS
 
         # 步驟 1: 快速掃描檔案取得 mtime
         logger.info("[*] 快速掃描目錄中...")
-        file_infos = fast_scan_directory(str(directory), VIDEO_EXTENSIONS, min_size_bytes)
+        file_infos = fast_scan_directory(str(directory), extensions, min_size_bytes)
         logger.info(f"[*] 找到 {len(file_infos)} 個影片檔案")
 
         # 步驟 2: 從 SQLite 取得現有 mtime 索引
@@ -549,7 +549,8 @@ class VideoScanner:
                        relative_path: bool = True,
                        min_size_mb: int = 0,
                        cache: Dict[str, dict] = None,
-                       progress_callback: callable = None) -> Tuple[List[VideoInfo], dict]:
+                       progress_callback: callable = None,
+                       video_extensions: set = None) -> Tuple[List[VideoInfo], dict]:
         """掃描資料夾
 
         Args:
@@ -559,6 +560,7 @@ class VideoScanner:
             min_size_mb: 最小檔案大小 (MB)
             cache: 緩存字典，用於增量更新
             progress_callback: 進度回調函數，簽名: (current, total, filename) -> None
+            video_extensions: 影片副檔名集合（預設使用 VIDEO_EXTENSIONS）
 
         Returns:
             Tuple[List[VideoInfo], dict]: (影片列表, 統計資訊)
@@ -572,11 +574,12 @@ class VideoScanner:
         base_path = str(directory) if relative_path else None
         min_size_bytes = min_size_mb * 1024 * 1024
         use_cache = cache is not None
+        extensions = video_extensions if video_extensions is not None else VIDEO_EXTENSIONS
 
         # 使用 fast_scan_directory 一次取得所有檔案資訊
         # 這大幅減少對 NAS 的系統呼叫次數
         logger.info("[*] 快速掃描目錄中...")
-        all_files = fast_scan_directory(str(directory), VIDEO_EXTENSIONS, min_size_bytes)
+        all_files = fast_scan_directory(str(directory), extensions, min_size_bytes)
         logger.info(f"[*] 找到 {len(all_files)} 個影片檔案")
 
         # 統計緩存命中

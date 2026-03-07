@@ -20,6 +20,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from core.logger import get_logger
+from core.video_extensions import ZERO_SIZE_EXTENSIONS, get_video_extensions
 logger = get_logger(__name__)
 
 from core.database import VideoRepository, get_db_path, init_db
@@ -512,7 +513,7 @@ async def get_favorite_files() -> dict:
         }
 
     # 過濾設定
-    video_exts = [ext.lower() for ext in config.get("scraper", {}).get("video_extensions", [])]
+    video_exts = get_video_extensions(config)
     min_size_mb = config.get("gallery", {}).get("min_size_mb", 0)
     min_size_bytes = min_size_mb * 1024 * 1024
 
@@ -524,7 +525,8 @@ async def get_favorite_files() -> dict:
                 continue
             if f.suffix.lower() not in video_exts:
                 continue
-            if min_size_bytes > 0 and f.stat().st_size < min_size_bytes:
+            suffix = f.suffix.lower()
+            if min_size_bytes > 0 and suffix not in ZERO_SIZE_EXTENSIONS and f.stat().st_size < min_size_bytes:
                 continue
             files.append(str(f))
     except PermissionError:
@@ -572,7 +574,7 @@ async def filter_files(request: Request) -> dict:
 
     # 載入設定
     config = load_config()
-    video_exts = [ext.lower() for ext in config.get("scraper", {}).get("video_extensions", [])]
+    video_exts = get_video_extensions(config)
     min_size_mb = config.get("gallery", {}).get("min_size_mb", 0)
     min_size_bytes = min_size_mb * 1024 * 1024
 
@@ -597,7 +599,7 @@ async def filter_files(request: Request) -> dict:
             rejected["extension"] += 1
             continue
 
-        if min_size_bytes > 0:
+        if min_size_bytes > 0 and suffix not in ZERO_SIZE_EXTENSIONS:
             try:
                 if p.stat().st_size < min_size_bytes:
                     rejected["size"] += 1

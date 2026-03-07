@@ -609,15 +609,35 @@ class TestVideoPlaybackGuard:
             "scanner.py 缺少 video_player endpoint（HTML5 播放頁面）"
 
     def test_video_api_has_security_checks(self):
-        """get_video() 必須包含 realpath + 目錄白名單 + 副檔名白名單"""
+        """get_video() 必須包含 realpath + 目錄白名單 + get_proxy_extensions 動態白名單"""
         py_file = PROJECT_ROOT / "web" / "routers" / "scanner.py"
         content = py_file.read_text(encoding='utf-8')
         assert 'os.path.realpath' in content, \
             "get_video 缺少 realpath（防路徑穿越）"
-        assert 'ALLOWED_VIDEO_EXTENSIONS' in content, \
-            "get_video 缺少副檔名白名單"
+        assert 'get_proxy_extensions' in content, \
+            "get_video 應使用 get_proxy_extensions（動態副檔名白名單）而非硬編碼 ALLOWED_VIDEO_EXTENSIONS"
         assert 'is_path_under_dir' in content, \
             "get_video 缺少目錄白名單檢查"
+
+    def test_no_hardcoded_video_extensions_in_modules(self):
+        """gallery_scanner.py, scanner.py, pywebview_api.py must NOT contain hardcoded video extension sets
+        (dict entries like '.mp4': 'video/mp4' are OK — those are MIME mappings, not extension sets)"""
+        files_to_check = [
+            PROJECT_ROOT / "core" / "gallery_scanner.py",
+            PROJECT_ROOT / "web" / "routers" / "scanner.py",
+            PROJECT_ROOT / "windows" / "pywebview_api.py",
+        ]
+        import re
+        for file_path in files_to_check:
+            content = file_path.read_text(encoding='utf-8')
+            # Find set literals: = {'.mp4', '.avi', ...} (bare extension strings, no colon after)
+            # This looks for lines with extension-only assignments
+            # e.g., VIDEO_EXTENSIONS = {'.mp4', '.avi', '.mkv', ...}
+            # But NOT: video_mime = {'.mp4': 'video/mp4', ...}
+            set_pattern = re.compile(r"""=\s*\{[^}]*'\.mp4'[^}:]*'\.avi'[^}:]*\}""", re.DOTALL)
+            matches = set_pattern.findall(content)
+            assert len(matches) == 0, \
+                f"{file_path.name} still contains hardcoded video extension set — should import from core.video_extensions"
 
 
 class TestSettingsSimplify:

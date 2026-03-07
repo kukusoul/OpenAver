@@ -313,6 +313,32 @@ class TestScanToSqlite:
         assert "劇情" in videos[0].tags
 
 
+class TestZeroSizeExtensionExemption:
+    """.strm min_size exemption in fast_scan_directory"""
+
+    def test_strm_not_filtered_by_min_size(self, temp_video_dir):
+        """A .strm file with 100 bytes should NOT be filtered by min_size (ZERO_SIZE_EXTENSIONS exemption)"""
+        from core.gallery_scanner import fast_scan_directory, VIDEO_EXTENSIONS
+        # Create a .strm file (100 bytes - normally would be filtered by 1MB min_size)
+        strm_file = temp_video_dir / "test.strm"
+        strm_file.write_bytes(b'x' * 100)
+
+        # Create a regular .mp4 file (100 bytes - should be filtered by 1MB min_size)
+        mp4_file = temp_video_dir / "small.mp4"
+        mp4_file.write_bytes(b'x' * 100)
+
+        # Scan with 1MB min_size
+        extensions = VIDEO_EXTENSIONS | {'.strm'}
+        results = fast_scan_directory(str(temp_video_dir), extensions, min_size_bytes=1 * 1024 * 1024)
+
+        # .strm should be found (exempted from min_size), .mp4 should be filtered out
+        found_paths = [r['path'] for r in results]
+        assert any('test.strm' in p for p in found_paths), \
+            ".strm file should NOT be filtered by min_size"
+        assert not any('small.mp4' in p for p in found_paths), \
+            "small .mp4 file should be filtered by min_size"
+
+
 class TestScanToSqliteIntegration:
     """scan_to_sqlite 整合測試"""
 

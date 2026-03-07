@@ -682,3 +682,31 @@ class TestVideoProxy:
             headers={"Range": "bytes=9999-"}
         )
         assert response.status_code == 416
+
+    def test_exe_file_returns_403(self, client, tmp_path, monkeypatch):
+        """Proxy security: .exe file returns 403 even if in config video_extensions"""
+        exe_file = tmp_path / "test.exe"
+        exe_file.write_bytes(b'\x00' * 100)
+
+        def mock_load_config():
+            return {
+                "scraper": {
+                    "video_extensions": [".mp4", ".exe"],
+                },
+                "gallery": {
+                    "directories": [str(tmp_path)],
+                    "path_mappings": {},
+                }
+            }
+        monkeypatch.setattr("web.routers.scanner.load_config", mock_load_config)
+
+        response = client.get(f"/api/gallery/video?path={str(exe_file)}")
+        assert response.status_code == 403, \
+            ".exe should be blocked by proxy security (SAFE_PROXY_EXTENSIONS)"
+
+    def test_video_api_uses_get_proxy_extensions(self):
+        """get_video() must use get_proxy_extensions (not hardcoded ALLOWED_VIDEO_EXTENSIONS)"""
+        scanner_py = Path(__file__).parent.parent.parent / "web" / "routers" / "scanner.py"
+        content = scanner_py.read_text(encoding='utf-8')
+        assert 'get_proxy_extensions' in content, \
+            "scanner.py get_video() should use get_proxy_extensions from core.video_extensions"

@@ -16,7 +16,8 @@ from fastapi.responses import StreamingResponse, HTMLResponse, Response, FileRes
 # 加入 core 模組路徑
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from core.gallery_scanner import VideoScanner, load_cache, save_cache, fast_scan_directory, VIDEO_EXTENSIONS, VideoInfo
+from core.gallery_scanner import VideoScanner, load_cache, save_cache, fast_scan_directory, VideoInfo
+from core.video_extensions import get_proxy_extensions, get_video_extensions
 from core.gallery_generator import HTMLGenerator
 from core.path_utils import normalize_path, to_file_uri, is_path_under_dir, uri_to_fs_path
 from core.nfo_updater import check_cache_needs_update, update_videos_generator, apply_actress_aliases_generator
@@ -119,7 +120,8 @@ def generate_avlist() -> Generator[str, None, None]:
             try:
                 # 快速掃描取得檔案列表
                 min_size_bytes = min_size_mb * 1024 * 1024
-                all_files = fast_scan_directory(normalized_dir, VIDEO_EXTENSIONS, min_size_bytes)
+                video_extensions = get_video_extensions(config)
+                all_files = fast_scan_directory(normalized_dir, video_extensions, min_size_bytes)
 
                 if not all_files:
                     yield send({"type": "log", "level": "info", "message": f"{directory}: 沒有影片檔案"})
@@ -586,13 +588,6 @@ async def get_image(path: str = Query(..., description="圖片路徑")):
     return FileResponse(local_path, media_type=media_type)
 
 
-ALLOWED_VIDEO_EXTENSIONS = {
-    '.mp4', '.avi', '.mkv', '.wmv', '.flv', '.mov',
-    '.rmvb', '.rm', '.mpg', '.mpeg', '.vob', '.ts',
-    '.m2ts', '.divx', '.asf', '.m4v', '.webm',
-}
-
-
 @router.get("/video")
 async def get_video(request: Request, path: str = Query(..., description="影片路徑（file:/// URI 或 FS 路徑）")):
     """代理影片請求，解決瀏覽器無法開啟 file:/// URI 的問題"""
@@ -606,13 +601,15 @@ async def get_video(request: Request, path: str = Query(..., description="影片
     local_path = os.path.realpath(local_path)
 
     # 3. 副檔名白名單（用 realpath 解析後的真實路徑）
+    #    使用 get_proxy_extensions() = user config ∩ SAFE_PROXY_EXTENSIONS
+    config = load_config()
+    allowed_extensions = get_proxy_extensions(config)
     ext = os.path.splitext(local_path)[1].lower()
-    if ext not in ALLOWED_VIDEO_EXTENSIONS:
+    if ext not in allowed_extensions:
         logger.warning("get_video: 拒絕非影片副檔名請求 ext=%s", ext)
         return Response(status_code=403, content="不允許的檔案類型")
 
     # 4. 目錄白名單：只允許 gallery.directories 底下的檔案
-    config = load_config()
     gallery_config = config.get('gallery', {})
     directories = gallery_config.get('directories', [])
     path_mappings = gallery_config.get('path_mappings', {})
