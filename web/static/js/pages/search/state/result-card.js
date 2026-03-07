@@ -241,11 +241,14 @@ window.SearchStateMixin_ResultCard = {
         const img = this.$refs.coverImg;
         if (!img) return;
 
+        // No cover URL → stale @error from previous cover, ignore
+        const expected = this.coverUrl();
+        if (!expected) return;
+
         // PHASE 1: First failure — getAttribute stale guard
         if (!this._coverRetried) {
             const attrSrc = img.getAttribute('src') || '';
-            const expected = this.coverUrl();
-            if (expected && attrSrc !== expected) {
+            if (attrSrc !== expected) {
                 return; // Stale @error from previous cover
             }
 

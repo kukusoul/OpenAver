@@ -1716,3 +1716,32 @@ class TestCoverStateGuard:
         content = self.SEARCH_CSS.read_text(encoding='utf-8')
         assert 'cover-loading-placeholder' in content, \
             "search.css 缺少 cover-loading-placeholder — U8d 必須新增 shimmer placeholder 樣式"
+
+    # === U8 Codex review fix guard tests ===
+
+    UI_JS = PROJECT_ROOT / "web/static/js/pages/search/ui.js"
+
+    def test_switch_source_reset_cover_state(self):
+        """ui.js 的 switchSource 包含 _resetCoverState（#20 cover-changing path）"""
+        content = self.UI_JS.read_text(encoding='utf-8')
+        assert '_resetCoverState' in content, (
+            "ui.js 缺少 _resetCoverState — switchSource 替換結果時必須重置 cover state（#20）"
+        )
+
+    def test_cover_error_guards_empty_cover_url(self):
+        """result-card.js 的 handleCoverError 在 _coverRetried 之前有 coverUrl 空值 early return"""
+        content = self.RESULT_CARD_JS.read_text(encoding='utf-8')
+        match = re.search(r'handleCoverError\s*\(', content)
+        assert match, "result-card.js 缺少 handleCoverError 方法定義"
+        method_body = content[match.start():match.start() + 800]
+        # coverUrl() 取值必須在 _coverRetried check 之前
+        cover_url_pos = method_body.find('coverUrl')
+        retried_pos = method_body.find('_coverRetried')
+        assert cover_url_pos != -1, \
+            "handleCoverError 缺少 coverUrl — 必須檢查空 coverUrl early return"
+        assert retried_pos != -1, \
+            "handleCoverError 缺少 _coverRetried"
+        assert cover_url_pos < retried_pos, (
+            "handleCoverError 的 coverUrl 檢查必須在 _coverRetried 之前 — "
+            "空 coverUrl 時應直接 return，避免 stale @error 觸發錯誤的 retry"
+        )
