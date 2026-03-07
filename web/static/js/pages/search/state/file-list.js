@@ -210,6 +210,10 @@ window.SearchStateMixin_FileList = {
                     // seed / result-item / status / mode: 忽略（背景模式不需要漸進 UI）
                 } catch (err) {
                     console.error('Background search parse error:', err);
+                    this._untrackConnection(eventSource);
+                    eventSource.close();
+                    file.searched = true;
+                    file.searchResults = [];
                 }
             };
 

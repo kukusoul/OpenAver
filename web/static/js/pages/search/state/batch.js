@@ -63,6 +63,15 @@ window.SearchStateMixin_Batch = {
 
             const chunk = currentBatch.slice(i, Math.min(i + concurrency, currentBatch.length));
 
+            // U10b fix: 當前顯示的 file 在 chunk 中 → 預清理 cover state
+            // 防止 _searchFileBackground 寫入 file.searchResults 觸發 Alpine 被動更新時 cover 狀態不一致
+            if (this.listMode === 'file') {
+                const currentFile = this.fileList[this.currentFileIndex];
+                if (currentFile && chunk.includes(currentFile) && !currentFile.searched) {
+                    this._resetCoverState();
+                }
+            }
+
             // U10b: 背景搜尋（不碰共享 UI 狀態）
             await Promise.all(chunk.map(async (file) => {
                 await this._searchFileBackground(file);
