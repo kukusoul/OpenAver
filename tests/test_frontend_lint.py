@@ -1479,3 +1479,14 @@ class TestAnimationHookup:
         for method in expected_methods:
             assert method in content, \
                 f"animations.js 缺少 {method} — 預期 9 個動畫方法全部存在"
+
+    # ===== U7a: File Search Detail Entry Guard =====
+
+    FILE_LIST_JS = PROJECT_ROOT / "web/static/js/pages/search/state/file-list.js"
+
+    def test_file_search_result_has_detail_entry(self):
+        """U7a: file-list.js searchForFile() result triggers playDetailEntry"""
+        content = self.FILE_LIST_JS.read_text(encoding="utf-8")
+        assert "playDetailEntry" in content, (
+            "file-list.js must call playDetailEntry for file search results (U7a)"
+        )

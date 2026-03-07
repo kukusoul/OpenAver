@@ -87,6 +87,13 @@ window.SearchStateMixin_FileList = {
                             }
 
                             window.SearchUI.showState('result');
+                            // U7a: detail entry animation (same as cloud search, C17 fire-and-forget)
+                            this.$nextTick(() => {
+                                if (this.displayMode === 'detail') {
+                                    var detailEl = document.querySelector('.av-card-full');
+                                    window.SearchAnimations?.playDetailEntry?.(detailEl);
+                                }
+                            });
                         } else {
                             file.searched = true;
                             file.searchResults = [];
