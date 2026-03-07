@@ -581,6 +581,12 @@
             // C4: 清除舊動畫（C18 interrupt 核心 — 打斷殘留 tween）
             gsap.killTweensOf(containerEl);
 
+            // C4: also kill child tweens left by playDetailEntry (cover/info have separate tweens)
+            var cover = containerEl.querySelector('.av-card-full-cover');
+            var info = containerEl.querySelector('.av-card-full-info');
+            if (cover) gsap.killTweensOf(cover);
+            if (info) gsap.killTweensOf(info);
+
             // Reduced Motion 降級：瞬間到位
             if (shouldSkip()) {
                 gsap.set(containerEl, { x: 0, opacity: 1 });

@@ -1506,3 +1506,18 @@ class TestAnimationHookup:
         assert "killTweensOf" in content, (
             "file-list.js must call killTweensOf for C18 interrupt in file switch (U7b)"
         )
+
+    def test_play_slide_in_kills_child_tweens(self):
+        """Codex review: playSlideIn must kill child element tweens (cover/info) not just container"""
+        content = self.ANIMATIONS_JS.read_text(encoding="utf-8")
+        # Find the playSlideIn function definition (not the comment reference)
+        slide_in_start = content.find('playSlideIn: function')
+        assert slide_in_start != -1, "playSlideIn function definition not found in animations.js"
+        # Check that it references child selectors for kill
+        slide_in_body = content[slide_in_start:slide_in_start + 800]
+        assert 'av-card-full-cover' in slide_in_body, (
+            "playSlideIn must kill .av-card-full-cover child tweens (Codex review fix)"
+        )
+        assert 'av-card-full-info' in slide_in_body, (
+            "playSlideIn must kill .av-card-full-info child tweens (Codex review fix)"
+        )
