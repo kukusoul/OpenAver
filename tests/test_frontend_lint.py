@@ -1371,3 +1371,55 @@ class TestAnimationHookup:
         content = self.ANIMATIONS_JS.read_text(encoding='utf-8')
         assert 'prefersReducedMotion' in content, \
             "animations.js 缺少 prefersReducedMotion 守衛 — Reduced Motion 時必須跳過動畫"
+
+    # ===== U4: Detail Entry + Grid-Detail Ghost Transition Guards =====
+
+    GRID_MODE_JS = PROJECT_ROOT / "web/static/js/pages/search/state/grid-mode.js"
+
+    def test_animations_js_has_detail_entry(self):
+        """animations.js 包含 playDetailEntry 方法"""
+        content = self.ANIMATIONS_JS.read_text(encoding='utf-8')
+        assert 'playDetailEntry' in content, \
+            "animations.js 缺少 playDetailEntry — U4 detail entry 動畫（cover slide-in + info fade-in）"
+
+    def test_animations_js_has_grid_to_detail(self):
+        """animations.js 包含 playGridToDetail 方法"""
+        content = self.ANIMATIONS_JS.read_text(encoding='utf-8')
+        assert 'playGridToDetail' in content, \
+            "animations.js 缺少 playGridToDetail — U4 Grid->Detail ghost 轉場動畫"
+
+    def test_animations_js_has_detail_to_grid(self):
+        """animations.js 包含 playDetailToGrid 方法"""
+        content = self.ANIMATIONS_JS.read_text(encoding='utf-8')
+        assert 'playDetailToGrid' in content, \
+            "animations.js 缺少 playDetailToGrid — U4 Detail->Grid ghost 飛回動畫"
+
+    def test_grid_mode_switch_to_detail_has_animation(self):
+        """grid-mode.js switchToDetail 接入 ghost transition"""
+        content = self.GRID_MODE_JS.read_text(encoding='utf-8')
+        assert 'SearchAnimations' in content, \
+            "grid-mode.js 缺少 SearchAnimations 引用 — switchToDetail 應接入 ghost 轉場"
+        assert 'getBoundingClientRect' in content, \
+            "grid-mode.js 缺少 getBoundingClientRect — C17 step 1 capture rect"
+        assert '$nextTick' in content, \
+            "grid-mode.js 缺少 $nextTick — C17 step 3 animate after render"
+
+    def test_grid_mode_toggle_has_animation(self):
+        """grid-mode.js toggleDisplayMode 接入 ghost fly-back"""
+        content = self.GRID_MODE_JS.read_text(encoding='utf-8')
+        assert 'playDetailToGrid' in content, \
+            "grid-mode.js 缺少 playDetailToGrid — toggleDisplayMode Detail->Grid 應觸發 ghost 飛回"
+
+    def test_search_flow_exact_result_has_detail_entry(self):
+        """search-flow.js exact result 觸發 detail entry 動畫"""
+        content = self.SEARCH_FLOW_JS.read_text(encoding='utf-8')
+        assert 'playDetailEntry' in content, \
+            "search-flow.js 缺少 playDetailEntry — exact result 應觸發 detail entry 動畫"
+
+    def test_animations_js_has_ghost_cleanup(self):
+        """animations.js 包含 ghost 清除邏輯"""
+        content = self.ANIMATIONS_JS.read_text(encoding='utf-8')
+        assert 'data-search-ghost' in content, \
+            "animations.js 缺少 data-search-ghost attribute — ghost 元素需可識別以便清除"
+        assert 'remove()' in content or 'removeChild' in content, \
+            "animations.js 缺少 ghost 清除呼叫 — ghost 元素必須在動畫完成後移除"

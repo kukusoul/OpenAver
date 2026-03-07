@@ -297,6 +297,13 @@ window.SearchStateMixin_SearchFlow = {
                             this.streamComplete = false;
                             this.streamSlots = [];
                             window.SearchUI.showState('result');
+                            // U4: detail entry animation (fire-and-forget, C17)
+                            this.$nextTick(() => {
+                                if (this.displayMode === 'detail') {
+                                    var detailEl = document.querySelector('.av-card-full');
+                                    window.SearchAnimations?.playDetailEntry?.(detailEl);
+                                }
+                            });
                             this.hasContent = true;
                             // Issue 2: 查詢本地狀態
                             if (window.SearchCore?.checkLocalStatus) {
@@ -346,6 +353,13 @@ window.SearchStateMixin_SearchFlow = {
 
                         // 顯示結果
                         window.SearchUI.showState('result');
+                        // U4: detail entry animation (fire-and-forget, C17)
+                        this.$nextTick(() => {
+                            if (this.displayMode === 'detail') {
+                                var detailEl = document.querySelector('.av-card-full');
+                                window.SearchAnimations?.playDetailEntry?.(detailEl);
+                            }
+                        });
                         if (window.SearchUI?.preloadImages) {
                             window.SearchUI.preloadImages(1, 5);
                         }
@@ -457,6 +471,13 @@ window.SearchStateMixin_SearchFlow = {
 
                 // 顯示結果
                 window.SearchUI.showState('result');
+                // U4: detail entry animation (fire-and-forget, C17)
+                this.$nextTick(() => {
+                    if (this.displayMode === 'detail') {
+                        var detailEl = document.querySelector('.av-card-full');
+                        window.SearchAnimations?.playDetailEntry?.(detailEl);
+                    }
+                });
                 if (window.SearchUI?.preloadImages) {
                     window.SearchUI.preloadImages(1, 5);
                 }

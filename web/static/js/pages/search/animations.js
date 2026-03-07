@@ -7,6 +7,9 @@
  *   - playStagingEntry(stagingEl)                staging card 進場 morph
  *   - playStagingExit(stagingEl, options)         staging card 退場 morph + onComplete
  *   - playGridFadeIn(gridEl)                     skeleton grid 整體轉場淡入（保留）
+ *   - playDetailEntry(detailEl, options)          detail 進場（cover slide-in + info fade-in）
+ *   - playGridToDetail(fromRect, detailEl, options)  Grid→Detail ghost 轉場
+ *   - playDetailToGrid(fromRect, targetCardEl, options)  Detail→Grid ghost 飛回
  *
  * C2：此檔案是 pages/ 目錄下被允許直接呼叫 GSAP 的兩個檔案之一
  *      （另一個為 motion-lab.js）。
@@ -28,6 +31,88 @@
      */
     function shouldSkip() {
         return !!(window.OpenAver?.prefersReducedMotion);
+    }
+
+    // ===== U4: Ghost Helpers (private to IIFE) =====
+
+    /**
+     * 清除所有殘留的 ghost 元素（防止 re-entrant 呼叫留下殘影）
+     */
+    function cleanupStaleGhosts() {
+        // 先還原所有被 ghost 動畫隱藏的真實封面 opacity
+        var hidden = document.querySelectorAll('[data-ghost-hidden]');
+        hidden.forEach(function (el) {
+            el.style.opacity = '1';
+            el.removeAttribute('data-ghost-hidden');
+        });
+
+        // 再移除殘留 ghost
+        var stale = document.querySelectorAll('[data-search-ghost]');
+        stale.forEach(function (el) { el.remove(); });
+    }
+
+    /**
+     * 建立封面 ghost img 節點，append 到 body
+     * 移植自 motion-lab.js L340-370，適配 /search
+     * @param {string} src - 圖片來源 URL
+     * @param {DOMRect} rect - 來源元素的 bounding rect
+     * @returns {HTMLImageElement|null} ghost element，或 null（建立失敗）
+     */
+    function createCoverGhost(src, rect) {
+        if (!src || !rect || rect.width === 0 || rect.height === 0) return null;
+
+        // 清除殘留 ghost
+        cleanupStaleGhosts();
+
+        var ghost = document.createElement('img');
+        ghost.src = src;
+        ghost.setAttribute('data-search-ghost', 'true');
+        ghost.style.position = 'fixed';
+        ghost.style.left = '0';
+        ghost.style.top = '0';
+        ghost.style.margin = '0';
+        ghost.style.pointerEvents = 'none';
+        ghost.style.zIndex = '2000';
+        ghost.style.willChange = 'transform, width, height';
+        ghost.style.transformOrigin = 'top left';
+        ghost.style.borderRadius = '8px';
+        ghost.style.objectFit = 'cover';
+
+        document.body.appendChild(ghost);
+
+        // 以 GSAP 定位至來源位置
+        if (typeof gsap !== 'undefined') {
+            gsap.set(ghost, {
+                x: rect.left,
+                y: rect.top,
+                width: rect.width,
+                height: rect.height,
+                boxShadow: '0 4px 16px rgba(0,0,0,0.25)'
+            });
+        }
+
+        return ghost;
+    }
+
+    /**
+     * 清除 ghost 並還原真實封面 opacity
+     * @param {HTMLImageElement} ghost - ghost 元素
+     * @param {...Element} restoreEls - 要還原 opacity 的元素
+     */
+    function cleanupGhost(ghost) {
+        var restoreEls = Array.prototype.slice.call(arguments, 1);
+        if (ghost && ghost.parentNode) {
+            ghost.remove();
+        }
+        if (typeof gsap !== 'undefined' && restoreEls.length) {
+            var valid = restoreEls.filter(Boolean);
+            if (valid.length) {
+                gsap.set(valid, { opacity: 1 });
+                valid.forEach(function (el) {
+                    el.removeAttribute('data-ghost-hidden');
+                });
+            }
+        }
     }
 
     window.SearchAnimations = {
@@ -258,6 +343,223 @@
                 opacity: 0,
                 duration: 0.25,
                 ease: 'power1.out'
+            });
+        },
+
+        // ===== U4: Detail Entry + Ghost Transition =====
+
+        /**
+         * Detail 進場：封面左滑入 + info 下淡入
+         * 移植自 motion-lab.js L253-296，適配 /search DOM
+         *
+         * @param {Element} detailEl - .av-card-full 容器
+         * @param {object} [options] - { skipCover: boolean }
+         * @returns {gsap.core.Timeline|null}
+         */
+        playDetailEntry: function (detailEl, options) {
+            options = options || {};
+
+            if (!detailEl) return null;
+            if (typeof gsap === 'undefined') return null;
+
+            var cover = detailEl.querySelector('.av-card-full-cover');
+            var info = detailEl.querySelector('.av-card-full-info');
+
+            // C4: 清除舊動畫
+            if (cover) gsap.killTweensOf(cover);
+            if (info) gsap.killTweensOf(info);
+
+            // Reduced Motion 降級：瞬間到位
+            if (shouldSkip()) {
+                if (cover) gsap.set(cover, { x: 0, opacity: 1 });
+                if (info) gsap.set(info, { y: 0, opacity: 1 });
+                return null;
+            }
+
+            var dur = 0.6;
+            var ease = 'power3.out';
+            var skipCover = options.skipCover === true;
+
+            var tl = gsap.timeline({ id: 'searchDetailEntry' });
+
+            // C6: 不使用 rotationX/Y/Z
+            if (cover && !skipCover) {
+                tl.fromTo(cover,
+                    { x: -40, opacity: 0 },
+                    { x: 0, opacity: 1, duration: dur, ease: ease });
+            }
+            if (info) {
+                tl.fromTo(info,
+                    { y: 30, opacity: 0 },
+                    { y: 0, opacity: 1, duration: dur * 0.8, ease: ease },
+                    (cover && !skipCover) ? ('-=' + (dur * 0.6)) : 0);
+            }
+
+            return tl;
+        },
+
+        /**
+         * Grid→Detail ghost 轉場：ghost 封面從 grid 位置飛到 detail 位置
+         * 飛行完成後接 playDetailEntry(skipCover: true)
+         *
+         * @param {DOMRect} fromRect - 來源 grid 卡片封面的 bounding rect（state 變前捕獲）
+         * @param {Element} detailEl - .av-card-full 容器（$nextTick 後取得）
+         * @param {object} [options] - { coverSrc: string }
+         * @returns {gsap.core.Timeline|null}
+         */
+        playGridToDetail: function (fromRect, detailEl, options) {
+            options = options || {};
+
+            if (!detailEl) return null;
+            if (typeof gsap === 'undefined') return null;
+
+            // Reduced Motion：跳過 ghost，直接 detail entry（也會被 skip）
+            if (shouldSkip()) {
+                return this.playDetailEntry(detailEl);
+            }
+
+            // 找 detail 封面 img 取得 toRect
+            var detailImg = detailEl.querySelector('.av-card-full-cover-img');
+            if (!detailImg) {
+                // fallback: 無目標 → full detail entry
+                return this.playDetailEntry(detailEl);
+            }
+
+            var toRect = detailImg.getBoundingClientRect();
+            if (!toRect || toRect.width === 0 || toRect.height === 0) {
+                return this.playDetailEntry(detailEl);
+            }
+
+            // 建立 ghost
+            var coverSrc = options.coverSrc || detailImg.src;
+            var ghost = createCoverGhost(coverSrc, fromRect);
+            if (!ghost) {
+                // ghost 建立失敗 → full detail entry
+                return this.playDetailEntry(detailEl);
+            }
+
+            // 飛行期間隱藏 source（已消失）和 target cover
+            detailImg.setAttribute('data-ghost-hidden', '');
+            gsap.set(detailImg, { opacity: 0 });
+
+            var self = this;
+            var dur = 0.38;
+            var ease = 'power2.inOut';
+
+            // C4: 清除 ghost 舊動畫（re-entrant safety）
+            gsap.killTweensOf(ghost);
+
+            var tl = gsap.timeline({ id: 'searchGridToDetail' });
+
+            // 主飛行 tween（位置 + 大小）
+            tl.fromTo(ghost,
+                {
+                    x: fromRect.left,
+                    y: fromRect.top,
+                    width: fromRect.width,
+                    height: fromRect.height
+                },
+                {
+                    x: toRect.left,
+                    y: toRect.top,
+                    width: toRect.width,
+                    height: toRect.height,
+                    duration: dur,
+                    ease: ease,
+                    onComplete: function () {
+                        // cleanup ghost + restore opacity
+                        cleanupGhost(ghost, detailImg);
+                        // chain: detail entry (skipCover，ghost 已處理封面動畫)
+                        self.playDetailEntry(detailEl, { skipCover: true });
+                    }
+                }
+            );
+
+            // 陰影 keyframes：起飛 → 強化 → 落地
+            gsap.to(ghost, {
+                keyframes: [
+                    { boxShadow: '0 12px 32px rgba(0,0,0,0.40)', duration: dur * 0.5 },
+                    { boxShadow: '0 2px 8px rgba(0,0,0,0.15)', duration: dur * 0.5 }
+                ],
+                ease: 'none'
+            });
+
+            return tl;
+        },
+
+        /**
+         * Detail→Grid ghost 飛回：ghost 封面從 detail 飛回 grid 卡片位置
+         * 飛行完成後觸發 target settle
+         *
+         * @param {DOMRect} fromRect - 來源 detail 封面的 bounding rect（state 變前捕獲）
+         * @param {Element} targetCardEl - .av-card-preview[data-slot] 元素（$nextTick 後取得）
+         * @param {object} [options] - { coverSrc: string }
+         */
+        playDetailToGrid: function (fromRect, targetCardEl, options) {
+            options = options || {};
+
+            if (!targetCardEl) return;
+            if (typeof gsap === 'undefined') return;
+
+            // Reduced Motion：no-op（state 已翻轉）
+            if (shouldSkip()) return;
+
+            // 找 target 卡片封面 img
+            var targetImg = targetCardEl.querySelector('.av-card-preview-img img');
+            if (!targetImg) return;
+
+            var toRect = targetImg.getBoundingClientRect();
+            if (!toRect || toRect.width === 0 || toRect.height === 0) return;
+
+            // 建立 ghost
+            var coverSrc = options.coverSrc || targetImg.src;
+            var ghost = createCoverGhost(coverSrc, fromRect);
+            if (!ghost) return;
+
+            // 飛行期間隱藏 target cover
+            targetImg.setAttribute('data-ghost-hidden', '');
+            gsap.set(targetImg, { opacity: 0 });
+
+            var dur = 0.38;
+            var ease = 'power2.inOut';
+
+            // C4: 清除 ghost 舊動畫
+            gsap.killTweensOf(ghost);
+
+            // 主飛行 tween
+            gsap.fromTo(ghost,
+                {
+                    x: fromRect.left,
+                    y: fromRect.top,
+                    width: fromRect.width,
+                    height: fromRect.height
+                },
+                {
+                    x: toRect.left,
+                    y: toRect.top,
+                    width: toRect.width,
+                    height: toRect.height,
+                    duration: dur,
+                    ease: ease,
+                    onComplete: function () {
+                        // cleanup ghost + restore target opacity
+                        cleanupGhost(ghost, targetImg);
+                        // target settle: micro scale pulse
+                        gsap.fromTo(targetCardEl,
+                            { scale: 1.02 },
+                            { scale: 1, duration: 0.18, ease: 'power2.out' }
+                        );
+                    }
+                }
+            );
+
+            // 陰影 keyframes
+            gsap.to(ghost, {
+                keyframes: [
+                    { boxShadow: '0 12px 32px rgba(0,0,0,0.40)', duration: dur * 0.5 },
+                    { boxShadow: '0 2px 8px rgba(0,0,0,0.15)', duration: dur * 0.5 }
+                ],
+                ease: 'none'
             });
         }
     };
