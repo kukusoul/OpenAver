@@ -321,7 +321,7 @@ def search_partial(partial: str,
                     if result_callback:
                         result_callback(idx, data)
             except Exception:
-                pass
+                logger.error('search_partial: %s failed', num)
             time.sleep(REQUEST_DELAY)
 
     if status_callback:
@@ -389,7 +389,7 @@ def search_prefix(prefix: str, limit: int = 20, offset: int = 0, status_callback
                         if result_callback:
                             result_callback(idx, data)
                 except Exception:
-                    pass
+                    logger.error('search_prefix: %s failed', num)
                 time.sleep(REQUEST_DELAY)
 
     except Exception:
@@ -456,7 +456,7 @@ def search_actress(name: str, limit: int = 20, offset: int = 0, status_callback:
                                 if result_callback:
                                     result_callback(idx, data)
                         except Exception:
-                            pass
+                            logger.error('search_actress: %s failed', num)
                  if status_callback: status_callback('done', f'found:{len(results)}')
                  return sort_results_by_date(results)
 

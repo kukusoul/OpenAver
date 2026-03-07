@@ -168,3 +168,81 @@ class TestSmartSearchPartialPassthrough:
             "smart_search should pass result_callback to search_partial"
         assert received_callbacks.get('status_callback') is my_status_cb, \
             "smart_search should pass status_callback to search_partial"
+
+
+# ============ status_callback event tests ============
+
+class TestSearchPartialStatusEvents:
+    """Tests for status_callback event uniqueness."""
+
+    def test_search_partial_status_callback_events(self):
+        """status_callback should emit exactly one ('javbus','searching') and one ('done','found:N')."""
+        from core.scraper import search_partial
+
+        candidates = ['IPZZ-030', 'IPZZ-031']
+        results_map = {
+            'IPZZ-030': {'number': 'IPZZ-030', 'title': 'Title 030'},
+            'IPZZ-031': {'number': 'IPZZ-031', 'title': 'Title 031'},
+        }
+
+        status_calls = []
+
+        def mock_status_cb(source, status):
+            status_calls.append((source, status))
+
+        with patch('core.scraper.expand_partial_number', return_value=candidates), \
+             patch('core.scraper.search_jav', side_effect=make_mock_search_jav(results_map)), \
+             patch('core.scraper.time.sleep'):
+            search_partial('IPZZ-03', status_callback=mock_status_cb)
+
+        # First call must be ('javbus', 'searching')
+        assert status_calls[0] == ('javbus', 'searching'), \
+            f"First status should be ('javbus', 'searching'), got {status_calls[0]}"
+
+        # Last call must be ('done', 'found:N')
+        assert status_calls[-1][0] == 'done', \
+            f"Last status source should be 'done', got {status_calls[-1][0]}"
+        assert status_calls[-1][1].startswith('found:'), \
+            f"Last status should start with 'found:', got {status_calls[-1][1]}"
+
+        # Exactly one 'javbus searching'
+        searching_calls = [c for c in status_calls if c == ('javbus', 'searching')]
+        assert len(searching_calls) == 1, \
+            f"Expected exactly 1 ('javbus','searching'), got {len(searching_calls)}"
+
+        # Exactly one 'done' event
+        done_calls = [c for c in status_calls if c[0] == 'done']
+        assert len(done_calls) == 1, \
+            f"Expected exactly 1 ('done',...), got {len(done_calls)}"
+
+    def test_smart_search_partial_no_duplicate_status(self):
+        """smart_search in partial mode should not duplicate status events."""
+        from core.scraper import smart_search
+
+        candidates = ['IPZZ-030', 'IPZZ-031']
+        results_map = {
+            'IPZZ-030': {'number': 'IPZZ-030', 'title': 'Title 030', 'date': '2024-01-01'},
+            'IPZZ-031': {'number': 'IPZZ-031', 'title': 'Title 031', 'date': '2024-01-02'},
+        }
+
+        status_calls = []
+
+        def mock_status_cb(source, status):
+            status_calls.append((source, status))
+
+        with patch('core.scraper.expand_partial_number', return_value=candidates), \
+             patch('core.scraper.search_jav', side_effect=make_mock_search_jav(results_map)), \
+             patch('core.scraper.time.sleep'), \
+             patch('core.scraper.is_number_format', return_value=False), \
+             patch('core.scraper.is_partial_number', return_value=True):
+            smart_search('ipzz03', status_callback=mock_status_cb)
+
+        # ('javbus', 'searching') should appear exactly once (from search_partial, not duplicated by smart_search)
+        searching_calls = [c for c in status_calls if c == ('javbus', 'searching')]
+        assert len(searching_calls) == 1, \
+            f"Expected exactly 1 ('javbus','searching'), got {len(searching_calls)}: {status_calls}"
+
+        # ('done', ...) should appear exactly once
+        done_calls = [c for c in status_calls if c[0] == 'done']
+        assert len(done_calls) == 1, \
+            f"Expected exactly 1 ('done',...), got {len(done_calls)}: {status_calls}"
