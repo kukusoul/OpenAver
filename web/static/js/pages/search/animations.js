@@ -10,6 +10,7 @@
  *   - playDetailEntry(detailEl, options)          detail 進場（cover slide-in + info fade-in）
  *   - playGridToDetail(fromRect, detailEl, options)  Grid→Detail ghost 轉場
  *   - playDetailToGrid(fromRect, targetCardEl, options)  Detail→Grid ghost 飛回
+ *   - playSlideIn(containerEl, direction)              detail 導航滑入動畫（C18 interrupt）
  *
  * C2：此檔案是 pages/ 目錄下被允許直接呼叫 GSAP 的兩個檔案之一
  *      （另一個為 motion-lab.js）。
@@ -561,6 +562,38 @@
                 ],
                 ease: 'none'
             });
+        },
+
+        // ===== U5: Detail Navigation Slide =====
+
+        /**
+         * Detail 導航滑入動畫（C18 interrupt 策略）
+         * 移植自 motion-lab.js L546-568，適配 /search
+         *
+         * @param {Element} containerEl - .av-card-full 容器
+         * @param {'next'|'prev'} direction - 'next' 從右滑入，'prev' 從左滑入
+         * @returns {gsap.core.Tween|null}
+         */
+        playSlideIn: function (containerEl, direction) {
+            if (!containerEl) return null;
+            if (typeof gsap === 'undefined') return null;
+
+            // C4: 清除舊動畫（C18 interrupt 核心 — 打斷殘留 tween）
+            gsap.killTweensOf(containerEl);
+
+            // Reduced Motion 降級：瞬間到位
+            if (shouldSkip()) {
+                gsap.set(containerEl, { x: 0, opacity: 1 });
+                return null;
+            }
+
+            // C6: 不使用 rotationX/Y/Z
+            var xFrom = direction === 'next' ? 40 : -40;
+
+            return gsap.fromTo(containerEl,
+                { x: xFrom, opacity: 0 },
+                { x: 0, opacity: 1, duration: 0.3, ease: 'power3.out' }
+            );
         }
     };
 })();

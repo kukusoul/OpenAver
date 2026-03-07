@@ -1423,3 +1423,27 @@ class TestAnimationHookup:
             "animations.js 缺少 data-search-ghost attribute — ghost 元素需可識別以便清除"
         assert 'remove()' in content or 'removeChild' in content, \
             "animations.js 缺少 ghost 清除呼叫 — ghost 元素必須在動畫完成後移除"
+
+    # ===== U5: Detail Navigation Slide + Interrupt Guards =====
+
+    NAVIGATION_JS = PROJECT_ROOT / "web/static/js/pages/search/state/navigation.js"
+
+    def test_animations_js_has_slide_in(self):
+        """animations.js 包含 playSlideIn 方法（U5 導航滑動動畫）"""
+        content = self.ANIMATIONS_JS.read_text(encoding='utf-8')
+        assert 'playSlideIn' in content, \
+            "animations.js 缺少 playSlideIn — U5 detail 導航滑動動畫"
+
+    def test_navigation_has_kill_tweens(self):
+        """navigation.js 包含 killTweensOf（C18 interrupt 策略）"""
+        content = self.NAVIGATION_JS.read_text(encoding='utf-8')
+        assert 'killTweensOf' in content, \
+            "navigation.js 缺少 killTweensOf — C18 interrupt 策略需在導航時打斷舊動畫"
+
+    def test_navigation_has_slide_animation(self):
+        """navigation.js 接入 SearchAnimations slide 動畫"""
+        content = self.NAVIGATION_JS.read_text(encoding='utf-8')
+        assert 'SearchAnimations' in content, \
+            "navigation.js 缺少 SearchAnimations 引用 — navigate() 應接入 slide 動畫"
+        assert 'playSlideIn' in content, \
+            "navigation.js 缺少 playSlideIn 引用 — navigate() 應觸發 slide-in 動畫"
