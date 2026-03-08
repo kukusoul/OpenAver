@@ -1016,6 +1016,84 @@
             // C6: 不使用 rotationX/Y/Z，只用 scale ✓
 
             return tl;
+        },
+
+        /**
+         * Showcase Grid 入場動畫：stagger 依序淡入
+         * C4: killTweensOf(cards)
+         * C6: 不使用 rotationX/Y/Z
+         * @param {Element} gridEl - .showcase-grid 容器（x-ref="showcaseGrid"）
+         * @param {object} params - { duration, stagger, easing, style, reducedMotionSim }
+         * @returns {gsap.core.Timeline|null}
+         */
+        playShowcaseEntry: function (gridEl, params) {
+            params = params || {};
+
+            // null guard
+            if (!gridEl) return null;
+
+            var cards = gridEl.querySelectorAll('.av-card-preview');
+            if (!cards.length) return null;
+
+            // C4: 清除舊動畫
+            gsap.killTweensOf(cards);
+
+            // Reduced Motion 降級：瞬間顯示
+            if (shouldSkip(params)) {
+                gsap.set(cards, { opacity: 1, y: 0, scale: 1 });
+                return null;
+            }
+
+            var dur = params.duration || 0.5;
+            var staggerVal = params.stagger || 0.04;
+            var ease = params.easing || 'power3.out';
+            var style = params.style || 'stagger';
+
+            // Viewport 分流：fold 以下卡片瞬間顯示
+            var viewportH = window.innerHeight;
+            var visible = [];
+            var offscreen = [];
+            Array.from(cards).forEach(function (card) {
+                if (card.getBoundingClientRect().top < viewportH) {
+                    visible.push(card);
+                } else {
+                    offscreen.push(card);
+                }
+            });
+
+            if (offscreen.length) {
+                gsap.set(offscreen, { opacity: 1, y: 0, scale: 1 });
+            }
+
+            if (!visible.length) return null;
+
+            // 依 style 決定動畫參數
+            var fromVars, toVars;
+            if (style === 'fadeScale') {
+                // C6: 不使用旋轉
+                fromVars = { opacity: 0, scale: 0.85 };
+                toVars = { opacity: 1, scale: 1, duration: dur, ease: ease, stagger: staggerVal };
+            } else if (style === 'fadeUp') {
+                fromVars = { opacity: 0, y: 40 };
+                toVars = { opacity: 1, y: 0, duration: dur, ease: ease, stagger: staggerVal };
+            } else {
+                // 預設 stagger
+                fromVars = { opacity: 0, y: 20 };
+                toVars = { opacity: 1, y: 0, duration: dur, ease: ease, stagger: staggerVal };
+            }
+
+            // 設定初始狀態
+            gsap.set(visible, fromVars);
+
+            var tl = gsap.timeline({ id: 'showcaseEntry' });
+            tl.to(visible, toVars);
+
+            // 動畫結束後初始化 GSDevTools
+            tl.eventCallback('onComplete', function () {
+                MotionLab.initDevTools(tl);
+            });
+
+            return tl;
         }
     };
 

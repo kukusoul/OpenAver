@@ -533,6 +533,30 @@
 
 /* 讓 x-show 正確工作（避免 Tailwind .hidden !important 衝突） */
 .motion-lab-container [x-cloak] { display: none !important; }
+
+/* Showcase Grid（motion-lab 內聯，避免載入整份 showcase.css） */
+.motion-lab-container .showcase-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1.5rem;
+    padding: 1.5rem;
+    max-width: 100%;
+}
+@media (min-width: 1500px) {
+    .motion-lab-container .showcase-grid { grid-template-columns: repeat(5, 1fr); }
+}
+@media (min-width: 1100px) and (max-width: 1499px) {
+    .motion-lab-container .showcase-grid { grid-template-columns: repeat(4, 1fr); }
+}
+@media (min-width: 900px) and (max-width: 1099px) {
+    .motion-lab-container .showcase-grid { grid-template-columns: repeat(3, 1fr); }
+}
+@media (min-width: 481px) and (max-width: 899px) {
+    .motion-lab-container .showcase-grid { grid-template-columns: repeat(2, 1fr); gap: 1rem; }
+}
+@media (max-width: 480px) {
+    .motion-lab-container .showcase-grid { grid-template-columns: 1fr; padding: 1rem; }
+}
 </style>
 {% endblock %}
 
@@ -606,6 +630,13 @@
          _heroTimers: [],
          heroActressProfile: null,
          heroCards: Array(12).fill(null),
+
+         // Showcase 沙盒 state
+         showcaseParams: {
+             style: 'stagger',
+             duration: 0.5,
+             stagger: 0.04,
+         },
 
          init() {
              this.fetchVideos();
@@ -1474,6 +1505,11 @@
                     @click="tab = 'hero'; onResetHero(); onResetStaging()">
                 Hero Slot
             </button>
+            <button class="motion-lab-tab"
+                    :class="{ active: tab === 'showcase' }"
+                    @click="tab = 'showcase'; onResetStaging(); onResetHero()">
+                Showcase
+            </button>
         </div>
     </div>
 
@@ -1802,6 +1838,53 @@
                    x-model="heroParams.heroReserved">
             <span class="control-label" style="cursor:pointer">Reserve Slot</span>
         </div>
+
+        <div class="control-divider"></div>
+
+        <!-- Showcase controls -->
+        <button class="control-btn primary"
+                :disabled="tab !== 'showcase'"
+                @click="MotionLab.playShowcaseEntry($refs.showcaseGrid, { ...showcaseParams, easing: params.easing, reducedMotionSim: params.reducedMotionSim })">
+            <i class="bi bi-play-fill"></i> Play
+        </button>
+
+        <button class="control-btn danger"
+                :disabled="tab !== 'showcase'"
+                @click="if ($refs.showcaseGrid) { var cards = $refs.showcaseGrid.querySelectorAll('.av-card-preview'); gsap.killTweensOf(cards); gsap.set(cards, { clearProps: 'all' }); }">
+            <i class="bi bi-arrow-counterclockwise"></i> Reset
+        </button>
+
+        <!-- Entry Style -->
+        <div class="control-group" :style="tab !== 'showcase' ? 'opacity:0.4' : ''">
+            <span class="control-label">Style</span>
+            <select class="control-select"
+                    :disabled="tab !== 'showcase'"
+                    x-model="showcaseParams.style">
+                <option value="stagger">stagger</option>
+                <option value="fadeScale">fadeScale</option>
+                <option value="fadeUp">fadeUp</option>
+            </select>
+        </div>
+
+        <!-- Showcase Duration -->
+        <div class="control-group" :style="tab !== 'showcase' ? 'opacity:0.4' : ''">
+            <span class="control-label">Duration</span>
+            <input type="range" class="control-slider"
+                   min="0.3" max="1.0" step="0.05"
+                   :disabled="tab !== 'showcase'"
+                   x-model.number="showcaseParams.duration">
+            <span class="control-value" x-text="showcaseParams.duration.toFixed(2) + 's'"></span>
+        </div>
+
+        <!-- Showcase Stagger -->
+        <div class="control-group" :style="tab !== 'showcase' ? 'opacity:0.4' : ''">
+            <span class="control-label">Stagger</span>
+            <input type="range" class="control-slider"
+                   min="0.02" max="0.1" step="0.01"
+                   :disabled="tab !== 'showcase'"
+                   x-model.number="showcaseParams.stagger">
+            <span class="control-value" x-text="showcaseParams.stagger.toFixed(2) + 's'"></span>
+        </div>
     </div>
 
     <!-- 預覽區 -->
@@ -2041,6 +2124,233 @@
                     </div>
                 </div>
             </template>
+        </div>
+
+        <!-- Showcase Grid 區（tab=showcase） -->
+        <div class="showcase-grid"
+             x-ref="showcaseGrid"
+             x-show="tab === 'showcase'"
+             x-cloak>
+            <div class="av-card-preview" data-flip-id="sc-1">
+                <div class="av-card-preview-img">
+                    <img src="https://picsum.photos/seed/1/280/400"
+                         alt="Showcase 1"
+                         loading="lazy"
+                         style="width:100%; height:100%; object-fit:cover; display:block;">
+                </div>
+                <div class="av-card-preview-footer">
+                    <span class="av-num">SC-001</span>
+                </div>
+            </div>
+            <div class="av-card-preview" data-flip-id="sc-2">
+                <div class="av-card-preview-img">
+                    <img src="https://picsum.photos/seed/2/280/400"
+                         alt="Showcase 2"
+                         loading="lazy"
+                         style="width:100%; height:100%; object-fit:cover; display:block;">
+                </div>
+                <div class="av-card-preview-footer">
+                    <span class="av-num">SC-002</span>
+                </div>
+            </div>
+            <div class="av-card-preview" data-flip-id="sc-3">
+                <div class="av-card-preview-img">
+                    <img src="https://picsum.photos/seed/3/280/400"
+                         alt="Showcase 3"
+                         loading="lazy"
+                         style="width:100%; height:100%; object-fit:cover; display:block;">
+                </div>
+                <div class="av-card-preview-footer">
+                    <span class="av-num">SC-003</span>
+                </div>
+            </div>
+            <div class="av-card-preview" data-flip-id="sc-4">
+                <div class="av-card-preview-img">
+                    <img src="https://picsum.photos/seed/4/280/400"
+                         alt="Showcase 4"
+                         loading="lazy"
+                         style="width:100%; height:100%; object-fit:cover; display:block;">
+                </div>
+                <div class="av-card-preview-footer">
+                    <span class="av-num">SC-004</span>
+                </div>
+            </div>
+            <div class="av-card-preview" data-flip-id="sc-5">
+                <div class="av-card-preview-img">
+                    <img src="https://picsum.photos/seed/5/280/400"
+                         alt="Showcase 5"
+                         loading="lazy"
+                         style="width:100%; height:100%; object-fit:cover; display:block;">
+                </div>
+                <div class="av-card-preview-footer">
+                    <span class="av-num">SC-005</span>
+                </div>
+            </div>
+            <div class="av-card-preview" data-flip-id="sc-6">
+                <div class="av-card-preview-img">
+                    <img src="https://picsum.photos/seed/6/280/400"
+                         alt="Showcase 6"
+                         loading="lazy"
+                         style="width:100%; height:100%; object-fit:cover; display:block;">
+                </div>
+                <div class="av-card-preview-footer">
+                    <span class="av-num">SC-006</span>
+                </div>
+            </div>
+            <div class="av-card-preview" data-flip-id="sc-7">
+                <div class="av-card-preview-img">
+                    <img src="https://picsum.photos/seed/7/280/400"
+                         alt="Showcase 7"
+                         loading="lazy"
+                         style="width:100%; height:100%; object-fit:cover; display:block;">
+                </div>
+                <div class="av-card-preview-footer">
+                    <span class="av-num">SC-007</span>
+                </div>
+            </div>
+            <div class="av-card-preview" data-flip-id="sc-8">
+                <div class="av-card-preview-img">
+                    <img src="https://picsum.photos/seed/8/280/400"
+                         alt="Showcase 8"
+                         loading="lazy"
+                         style="width:100%; height:100%; object-fit:cover; display:block;">
+                </div>
+                <div class="av-card-preview-footer">
+                    <span class="av-num">SC-008</span>
+                </div>
+            </div>
+            <div class="av-card-preview" data-flip-id="sc-9">
+                <div class="av-card-preview-img">
+                    <img src="https://picsum.photos/seed/9/280/400"
+                         alt="Showcase 9"
+                         loading="lazy"
+                         style="width:100%; height:100%; object-fit:cover; display:block;">
+                </div>
+                <div class="av-card-preview-footer">
+                    <span class="av-num">SC-009</span>
+                </div>
+            </div>
+            <div class="av-card-preview" data-flip-id="sc-10">
+                <div class="av-card-preview-img">
+                    <img src="https://picsum.photos/seed/10/280/400"
+                         alt="Showcase 10"
+                         loading="lazy"
+                         style="width:100%; height:100%; object-fit:cover; display:block;">
+                </div>
+                <div class="av-card-preview-footer">
+                    <span class="av-num">SC-010</span>
+                </div>
+            </div>
+            <div class="av-card-preview" data-flip-id="sc-11">
+                <div class="av-card-preview-img">
+                    <img src="https://picsum.photos/seed/11/280/400"
+                         alt="Showcase 11"
+                         loading="lazy"
+                         style="width:100%; height:100%; object-fit:cover; display:block;">
+                </div>
+                <div class="av-card-preview-footer">
+                    <span class="av-num">SC-011</span>
+                </div>
+            </div>
+            <div class="av-card-preview" data-flip-id="sc-12">
+                <div class="av-card-preview-img">
+                    <img src="https://picsum.photos/seed/12/280/400"
+                         alt="Showcase 12"
+                         loading="lazy"
+                         style="width:100%; height:100%; object-fit:cover; display:block;">
+                </div>
+                <div class="av-card-preview-footer">
+                    <span class="av-num">SC-012</span>
+                </div>
+            </div>
+            <div class="av-card-preview" data-flip-id="sc-13">
+                <div class="av-card-preview-img">
+                    <img src="https://picsum.photos/seed/13/280/400"
+                         alt="Showcase 13"
+                         loading="lazy"
+                         style="width:100%; height:100%; object-fit:cover; display:block;">
+                </div>
+                <div class="av-card-preview-footer">
+                    <span class="av-num">SC-013</span>
+                </div>
+            </div>
+            <div class="av-card-preview" data-flip-id="sc-14">
+                <div class="av-card-preview-img">
+                    <img src="https://picsum.photos/seed/14/280/400"
+                         alt="Showcase 14"
+                         loading="lazy"
+                         style="width:100%; height:100%; object-fit:cover; display:block;">
+                </div>
+                <div class="av-card-preview-footer">
+                    <span class="av-num">SC-014</span>
+                </div>
+            </div>
+            <div class="av-card-preview" data-flip-id="sc-15">
+                <div class="av-card-preview-img">
+                    <img src="https://picsum.photos/seed/15/280/400"
+                         alt="Showcase 15"
+                         loading="lazy"
+                         style="width:100%; height:100%; object-fit:cover; display:block;">
+                </div>
+                <div class="av-card-preview-footer">
+                    <span class="av-num">SC-015</span>
+                </div>
+            </div>
+            <div class="av-card-preview" data-flip-id="sc-16">
+                <div class="av-card-preview-img">
+                    <img src="https://picsum.photos/seed/16/280/400"
+                         alt="Showcase 16"
+                         loading="lazy"
+                         style="width:100%; height:100%; object-fit:cover; display:block;">
+                </div>
+                <div class="av-card-preview-footer">
+                    <span class="av-num">SC-016</span>
+                </div>
+            </div>
+            <div class="av-card-preview" data-flip-id="sc-17">
+                <div class="av-card-preview-img">
+                    <img src="https://picsum.photos/seed/17/280/400"
+                         alt="Showcase 17"
+                         loading="lazy"
+                         style="width:100%; height:100%; object-fit:cover; display:block;">
+                </div>
+                <div class="av-card-preview-footer">
+                    <span class="av-num">SC-017</span>
+                </div>
+            </div>
+            <div class="av-card-preview" data-flip-id="sc-18">
+                <div class="av-card-preview-img">
+                    <img src="https://picsum.photos/seed/18/280/400"
+                         alt="Showcase 18"
+                         loading="lazy"
+                         style="width:100%; height:100%; object-fit:cover; display:block;">
+                </div>
+                <div class="av-card-preview-footer">
+                    <span class="av-num">SC-018</span>
+                </div>
+            </div>
+            <div class="av-card-preview" data-flip-id="sc-19">
+                <div class="av-card-preview-img">
+                    <img src="https://picsum.photos/seed/19/280/400"
+                         alt="Showcase 19"
+                         loading="lazy"
+                         style="width:100%; height:100%; object-fit:cover; display:block;">
+                </div>
+                <div class="av-card-preview-footer">
+                    <span class="av-num">SC-019</span>
+                </div>
+            </div>
+            <div class="av-card-preview" data-flip-id="sc-20">
+                <div class="av-card-preview-img">
+                    <img src="https://picsum.photos/seed/20/280/400"
+                         alt="Showcase 20"
+                         loading="lazy"
+                         style="width:100%; height:100%; object-fit:cover; display:block;">
+                </div>
+                <div class="av-card-preview-footer">
+                    <span class="av-num">SC-020</span>
+                </div>
+            </div>
         </div>
 
         <!-- Detail 區（tab=search && mode=detail） -->
