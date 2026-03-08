@@ -192,7 +192,8 @@
             <template x-for="(video, index) in paginatedVideos" :key="video.path">
                 <div class="av-card-preview"
                      @click="openLightbox(getCurrentFilteredIndex(index))"
-                     :style="`--card-index: ${index}`">
+                     :style="`--card-index: ${index}`"
+                     :data-flip-id="video.path">
                     <div class="av-card-preview-img">
                         <img :src="video.cover_url"
                              :alt="video.number"
@@ -431,6 +432,7 @@
 <script>
 window.__SHOWCASE_CONFIG__ = {{ (config.gallery or {}) | tojson | safe }};
 </script>
-<!-- M2a 只需 core.js -->
+<!-- B5: animations.js 必須在 core.js 之前載入 -->
+<script src="/static/js/pages/showcase/animations.js"></script>
 <script src="/static/js/pages/showcase/core.js"></script>
 {% endblock %}

@@ -2342,3 +2342,110 @@ class TestHeroSlotReservation:
             "search-flow.js result 事件全失敗無 fallback 路徑缺少 _heroSlotReserved 清理 — "
             "A7-Prod 切到 error state 前必須清理 Hero slot"
         )
+
+
+class TestShowcaseAnimationsGuard:
+    """B5 守衛 — Showcase GSAP 基礎設施落地
+
+    確認 animations.js 存在且結構正確、showcase.html 載入順序正確、
+    grid 卡片有 data-flip-id、不重複載入 Flip CDN。
+    """
+
+    ANIMATIONS_JS = PROJECT_ROOT / "web/static/js/pages/showcase/animations.js"
+    SHOWCASE_HTML = PROJECT_ROOT / "web/templates/showcase.html"
+
+    def test_animations_js_exists(self):
+        """web/static/js/pages/showcase/animations.js 檔案存在"""
+        assert self.ANIMATIONS_JS.exists(), (
+            "showcase/animations.js 不存在 — "
+            "B5 必須建立 ShowcaseAnimations 動畫模組骨架"
+        )
+
+    def test_animations_js_has_iife(self):
+        """animations.js 包含 IIFE 封裝 + window.ShowcaseAnimations 暴露"""
+        content = self.ANIMATIONS_JS.read_text(encoding='utf-8')
+        assert "'use strict'" in content or '"use strict"' in content, (
+            "showcase/animations.js 缺少 'use strict' — "
+            "B5 IIFE 必須啟用嚴格模式"
+        )
+        assert 'window.ShowcaseAnimations' in content, (
+            "showcase/animations.js 缺少 window.ShowcaseAnimations — "
+            "B5 必須暴露全域物件供 core.js 呼叫"
+        )
+
+    def test_animations_js_has_should_skip(self):
+        """animations.js 包含 prefersReducedMotion 檢查"""
+        content = self.ANIMATIONS_JS.read_text(encoding='utf-8')
+        assert 'prefersReducedMotion' in content, (
+            "showcase/animations.js 缺少 prefersReducedMotion — "
+            "B5 shouldSkip() 必須檢查 Reduced Motion 偏好"
+        )
+
+    def test_animations_js_has_all_method_stubs(self):
+        """animations.js 包含全部 7 個 placeholder 方法"""
+        content = self.ANIMATIONS_JS.read_text(encoding='utf-8')
+        methods = [
+            'playEntry', 'playFlipReorder', 'playFlipFilter',
+            'captureFlipState', 'playPageOut', 'playPageIn',
+            'playModeCrossfade',
+        ]
+        missing = [m for m in methods if m not in content]
+        assert not missing, (
+            f"showcase/animations.js 缺少方法: {', '.join(missing)} — "
+            "B5 必須包含全部 7 個 placeholder 方法"
+        )
+
+    def test_animations_js_registers_flip(self):
+        """animations.js 包含 registerPlugin(Flip) 註冊"""
+        content = self.ANIMATIONS_JS.read_text(encoding='utf-8')
+        assert 'registerPlugin(Flip)' in content, (
+            "showcase/animations.js 缺少 registerPlugin(Flip) — "
+            "B5 DOMContentLoaded 內必須註冊 Flip plugin"
+        )
+
+    def test_animations_js_registers_custom_ease(self):
+        """animations.js 包含 showcaseSettle CustomEase 註冊"""
+        content = self.ANIMATIONS_JS.read_text(encoding='utf-8')
+        assert 'showcaseSettle' in content, (
+            "showcase/animations.js 缺少 showcaseSettle — "
+            "B5 必須註冊 showcase 專用 CustomEase"
+        )
+
+    def test_showcase_html_loads_animations_before_core(self):
+        """showcase.html 載入 animations.js 且在 core.js 之前"""
+        content = self.SHOWCASE_HTML.read_text(encoding='utf-8')
+        lines = content.split('\n')
+        anim_line = None
+        core_line = None
+        for i, line in enumerate(lines, 1):
+            if 'animations.js' in line and '<script' in line:
+                anim_line = i
+            if 'core.js' in line and '<script' in line:
+                core_line = i
+        assert anim_line is not None, (
+            "showcase.html 缺少 animations.js script tag — "
+            "B5 必須在 extra_js block 載入 animations.js"
+        )
+        assert core_line is not None, (
+            "showcase.html 缺少 core.js script tag"
+        )
+        assert anim_line < core_line, (
+            f"showcase.html animations.js (L{anim_line}) 必須在 core.js (L{core_line}) 之前 — "
+            "B5 載入順序：animations.js → core.js"
+        )
+
+    def test_showcase_html_has_flip_id(self):
+        """showcase.html grid 卡片包含 data-flip-id 屬性"""
+        content = self.SHOWCASE_HTML.read_text(encoding='utf-8')
+        assert 'data-flip-id' in content, (
+            "showcase.html 缺少 data-flip-id — "
+            "B5 .av-card-preview 必須有 :data-flip-id 供 Flip plugin 追蹤"
+        )
+
+    def test_showcase_html_no_duplicate_flip_cdn(self):
+        """showcase.html 不重複載入 Flip.min.js（base.html 已全站載入）"""
+        content = self.SHOWCASE_HTML.read_text(encoding='utf-8')
+        assert 'Flip.min.js' not in content, (
+            "showcase.html 不應載入 Flip.min.js — "
+            "base.html 已全站載入 Flip CDN，不應重複"
+        )

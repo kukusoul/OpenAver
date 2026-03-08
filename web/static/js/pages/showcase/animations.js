@@ -1,0 +1,129 @@
+/**
+ * ShowcaseAnimations — /showcase 頁面動畫模組
+ *
+ * 暴露 window.ShowcaseAnimations 物件，提供：
+ *   - playEntry(gridEl, params)                B6: 初始載入進場動畫
+ *   - playFlipReorder(gridEl, params)           B7: 排序洗牌 Flip 動畫
+ *   - playFlipFilter(gridEl, state, params)     B8: 篩選進出場 Flip 動畫
+ *   - captureFlipState(gridEl)                  B8: 捕獲 Flip 狀態快照
+ *   - playPageOut(gridEl, direction, params)    B9: 分頁離場動畫
+ *   - playPageIn(gridEl, direction, params)     B9: 分頁進場動畫
+ *   - playModeCrossfade(outEl, inEl, params)    B10: 模式切換 crossfade
+ *
+ * B5 骨架：所有方法為 placeholder，return null。
+ * B6-B10 逐步填入實作。
+ *
+ * Graceful fallback：若 GSAP 未載入，所有方法安全降級（不拋錯）。
+ * core.js 透過 window.ShowcaseAnimations?.playEntry?.()
+ * optional chaining 呼叫，確保此模組未載入時功能完全正常。
+ */
+(function () {
+    'use strict';
+
+    /**
+     * 判斷是否應跳過動畫（Reduced Motion 降級）
+     * @returns {boolean}
+     */
+    function shouldSkip() {
+        return !!(window.OpenAver?.prefersReducedMotion);
+    }
+
+    // B5: 註冊 Flip plugin + CustomEase（base.html 已載入 CDN）
+    document.addEventListener('DOMContentLoaded', function () {
+        if (typeof gsap !== 'undefined' && typeof Flip !== 'undefined') {
+            gsap.registerPlugin(Flip);
+        }
+        if (typeof CustomEase !== 'undefined') {
+            try {
+                if (typeof gsap !== 'undefined') {
+                    gsap.registerPlugin(CustomEase);
+                }
+                CustomEase.create("showcaseSettle", "M0,0 C0.14,0 0.27,0.87 0.5,1 0.75,1 0.86,0.98 1,1");
+            } catch (e) {
+                // showcaseSettle ease 註冊失敗時動畫會 fallback 到 power2.out
+            }
+        }
+    });
+
+    /**
+     * ShowcaseAnimations 物件 — B6-B10 逐步實作
+     * 目前所有方法為 placeholder，return null
+     */
+    var ShowcaseAnimations = {
+        /**
+         * B6: 初始載入進場動畫
+         * @param {Element} gridEl - .showcase-grid 容器
+         * @param {Object} params - 動畫參數
+         * @returns {null}
+         */
+        playEntry: function (gridEl, params) {
+            return null;
+        },
+
+        /**
+         * B7: 排序洗牌 Flip 動畫
+         * @param {Element} gridEl - .showcase-grid 容器
+         * @param {Object} params - 動畫參數
+         * @returns {null}
+         */
+        playFlipReorder: function (gridEl, params) {
+            return null;
+        },
+
+        /**
+         * B8: 篩選進出場 Flip 動畫
+         * @param {Element} gridEl - .showcase-grid 容器
+         * @param {Object} state - Flip 狀態快照
+         * @param {Object} params - 動畫參數
+         * @returns {null}
+         */
+        playFlipFilter: function (gridEl, state, params) {
+            return null;
+        },
+
+        /**
+         * B8: 捕獲 Flip 狀態快照
+         * @param {Element} gridEl - .showcase-grid 容器
+         * @returns {null}
+         */
+        captureFlipState: function (gridEl) {
+            return null;
+        },
+
+        /**
+         * B9: 分頁離場動畫
+         * @param {Element} gridEl - .showcase-grid 容器
+         * @param {string} direction - 'next' | 'prev'
+         * @param {Object} params - 動畫參數
+         * @returns {null}
+         */
+        playPageOut: function (gridEl, direction, params) {
+            return null;
+        },
+
+        /**
+         * B9: 分頁進場動畫
+         * @param {Element} gridEl - .showcase-grid 容器
+         * @param {string} direction - 'next' | 'prev'
+         * @param {Object} params - 動畫參數
+         * @returns {null}
+         */
+        playPageIn: function (gridEl, direction, params) {
+            return null;
+        },
+
+        /**
+         * B10: 模式切換 crossfade
+         * @param {Element} outEl - 離場容器
+         * @param {Element} inEl - 進場容器
+         * @param {Object} params - 動畫參數
+         * @returns {null}
+         */
+        playModeCrossfade: function (outEl, inEl, params) {
+            return null;
+        }
+    };
+
+    // 暴露全域物件
+    window.ShowcaseAnimations = ShowcaseAnimations;
+})();
