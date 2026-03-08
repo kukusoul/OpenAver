@@ -1280,8 +1280,9 @@
             var tl = gsap.timeline({ id: 'showcaseEntry' });
             tl.to(visible, toVars);
 
-            // 動畫結束後初始化 GSDevTools
+            // 動畫結束後清除 inline styles 並初始化 GSDevTools
             tl.eventCallback('onComplete', function () {
+                gsap.set(visible, { clearProps: 'transform,opacity' });
                 MotionLab.initDevTools(tl);
             });
 
