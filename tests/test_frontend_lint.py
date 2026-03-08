@@ -2756,7 +2756,7 @@ class TestShowcaseAnimationsGuard:
         )
 
     def test_core_js_animate_filter_has_mode_guard(self):
-        """B8: core.js _animateFilter 包含 mode guard"""
+        """B8/B14: core.js _animateFilter 包含 mode guard"""
         content = self.CORE_JS.read_text(encoding='utf-8')
         lines = content.split('\n')
         # 找到 _animateFilter 方法定義（帶 { 結尾的行）
@@ -2777,6 +2777,65 @@ class TestShowcaseAnimationsGuard:
         assert 'mode' in method_body, (
             "showcase/core.js _animateFilter 缺少 mode guard — "
             "B8 必須在 mode === 'grid' 時才觸發篩選動畫"
+        )
+
+    # --- B14 守衛 ---
+
+    def test_core_js_animate_filter_uses_play_entry(self):
+        """B14: core.js _animateFilter 改用 playEntry（取代 captureFlipState + playFlipFilter）"""
+        content = self.CORE_JS.read_text(encoding='utf-8')
+        lines = content.split('\n')
+        # brace-counting 提取 _animateFilter 方法體
+        in_method = False
+        method_lines = []
+        brace_count = 0
+        for line in lines:
+            stripped = line.strip()
+            if not in_method and '_animateFilter' in stripped and '{' in stripped and stripped.endswith('{'):
+                in_method = True
+                brace_count = 0
+            if in_method:
+                method_lines.append(line)
+                brace_count += line.count('{') - line.count('}')
+                if brace_count <= 0 and len(method_lines) > 1:
+                    break
+        method_body = '\n'.join(method_lines)
+        assert method_lines, "showcase/core.js 找不到 _animateFilter 方法定義"
+        assert 'playEntry' in method_body, (
+            "showcase/core.js _animateFilter 缺少 playEntry — "
+            "B14 篩選後必須用 playEntry stagger fade-in"
+        )
+        assert 'captureFlipState' not in method_body, (
+            "showcase/core.js _animateFilter 仍包含 captureFlipState — "
+            "B14 應移除 Flip 狀態捕獲（改用 playEntry）"
+        )
+        assert 'playFlipFilter' not in method_body, (
+            "showcase/core.js _animateFilter 仍包含 playFlipFilter — "
+            "B14 應移除 Flip 篩選動畫（改用 playEntry）"
+        )
+
+    def test_core_js_animate_filter_has_generation_guard(self):
+        """B14: core.js _animateFilter 使用 generation token 防止 stale callback"""
+        content = self.CORE_JS.read_text(encoding='utf-8')
+        lines = content.split('\n')
+        in_method = False
+        method_lines = []
+        brace_count = 0
+        for line in lines:
+            stripped = line.strip()
+            if not in_method and '_animateFilter' in stripped and '{' in stripped and stripped.endswith('{'):
+                in_method = True
+                brace_count = 0
+            if in_method:
+                method_lines.append(line)
+                brace_count += line.count('{') - line.count('}')
+                if brace_count <= 0 and len(method_lines) > 1:
+                    break
+        method_body = '\n'.join(method_lines)
+        assert method_lines, "showcase/core.js 找不到 _animateFilter 方法定義"
+        assert '_animGeneration' in method_body, (
+            "showcase/core.js _animateFilter 缺少 _animGeneration guard — "
+            "B14 快速打字時必須用 generation token 使舊 callback 失效"
         )
 
     # --- B9 守衛 ---

@@ -229,26 +229,21 @@ function showcaseState() {
         },
 
         /**
-         * B8: 篩選動畫共用 helper — capture → change → animate
+         * B8/B14: 篩選動畫共用 helper — change → playEntry
          * onSearchChange() 和 searchFromMetadata() 共用
          */
         _animateFilter() {
-            // Mode guard：僅 grid mode 捕獲狀態和觸發動畫
-            var grid = null;
-            var state = null;
-            if (this.mode === 'grid') {
-                grid = document.querySelector('.showcase-grid');
-                state = window.ShowcaseAnimations?.captureFlipState?.(grid) || null;
-            }
-
-            // Step 2: data change
+            // Step 1: data change
             this.applyFilterAndSort();
             this.saveState();
 
-            // Step 3: animate（$nextTick + rAF 雙層 defer）
-            if (state && grid) {
+            // Step 2: 篩選後播放進場動畫（僅 grid mode）
+            if (this.mode === 'grid') {
+                var gen = ++this._animGeneration;
                 this.$nextTick(() => { requestAnimationFrame(() => {
-                    window.ShowcaseAnimations?.playFlipFilter?.(grid, state);
+                    if (this._animGeneration !== gen) return;  // stale
+                    var grid = document.querySelector('.showcase-grid');
+                    window.ShowcaseAnimations?.playEntry?.(grid);
                 }); });
             }
         },
