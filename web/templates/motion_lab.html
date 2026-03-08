@@ -594,6 +594,19 @@
              rows: 2,
          },
 
+         // Hero Slot 沙盒 state
+         heroParams: {
+             heroDelay: 2000,
+             heroResult: 'found',
+             heroReserved: true,
+         },
+         _heroSlotReserved: false,
+         _heroFilled: false,
+         _heroRunning: false,
+         _heroTimers: [],
+         heroActressProfile: null,
+         heroCards: Array(12).fill(null),
+
          init() {
              this.fetchVideos();
              // 鍵盤 ←/→ 快捷鍵
@@ -1082,6 +1095,148 @@
              }
          },
 
+         // ===== Hero Slot 沙盒 methods =====
+
+         onResetHero() {
+             // 清除所有 hero timers
+             this._heroTimers.forEach(function (handle) {
+                 clearTimeout(handle);
+             });
+             this._heroTimers = [];
+             // 重置 hero state
+             this._heroSlotReserved = false;
+             this._heroFilled = false;
+             this._heroRunning = false;
+             this.heroActressProfile = null;
+             this.heroCards = Array(12).fill(null);
+             // 清除 GSAP 殘留
+             if (typeof window.MotionLab !== 'undefined') {
+                 const heroGridEl = this.$refs.heroGrid;
+                 if (heroGridEl) {
+                     window.MotionLab.resetAll(heroGridEl, null);
+                 }
+                 const heroPlaceholderEl = this.$refs.heroPlaceholder;
+                 if (heroPlaceholderEl) {
+                     heroPlaceholderEl.style.display = '';
+                     gsap.killTweensOf(heroPlaceholderEl);
+                     gsap.set(heroPlaceholderEl, { clearProps: 'all' });
+                     const heroImg = heroPlaceholderEl.querySelector('img');
+                     if (heroImg) {
+                         gsap.killTweensOf(heroImg);
+                         gsap.set(heroImg, { clearProps: 'all' });
+                     }
+                 }
+             }
+         },
+
+         async onPlayHero() {
+             if (this._heroRunning) return;
+             if (!this.hasVideos) return;
+             this.onResetHero();
+
+             this._heroRunning = true;
+             const self = this;
+             const heroDelay = this.heroParams.heroDelay;
+             const heroResult = this.heroParams.heroResult;
+             const heroReserved = this.heroParams.heroReserved;
+
+             // 填充 heroCards（瞬間填入，焦點是 hero 預留/移除）
+             const cardCount = Math.min(12, this.videos.length);
+             // 用 videos[1..12] 當卡片（留 videos[0] 給 hero profile）
+             const cardVideos = this.videos.slice(1, cardCount + 1);
+
+             if (heroReserved) {
+                 // === 路徑 A：預留 Hero Slot ===
+                 this._heroSlotReserved = true;
+                 // 填入卡片
+                 for (let i = 0; i < cardVideos.length; i++) {
+                     this.heroCards[i] = cardVideos[i];
+                 }
+
+                 // Grid 淡入
+                 await this.$nextTick();
+                 const heroGridEl = this.$refs.heroGrid;
+                 if (heroGridEl && typeof gsap !== 'undefined') {
+                     gsap.from(heroGridEl, { opacity: 0, duration: 0.25, ease: 'power1.out' });
+                 }
+
+                 // 延遲後處理 hero
+                 await new Promise(function (resolve) {
+                     const t = setTimeout(resolve, heroDelay);
+                     self._heroTimers.push(t);
+                 });
+
+                 if (!this._heroRunning) return; // guard: reset during delay
+
+                 if (heroResult === 'found') {
+                     // Hero found: 填充封面
+                     this.heroActressProfile = this.videos[0];
+                     this._heroFilled = true;
+                     await this.$nextTick();
+                     const heroEl = this.$refs.heroPlaceholder;
+                     if (heroEl && typeof window.MotionLab !== 'undefined') {
+                         window.MotionLab.playHeroFill(heroEl, {
+                             reducedMotionSim: this.params.reducedMotionSim
+                         });
+                     }
+                 } else {
+                     // Hero not found: Flip 移除（呼叫端控制時序）
+                     const gridEl = this.$refs.heroGrid;
+                     if (gridEl && typeof window.MotionLab !== 'undefined' && typeof Flip !== 'undefined') {
+                         // 1. 捕獲佈局（DOM 變更前）
+                         var gridChildren = gridEl.querySelectorAll('.av-card-preview');
+                         gsap.killTweensOf(gridChildren);  // C4
+                         var flipState = Flip.getState(gridChildren);
+
+                         // 2. Alpine state 驅動移除
+                         self._heroSlotReserved = false;
+
+                         // 3. 等 Alpine DOM patch 完成後 Flip 動畫
+                         await new Promise(function(resolve) {
+                             self.$nextTick(function() {
+                                 window.MotionLab.playHeroRemove(flipState, {
+                                     reducedMotionSim: self.params.reducedMotionSim
+                                 }).then(resolve);
+                             });
+                         });
+                     } else {
+                         this._heroSlotReserved = false;
+                     }
+                 }
+             } else {
+                 // === 路徑 B：不預留（A/B 對比：重現 bug） ===
+                 // 直接填入 12 張卡（無 hero slot）
+                 for (let i = 0; i < cardVideos.length; i++) {
+                     this.heroCards[i] = cardVideos[i];
+                 }
+
+                 // Grid 淡入
+                 await this.$nextTick();
+                 const heroGridEl = this.$refs.heroGrid;
+                 if (heroGridEl && typeof gsap !== 'undefined') {
+                     gsap.from(heroGridEl, { opacity: 0, duration: 0.25, ease: 'power1.out' });
+                 }
+
+                 // 延遲後處理 hero
+                 await new Promise(function (resolve) {
+                     const t = setTimeout(resolve, heroDelay);
+                     self._heroTimers.push(t);
+                 });
+
+                 if (!this._heroRunning) return; // guard: reset during delay
+
+                 if (heroResult === 'found') {
+                     // Hero 突然插入第一格（無 Flip — 重現 bug）
+                     this.heroActressProfile = this.videos[0];
+                     this._heroFilled = true;
+                     this._heroSlotReserved = true;
+                 }
+                 // not-found 時不做任何事
+             }
+
+             this._heroRunning = false;
+         },
+
          async triggerMiniBurst(batch, runId, isFinalBurst) {
              if (!batch || !batch.length) return;
              if (typeof window.MotionLab === 'undefined') return;
@@ -1296,23 +1451,28 @@
         <div class="motion-lab-tab-bar">
             <button class="motion-lab-tab"
                     :class="{ active: tab === 'search' }"
-                    @click="tab = 'search'; onResetStaging()">
+                    @click="tab = 'search'; onResetStaging(); onResetHero()">
                 Search
             </button>
             <button class="motion-lab-tab"
                     :class="{ active: tab === 'stream' }"
-                    @click="tab = 'stream'; onResetStream(); onResetStaging()">
+                    @click="tab = 'stream'; onResetStream(); onResetStaging(); onResetHero()">
                 Stream
             </button>
             <button class="motion-lab-tab"
                     :class="{ active: tab === 'staging' }"
-                    @click="tab = 'staging'; onResetStaging()">
+                    @click="tab = 'staging'; onResetStaging(); onResetHero()">
                 Staging Burst
             </button>
             <button class="motion-lab-tab"
                     :class="{ active: tab === 'settle' }"
-                    @click="tab = 'settle'; onResetStaging()">
+                    @click="tab = 'settle'; onResetStaging(); onResetHero()">
                 Settle
+            </button>
+            <button class="motion-lab-tab"
+                    :class="{ active: tab === 'hero' }"
+                    @click="tab = 'hero'; onResetHero(); onResetStaging()">
+                Hero Slot
             </button>
         </div>
     </div>
@@ -1594,6 +1754,54 @@
                    x-model.number="settleParams.rows">
             <span class="control-value" x-text="settleParams.rows"></span>
         </div>
+
+        <div class="control-divider"></div>
+
+        <!-- Hero Slot controls -->
+        <button class="control-btn primary"
+                :disabled="_heroRunning || !hasVideos || tab !== 'hero'"
+                @click="onPlayHero()">
+            <i class="bi bi-person-badge"></i> Play Hero
+        </button>
+
+        <button class="control-btn danger"
+                :disabled="tab !== 'hero'"
+                @click="onResetHero()">
+            <i class="bi bi-arrow-counterclockwise"></i> Reset
+        </button>
+
+        <!-- Hero Delay slider -->
+        <div class="control-group" :style="tab !== 'hero' ? 'opacity:0.4' : ''">
+            <span class="control-label">Delay</span>
+            <input type="range" class="control-slider"
+                   min="0" max="5000" step="250"
+                   :disabled="tab !== 'hero'"
+                   x-model.number="heroParams.heroDelay">
+            <span class="control-value" x-text="heroParams.heroDelay + 'ms'"></span>
+        </div>
+
+        <!-- Hero Result radio -->
+        <div class="control-group" :style="tab !== 'hero' ? 'opacity:0.4' : ''">
+            <span class="control-label">Result</span>
+            <label style="font-size:0.75rem; cursor:pointer; display:flex; align-items:center; gap:2px;">
+                <input type="radio" value="found"
+                       :disabled="tab !== 'hero'"
+                       x-model="heroParams.heroResult"> found
+            </label>
+            <label style="font-size:0.75rem; cursor:pointer; display:flex; align-items:center; gap:2px;">
+                <input type="radio" value="not-found"
+                       :disabled="tab !== 'hero'"
+                       x-model="heroParams.heroResult"> not-found
+            </label>
+        </div>
+
+        <!-- Hero Reserved toggle（A/B 對比） -->
+        <div class="control-group" :style="tab !== 'hero' ? 'opacity:0.4' : ''">
+            <input type="checkbox" class="control-checkbox"
+                   :disabled="tab !== 'hero'"
+                   x-model="heroParams.heroReserved">
+            <span class="control-label" style="cursor:pointer">Reserve Slot</span>
+        </div>
     </div>
 
     <!-- 預覽區 -->
@@ -1773,6 +1981,68 @@
             </template>
         </div>
 
+        <!-- Hero Slot Grid 區（tab=hero） -->
+        <div class="motion-lab-grid"
+             x-ref="heroGrid"
+             x-show="tab === 'hero'"
+             x-cloak>
+
+            <!-- Hero Placeholder（skeleton 態 / 填充態） -->
+            <div class="av-card-preview hero-card"
+                 x-show="_heroSlotReserved"
+                 x-ref="heroPlaceholder">
+                <div class="av-card-preview-img" style="position:relative;">
+                    <!-- skeleton 態：shimmer -->
+                    <div class="skeleton-cover shimmer"
+                         x-show="!_heroFilled"
+                         style="position:absolute; inset:0;"></div>
+                    <!-- 填充態：模擬 actressProfile 圖片 -->
+                    <img :src="heroActressProfile?.cover_url || ''"
+                         x-show="_heroFilled && heroActressProfile?.cover_url"
+                         style="width:100%; height:100%; object-fit:cover; display:block;">
+                    <!-- 填充態：無封面 -->
+                    <div class="av-card-no-cover"
+                         x-show="_heroFilled && heroActressProfile && !heroActressProfile.cover_url">
+                        <i class="bi bi-person-badge"></i>
+                        <span>Hero</span>
+                    </div>
+                </div>
+                <div class="av-card-preview-footer">
+                    <span class="av-num"
+                          x-text="_heroFilled ? (heroActressProfile?.actresses?.[0] || 'Hero') : '搜尋中...'"></span>
+                </div>
+            </div>
+
+            <!-- 正常卡片（skeleton → 填充） -->
+            <template x-for="(card, index) in heroCards" :key="card ? ('hero_' + card.path) : ('hero_empty_' + index)">
+                <div class="av-card-preview">
+                    <div class="av-card-preview-img">
+                        <!-- skeleton 狀態 -->
+                        <template x-if="card === null">
+                            <div class="skeleton-cover shimmer"></div>
+                        </template>
+                        <!-- 填入狀態：有封面 -->
+                        <template x-if="card !== null && card.cover_url">
+                            <img :src="card.cover_url" :alt="card.number" loading="lazy"
+                                 style="width:100%; height:100%; object-fit:cover; display:block;">
+                        </template>
+                        <!-- 填入狀態：無封面 -->
+                        <template x-if="card !== null && !card.cover_url">
+                            <div class="av-card-no-cover">
+                                <i class="bi bi-image"></i>
+                                <span>無封面</span>
+                            </div>
+                        </template>
+                    </div>
+                    <div class="av-card-preview-footer">
+                        <span class="av-num"
+                              x-text="card !== null ? (card.number || '-') : ('#' + (index + 1))">
+                        </span>
+                    </div>
+                </div>
+            </template>
+        </div>
+
         <!-- Detail 區（tab=search && mode=detail） -->
         <div class="motion-lab-detail"
              x-ref="detail"
@@ -1887,6 +2157,16 @@
 @keyframes shimmer {
     0%   { background-position: 200% 0; }
     100% { background-position: -200% 0; }
+}
+
+/* Hero Slot: hero-card 邊框提示 */
+.hero-card {
+    border: 2px solid var(--accent-primary);
+    border-radius: 8px;
+}
+
+.hero-card .av-card-preview-footer {
+    background: color-mix(in srgb, var(--accent-primary) 15%, transparent);
 }
 
 </style>

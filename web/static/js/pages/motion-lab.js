@@ -892,6 +892,58 @@
         },
 
         /**
+         * Hero Slot: skeleton → 封面圖填充動畫
+         * C4: killTweensOf(img)
+         * C6: 不使用旋轉
+         * @param {Element} heroEl - hero placeholder DOM
+         * @param {object} options - { duration, ease, reducedMotionSim }
+         * @returns {gsap.core.Tween|null}
+         */
+        playHeroFill: function (heroEl, options) {
+            options = options || {};
+            if (!heroEl) return null;
+            var img = heroEl.querySelector('.av-card-preview-img img');
+            if (!img) return null;
+            // C4: 清除舊動畫
+            gsap.killTweensOf(img);
+            if (shouldSkip(options)) {
+                gsap.set(img, { opacity: 1, scale: 1 });
+                return null;
+            }
+            var dur = options.duration || 0.5;
+            var ease = options.ease || 'power2.out';
+            return gsap.fromTo(img,
+                { opacity: 0, scale: 1.05 },
+                { opacity: 1, scale: 1, duration: dur, ease: ease }
+            );
+        },
+
+        /**
+         * Hero Slot: Flip 補位動畫
+         * 呼叫端負責：getState → DOM 變更 → 確認 DOM 更新後呼叫此方法
+         *
+         * @param {Flip.FlipState} flipState - Flip.getState() 的結果（DOM 變更前捕獲）
+         * @param {object} options - { duration, ease, reducedMotionSim }
+         * @returns {Promise}
+         */
+        playHeroRemove: function (flipState, options) {
+            options = options || {};
+            return new Promise(function (resolve) {
+                if (!flipState) { resolve(); return; }
+                if (typeof Flip === 'undefined') { resolve(); return; }
+                if (shouldSkip(options)) { resolve(); return; }
+
+                var dur = options.duration || 0.4;
+                var ease = options.ease || 'power2.out';
+                Flip.from(flipState, {
+                    duration: dur,
+                    ease: ease,
+                    onComplete: resolve
+                });
+            });
+        },
+
+        /**
          * Grid Settle Pulse：staging exit 完成後，前幾行卡片極輕微 scale pulse
          * 營造「結果穩定落位」的收尾感
          *
