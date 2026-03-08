@@ -8,41 +8,35 @@ from core.database import init_db, Video, VideoRepository
 
 # temp_db fixture 定義於 tests/unit/conftest.py
 
+@pytest.fixture
+def showcase_config():
+    return {
+        "gallery": {
+            "directories": [
+                "/home/user/media",
+                "C:/Videos",
+                "D:/AV",
+                "//NAS/share",
+            ],
+            "path_mappings": {},
+            "min_size_mb": 1,
+            "thumbnail_width": 400
+        },
+        "scraper": {"video_extensions": [".mp4"], "image_extensions": [".jpg"]},
+        "database": {"path": ":memory:"},
+        "translate": {"provider": "ollama", "ollama_model": "llama3"}
+    }
 
 @pytest.fixture
-def client(temp_db, monkeypatch):
-    """建立測試客戶端，使用臨時資料庫"""
-    def mock_get_db_path():
-        return temp_db
-
-    # Mock config：directories 涵蓋所有測試資料路徑
-    def mock_load_config():
-        return {
-            "gallery": {
-                "directories": [
-                    "/home/user/media",
-                    "C:/Videos",
-                    "D:/AV",
-                    "//NAS/share",
-                ],
-                "path_mappings": {},
-            }
-        }
-
-    monkeypatch.setattr("core.database.get_db_path", mock_get_db_path)
-    monkeypatch.setattr("web.routers.showcase.get_db_path", mock_get_db_path)
-    monkeypatch.setattr("web.routers.showcase.load_config", mock_load_config)
-
-    from web.app import app
-    return TestClient(app)
-
+def client(make_client, temp_db, showcase_config):
+    return make_client(
+        ["core.database.get_db_path", "web.routers.showcase.get_db_path", "web.routers.showcase.load_config"],
+        mock_db_path=temp_db,
+        config_override=showcase_config,
+    )
 
 @pytest.fixture
-def populated_db(temp_db):
-    """預先填入測試資料的資料庫"""
-    repo = VideoRepository(temp_db)
-
-    # 插入測試影片資料
+def populated_db(make_populated_db):
     videos = [
         Video(
             path="file:////home/user/media/SONE-205.mp4",
@@ -55,7 +49,7 @@ def populated_db(temp_db):
             tags=["単体作品", "ハイビジョン", "独占配信"],
             size_bytes=3145728000,
             cover_path="file:////home/user/media/SONE-205/poster.jpg",
-            mtime=1705276800.0  # 2024-01-15 00:00:00 UTC
+            mtime=1705276800.0
         ),
         Video(
             path="file:///C:/Videos/ABW-001.mp4",
@@ -68,20 +62,20 @@ def populated_db(temp_db):
             tags=["スレンダー"],
             size_bytes=2147483648,
             cover_path="file:///C:/Videos/ABW-001/cover.jpg",
-            mtime=1706745600.0  # 2024-02-01 00:00:00 UTC
+            mtime=1706745600.0
         ),
         Video(
             path="file:///D:/AV/FC2-001.mp4",
             number="FC2-PPV-001",
             title="Test Video 3 - No Cover",
             original_title="",
-            actresses=[],  # 空陣列測試
+            actresses=[],
             maker="",
             release_date="",
-            tags=[],  # 空陣列測試
+            tags=[],
             size_bytes=0,
-            cover_path="",  # 無封面測試
-            mtime=0.0  # 零時間測試
+            cover_path="",
+            mtime=0.0
         ),
         Video(
             path="file://///NAS/share/PRED-001.mp4",
@@ -93,12 +87,11 @@ def populated_db(temp_db):
             release_date="2024-03-01",
             tags=[],
             size_bytes=1073741824,
-            cover_path="file://///NAS/share/PRED-001/cover.jpg",  # UNC 路徑測試
+            cover_path="file://///NAS/share/PRED-001/cover.jpg",
             mtime=1709251200.0
         ),
     ]
-    repo.upsert_batch(videos)
-    return temp_db
+    return make_populated_db(videos)
 
 
 # === API 端點測試 ===
@@ -136,29 +129,39 @@ class TestShowcaseVideosAPI:
         assert data["videos"] == []
         assert data["total"] == 0
 
-    def test_get_videos_with_data(self, client, populated_db, monkeypatch):
-        """測試有資料時回傳完整欄位"""
+    @pytest.fixture
+    def showcase_videos_response(self, client, populated_db, monkeypatch):
+        """共用 fixture：取得有資料時的 API 回應"""
         def mock_get_db_path():
             return populated_db
         monkeypatch.setattr("web.routers.showcase.get_db_path", mock_get_db_path)
+        return client.get("/api/showcase/videos")
 
-        response = client.get("/api/showcase/videos")
+    def test_get_videos_returns_list_structure(self, showcase_videos_response):
+        """測試回傳列表基本結構"""
+        response = showcase_videos_response
         assert response.status_code == 200
-
         data = response.json()
         assert data["success"] is True
         assert data["total"] == 4
         assert len(data["videos"]) == 4
 
-        # 驗證第一筆資料欄位完整性
+    def test_get_videos_item_basic_fields(self, showcase_videos_response):
+        """測試單筆影片資源基本與元資料欄位"""
+        data = showcase_videos_response.json()
         video1 = data["videos"][0]
         assert "path" in video1
         assert "title" in video1
         assert "original_title" in video1
-        assert "actresses" in video1
         assert "number" in video1
         assert "maker" in video1
         assert "release_date" in video1
+
+    def test_get_videos_item_media_fields(self, showcase_videos_response):
+        """測試單筆影片資源多媒體與陣列欄位"""
+        data = showcase_videos_response.json()
+        video1 = data["videos"][0]
+        assert "actresses" in video1
         assert "tags" in video1
         assert "size" in video1
         assert "cover_url" in video1
@@ -308,8 +311,8 @@ class TestShowcaseVideosAPI:
         assert video3["mtime"] == 0
         assert isinstance(video3["mtime"], int)
 
-    def test_empty_fields_handling(self, client, populated_db, monkeypatch):
-        """測試空值欄位處理正確"""
+    def test_empty_fields_response_structure(self, client, populated_db, monkeypatch):
+        """測試空值欄位的回應結構與狀態欄位"""
         def mock_get_db_path():
             return populated_db
         monkeypatch.setattr("web.routers.showcase.get_db_path", mock_get_db_path)
@@ -317,12 +320,24 @@ class TestShowcaseVideosAPI:
         response = client.get("/api/showcase/videos")
         data = response.json()
 
-        # 第三筆：多個空值欄位
+        # 第三筆：多個空值欄位 — 基本結構與狀態
         video3 = data["videos"][2]
         assert video3["number"] == "FC2-PPV-001"  # number 有值
         assert video3["original_title"] == ""  # 空字串
         assert video3["maker"] == ""  # 空字串
         assert video3["release_date"] == ""  # 空字串
+
+    def test_empty_fields_content_values(self, client, populated_db, monkeypatch):
+        """測試空值欄位的內容值（陣列、數值、封面）"""
+        def mock_get_db_path():
+            return populated_db
+        monkeypatch.setattr("web.routers.showcase.get_db_path", mock_get_db_path)
+
+        response = client.get("/api/showcase/videos")
+        data = response.json()
+
+        # 第三筆：多個空值欄位 — 內容值
+        video3 = data["videos"][2]
         assert video3["actresses"] == ""  # 空陣列 → 空字串
         assert video3["tags"] == ""  # 空陣列 → 空字串
         assert video3["size"] == 0  # 零值

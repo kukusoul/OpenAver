@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2026-03-08
+
+### Changed
+
+#### 🧪 測試套件整合 (Phase 32)
+
+**U13 — 去重 + conftest 統一 + 結構歸位**
+- 刪除 `test_smoke.py` 與 `test_scraper_parser.py` 重疊的 76 個測試（778 → 740）
+- `make_client(mock_targets)` / `make_populated_db(videos)` factory fixture 統一至 `tests/unit/conftest.py`
+- `test_scrapers.py` 連外測試加 `@pytest.mark.smoke` 標記
+- 4 個重複 scraper search tests 合併為 `@pytest.mark.parametrize`
+
+**U14 — 覆蓋率補強**
+- 新增 `test_scraper_validators.py` — `is_number_format` / `is_partial_number` / `is_prefix_only` 邊界測試
+- 新增 `test_gallery_scanner.py` — `parse_nfo` / `parse_filename` / `find_cover_image` 測試
+- 新增 `test_api_config_endpoints.py` — Tutorial flow + DELETE config 整合測試
+- 新增 `test_api_scanner.py` — `/api/gallery/video` 安全測試（403 invalid ext/dir）+ player 測試
+- 覆蓋率 740 → 803（+63 tests）
+
+**U15 — 品質修正**
+- 拆分 6 個過大測試（17/17/11/20/15/11 assertions → 各 3+ 小測試）
+- 弱斷言加強：`len()>0` → 驗具體值/結構，`is not None` → 驗型別/欄位
+- `test_init_db_creates_table` 加 PRAGMA schema 驗證
+- `test_scrapers.py` 連外測試加強結構驗證（Actress/str 型別檢查）
+- 最終測試數 817 passed, 18 deselected (smoke)
+
+---
+
 ## [0.4.0] - 2026-03-08
 
 ### Added

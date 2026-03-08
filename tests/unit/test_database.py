@@ -10,7 +10,10 @@ from core.database import (
     get_connection,
     init_db,
     Video,
-    ActressAlias
+    ActressAlias,
+    migrate_json_to_sqlite,
+    ActressAliasRepository,
+    VideoRepository
 )
 from core.gallery_scanner import VideoInfo
 
@@ -42,6 +45,16 @@ def test_init_db_creates_table(tmp_path):
 
     assert result is not None
     assert result[0] == "videos"
+
+    # Verify schema columns via PRAGMA table_info
+    cursor2 = sqlite3.connect(str(db_path)).cursor()
+    cursor2.execute("PRAGMA table_info(videos)")
+    columns = [row[1] for row in cursor2.fetchall()]
+    cursor2.connection.close()
+
+    assert "number" in columns
+    assert "title" in columns
+    assert "cover_path" in columns
 
 
 def test_init_db_creates_indexes(tmp_path):
@@ -85,31 +98,44 @@ def test_init_db_idempotent(tmp_path):
     assert result[0] == 0  # 表格為空
 
 
-def test_video_dataclass_defaults():
-    """測試 Video 預設值正確"""
-    video = Video()
-
-    assert video.id is None
-    assert video.path == ""
-    assert video.number is None
-    assert video.title == ""
-    assert video.original_title == ""
-    assert video.actresses == []
-    assert video.maker == ""
-    assert video.series is None
-    assert video.tags == []
-    assert video.duration is None
-    assert video.size_bytes == 0
-    assert video.cover_path == ""
-    assert video.release_date == ""
-    assert video.mtime == 0.0
-    assert video.nfo_mtime == 0.0
-    assert video.created_at is None
-    assert video.updated_at is None
+@pytest.fixture
+def default_video():
+    """建立預設 Video 物件供測試共用。"""
+    return Video()
 
 
-def test_video_from_video_info():
-    """測試從 VideoInfo 轉換"""
+def test_video_defaults_basic_fields(default_video):
+    """測試核心基本欄位的預設值"""
+    assert default_video.id is None
+    assert default_video.path == ""
+    assert default_video.number is None
+    assert default_video.size_bytes == 0
+    assert default_video.mtime == 0.0
+    assert default_video.nfo_mtime == 0.0
+    assert default_video.created_at is None
+    assert default_video.updated_at is None
+
+
+def test_video_defaults_string_metadata(default_video):
+    """測試可選字串欄位預設值"""
+    assert default_video.title == ""
+    assert default_video.original_title == ""
+    assert default_video.maker == ""
+    assert default_video.series is None
+    assert default_video.cover_path == ""
+    assert default_video.release_date == ""
+    assert default_video.duration is None
+
+
+def test_video_defaults_list_fields(default_video):
+    """測試列表欄位預設空 list"""
+    assert default_video.actresses == []
+    assert default_video.tags == []
+
+
+@pytest.fixture
+def mapped_video():
+    """準備 VideoInfo 轉換後的 Video 物件供測試"""
     info = VideoInfo(
         path="/videos/test.mp4",
         title="測試影片",
@@ -123,21 +149,30 @@ def test_video_from_video_info():
         mtime=133500000000000000,  # FileTime 格式
         img="/covers/test.jpg"
     )
+    return Video.from_video_info(info)
 
-    video = Video.from_video_info(info)
 
-    assert video.path == "/videos/test.mp4"
-    assert video.number == "ABC-123"
-    assert video.title == "測試影片"
-    assert video.original_title == "Test Video"
-    assert video.actresses == ["演員A", "演員B", "演員C"]
-    assert video.maker == "測試片商"
-    assert video.tags == ["類型1", "類型2", "類型3"]
-    assert video.size_bytes == 1024 * 1024 * 500
-    assert video.cover_path == "/covers/test.jpg"
-    assert video.release_date == "2024-01-20"
-    # 檢查 mtime 轉換是否正確（允許小誤差）
-    assert video.mtime > 0
+def test_mapped_video_basic_fields(mapped_video):
+    """測試 VideoInfo 轉換的基本欄位映射"""
+    assert mapped_video.path == "/videos/test.mp4"
+    assert mapped_video.number == "ABC-123"
+    assert mapped_video.size_bytes == 1024 * 1024 * 500
+    assert mapped_video.mtime > 0  # 檢查 mtime 轉換是否正確（允許小誤差）
+
+
+def test_mapped_video_metadata_fields(mapped_video):
+    """測試 VideoInfo 轉換的字串元資料映射"""
+    assert mapped_video.title == "測試影片"
+    assert mapped_video.original_title == "Test Video"
+    assert mapped_video.maker == "測試片商"
+    assert mapped_video.cover_path == "/covers/test.jpg"
+    assert mapped_video.release_date == "2024-01-20"
+
+
+def test_mapped_video_list_fields(mapped_video):
+    """測試 VideoInfo 轉換的列表欄位映射"""
+    assert mapped_video.actresses == ["演員A", "演員B", "演員C"]
+    assert mapped_video.tags == ["類型1", "類型2", "類型3"]
 
 
 def test_video_to_dict():
@@ -204,77 +239,84 @@ def test_connection_wal_mode(tmp_path):
     assert result[0].lower() == "wal"
 
 
-def test_insert_and_query(tmp_path):
-    """測試基本 CRUD 操作"""
-    db_path = tmp_path / "test_crud.db"
-    init_db(db_path)
+class TestInsertAndQuery:
+    """測試基本 CRUD 操作，拆分為多個小測試"""
 
-    conn = get_connection(db_path)
-    cursor = conn.cursor()
+    @pytest.fixture(autouse=True)
+    def setup_db(self, tmp_path):
+        db_path = tmp_path / "test_crud.db"
+        init_db(db_path)
 
-    # 插入測試資料
-    video = Video(
-        path="/videos/test123.mp4",
-        number="TEST-123",
-        title="測試影片",
-        original_title="Test Video",
-        actresses=["演員A", "演員B"],
-        maker="測試片商",
-        series="測試系列",
-        tags=["類型1", "類型2"],
-        duration=120,
-        size_bytes=1024 * 1024 * 100,
-        cover_path="/covers/test123.jpg",
-        release_date="2024-01-20",
-        mtime=1234567890.0,
-        nfo_mtime=1234567800.0
-    )
+        conn = get_connection(db_path)
+        cursor = conn.cursor()
 
-    video_dict = video.to_dict()
-    # 移除 id, created_at, updated_at（由資料庫自動處理）
-    video_dict.pop('id', None)
-    video_dict.pop('created_at', None)
-    video_dict.pop('updated_at', None)
+        # 插入測試資料
+        video = Video(
+            path="/videos/test123.mp4",
+            number="TEST-123",
+            title="測試影片",
+            original_title="Test Video",
+            actresses=["演員A", "演員B"],
+            maker="測試片商",
+            series="測試系列",
+            tags=["類型1", "類型2"],
+            duration=120,
+            size_bytes=1024 * 1024 * 100,
+            cover_path="/covers/test123.jpg",
+            release_date="2024-01-20",
+            mtime=1234567890.0,
+            nfo_mtime=1234567800.0
+        )
 
-    # 插入資料
-    columns = list(video_dict.keys())
-    placeholders = ', '.join(['?'] * len(columns))
-    cursor.execute(
-        f"INSERT INTO videos ({', '.join(columns)}) VALUES ({placeholders})",
-        list(video_dict.values())
-    )
-    conn.commit()
+        video_dict = video.to_dict()
+        video_dict.pop('id', None)
+        video_dict.pop('created_at', None)
+        video_dict.pop('updated_at', None)
 
-    # 查詢資料
-    cursor.execute("SELECT * FROM videos WHERE number = ?", ("TEST-123",))
-    row = cursor.fetchone()
-    cursor.execute("PRAGMA table_info(videos)")
-    columns_info = cursor.fetchall()
-    column_names = [col[1] for col in columns_info]
+        columns = list(video_dict.keys())
+        placeholders = ', '.join(['?'] * len(columns))
+        cursor.execute(
+            f"INSERT INTO videos ({', '.join(columns)}) VALUES ({placeholders})",
+            list(video_dict.values())
+        )
+        conn.commit()
 
-    conn.close()
+        # 查詢資料
+        cursor.execute("SELECT * FROM videos WHERE number = ?", ("TEST-123",))
+        row = cursor.fetchone()
+        cursor.execute("PRAGMA table_info(videos)")
+        columns_info = cursor.fetchall()
+        column_names = [col[1] for col in columns_info]
 
-    # 驗證資料
-    assert row is not None
-    result_video = Video.from_row(row, column_names)
+        conn.close()
 
-    assert result_video.path == "/videos/test123.mp4"
-    assert result_video.number == "TEST-123"
-    assert result_video.title == "測試影片"
-    assert result_video.original_title == "Test Video"
-    assert result_video.actresses == ["演員A", "演員B"]
-    assert result_video.maker == "測試片商"
-    assert result_video.series == "測試系列"
-    assert result_video.tags == ["類型1", "類型2"]
-    assert result_video.duration == 120
-    assert result_video.size_bytes == 1024 * 1024 * 100
-    assert result_video.cover_path == "/covers/test123.jpg"
-    assert result_video.release_date == "2024-01-20"
-    assert result_video.mtime == 1234567890.0
-    assert result_video.nfo_mtime == 1234567800.0
-    # created_at 和 updated_at 應該由資料庫自動設定
-    assert result_video.created_at is not None
-    assert result_video.updated_at is not None
+        assert row is not None
+        self.result_video = Video.from_row(row, column_names)
+
+    def test_insert_basic_fields(self):
+        """測試插入與查詢的基本欄位"""
+        assert self.result_video.path == "/videos/test123.mp4"
+        assert self.result_video.number == "TEST-123"
+        assert self.result_video.size_bytes == 1024 * 1024 * 100
+        assert self.result_video.mtime == 1234567890.0
+        assert self.result_video.nfo_mtime == 1234567800.0
+        assert self.result_video.created_at is not None
+        assert self.result_video.updated_at is not None
+
+    def test_insert_metadata_fields(self):
+        """測試插入與查詢的字串元資料欄位"""
+        assert self.result_video.title == "測試影片"
+        assert self.result_video.original_title == "Test Video"
+        assert self.result_video.maker == "測試片商"
+        assert self.result_video.series == "測試系列"
+        assert self.result_video.duration == 120
+        assert self.result_video.cover_path == "/covers/test123.jpg"
+        assert self.result_video.release_date == "2024-01-20"
+
+    def test_insert_list_fields(self):
+        """測試插入與查詢的列表欄位"""
+        assert self.result_video.actresses == ["演員A", "演員B"]
+        assert self.result_video.tags == ["類型1", "類型2"]
 
 
 def test_video_from_video_info_with_empty_fields():
@@ -381,3 +423,95 @@ def test_actress_alias_to_dict():
     assert d['old_name'] == 'miru'
     assert d['new_name'] == '坂道みる'
     assert d['applied_count'] == 5
+
+
+# ============ migrate_json_to_sqlite 測試 ============
+
+def test_migrate_json_to_sqlite_success(tmp_path):
+    """測試正常遷移與 idempotency"""
+    db_path = tmp_path / "test.db"
+    json_path = tmp_path / "cache.json"
+    
+    # 準備假的 json cache 資料
+    fake_cache = {
+        "_metadata": {"version": 1},
+        "file:///videos/test1.mp4": {
+            "mtime": 100.0,
+            "nfo_mtime": 200.0,
+            "info": {
+                "path": "file:///videos/test1.mp4",
+                "title": "Title 1",
+                "num": "TEST-001"
+            }
+        }
+    }
+    json_path.write_text(json.dumps(fake_cache))
+    
+    # 第一次遷移
+    result1 = migrate_json_to_sqlite(json_path, db_path, delete_on_success=False)
+    assert result1['migrated'] == 1
+    assert result1['skipped'] == 1
+    assert result1['errors'] == 0
+    
+    # 檢查 mtime/nfo_mtime 預設值
+    repo = VideoRepository(db_path)
+    video = repo.get_by_path("file:///videos/test1.mp4")
+    assert video.mtime == 100.0
+    assert video.nfo_mtime == 200.0
+    
+    # 第2次遷移，測試重複匯入（idempotency）
+    result2 = migrate_json_to_sqlite(json_path, db_path, delete_on_success=False)
+    assert result2['migrated'] == 1  # 依然算 migrated 因為它會 UPSERT（updated計數+1）
+    # 但總數仍為 1
+    assert repo.count() == 1
+
+
+def test_migrate_json_to_sqlite_invalid_json(tmp_path):
+    """測試損壞的 json 檔案"""
+    db_path = tmp_path / "test.db"
+    json_path = tmp_path / "bad.json"
+    json_path.write_text("{bad json")
+    
+    result = migrate_json_to_sqlite(json_path, db_path, delete_on_success=False)
+    assert result['errors'] == 1
+
+
+# ============ ActressAliasRepository 測試 ============
+
+def test_actress_alias_repository_crud(tmp_path):
+    """測試 ActressAliasRepository 完整 CRUD 流程"""
+    db_path = tmp_path / "actress.db"
+    init_db(db_path)
+    
+    repo = ActressAliasRepository(db_path)
+    
+    # 剛開始有5筆種子資料
+    initial = repo.get_all()
+    assert len(initial) == 5
+    
+    # Add
+    new_id = repo.add("old1", "new1")
+    assert new_id > 0
+    
+    # Add duplicate (should fail and return -1)
+    dup_id = repo.add("old1", "new2")
+    assert dup_id == -1
+    
+    all_data = repo.get_all()
+    assert len(all_data) == 6
+    # 找出剛新增的
+    added = next(x for x in all_data if x.old_name == "old1")
+    assert added.applied_count == 0
+    
+    # Increment
+    repo.increment_applied_count(new_id, 3)
+    updated = next(x for x in repo.get_all() if x.id == new_id)
+    assert updated.applied_count == 3
+    
+    # Delete
+    success = repo.delete(new_id)
+    assert success is True
+    
+    # Verify deletion
+    assert len(repo.get_all()) == 5
+
