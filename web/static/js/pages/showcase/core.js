@@ -191,7 +191,6 @@ function showcaseState() {
         onSortChange() {
             this._sortWithFlip(() => {
                 this.applyFilterAndSort();
-                this.saveState();
             });
         },
 
@@ -199,7 +198,6 @@ function showcaseState() {
             this._sortWithFlip(() => {
                 this.order = this.order === 'asc' ? 'desc' : 'asc';
                 this.applyFilterAndSort();
-                this.saveState();
             });
         },
 
@@ -216,8 +214,12 @@ function showcaseState() {
                 state = window.ShowcaseAnimations?.captureFlipState?.(grid) || null;
             }
 
-            // Step 2: data change
+            // Step 2: data change（保存頁碼，因 applyFilterAndSort 會重置 page=1）
+            var savedPage = this.page;
             changeFn();
+            this.page = savedPage;
+            this.updatePagination();
+            this.saveState();  // 在 page 恢復後才持久化，避免 localStorage 寫入 page=1
 
             // Step 3: animate（$nextTick + rAF 雙層 defer）
             if (state && grid) {

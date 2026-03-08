@@ -2566,6 +2566,34 @@ class TestShowcaseAnimationsGuard:
             "B7 必須在 mode === 'grid' 時才觸發排序動畫"
         )
 
+    def test_sort_with_flip_preserves_page(self):
+        """B7: _sortWithFlip 保存並恢復頁碼（避免排序動畫在第 2 頁之後退化）"""
+        content = self.CORE_JS.read_text(encoding='utf-8')
+        lines = content.split('\n')
+        # 用 brace counting 提取 _sortWithFlip 方法體
+        in_method = False
+        method_lines = []
+        brace_count = 0
+        for line in lines:
+            stripped = line.strip()
+            if not in_method and '_sortWithFlip(' in stripped and 'changeFn' in stripped and stripped.endswith('{'):
+                in_method = True
+                brace_count = 0
+            if in_method:
+                method_lines.append(line)
+                brace_count += line.count('{') - line.count('}')
+                if brace_count <= 0 and len(method_lines) > 1:
+                    break
+        method_body = '\n'.join(method_lines)
+        assert 'savedPage' in method_body or 'saved_page' in method_body or 'savePage' in method_body, (
+            "showcase/core.js _sortWithFlip 缺少頁碼保存 — "
+            "排序操作不應重置頁碼，必須在 changeFn() 前後保存/恢復 page"
+        )
+        assert 'updatePagination' in method_body, (
+            "showcase/core.js _sortWithFlip 缺少 updatePagination — "
+            "恢復頁碼後必須重新分頁以 clamp 超出範圍的頁碼"
+        )
+
     # --- B8 守衛 ---
 
     def test_play_flip_filter_not_placeholder(self):

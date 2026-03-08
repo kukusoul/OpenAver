@@ -94,7 +94,7 @@
             });
 
             if (offscreen.length) {
-                gsap.set(offscreen, { opacity: 1, y: 0, scale: 1 });
+                gsap.set(offscreen, { clearProps: 'transform,opacity' });
             }
 
             if (!visible.length) return null;
