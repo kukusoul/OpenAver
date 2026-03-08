@@ -643,6 +643,8 @@
              filterEnterStyle: 'opacityScale',
              filterLeaveStyle: 'opacityScale',
              filterDuration: 0.4,
+             pageDuration: 0.3,
+             pageStagger: 0.02,
          },
 
          init() {
@@ -2012,6 +2014,44 @@
                    :disabled="tab !== 'showcase'"
                    x-model.number="showcaseParams.filterDuration">
             <span class="control-value" x-text="showcaseParams.filterDuration.toFixed(2) + 's'"></span>
+        </div>
+
+        <!-- ─── B4: Page Transition ─── -->
+        <div class="control-divider"></div>
+
+        <!-- Prev / Next -->
+        <div class="control-group" :style="tab !== 'showcase' ? 'opacity:0.4' : ''">
+            <span class="control-label">Page</span>
+            <button class="control-btn"
+                    :disabled="tab !== 'showcase'"
+                    @click="MotionLab.playPageTransition($refs.showcaseGrid, 'prev', { duration: showcaseParams.pageDuration, stagger: showcaseParams.pageStagger, reducedMotionSim: params.reducedMotionSim })">
+                ← Prev
+            </button>
+            <button class="control-btn"
+                    :disabled="tab !== 'showcase'"
+                    @click="MotionLab.playPageTransition($refs.showcaseGrid, 'next', { duration: showcaseParams.pageDuration, stagger: showcaseParams.pageStagger, reducedMotionSim: params.reducedMotionSim })">
+                Next →
+            </button>
+        </div>
+
+        <!-- Page Duration -->
+        <div class="control-group" :style="tab !== 'showcase' ? 'opacity:0.4' : ''">
+            <span class="control-label">Page Duration</span>
+            <input type="range" class="control-slider"
+                   min="0.2" max="0.5" step="0.05"
+                   :disabled="tab !== 'showcase'"
+                   x-model.number="showcaseParams.pageDuration">
+            <span class="control-value" x-text="showcaseParams.pageDuration.toFixed(2) + 's'"></span>
+        </div>
+
+        <!-- Page Stagger -->
+        <div class="control-group" :style="tab !== 'showcase' ? 'opacity:0.4' : ''">
+            <span class="control-label">Page Stagger</span>
+            <input type="range" class="control-slider"
+                   min="0.01" max="0.05" step="0.005"
+                   :disabled="tab !== 'showcase'"
+                   x-model.number="showcaseParams.pageStagger">
+            <span class="control-value" x-text="showcaseParams.pageStagger.toFixed(3) + 's'"></span>
         </div>
     </div>
 

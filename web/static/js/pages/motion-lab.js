@@ -1152,6 +1152,65 @@
         },
 
         /**
+         * 分頁切換動畫：stagger-out 舊頁 + stagger-in 新頁
+         * C4: killTweensOf(cards)
+         * C18: interrupt 策略（不 lock）
+         * @param {Element} gridEl - .showcase-grid 容器（x-ref="showcaseGrid"）
+         * @param {string} direction - 'prev' | 'next'
+         * @param {object} params - { duration, stagger, reducedMotionSim }
+         * @returns {gsap.core.Timeline|null}
+         */
+        playPageTransition: function (gridEl, direction, params) {
+            params = params || {};
+
+            // null guard
+            if (!gridEl) return null;
+
+            var cards = gridEl.querySelectorAll('.av-card-preview');
+            if (!cards.length) return null;
+
+            // Reduced Motion 降級：瞬間顯示
+            if (shouldSkip(params)) {
+                gsap.set(cards, { opacity: 1, x: 0 });
+                return null;
+            }
+
+            // C4: 清除舊動畫（含被中斷的上一次分頁動畫）
+            gsap.killTweensOf(cards);
+
+            var dur = params.duration || 0.3;
+            var staggerVal = params.stagger || 0.02;
+            var xShift = direction === 'next' ? -20 : 20;
+            var staggerFrom = direction === 'next' ? 'start' : 'end';
+
+            var tl = gsap.timeline({ id: 'pageTransition' });
+
+            // Phase 1: stagger-out
+            tl.to(cards, {
+                opacity: 0,
+                x: xShift,
+                duration: dur * 0.6,
+                ease: 'power2.in',
+                stagger: { each: staggerVal, from: staggerFrom }
+            });
+
+            // Phase 2: set 反向起始位置 + stagger-in
+            tl.set(cards, { x: -xShift });
+            tl.to(cards, {
+                opacity: 1,
+                x: 0,
+                duration: dur,
+                ease: 'power3.out',
+                stagger: { each: staggerVal, from: staggerFrom },
+                onComplete: function () {
+                    gsap.set(cards, { clearProps: 'transform,opacity' });
+                }
+            });
+
+            return tl;
+        },
+
+        /**
          * Showcase Grid 入場動畫：stagger 依序淡入
          * C4: killTweensOf(cards)
          * C6: 不使用 rotationX/Y/Z
