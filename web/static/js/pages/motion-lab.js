@@ -889,6 +889,81 @@
                 visibility: 'auto',
                 loop: true
             });
+        },
+
+        /**
+         * Grid Settle Pulse：staging exit 完成後，前幾行卡片極輕微 scale pulse
+         * 營造「結果穩定落位」的收尾感
+         *
+         * @param {Element} gridEl - grid 容器
+         * @param {object} [options] - { duration, scale, ease, rows, reducedMotionSim }
+         * @returns {gsap.core.Timeline|null}
+         */
+        playGridSettle: function (gridEl, options) {
+            options = options || {};
+            if (!gridEl) return null;
+            if (typeof gsap === 'undefined') return null;
+
+            var cards = gridEl.querySelectorAll('.av-card-preview');
+            if (!cards.length) return null;
+
+            // 動畫目標是 .av-card-preview-img（不是 .av-card-preview），
+            // 因為 .av-card-preview:hover 有 CSS transform（theme.css），
+            // GSAP 寫 inline scale 會覆蓋 hover 效果
+            var imgTargets = [];
+            cards.forEach(function (card) {
+                var img = card.querySelector('.av-card-preview-img');
+                if (img) imgTargets.push(img);
+            });
+            if (!imgTargets.length) return null;
+
+            // C4: 清除舊動畫
+            gsap.killTweensOf(imgTargets);
+
+            // Reduced Motion 降級
+            if (shouldSkip(options)) {
+                gsap.set(imgTargets, { scale: 1 });
+                return null;
+            }
+
+            var dur = options.duration || 0.4;
+            var scaleVal = options.scale || 1.03;
+            var ease = options.ease || 'settle';
+            var rowCount = options.rows || 2;
+
+            // Row bucketing：2px tolerance，避免子像素差異
+            var rowMap = {};
+            imgTargets.forEach(function (img, i) {
+                var card = cards[i];
+                var top = card.getBoundingClientRect().top;
+                var rowKey = Math.round(top / 2) * 2;
+                if (!rowMap[rowKey]) rowMap[rowKey] = [];
+                rowMap[rowKey].push(img);
+            });
+
+            // 按 rowKey 升序排列
+            var sortedKeys = Object.keys(rowMap).map(Number).sort(function (a, b) { return a - b; });
+
+            // 只取前 N 行
+            var targetKeys = sortedKeys.slice(0, rowCount);
+            if (!targetKeys.length) return null;
+
+            // 建立 timeline
+            var tl = gsap.timeline({ id: 'gridSettle' });
+
+            targetKeys.forEach(function (key, rowIdx) {
+                var rowImgs = rowMap[key];
+                // 同行卡片同時，跨行 0.06s 延遲
+                tl.fromTo(rowImgs,
+                    { scale: scaleVal },
+                    { scale: 1, duration: dur, ease: ease },
+                    rowIdx * 0.06  // position parameter
+                );
+            });
+
+            // C6: 不使用 rotationX/Y/Z，只用 scale ✓
+
+            return tl;
         }
     };
 
@@ -904,6 +979,15 @@
                 console.log('[MotionLab] CustomBounce 已初始化');
             } catch (e) {
                 console.warn('[MotionLab] CustomBounce 初始化失敗:', e);
+            }
+        }
+        if (typeof CustomEase !== 'undefined') {
+            try {
+                if (!CustomEase._initted) gsap.registerPlugin(CustomEase);
+                CustomEase.create("settle", "M0,0 C0.14,0 0.27,0.87 0.5,1 0.75,1 0.86,0.98 1,1");
+                console.log('[MotionLab] CustomEase "settle" 已初始化');
+            } catch (e) {
+                console.warn('[MotionLab] CustomEase "settle" 初始化失敗:', e);
             }
         }
         if (typeof Flip !== 'undefined') {

@@ -586,6 +586,14 @@
          _stagingExiting: false,         // exit 動畫進行中（防止 pulse killTweensOf 殺死 exit）
          _pulseDebounceTimer: null,      // micro-pulse debounce timer（150ms）
 
+         // Settle Pulse 沙盒 state
+         settleParams: {
+             ease: 'settle',
+             duration: 0.4,
+             scale: 1.03,
+             rows: 2,
+         },
+
          init() {
              this.fetchVideos();
              // 鍵盤 ←/→ 快捷鍵
@@ -1301,6 +1309,11 @@
                     @click="tab = 'staging'; onResetStaging()">
                 Staging Burst
             </button>
+            <button class="motion-lab-tab"
+                    :class="{ active: tab === 'settle' }"
+                    @click="tab = 'settle'; onResetStaging()">
+                Settle
+            </button>
         </div>
     </div>
 
@@ -1524,6 +1537,63 @@
                    x-model.number="stagingParams.burstDuration">
             <span class="control-value" x-text="stagingParams.burstDuration.toFixed(2) + 's'"></span>
         </div>
+
+        <div class="control-divider"></div>
+
+        <!-- Settle Pulse controls -->
+        <button class="control-btn primary"
+                :disabled="!hasVideos || tab !== 'settle'"
+                @click="MotionLab.playGridSettle($refs.settleGrid, { ...settleParams, reducedMotionSim: params.reducedMotionSim })">
+            <i class="bi bi-activity"></i> Play Settle
+        </button>
+
+        <button class="control-btn danger"
+                :disabled="tab !== 'settle'"
+                @click="gsap.killTweensOf($refs.settleGrid?.querySelectorAll('.av-card-preview-img')); gsap.set($refs.settleGrid?.querySelectorAll('.av-card-preview-img'), { clearProps: 'scale' })">
+            <i class="bi bi-arrow-counterclockwise"></i> Reset
+        </button>
+
+        <!-- Settle Ease -->
+        <div class="control-group" :style="tab !== 'settle' ? 'opacity:0.4' : ''">
+            <span class="control-label">Ease</span>
+            <select class="control-select"
+                    :disabled="tab !== 'settle'"
+                    x-model="settleParams.ease">
+                <option value="settle">settle</option>
+                <option value="power2.out">power2.out</option>
+                <option value="elastic.out(1,0.5)">elastic.out(1,0.5)</option>
+            </select>
+        </div>
+
+        <!-- Settle Duration -->
+        <div class="control-group" :style="tab !== 'settle' ? 'opacity:0.4' : ''">
+            <span class="control-label">Duration</span>
+            <input type="range" class="control-slider"
+                   min="0.2" max="0.8" step="0.05"
+                   :disabled="tab !== 'settle'"
+                   x-model.number="settleParams.duration">
+            <span class="control-value" x-text="settleParams.duration.toFixed(2) + 's'"></span>
+        </div>
+
+        <!-- Settle Scale -->
+        <div class="control-group" :style="tab !== 'settle' ? 'opacity:0.4' : ''">
+            <span class="control-label">Scale</span>
+            <input type="range" class="control-slider"
+                   min="1.01" max="1.06" step="0.01"
+                   :disabled="tab !== 'settle'"
+                   x-model.number="settleParams.scale">
+            <span class="control-value" x-text="settleParams.scale.toFixed(2)"></span>
+        </div>
+
+        <!-- Settle Rows -->
+        <div class="control-group" :style="tab !== 'settle' ? 'opacity:0.4' : ''">
+            <span class="control-label">Rows</span>
+            <input type="range" class="control-slider"
+                   min="1" max="4" step="1"
+                   :disabled="tab !== 'settle'"
+                   x-model.number="settleParams.rows">
+            <span class="control-value" x-text="settleParams.rows"></span>
+        </div>
     </div>
 
     <!-- 預覽區 -->
@@ -1669,6 +1739,35 @@
                         <span class="av-num"
                               x-text="card !== null ? (card.number || '-') : ('#' + (index + 1))">
                         </span>
+                    </div>
+                </div>
+            </template>
+        </div>
+
+        <!-- Settle Grid 區（tab=settle） -->
+        <div class="motion-lab-grid"
+             x-ref="settleGrid"
+             x-show="tab === 'settle'"
+             x-cloak>
+            <template x-for="(video, index) in videos" :key="'settle_' + (video.number || index)">
+                <div class="av-card-preview">
+                    <div class="av-card-preview-img">
+                        <template x-if="video.cover_url">
+                            <img :src="video.cover_url"
+                                 :alt="video.number"
+                                 loading="lazy"
+                                 style="width:100%; height:100%; object-fit:cover; display:block;">
+                        </template>
+                        <template x-if="!video.cover_url">
+                            <div class="av-card-no-cover">
+                                <i class="bi bi-image"></i>
+                                <span>無封面</span>
+                            </div>
+                        </template>
+                    </div>
+                    <div class="av-card-preview-footer">
+                        <span class="av-num" x-text="video.number || '-'"></span>
+                        <span class="av-actress" x-text="formatActresses(video.actresses)"></span>
                     </div>
                 </div>
             </template>
