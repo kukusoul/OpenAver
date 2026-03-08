@@ -2875,3 +2875,58 @@ class TestShowcaseAnimationsGuard:
             "showcase/core.js 缺少 ShowcaseAnimations?.playModeCrossfade?.( — "
             "B10 必須使用 optional chaining 確保 animations.js 未載入時安全降級"
         )
+
+
+class TestMotionLabShowcase:
+    """B11 守衛 — Motion Lab Showcase demo 完整性
+
+    確認 Motion Lab 頁面包含 Showcase tab 及所有 demo 方法，
+    涵蓋 B1-B4 在 Motion Lab 新增的功能。
+    """
+
+    MOTION_LAB_HTML = PROJECT_ROOT / "web/templates/motion_lab.html"
+    MOTION_LAB_JS = PROJECT_ROOT / "web/static/js/pages/motion-lab.js"
+
+    def test_motion_lab_html_has_showcase_tab(self):
+        """motion_lab.html 包含 showcase tab 按鈕"""
+        content = self.MOTION_LAB_HTML.read_text(encoding='utf-8')
+        assert "showcase" in content.lower(), (
+            "motion_lab.html 缺少 showcase tab — "
+            "B1-B4 必須在 Motion Lab 新增 Showcase 分頁"
+        )
+        assert "tab === 'showcase'" in content, (
+            "motion_lab.html 缺少 tab === 'showcase' 條件 — "
+            "Showcase tab 必須有 Alpine tab 切換邏輯"
+        )
+
+    def test_motion_lab_js_has_play_showcase_entry(self):
+        """motion-lab.js 包含 playShowcaseEntry 方法"""
+        content = self.MOTION_LAB_JS.read_text(encoding='utf-8')
+        assert 'playShowcaseEntry' in content, (
+            "motion-lab.js 缺少 playShowcaseEntry — "
+            "B1 必須在 Motion Lab 提供 Showcase 初始載入 demo"
+        )
+
+    def test_motion_lab_js_has_play_flip_reorder(self):
+        """motion-lab.js 包含 playFlipReorder 方法"""
+        content = self.MOTION_LAB_JS.read_text(encoding='utf-8')
+        assert 'playFlipReorder' in content, (
+            "motion-lab.js 缺少 playFlipReorder — "
+            "B2 必須在 Motion Lab 提供排序洗牌 demo"
+        )
+
+    def test_motion_lab_js_has_play_flip_filter(self):
+        """motion-lab.js 包含 playFlipFilter 方法"""
+        content = self.MOTION_LAB_JS.read_text(encoding='utf-8')
+        assert 'playFlipFilter' in content, (
+            "motion-lab.js 缺少 playFlipFilter — "
+            "B3 必須在 Motion Lab 提供篩選進出場 demo"
+        )
+
+    def test_motion_lab_js_has_play_page_transition(self):
+        """motion-lab.js 包含 playPageTransition 方法（整合 playPageOut + playPageIn）"""
+        content = self.MOTION_LAB_JS.read_text(encoding='utf-8')
+        assert 'playPageTransition' in content, (
+            "motion-lab.js 缺少 playPageTransition — "
+            "B4 必須在 Motion Lab 提供分頁切換 demo"
+        )
