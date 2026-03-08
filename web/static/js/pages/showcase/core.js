@@ -211,7 +211,7 @@ function showcaseState() {
             var state = null;
             if (this.mode === 'grid') {
                 grid = document.querySelector('.showcase-grid');
-                state = window.ShowcaseAnimations?.captureFlipState?.(grid) || null;
+                state = window.ShowcaseAnimations?.capturePositions?.(grid) || null;
             }
 
             // Step 2: data change（保存頁碼，因 applyFilterAndSort 會重置 page=1）

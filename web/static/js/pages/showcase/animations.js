@@ -3,9 +3,10 @@
  *
  * 暴露 window.ShowcaseAnimations 物件，提供：
  *   - playEntry(gridEl, params)                B6: 初始載入進場動畫
- *   - playFlipReorder(gridEl, params)           B7: 排序洗牌 Flip 動畫
+ *   - capturePositions(gridEl)                  B12: 捕獲手動位置快照（排序用）
+ *   - playFlipReorder(gridEl, positionMap, params) B12: 排序洗牌手動動畫（取代 Flip）
  *   - playFlipFilter(gridEl, state, params)     B8: 篩選進出場 Flip 動畫
- *   - captureFlipState(gridEl)                  B8: 捕獲 Flip 狀態快照
+ *   - captureFlipState(gridEl)                  B8: 捕獲 Flip 狀態快照（篩選用）
  *   - playPageOut(gridEl, direction, params)    B9: 分頁離場動畫
  *   - playPageIn(gridEl, direction, params)     B9: 分頁進場動畫
  *   - playModeCrossfade(oldMode, newMode, params) B10: 模式切換 crossfade
@@ -115,44 +116,60 @@
         },
 
         /**
-         * B7: 排序洗牌 Flip 動畫
+         * B12: 排序洗牌手動動畫（取代 Flip reorder）
          * @param {Element} gridEl - .showcase-grid 容器
-         * @param {Object} state - captureFlipState 回傳的 Flip 狀態快照
+         * @param {Map} positionMap - capturePositions 回傳的位置快照
          * @param {Object} params - 動畫參數
-         * @returns {Flip|null}
+         * @returns {gsap.core.Timeline|null}
          */
-        playFlipReorder: function (gridEl, state, params) {
+        playFlipReorder: function (gridEl, positionMap, params) {
             params = params || {};
 
             // null guard
-            if (!gridEl || !state) return null;
+            if (!gridEl || !positionMap) return null;
 
-            // Flip guard
-            if (typeof Flip === 'undefined' || typeof gsap === 'undefined') return null;
+            // GSAP guard
+            if (typeof gsap === 'undefined') return null;
 
             var cards = gridEl.querySelectorAll('.av-card-preview');
             if (!cards.length) return null;
 
-            // Reduced Motion 降級：Alpine 已完成 DOM 更新，不需額外處理
+            // Reduced Motion 降級
             if (shouldSkip()) return null;
 
-            // C18: 中斷進行中的 Flip 動畫
-            Flip.killFlipsOf(cards);
+            // C18: 中斷進行中的動畫
+            gsap.killTweensOf(cards);
 
             var dur = params.duration || 0.5;
             var ease = params.ease || 'power2.inOut';
 
-            // Flip.from — 從舊位置動畫到新位置
-            return Flip.from(state, {
-                duration: dur,
-                ease: ease,
-                absolute: true,
-                prune: true,
-                simple: true,
-                onComplete: function () {
-                    gsap.set(cards, { clearProps: 'transform' });
-                }
+            // 計算 delta 並收集需要動畫的卡片
+            var tweens = [];
+            Array.from(cards).forEach(function (card) {
+                var id = card.getAttribute('data-flip-id');
+                if (!id) return;
+                var oldRect = positionMap.get(id);
+                if (!oldRect) return;
+                var newRect = card.getBoundingClientRect();
+                var dx = oldRect.left - newRect.left;
+                var dy = oldRect.top - newRect.top;
+                // delta 為 0 跳過
+                if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) return;
+                tweens.push({ card: card, dx: dx, dy: dy });
             });
+
+            if (!tweens.length) return null;
+
+            var tl = gsap.timeline({ id: 'showcaseReorder' });
+            tweens.forEach(function (t) {
+                tl.fromTo(t.card,
+                    { x: t.dx, y: t.dy },
+                    { x: 0, y: 0, duration: dur, ease: ease, clearProps: 'transform' },
+                    0  // all start at time 0
+                );
+            });
+
+            return tl;
         },
 
         /**
@@ -202,6 +219,25 @@
                     gsap.set(cards, { clearProps: 'transform' });
                 }
             });
+        },
+
+        /**
+         * B12: 捕獲手動位置快照（排序用，取代 Flip reorder）
+         * @param {Element} gridEl - .showcase-grid 容器
+         * @returns {Map|null} Map<string, DOMRect>
+         */
+        capturePositions: function (gridEl) {
+            if (!gridEl) return null;
+            var cards = gridEl.querySelectorAll('.av-card-preview');
+            if (!cards.length) return null;
+            var map = new Map();
+            Array.from(cards).forEach(function (card) {
+                var id = card.getAttribute('data-flip-id');
+                if (id) {
+                    map.set(id, card.getBoundingClientRect());
+                }
+            });
+            return map.size ? map : null;
         },
 
         /**

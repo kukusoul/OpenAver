@@ -2383,17 +2383,18 @@ class TestShowcaseAnimationsGuard:
         )
 
     def test_animations_js_has_all_method_stubs(self):
-        """animations.js 包含全部 7 個 placeholder 方法"""
+        """animations.js 包含全部 8 個方法"""
         content = self.ANIMATIONS_JS.read_text(encoding='utf-8')
         methods = [
             'playEntry', 'playFlipReorder', 'playFlipFilter',
-            'captureFlipState', 'playPageOut', 'playPageIn',
+            'captureFlipState', 'capturePositions',
+            'playPageOut', 'playPageIn',
             'playModeCrossfade',
         ]
         missing = [m for m in methods if m not in content]
         assert not missing, (
             f"showcase/animations.js 缺少方法: {', '.join(missing)} — "
-            "B5 必須包含全部 7 個 placeholder 方法"
+            "B5 必須包含全部 8 個方法"
         )
 
     def test_animations_js_registers_flip(self):
@@ -2518,52 +2519,127 @@ class TestShowcaseAnimationsGuard:
             "B7 必須查詢卡片元素"
         )
 
-    def test_play_flip_reorder_not_placeholder(self):
-        """B7: playFlipReorder 已從 placeholder 替換為完整實作"""
+    def test_animations_js_has_capture_positions(self):
+        """B12: animations.js 包含 capturePositions 手動位置捕獲方法"""
         content = self.ANIMATIONS_JS.read_text(encoding='utf-8')
-        assert 'Flip.from' in content, (
-            "showcase/animations.js playFlipReorder 缺少 Flip.from — "
-            "B7 必須包含 Flip 動畫"
+        lines = content.split('\n')
+        # 用 brace counting 提取 capturePositions 方法體
+        in_method = False
+        method_lines = []
+        brace_count = 0
+        for line in lines:
+            if not in_method and 'capturePositions' in line and 'function' in line:
+                in_method = True
+                brace_count = 0
+            if in_method:
+                method_lines.append(line)
+                brace_count += line.count('{') - line.count('}')
+                if brace_count <= 0 and len(method_lines) > 1:
+                    break
+        method_body = '\n'.join(method_lines)
+        assert method_lines, (
+            "showcase/animations.js 缺少 capturePositions — "
+            "B12 必須新增手動位置捕獲方法"
         )
-        assert 'Flip.killFlipsOf' in content, (
-            "showcase/animations.js playFlipReorder 缺少 Flip.killFlipsOf — "
-            "B7 必須包含 C18 中斷進行中動畫"
+        assert 'getBoundingClientRect' in method_body, (
+            "showcase/animations.js capturePositions 缺少 getBoundingClientRect — "
+            "B12 必須用原生 DOM API 捕獲位置"
         )
-        assert 'clearProps' in content, (
-            "showcase/animations.js playFlipReorder 缺少 clearProps — "
-            "B7 必須在動畫後恢復 CSS hover 效果"
+        assert 'data-flip-id' in method_body, (
+            "showcase/animations.js capturePositions 缺少 data-flip-id — "
+            "B12 必須用 data-flip-id 作為卡片識別 key"
         )
 
-    def test_core_js_on_sort_change_has_flip(self):
-        """B7: core.js 包含排序動畫攔截"""
-        content = self.CORE_JS.read_text(encoding='utf-8')
-        assert 'captureFlipState' in content, (
-            "showcase/core.js 缺少 captureFlipState — "
-            "B7 排序前必須捕獲 Flip 狀態"
+    def test_play_flip_reorder_not_placeholder(self):
+        """B12: playFlipReorder 使用手動 gsap.fromTo 取代 Flip（修正排序閃爍）"""
+        content = self.ANIMATIONS_JS.read_text(encoding='utf-8')
+        lines = content.split('\n')
+        # 用 brace counting 提取 playFlipReorder 方法體
+        in_method = False
+        method_lines = []
+        brace_count = 0
+        for line in lines:
+            if not in_method and 'playFlipReorder' in line and 'function' in line:
+                in_method = True
+                brace_count = 0
+            if in_method:
+                method_lines.append(line)
+                brace_count += line.count('{') - line.count('}')
+                if brace_count <= 0 and len(method_lines) > 1:
+                    break
+        method_body = '\n'.join(method_lines)
+        assert method_lines, (
+            "showcase/animations.js 找不到 playFlipReorder 方法定義"
         )
-        assert 'playFlipReorder' in content, (
-            "showcase/core.js 缺少 playFlipReorder — "
-            "B7 排序後必須播放 Flip 動畫"
+        assert '.fromTo' in method_body, (
+            "showcase/animations.js playFlipReorder 缺少 fromTo — "
+            "B12 必須用手動位置追蹤取代 Flip reorder"
+        )
+        assert 'killTweensOf' in method_body, (
+            "showcase/animations.js playFlipReorder 缺少 killTweensOf — "
+            "B12 必須包含 C18 中斷進行中動畫"
+        )
+        assert 'clearProps' in method_body, (
+            "showcase/animations.js playFlipReorder 缺少 clearProps — "
+            "B12 必須在動畫後恢復 CSS hover 效果"
+        )
+
+    def test_core_js_on_sort_change_has_position_capture(self):
+        """B12: core.js 排序動畫使用 capturePositions（取代 captureFlipState）"""
+        content = self.CORE_JS.read_text(encoding='utf-8')
+        lines = content.split('\n')
+        # 用 brace counting 提取 _sortWithFlip 方法體
+        in_method = False
+        method_lines = []
+        brace_count = 0
+        for line in lines:
+            stripped = line.strip()
+            if not in_method and '_sortWithFlip' in stripped and 'changeFn' in stripped and stripped.endswith('{'):
+                in_method = True
+                brace_count = 0
+            if in_method:
+                method_lines.append(line)
+                brace_count += line.count('{') - line.count('}')
+                if brace_count <= 0 and len(method_lines) > 1:
+                    break
+        method_body = '\n'.join(method_lines)
+        assert method_lines, (
+            "showcase/core.js 找不到 _sortWithFlip 方法定義"
+        )
+        assert 'capturePositions' in method_body, (
+            "showcase/core.js _sortWithFlip 缺少 capturePositions — "
+            "B12 排序前必須用手動位置捕獲"
+        )
+        assert 'playFlipReorder' in method_body, (
+            "showcase/core.js _sortWithFlip 缺少 playFlipReorder — "
+            "B12 排序後必須播放動畫"
         )
 
     def test_core_js_on_sort_change_has_mode_guard(self):
-        """B7: core.js 排序動畫包含 mode guard"""
+        """B12: core.js 排序動畫包含 mode guard"""
         content = self.CORE_JS.read_text(encoding='utf-8')
         lines = content.split('\n')
-        flip_indices = [i for i, line in enumerate(lines) if 'captureFlipState' in line]
-        assert flip_indices, (
-            "showcase/core.js 找不到 captureFlipState — B7 必須呼叫動畫"
+        # 用 brace counting 提取 _sortWithFlip 方法體
+        in_method = False
+        method_lines = []
+        brace_count = 0
+        for line in lines:
+            stripped = line.strip()
+            if not in_method and '_sortWithFlip' in stripped and 'changeFn' in stripped and stripped.endswith('{'):
+                in_method = True
+                brace_count = 0
+            if in_method:
+                method_lines.append(line)
+                brace_count += line.count('{') - line.count('}')
+                if brace_count <= 0 and len(method_lines) > 1:
+                    break
+        method_body = '\n'.join(method_lines)
+        assert method_lines, (
+            "showcase/core.js 找不到 _sortWithFlip 方法定義"
         )
-        found_mode_guard = False
-        for idx in flip_indices:
-            start = max(0, idx - 5)
-            nearby = '\n'.join(lines[start:idx + 1])
-            if 'mode' in nearby:
-                found_mode_guard = True
-                break
-        assert found_mode_guard, (
-            "showcase/core.js captureFlipState 附近缺少 mode guard — "
-            "B7 必須在 mode === 'grid' 時才觸發排序動畫"
+        assert 'mode' in method_body, (
+            "showcase/core.js _sortWithFlip 缺少 mode guard — "
+            "B12 必須在 mode === 'grid' 時才觸發排序動畫"
         )
 
     def test_sort_with_flip_preserves_page(self):
