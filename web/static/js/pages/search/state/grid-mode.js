@@ -67,6 +67,7 @@ window.SearchStateMixin_GridMode = {
      * 開啟 Actress Lightbox（Hero Card 專用）
      */
     openActressLightbox() {
+        if (!this.actressProfile) return;  // A6-2: 無女優資料時不開啟 lightbox
         this._heroLightboxImageError = false;  // A6-1: 重置圖片錯誤狀態
         this.lightboxIndex = -1;
         this.lightboxOpen = true;

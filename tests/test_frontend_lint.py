@@ -2168,3 +2168,50 @@ class TestHeroImageErrorGuard:
             "search-flow.js doSearch 缺少 _heroLightboxImageError = false 重置 — "
             "A6-1 新搜尋必須清空 Lightbox 圖片錯誤"
         )
+
+
+class TestLightboxModeNormalization:
+    """A6-2 Lightbox 模式正規化 + restoreState 防護守衛
+
+    確認 restoreState 後 lightbox 狀態被正規化，
+    以及 openActressLightbox 有 actressProfile 存在性 guard。
+    """
+
+    PERSISTENCE_JS = PROJECT_ROOT / "web/static/js/pages/search/state/persistence.js"
+    GRID_MODE_JS = PROJECT_ROOT / "web/static/js/pages/search/state/grid-mode.js"
+
+    def test_restore_state_resets_lightbox_open(self):
+        """persistence.js 的 restoreState 方法區段包含 lightboxOpen = false 重置"""
+        content = self.PERSISTENCE_JS.read_text(encoding='utf-8')
+        match = re.search(r'restoreState\s*\(\s*\)', content)
+        assert match, "persistence.js 缺少 restoreState 方法定義"
+        # 取 restoreState 方法體（到 saveState 為止，取 3000 字元覆蓋完整 try block）
+        method_body = content[match.start():match.start() + 3000]
+        assert 'lightboxOpen' in method_body and '= false' in method_body, (
+            "persistence.js restoreState 缺少 lightboxOpen = false 重置 — "
+            "A6-2 還原後 lightbox 不應處於開啟狀態"
+        )
+
+    def test_restore_state_handles_lightbox_index_with_actress(self):
+        """persistence.js 的 restoreState 方法區段在 actressProfile 條件下處理 lightboxIndex"""
+        content = self.PERSISTENCE_JS.read_text(encoding='utf-8')
+        match = re.search(r'restoreState\s*\(\s*\)', content)
+        assert match, "persistence.js 缺少 restoreState 方法定義"
+        method_body = content[match.start():match.start() + 3000]
+        # 確認有 actressProfile 條件判斷 + lightboxIndex 設定
+        assert 'actressProfile' in method_body and 'lightboxIndex' in method_body, (
+            "persistence.js restoreState 缺少 actressProfile 條件下的 lightboxIndex 處理 — "
+            "A6-2 有女優資料時應將 lightboxIndex 設為 -1"
+        )
+
+    def test_open_actress_lightbox_has_actress_guard(self):
+        """grid-mode.js 的 openActressLightbox 方法開頭有 actressProfile 存在性 guard"""
+        content = self.GRID_MODE_JS.read_text(encoding='utf-8')
+        match = re.search(r'openActressLightbox\s*\(\s*\)', content)
+        assert match, "grid-mode.js 缺少 openActressLightbox 方法定義"
+        # 取方法開頭 300 字元（guard 應在最前面）
+        method_head = content[match.start():match.start() + 300]
+        assert re.search(r'if\s*\(\s*!this\.actressProfile\s*\)\s*return', method_head), (
+            "grid-mode.js openActressLightbox 缺少 actressProfile guard — "
+            "A6-2 無女優資料時不應開啟 actress lightbox"
+        )
