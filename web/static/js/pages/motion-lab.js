@@ -978,8 +978,8 @@
                 return null;
             }
 
-            var dur = options.duration || 0.4;
-            var scaleVal = options.scale || 1.03;
+            var dur = options.duration || 0.8;
+            var scaleVal = options.scale || 1.06;
             var ease = options.ease || 'settle';
             var rowCount = options.rows || 2;
 
