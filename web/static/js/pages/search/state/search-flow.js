@@ -262,6 +262,7 @@ window.SearchStateMixin_SearchFlow = {
                     this.$nextTick(() => { this.isStreaming = false; });
                     this.hasMoreResults = data.has_more || false;
                     this.actressProfile = data.actress_profile || null;
+                    if (this.actressProfile) this._heroCardImageError = false;  // A6-1 fix: actressProfile 到達，重新嘗試載入
                     // C9: 不用 filter()，失敗 slot 原地標記
                     // C13: map 回傳新 array，觸發 Alpine reactivity
                     // 只標記「尚未 burst 的 _skeleton」（已 burst 的 slot 已填入真實資料）
@@ -296,6 +297,7 @@ window.SearchStateMixin_SearchFlow = {
                             this.currentIndex = 0;
                             this.hasMoreResults = data.has_more || false;
                             this.actressProfile = data.actress_profile || null;
+                            if (this.actressProfile) this._heroCardImageError = false;  // A6-1 fix: actressProfile 到達，重新嘗試載入
                             this.listMode = 'search';
                             if (data.mode) this.currentMode = data.mode;
                             // 與傳統 result 路徑一致：尊重 gallery_mode_enabled 設定
@@ -328,7 +330,10 @@ window.SearchStateMixin_SearchFlow = {
                         } else {
                             // 正常 stream 完成：只補充 metadata
                             this.hasMoreResults = data.has_more || false;
-                            if (data.actress_profile) this.actressProfile = data.actress_profile;
+                            if (data.actress_profile) {
+                                this.actressProfile = data.actress_profile;
+                                this._heroCardImageError = false;  // A6-1 fix: actressProfile 到達，重新嘗試載入
+                            }
                             this.hasContent = this.searchResults.length > 0;
                             // Issue 2: 查詢本地狀態（只對非 _failed 結果）
                             if (window.SearchCore?.checkLocalStatus) {
@@ -351,6 +356,7 @@ window.SearchStateMixin_SearchFlow = {
                         this.currentIndex = 0;
                         this.hasMoreResults = data.has_more || false;
                         this.actressProfile = data.actress_profile || null;  // T2d: 寫入女優資料
+                        if (this.actressProfile) this._heroCardImageError = false;  // A6-1 fix: actressProfile 到達，重新嘗試載入
                         this.listMode = 'search';
 
                         // 查詢本地狀態（非同步）
@@ -466,6 +472,7 @@ window.SearchStateMixin_SearchFlow = {
                 this.currentIndex = 0;
                 this.hasMoreResults = data.has_more || false;
                 this.actressProfile = data.actress_profile || null;  // T2d: 寫入女優資料
+                if (this.actressProfile) this._heroCardImageError = false;  // A6-1 fix: actressProfile 到達，重新嘗試載入
                 this.listMode = 'search';
 
                 // 查詢本地狀態

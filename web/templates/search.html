@@ -395,7 +395,7 @@
                              :alt="actressProfile?.name"
                              loading="lazy"
                              x-show="!_heroCardImageError"
-                             @error="_heroCardImageError = true">
+                             @error="if (actressProfile?.img) _heroCardImageError = true">
                         <!-- A6-1: Hero Card fallback placeholder -->
                         <div x-show="_heroCardImageError"
                              class="av-card-no-cover">
