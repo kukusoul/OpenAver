@@ -212,6 +212,14 @@
                 prune: true,
                 simple: true,
                 onEnter: function (els) {
+                    // B18: 大量新卡片同時進場 → 純 fade + stagger（無 scale，降低視覺混亂）
+                    if (els.length > 10) {
+                        return gsap.fromTo(els,
+                            { opacity: 0 },
+                            { opacity: 1, duration: dur * 0.6, stagger: 0.02, ease: 'power2.out' }
+                        );
+                    }
+                    // 預設：scale + fade（少量卡片進場時效果好）
                     return gsap.fromTo(els,
                         { opacity: 0, scale: 0.85 },
                         { opacity: 1, scale: 1, duration: dur * 0.8, ease: 'power2.out' }
