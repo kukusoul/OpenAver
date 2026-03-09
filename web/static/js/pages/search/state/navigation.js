@@ -121,6 +121,7 @@ window.SearchStateMixin_Navigation = {
         // T2a: Lightbox 鍵盤導航（優先）
         if (this.lightboxOpen) {
             if (event.key === 'Escape') {
+                if (this._lightboxAnimating) return;  // D2: guard
                 event.preventDefault();
                 this.closeLightbox();
                 return;

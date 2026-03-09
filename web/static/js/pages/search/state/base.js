@@ -120,6 +120,7 @@ window.SearchStateMixin_Base = function () {
         displayMode: 'detail',     // 'detail' | 'grid'
         lightboxOpen: false,       // Lightbox 顯示狀態
         lightboxIndex: 0,          // Lightbox 當前索引（-1 = 女優頭像）
+        _lightboxAnimating: false, // D2: Lightbox 動畫進行中 guard
 
         // ===== T2d: Actress Profile State =====
         actressProfile: null,      // { name, img, backdrop, birth, age, height, cup, bust, waist, hip, hometown, hobby }

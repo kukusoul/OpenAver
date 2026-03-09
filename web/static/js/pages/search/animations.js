@@ -11,6 +11,9 @@
  *   - playGridToDetail(fromRect, detailEl, options)  Grid→Detail ghost 轉場
  *   - playDetailToGrid(fromRect, targetCardEl, options)  Detail→Grid ghost 飛回
  *   - playSlideIn(containerEl, direction)              detail 導航滑入動畫（C18 interrupt）
+ *   - playLightboxOpen(lightboxEl, options)             lightbox 進場動畫（backdrop + content + cover）
+ *   - playLightboxClose(lightboxEl, options)            lightbox 退場動畫（content + backdrop）
+ *   - playLightboxSwitch(contentEl, direction, options) lightbox 導航 crossfade + micro slide
  *
  * C2：此檔案是 pages/ 目錄下被允許直接呼叫 GSAP 的兩個檔案之一
  *      （另一個為 motion-lab.js）。
@@ -739,6 +742,196 @@
             });
 
             // C6: 不使用 rotationX/Y/Z，只用 scale
+
+            return tl;
+        },
+
+        // ===== D2: Lightbox Animations =====
+
+        /**
+         * Lightbox 進場動畫：backdrop 淡入 + content scale pop-in + cover 上滑淡入
+         *
+         * C4：開頭 killTweensOf 清舊動畫。
+         * C6：不使用 rotation。
+         * C21：用 .gsap-animating class 暫時關掉 CSS transition。
+         *
+         * @param {Element} lightboxEl - .showcase-lightbox 元素
+         * @param {object} [options] - { onComplete }
+         * @returns {gsap.core.Timeline|null}
+         */
+        playLightboxOpen: function (lightboxEl, options) {
+            options = options || {};
+
+            if (!lightboxEl) return null;
+            if (typeof gsap === 'undefined') return null;
+            if (shouldSkip()) return null;
+
+            var content = lightboxEl.querySelector('.lightbox-content');
+            var coverImg = lightboxEl.querySelector('.lightbox-cover img');
+
+            // C4: 清除舊動畫
+            gsap.killTweensOf(lightboxEl);
+            if (content) gsap.killTweensOf(content);
+            if (coverImg) gsap.killTweensOf(coverImg);
+
+            // C21: 暫時關掉 CSS transition
+            lightboxEl.classList.add('gsap-animating');
+
+            var tl = gsap.timeline({
+                id: 'lightboxOpen',
+                onComplete: function () {
+                    lightboxEl.classList.remove('gsap-animating');
+                    if (typeof options.onComplete === 'function') options.onComplete();
+                },
+                onInterrupt: function () {
+                    lightboxEl.classList.remove('gsap-animating');
+                }
+            });
+
+            // 1. Backdrop fade-in
+            tl.fromTo(lightboxEl,
+                { opacity: 0 },
+                { opacity: 1, duration: 0.3, ease: 'power2.out' }
+            );
+
+            // 2. Content card scale pop-in
+            if (content) {
+                tl.fromTo(content,
+                    { scale: 0.92, opacity: 0 },
+                    { scale: 1, opacity: 1, duration: 0.35, ease: 'back.out(1.2)' },
+                    0.05
+                );
+            }
+
+            // 3. Cover image slide-up fade-in
+            if (coverImg) {
+                tl.fromTo(coverImg,
+                    { y: 20, opacity: 0 },
+                    { y: 0, opacity: 1, duration: 0.3, ease: 'power2.out' },
+                    '-=0.15'
+                );
+            }
+
+            return tl;
+        },
+
+        /**
+         * Lightbox 退場動畫：content 縮小淡出 + backdrop 淡出
+         *
+         * 關鍵設計：closeLightbox 先播動畫，onComplete 後才翻 state（lightboxOpen = false）。
+         *
+         * C4：開頭 killTweensOf 清舊動畫。
+         * C6：不使用 rotation。
+         * C21：用 .gsap-animating class 暫時關掉 CSS transition。
+         *
+         * @param {Element} lightboxEl - .showcase-lightbox 元素
+         * @param {object} [options] - { onComplete }
+         * @returns {gsap.core.Timeline|null}
+         */
+        playLightboxClose: function (lightboxEl, options) {
+            options = options || {};
+
+            if (!lightboxEl) return null;
+            if (typeof gsap === 'undefined') return null;
+            if (shouldSkip()) return null;
+
+            var content = lightboxEl.querySelector('.lightbox-content');
+
+            // C4: 清除舊動畫
+            gsap.killTweensOf(lightboxEl);
+            if (content) gsap.killTweensOf(content);
+
+            // C21: 暫時關掉 CSS transition
+            lightboxEl.classList.add('gsap-animating');
+
+            var tl = gsap.timeline({
+                id: 'lightboxClose',
+                onComplete: function () {
+                    lightboxEl.classList.remove('gsap-animating');
+                    if (typeof options.onComplete === 'function') options.onComplete();
+                },
+                onInterrupt: function () {
+                    lightboxEl.classList.remove('gsap-animating');
+                }
+            });
+
+            // 1. Content card shrink + fade-out
+            if (content) {
+                tl.fromTo(content,
+                    { scale: 1, opacity: 1 },
+                    { scale: 0.95, opacity: 0, duration: 0.2, ease: 'power2.in' }
+                );
+            }
+
+            // 2. Backdrop fade-out
+            tl.fromTo(lightboxEl,
+                { opacity: 1 },
+                { opacity: 0, duration: 0.25, ease: 'power2.in' },
+                content ? '-=0.1' : 0
+            );
+
+            return tl;
+        },
+
+        /**
+         * Lightbox 導航切換動畫：crossfade + micro slide
+         *
+         * direction: 'next' 從右進，'prev' 從左進（對齊 playSlideIn 方向感）。
+         * onMidpoint callback 在淡出完成、淡入開始前呼叫（用於更新 Alpine state）。
+         *
+         * C4：開頭 killTweensOf 清舊動畫。
+         * C6：不使用 rotation。
+         * C21：用 .gsap-animating class 暫時關掉 CSS transition。
+         *
+         * @param {Element} contentEl - .lightbox-content 元素
+         * @param {'next'|'prev'} direction - 切換方向
+         * @param {object} [options] - { onMidpoint, onComplete }
+         * @returns {gsap.core.Timeline|null}
+         */
+        playLightboxSwitch: function (contentEl, direction, options) {
+            options = options || {};
+
+            if (!contentEl) return null;
+            if (typeof gsap === 'undefined') return null;
+            if (shouldSkip()) return null;
+
+            // C4: 清除舊動畫
+            gsap.killTweensOf(contentEl);
+
+            // C21: 暫時關掉 CSS transition（contentEl 的 x 映射到 transform）
+            var lightboxEl = contentEl.closest('.showcase-lightbox');
+            if (lightboxEl) lightboxEl.classList.add('gsap-animating');
+
+            var xOut = direction === 'next' ? -20 : 20;
+            var xIn = direction === 'next' ? 20 : -20;
+
+            var tl = gsap.timeline({
+                id: 'lightboxSwitch',
+                onComplete: function () {
+                    if (lightboxEl) lightboxEl.classList.remove('gsap-animating');
+                    if (typeof options.onComplete === 'function') options.onComplete();
+                },
+                onInterrupt: function () {
+                    if (lightboxEl) lightboxEl.classList.remove('gsap-animating');
+                }
+            });
+
+            // 1. Fade-out + micro slide
+            tl.fromTo(contentEl,
+                { opacity: 1, x: 0 },
+                { opacity: 0, x: xOut, duration: 0.15, ease: 'power2.in' }
+            );
+
+            // 2. Midpoint callback (update Alpine state)
+            tl.call(function () {
+                if (typeof options.onMidpoint === 'function') options.onMidpoint();
+            });
+
+            // 3. Fade-in + micro slide from opposite direction
+            tl.fromTo(contentEl,
+                { opacity: 0, x: xIn },
+                { opacity: 1, x: 0, duration: 0.25, ease: 'power2.out' }
+            );
 
             return tl;
         }
