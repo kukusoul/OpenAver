@@ -43,6 +43,7 @@ function showcaseState() {
         totalPages: 1,
         _animGeneration: 0,  // B13: 防止 stale deferred callback
         _lightboxAnimating: false,  // B16: Lightbox 動畫進行中 guard
+        _lightboxGeneration: 0,    // B19: invalidation token for deferred $nextTick lightbox callbacks
 
         // --- Computed ---
         get currentLightboxVideo() {
@@ -58,7 +59,8 @@ function showcaseState() {
             if (window.__registerPage) {
                 window.__registerPage({
                     cleanup: () => {
-                        this._animGeneration++;  // B13: 使 pending deferred callback 失效
+                        this._animGeneration++;       // B13: 使 pending deferred callback 失效
+                        this._lightboxGeneration++;   // B19: invalidate pending $nextTick lightbox callbacks
                         if (this.lightboxMoveTimer) clearTimeout(this.lightboxMoveTimer);
                         if (this.toastTimer) clearTimeout(this.toastTimer);
                         if (this.lightboxOpen) document.body.classList.remove('overflow-hidden');
@@ -540,53 +542,40 @@ function showcaseState() {
             // Fix: lightbox 已開啟時走 switch 路徑（避免 backdrop click-through 重播 open 動畫）
             if (this.lightboxOpen && this.lightboxIndex !== index) {
                 var self = this;
-                var contentEl = document.querySelector('.showcase-lightbox .lightbox-content');
-                if (contentEl && window.ShowcaseAnimations?.playLightboxSwitch) {
-                    var direction = index > this.lightboxIndex ? 'next' : 'prev';
-                    // C18: interrupt — kill 舊 switch timeline（含 onMidpoint/onComplete callback）
-                    if (typeof gsap !== 'undefined') {
-                        gsap.getById('showcaseLightboxSwitch')?.kill();
-                    }
-                    this._lightboxAnimating = true;
-                    var tl = window.ShowcaseAnimations.playLightboxSwitch(contentEl, direction, {
-                        onMidpoint: function () {
-                            self.lightboxIndex = index;
-                            // Smart Close 重置
-                            self.lightboxMoveEnabled = false;
-                            if (self.lightboxMoveTimer) clearTimeout(self.lightboxMoveTimer);
-                            self.lightboxMoveTimer = setTimeout(function () {
-                                self.lightboxMoveEnabled = true;
-                            }, 1000);
-                            self.lightboxStartX = 0;
-                            self.lightboxStartY = 0;
-                        },
-                        onComplete: function () {
-                            self._lightboxAnimating = false;
-                        }
-                    });
-                    if (!tl) {
-                        this._lightboxAnimating = false;
-                        this.lightboxIndex = index;
-                        // Smart Close 重置
-                        this.lightboxMoveEnabled = false;
-                        if (this.lightboxMoveTimer) clearTimeout(this.lightboxMoveTimer);
-                        this.lightboxMoveTimer = setTimeout(function () {
-                            self.lightboxMoveEnabled = true;
-                        }, 1000);
-                        this.lightboxStartX = 0;
-                        this.lightboxStartY = 0;
-                    }
-                } else {
-                    this.lightboxIndex = index;
-                    // Smart Close 重置
-                    this.lightboxMoveEnabled = false;
-                    if (this.lightboxMoveTimer) clearTimeout(this.lightboxMoveTimer);
-                    this.lightboxMoveTimer = setTimeout(function () {
-                        self.lightboxMoveEnabled = true;
-                    }, 1000);
-                    this.lightboxStartX = 0;
-                    this.lightboxStartY = 0;
+                // C18: interrupt — kill 舊 switch timeline（含 onComplete callback）
+                if (typeof gsap !== 'undefined') {
+                    gsap.getById('showcaseLightboxSwitch')?.kill();
                 }
+                var oldIndex = this.lightboxIndex;
+                var direction = index > oldIndex ? 'next' : 'prev';
+
+                // B19: state-first — 立即更新 state，避免 C18 interrupt 吞掉 index mutation
+                this.lightboxIndex = index;
+
+                // Smart Close 重置
+                this.lightboxMoveEnabled = false;
+                if (this.lightboxMoveTimer) clearTimeout(this.lightboxMoveTimer);
+                this.lightboxMoveTimer = setTimeout(function () {
+                    self.lightboxMoveEnabled = true;
+                }, 1000);
+                this.lightboxStartX = 0;
+                this.lightboxStartY = 0;
+
+                // B19: 動畫（state 已更新，$nextTick 後 Alpine 已 patch DOM）
+                var lbGen = ++this._lightboxGeneration;
+                this.$nextTick(function () {
+                    if (self._lightboxGeneration !== lbGen) return;  // stale — lightbox was closed/interrupted
+                    var contentEl = document.querySelector('.showcase-lightbox .lightbox-content');
+                    if (contentEl && window.ShowcaseAnimations?.playLightboxSwitch) {
+                        self._lightboxAnimating = true;
+                        var tl = window.ShowcaseAnimations.playLightboxSwitch(contentEl, direction, {
+                            onComplete: function () {
+                                self._lightboxAnimating = false;
+                            }
+                        });
+                        if (!tl) self._lightboxAnimating = false;
+                    }
+                });
                 return;
             }
 
@@ -607,7 +596,9 @@ function showcaseState() {
 
             // B16: GSAP 進場動畫（fire-and-forget）
             var self = this;
+            var lbGen = ++this._lightboxGeneration;
             this.$nextTick(() => {
+                if (self._lightboxGeneration !== lbGen) return;  // B19: stale
                 var lightboxEl = document.querySelector('.showcase-lightbox');
                 if (!lightboxEl) return;
                 self._lightboxAnimating = true;
@@ -623,6 +614,7 @@ function showcaseState() {
         },
 
         closeLightbox() {
+            this._lightboxGeneration++;  // B19: invalidate pending $nextTick lightbox callbacks
             // B16: 動畫進行中 guard
             if (this._lightboxAnimating) return;
 
@@ -670,6 +662,7 @@ function showcaseState() {
             var lightboxEl = document.querySelector('.showcase-lightbox');
             if (lightboxEl) lightboxEl.classList.remove('gsap-animating');
             this._lightboxAnimating = false;
+            this._lightboxGeneration++;  // B19: invalidate pending $nextTick lightbox callbacks
             this.lightboxOpen = false;
             this.lightboxIndex = -1;
             document.body.classList.remove('overflow-hidden');
@@ -699,6 +692,9 @@ function showcaseState() {
                 var self = this;
                 var newIdx = this.lightboxIndex - 1;
 
+                // B19: state-first — 立即更新 state，避免 C18 interrupt 吞掉 index mutation
+                this.lightboxIndex = newIdx;
+
                 /** Smart Close 重置邏輯 */
                 function resetSmartClose() {
                     self.lightboxMoveEnabled = false;
@@ -709,30 +705,23 @@ function showcaseState() {
                     self.lightboxStartX = 0;
                     self.lightboxStartY = 0;
                 }
+                resetSmartClose();
 
-                // B16: GSAP 切換動畫
-                var contentEl = document.querySelector('.showcase-lightbox .lightbox-content');
-                if (contentEl && window.ShowcaseAnimations?.playLightboxSwitch) {
-                    this._lightboxAnimating = true;
-                    var tl = window.ShowcaseAnimations.playLightboxSwitch(contentEl, 'prev', {
-                        onMidpoint: function () {
-                            self.lightboxIndex = newIdx;
-                            resetSmartClose();
-                        },
-                        onComplete: function () {
-                            self._lightboxAnimating = false;
-                        }
-                    });
-                    if (!tl) {
-                        this._lightboxAnimating = false;
-                        this.lightboxIndex = newIdx;
-                        resetSmartClose();
+                // B19: 動畫（state 已更新，$nextTick 後 Alpine 已 patch DOM）
+                var lbGen = ++this._lightboxGeneration;
+                this.$nextTick(function () {
+                    if (self._lightboxGeneration !== lbGen) return;  // stale — lightbox was closed/interrupted
+                    var contentEl = document.querySelector('.showcase-lightbox .lightbox-content');
+                    if (contentEl && window.ShowcaseAnimations?.playLightboxSwitch) {
+                        self._lightboxAnimating = true;
+                        var tl = window.ShowcaseAnimations.playLightboxSwitch(contentEl, 'prev', {
+                            onComplete: function () {
+                                self._lightboxAnimating = false;
+                            }
+                        });
+                        if (!tl) self._lightboxAnimating = false;
                     }
-                } else {
-                    // 無 GSAP fallback：直接切換
-                    this.lightboxIndex = newIdx;
-                    resetSmartClose();
-                }
+                });
             }
         },
 
@@ -750,6 +739,9 @@ function showcaseState() {
                 var self = this;
                 var newIdx = this.lightboxIndex + 1;
 
+                // B19: state-first — 立即更新 state，避免 C18 interrupt 吞掉 index mutation
+                this.lightboxIndex = newIdx;
+
                 /** Smart Close 重置邏輯 */
                 function resetSmartClose() {
                     self.lightboxMoveEnabled = false;
@@ -760,30 +752,23 @@ function showcaseState() {
                     self.lightboxStartX = 0;
                     self.lightboxStartY = 0;
                 }
+                resetSmartClose();
 
-                // B16: GSAP 切換動畫
-                var contentEl = document.querySelector('.showcase-lightbox .lightbox-content');
-                if (contentEl && window.ShowcaseAnimations?.playLightboxSwitch) {
-                    this._lightboxAnimating = true;
-                    var tl = window.ShowcaseAnimations.playLightboxSwitch(contentEl, 'next', {
-                        onMidpoint: function () {
-                            self.lightboxIndex = newIdx;
-                            resetSmartClose();
-                        },
-                        onComplete: function () {
-                            self._lightboxAnimating = false;
-                        }
-                    });
-                    if (!tl) {
-                        this._lightboxAnimating = false;
-                        this.lightboxIndex = newIdx;
-                        resetSmartClose();
+                // B19: 動畫（state 已更新，$nextTick 後 Alpine 已 patch DOM）
+                var lbGen = ++this._lightboxGeneration;
+                this.$nextTick(function () {
+                    if (self._lightboxGeneration !== lbGen) return;  // stale — lightbox was closed/interrupted
+                    var contentEl = document.querySelector('.showcase-lightbox .lightbox-content');
+                    if (contentEl && window.ShowcaseAnimations?.playLightboxSwitch) {
+                        self._lightboxAnimating = true;
+                        var tl = window.ShowcaseAnimations.playLightboxSwitch(contentEl, 'next', {
+                            onComplete: function () {
+                                self._lightboxAnimating = false;
+                            }
+                        });
+                        if (!tl) self._lightboxAnimating = false;
                     }
-                } else {
-                    // 無 GSAP fallback：直接切換
-                    this.lightboxIndex = newIdx;
-                    resetSmartClose();
-                }
+                });
             }
         },
 
@@ -942,6 +927,7 @@ function showcaseState() {
                         gsap.getById('showcaseLightboxSwitch')?.kill();
                     }
                     this._lightboxAnimating = false;
+                    this._lightboxGeneration++;  // B19: invalidate pending $nextTick lightbox callbacks
                     var lbEl = document.querySelector('.showcase-lightbox');
                     if (lbEl) lbEl.classList.remove('gsap-animating');
                     this.closeLightbox();

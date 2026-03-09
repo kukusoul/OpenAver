@@ -3621,3 +3621,154 @@ class TestLightboxAnimationGuard:
         assert lightboxOpen_idx > getById_idx, (
             "C18 守衛違規：searchFromMetadata 的 lightboxOpen = false 應在 getById kill 之後同步設定"
         )
+
+
+class TestLightboxStateFirstGuard:
+    """B19 守衛：Lightbox 導航必須 state-first（lightboxIndex 在 playLightboxSwitch 之前更新）"""
+
+    SEARCH_GRID_MODE = PROJECT_ROOT / 'web' / 'static' / 'js' / 'pages' / 'search' / 'state' / 'grid-mode.js'
+    SHOWCASE_CORE = PROJECT_ROOT / 'web' / 'static' / 'js' / 'pages' / 'showcase' / 'core.js'
+
+    @staticmethod
+    def _read_file(path):
+        return path.read_text(encoding='utf-8')
+
+    @staticmethod
+    def _extract_function(content, func_name):
+        """粗略擷取函數內容（從函數名到下一個同級函數或檔案結尾）"""
+        pattern = re.compile(r'^\s*' + re.escape(func_name) + r'\s*\(', re.MULTILINE)
+        match = pattern.search(content)
+        if not match:
+            return ''
+        start = match.start()
+        return content[start:start + 3000]
+
+    def test_lightbox_nav_state_first_search(self):
+        """B19: search lightbox nav 必須在 playLightboxSwitch 之前更新 lightboxIndex"""
+        content = self._read_file(self.SEARCH_GRID_MODE)
+        for func in ['prevLightboxVideo', 'nextLightboxVideo']:
+            body = self._extract_function(content, func)
+            assert body, f"{func} 函數未找到 in grid-mode.js"
+            switch_pos = body.find('playLightboxSwitch')
+            update_pos = body.find('this.lightboxIndex =')
+            assert update_pos != -1 and switch_pos != -1, (
+                f"{func} 缺少必要的 lightboxIndex 更新或 playLightboxSwitch 呼叫"
+            )
+            assert update_pos < switch_pos, (
+                f"B19 違規：grid-mode.js {func} 的 lightboxIndex 更新必須在 playLightboxSwitch 之前（state-first）"
+            )
+
+    def test_lightbox_nav_state_first_showcase(self):
+        """B19: showcase lightbox nav 必須在 playLightboxSwitch 之前更新 lightboxIndex"""
+        content = self._read_file(self.SHOWCASE_CORE)
+        for func in ['prevLightboxVideo', 'nextLightboxVideo']:
+            body = self._extract_function(content, func)
+            assert body, f"{func} 函數未找到 in showcase/core.js"
+            switch_pos = body.find('playLightboxSwitch')
+            update_pos = body.find('this.lightboxIndex =')
+            assert update_pos != -1 and switch_pos != -1, (
+                f"{func} 缺少必要的 lightboxIndex 更新或 playLightboxSwitch 呼叫"
+            )
+            assert update_pos < switch_pos, (
+                f"B19 違規：core.js {func} 的 lightboxIndex 更新必須在 playLightboxSwitch 之前（state-first）"
+            )
+
+    def test_lightbox_switch_onmidpoint_no_index_update(self):
+        """B19: prevLightboxVideo/nextLightboxVideo 不可包含 onMidpoint（state-first 模式下已移除）"""
+        for path, filename in [
+            (self.SEARCH_GRID_MODE, 'search/state/grid-mode.js'),
+            (self.SHOWCASE_CORE, 'showcase/core.js'),
+        ]:
+            content = self._read_file(path)
+            for func in ['prevLightboxVideo', 'nextLightboxVideo']:
+                body = self._extract_function(content, func)
+                assert body, f"{func} 函數未找到 in {filename}"
+                assert 'onMidpoint' not in body, (
+                    f"B19 違規：{filename} {func} 仍包含 onMidpoint — "
+                    "state-first 模式下 lightboxIndex 應在動畫啟動前就已更新，不需要 onMidpoint callback"
+                )
+
+    def test_open_lightbox_switch_state_first(self):
+        """B19: openLightbox 的 switch 路徑也必須 state-first"""
+        for path, filename in [
+            (self.SEARCH_GRID_MODE, 'search/state/grid-mode.js'),
+            (self.SHOWCASE_CORE, 'showcase/core.js'),
+        ]:
+            content = self._read_file(path)
+            body = self._extract_function(content, 'openLightbox')
+            assert body, f"openLightbox 函數未找到 in {filename}"
+            switch_section_start = body.find('lightboxIndex !== index')
+            assert switch_section_start != -1, f"{filename} openLightbox 缺少 switch 路徑"
+            switch_section = body[switch_section_start:]
+            switch_pos = switch_section.find('playLightboxSwitch')
+            update_pos = switch_section.find('lightboxIndex = index')
+            assert update_pos != -1 and switch_pos != -1, (
+                f"{filename} openLightbox switch 路徑缺少 lightboxIndex 更新或 playLightboxSwitch 呼叫"
+            )
+            assert update_pos < switch_pos, (
+                f"B19 違規：{filename} openLightbox switch 路徑的 lightboxIndex 更新必須在 playLightboxSwitch 之前"
+            )
+
+    def test_lightbox_nexttick_has_generation_guard(self):
+        """B19: 所有 lightbox $nextTick 動畫 callback 必須有 _lightboxGeneration 失效檢查"""
+        SEARCH_NAV = PROJECT_ROOT / 'web' / 'static' / 'js' / 'pages' / 'search' / 'state' / 'navigation.js'
+        for path, filename in [
+            (self.SEARCH_GRID_MODE, 'search/state/grid-mode.js'),
+            (self.SHOWCASE_CORE, 'showcase/core.js'),
+        ]:
+            content = self._read_file(path)
+            for func in ['prevLightboxVideo', 'nextLightboxVideo', 'openLightbox']:
+                body = self._extract_function(content, func)
+                if 'playLightboxSwitch' not in body and 'playLightboxOpen' not in body:
+                    continue
+                assert '_lightboxGeneration' in body, (
+                    f"B19 違規：{filename} {func} 的 $nextTick callback 缺少 _lightboxGeneration 失效檢查 — "
+                    "close/ESC 後 stale callback 會重設 _lightboxAnimating = true 造成 input lock"
+                )
+
+    def test_lightbox_close_increments_generation(self):
+        """B19: closeLightbox / ESC / searchFromMetadata / page cleanup 必須 increment _lightboxGeneration"""
+        SEARCH_INDEX = PROJECT_ROOT / 'web' / 'static' / 'js' / 'pages' / 'search' / 'state' / 'index.js'
+
+        # Search closeLightbox
+        content = self._read_file(self.SEARCH_GRID_MODE)
+        body = self._extract_function(content, 'closeLightbox')
+        assert body, "closeLightbox 函數未找到 in grid-mode.js"
+        assert '_lightboxGeneration++' in body, (
+            "B19 違規：search closeLightbox 缺少 _lightboxGeneration++ — "
+            "pending $nextTick callback 不會被 invalidate"
+        )
+
+        # Showcase closeLightbox
+        content = self._read_file(self.SHOWCASE_CORE)
+        body = self._extract_function(content, 'closeLightbox')
+        assert body, "closeLightbox 函數未找到 in showcase/core.js"
+        assert '_lightboxGeneration++' in body, (
+            "B19 違規：showcase closeLightbox 缺少 _lightboxGeneration++ — "
+            "pending $nextTick callback 不會被 invalidate"
+        )
+
+        # Showcase searchFromMetadata
+        body = self._extract_function(content, 'searchFromMetadata')
+        assert body, "searchFromMetadata 函數未找到 in showcase/core.js"
+        assert '_lightboxGeneration++' in body, (
+            "B19 違規：showcase searchFromMetadata 缺少 _lightboxGeneration++ — "
+            "pending $nextTick callback 不會被 invalidate"
+        )
+
+        # Page lifecycle cleanup — search
+        search_index_content = SEARCH_INDEX.read_text(encoding='utf-8')
+        assert '_lightboxGeneration++' in search_index_content, (
+            "B19 違規：search state/index.js cleanup 缺少 _lightboxGeneration++ — "
+            "離頁時 pending $nextTick lightbox callback 不會被 invalidate"
+        )
+
+        # Page lifecycle cleanup — showcase (init is async, extract manually)
+        showcase_content = self._read_file(self.SHOWCASE_CORE)
+        cleanup_start = showcase_content.find('cleanup: ()')
+        assert cleanup_start != -1, "showcase/core.js 缺少 cleanup callback"
+        cleanup_section = showcase_content[cleanup_start:cleanup_start + 500]
+        assert '_lightboxGeneration++' in cleanup_section, (
+            "B19 違規：showcase init() cleanup 缺少 _lightboxGeneration++ — "
+            "離頁時 pending $nextTick lightbox callback 不會被 invalidate"
+        )

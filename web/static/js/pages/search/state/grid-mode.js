@@ -54,33 +54,31 @@ window.SearchStateMixin_GridMode = {
 
         // Fix: lightbox 已開啟時走 switch 路徑（避免 backdrop click-through 重播 open 動畫）
         if (this.lightboxOpen && this.lightboxIndex !== index) {
-            var content = document.querySelector('.lightbox-content');
-            if (window.SearchAnimations?.playLightboxSwitch) {
-                var direction = index > this.lightboxIndex ? 'next' : 'prev';
-                // C18: interrupt — kill 舊 switch timeline（含 onMidpoint/onComplete callback）
-                if (typeof gsap !== 'undefined') {
-                    gsap.getById('lightboxSwitch')?.kill();
-                }
-                this._lightboxAnimating = true;
-                var tl = window.SearchAnimations.playLightboxSwitch(content, direction, {
-                    onMidpoint: () => {
-                        this._heroLightboxImageError = false;
-                        this.lightboxIndex = index;
-                        this.currentIndex = index;
-                    },
-                    onComplete: () => { this._lightboxAnimating = false; }
-                });
-                if (!tl) {
-                    this._lightboxAnimating = false;
-                    this._heroLightboxImageError = false;
-                    this.lightboxIndex = index;
-                    this.currentIndex = index;
-                }
-            } else {
-                this._heroLightboxImageError = false;
-                this.lightboxIndex = index;
-                this.currentIndex = index;
+            // C18: interrupt — kill 舊 switch timeline（含 onComplete callback）
+            if (typeof gsap !== 'undefined') {
+                gsap.getById('lightboxSwitch')?.kill();
             }
+            var oldIndex = this.lightboxIndex;
+            var direction = index > oldIndex ? 'next' : 'prev';
+
+            // B19: state-first — 立即更新 state，避免 C18 interrupt 吞掉 index mutation
+            this._heroLightboxImageError = false;
+            this.lightboxIndex = index;
+            this.currentIndex = index;
+
+            // B19: 動畫（state 已更新，$nextTick 後 Alpine 已 patch DOM）
+            var lbGen = ++this._lightboxGeneration;
+            this.$nextTick(() => {
+                if (this._lightboxGeneration !== lbGen) return;  // stale — lightbox was closed/interrupted
+                var content = document.querySelector('.lightbox-content');
+                if (content && window.SearchAnimations?.playLightboxSwitch) {
+                    this._lightboxAnimating = true;
+                    var tl = window.SearchAnimations.playLightboxSwitch(content, direction, {
+                        onComplete: () => { this._lightboxAnimating = false; }
+                    });
+                    if (!tl) this._lightboxAnimating = false;
+                }
+            });
             return;
         }
 
@@ -91,7 +89,9 @@ window.SearchStateMixin_GridMode = {
         this.currentIndex = index;
 
         // D2: 進場動畫（fire-and-forget）
+        var lbGen = ++this._lightboxGeneration;
         this.$nextTick(() => {
+            if (this._lightboxGeneration !== lbGen) return;  // B19: stale
             var el = document.querySelector('.showcase-lightbox');
             if (window.SearchAnimations?.playLightboxOpen) {
                 this._lightboxAnimating = true;
@@ -107,6 +107,7 @@ window.SearchStateMixin_GridMode = {
      * 關閉 Lightbox
      */
     closeLightbox() {
+        this._lightboxGeneration++;  // B19: invalidate pending $nextTick lightbox callbacks
         if (this._lightboxAnimating) return;  // D2: guard
         var el = document.querySelector('.showcase-lightbox');
         if (window.SearchAnimations?.playLightboxClose) {
@@ -139,7 +140,9 @@ window.SearchStateMixin_GridMode = {
         this.lightboxOpen = true;
 
         // D2: 進場動畫（fire-and-forget）
+        var lbGen = ++this._lightboxGeneration;
         this.$nextTick(() => {
+            if (this._lightboxGeneration !== lbGen) return;  // B19: stale
             var el = document.querySelector('.showcase-lightbox');
             if (window.SearchAnimations?.playLightboxOpen) {
                 this._lightboxAnimating = true;
@@ -188,31 +191,24 @@ window.SearchStateMixin_GridMode = {
             return;  // lightboxIndex === 0 && no actress → don't move
         }
 
-        // D2: switch 動畫
-        var content = document.querySelector('.lightbox-content');
-        if (window.SearchAnimations?.playLightboxSwitch) {
-            this._lightboxAnimating = true;
-            var tl = window.SearchAnimations.playLightboxSwitch(content, 'prev', {
-                onMidpoint: () => {
-                    this._heroLightboxImageError = false;
-                    this.lightboxIndex = newIdx;
-                    if (newIdx >= 0) this.currentIndex = newIdx;
-                },
-                onComplete: () => { this._lightboxAnimating = false; }
-            });
-            if (!tl) {
-                this._lightboxAnimating = false;
-                // fallback: 直接切
-                this._heroLightboxImageError = false;
-                this.lightboxIndex = newIdx;
-                if (newIdx >= 0) this.currentIndex = newIdx;
+        // B19: state-first — 立即更新 state，避免 C18 interrupt 吞掉 index mutation
+        this._heroLightboxImageError = false;
+        this.lightboxIndex = newIdx;
+        if (newIdx >= 0) this.currentIndex = newIdx;
+
+        // B19: 動畫（state 已更新，$nextTick 後 Alpine 已 patch DOM）
+        var lbGen = ++this._lightboxGeneration;
+        this.$nextTick(() => {
+            if (this._lightboxGeneration !== lbGen) return;  // stale — lightbox was closed/interrupted
+            var content = document.querySelector('.lightbox-content');
+            if (content && window.SearchAnimations?.playLightboxSwitch) {
+                this._lightboxAnimating = true;
+                var tl = window.SearchAnimations.playLightboxSwitch(content, 'prev', {
+                    onComplete: () => { this._lightboxAnimating = false; }
+                });
+                if (!tl) this._lightboxAnimating = false;
             }
-        } else {
-            // fallback: 無 GSAP
-            this._heroLightboxImageError = false;
-            this.lightboxIndex = newIdx;
-            if (newIdx >= 0) this.currentIndex = newIdx;
-        }
+        });
     },
 
     /**
@@ -245,31 +241,24 @@ window.SearchStateMixin_GridMode = {
             return;  // at last item → don't move
         }
 
-        // D2: switch 動畫
-        var content = document.querySelector('.lightbox-content');
-        if (window.SearchAnimations?.playLightboxSwitch) {
-            this._lightboxAnimating = true;
-            var tl = window.SearchAnimations.playLightboxSwitch(content, 'next', {
-                onMidpoint: () => {
-                    this._heroLightboxImageError = false;
-                    this.lightboxIndex = newIdx;
-                    this.currentIndex = newIdx;
-                },
-                onComplete: () => { this._lightboxAnimating = false; }
-            });
-            if (!tl) {
-                this._lightboxAnimating = false;
-                // fallback: 直接切
-                this._heroLightboxImageError = false;
-                this.lightboxIndex = newIdx;
-                this.currentIndex = newIdx;
+        // B19: state-first — 立即更新 state，避免 C18 interrupt 吞掉 index mutation
+        this._heroLightboxImageError = false;
+        this.lightboxIndex = newIdx;
+        this.currentIndex = newIdx;
+
+        // B19: 動畫（state 已更新，$nextTick 後 Alpine 已 patch DOM）
+        var lbGen = ++this._lightboxGeneration;
+        this.$nextTick(() => {
+            if (this._lightboxGeneration !== lbGen) return;  // stale — lightbox was closed/interrupted
+            var content = document.querySelector('.lightbox-content');
+            if (content && window.SearchAnimations?.playLightboxSwitch) {
+                this._lightboxAnimating = true;
+                var tl = window.SearchAnimations.playLightboxSwitch(content, 'next', {
+                    onComplete: () => { this._lightboxAnimating = false; }
+                });
+                if (!tl) this._lightboxAnimating = false;
             }
-        } else {
-            // fallback: 無 GSAP
-            this._heroLightboxImageError = false;
-            this.lightboxIndex = newIdx;
-            this.currentIndex = newIdx;
-        }
+        });
     },
 
     /**

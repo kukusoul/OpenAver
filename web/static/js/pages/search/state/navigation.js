@@ -128,6 +128,7 @@ window.SearchStateMixin_Navigation = {
                     gsap.getById('lightboxSwitch')?.kill();
                 }
                 this._lightboxAnimating = false;
+                this._lightboxGeneration++;  // B19: invalidate pending $nextTick lightbox callbacks
                 // 移除 gsap-animating class
                 var lbEl = document.querySelector('.showcase-lightbox');
                 if (lbEl) lbEl.classList.remove('gsap-animating');

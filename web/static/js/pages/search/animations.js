@@ -877,7 +877,7 @@
          * Lightbox 導航切換動畫：crossfade + micro slide
          *
          * direction: 'next' 從右進，'prev' 從左進（對齊 playSlideIn 方向感）。
-         * onMidpoint callback 在淡出完成、淡入開始前呼叫（用於更新 Alpine state）。
+         * B19: 單相 slide-in（state-first 後 DOM 已是新內容，fade-out 會造成反向閃爍）。
          *
          * C4：開頭 killTweensOf 清舊動畫。
          * C6：不使用 rotation。
@@ -885,7 +885,7 @@
          *
          * @param {Element} contentEl - .lightbox-content 元素
          * @param {'next'|'prev'} direction - 切換方向
-         * @param {object} [options] - { onMidpoint, onComplete }
+         * @param {object} [options] - { onComplete }
          * @returns {gsap.core.Timeline|null}
          */
         playLightboxSwitch: function (contentEl, direction, options) {
@@ -902,7 +902,6 @@
             var lightboxEl = contentEl.closest('.showcase-lightbox');
             if (lightboxEl) lightboxEl.classList.add('gsap-animating');
 
-            var xOut = direction === 'next' ? -20 : 20;
             var xIn = direction === 'next' ? 20 : -20;
 
             var tl = gsap.timeline({
@@ -916,18 +915,7 @@
                 }
             });
 
-            // 1. Fade-out + micro slide
-            tl.fromTo(contentEl,
-                { opacity: 1, x: 0 },
-                { opacity: 0, x: xOut, duration: 0.15, ease: 'power2.in' }
-            );
-
-            // 2. Midpoint callback (update Alpine state)
-            tl.call(function () {
-                if (typeof options.onMidpoint === 'function') options.onMidpoint();
-            });
-
-            // 3. Fade-in + micro slide from opposite direction
+            // B19: 單相 slide-in（state-first 後 DOM 已是新內容，fade-out 會造成反向閃爍）
             tl.fromTo(contentEl,
                 { opacity: 0, x: xIn },
                 { opacity: 1, x: 0, duration: 0.25, ease: 'power2.out' }
