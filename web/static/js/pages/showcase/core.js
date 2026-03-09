@@ -615,40 +615,24 @@ function showcaseState() {
 
         closeLightbox() {
             this._lightboxGeneration++;  // B19: invalidate pending $nextTick lightbox callbacks
-            // B16: 動畫進行中 guard
-            if (this._lightboxAnimating) return;
-
-            var self = this;
-
-            /** B16: 所有 cleanup 邏輯（動畫 onComplete 或 fallback 共用） */
-            function doCleanup() {
-                self._lightboxAnimating = false;
-                self.lightboxOpen = false;
-                self.lightboxIndex = -1;
-                document.body.classList.remove('overflow-hidden');
-                if (self.lightboxMoveTimer) {
-                    clearTimeout(self.lightboxMoveTimer);
-                    self.lightboxMoveTimer = null;
-                }
-                self.lightboxMoveEnabled = false;
-                self.lightboxStartX = 0;
-                self.lightboxStartY = 0;
+            // Instant close — kill any in-progress lightbox animations, then sync cleanup
+            if (typeof gsap !== 'undefined') {
+                gsap.getById('showcaseLightboxOpen')?.kill();
+                gsap.getById('showcaseLightboxSwitch')?.kill();
             }
-
-            // B16: GSAP 退場動畫 — 先播動畫，onComplete 才翻 state
-            var lightboxEl = document.querySelector('.showcase-lightbox');
-            if (lightboxEl && window.ShowcaseAnimations?.playLightboxClose) {
-                this._lightboxAnimating = true;
-                var tl = window.ShowcaseAnimations.playLightboxClose(lightboxEl, {
-                    onComplete: doCleanup
-                });
-                if (!tl) {
-                    doCleanup();
-                }
-            } else {
-                // 無 GSAP fallback：直接 cleanup
-                doCleanup();
+            var lbEl = document.querySelector('.showcase-lightbox');
+            if (lbEl) lbEl.classList.remove('gsap-animating');
+            this._lightboxAnimating = false;
+            this.lightboxOpen = false;
+            this.lightboxIndex = -1;
+            document.body.classList.remove('overflow-hidden');
+            if (this.lightboxMoveTimer) {
+                clearTimeout(this.lightboxMoveTimer);
+                this.lightboxMoveTimer = null;
             }
+            this.lightboxMoveEnabled = false;
+            this.lightboxStartX = 0;
+            this.lightboxStartY = 0;
         },
 
         // Metadata 點擊搜尋 (M3f)
@@ -920,17 +904,7 @@ function showcaseState() {
             // 4. Lightbox 開啟時的快捷鍵（優先處理）
             if (this.lightboxOpen) {
                 if (key === 'ESCAPE') {
-                    // C18: interrupt — kill 所有 lightbox timeline
-                    if (typeof gsap !== 'undefined') {
-                        gsap.getById('showcaseLightboxOpen')?.kill();
-                        gsap.getById('showcaseLightboxClose')?.kill();
-                        gsap.getById('showcaseLightboxSwitch')?.kill();
-                    }
-                    this._lightboxAnimating = false;
-                    this._lightboxGeneration++;  // B19: invalidate pending $nextTick lightbox callbacks
-                    var lbEl = document.querySelector('.showcase-lightbox');
-                    if (lbEl) lbEl.classList.remove('gsap-animating');
-                    this.closeLightbox();
+                    this.closeLightbox();  // closeLightbox handles kill + cleanup + generation++
                 } else if (key === 'ARROWLEFT') {
                     this.prevLightboxVideo();
                 } else if (key === 'ARROWRIGHT') {

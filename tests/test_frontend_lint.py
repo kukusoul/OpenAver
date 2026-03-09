@@ -3536,31 +3536,50 @@ class TestLightboxAnimationGuard:
                 "修正：改用 gsap.getById()?.kill()"
             )
 
-    def test_esc_interrupt_uses_getById_search(self):
-        """search/navigation.js ESC 分支用 getById kill"""
+    def test_esc_calls_closeLightbox_search(self):
+        """search/navigation.js ESC 分支呼叫 closeLightbox（closeLightbox 內部處理 getById kill）"""
         content = self._read_file(self.SEARCH_NAVIGATION)
         body = self._extract_function(content, 'handleKeydown')
         assert body, "handleKeydown 函數未找到 in navigation.js"
-        # ESC 分支應含 getById
         esc_idx = body.find('Escape')
         assert esc_idx >= 0, "handleKeydown 中未找到 Escape 分支"
-        esc_section = body[esc_idx:esc_idx + 500]
-        assert 'getById' in esc_section, (
-            "C18 守衛違規：search navigation.js ESC 分支缺少 getById kill\n"
-            "修正：用 gsap.getById kill 所有 lightbox timeline"
+        esc_section = body[esc_idx:esc_idx + 300]
+        assert 'closeLightbox' in esc_section, (
+            "C18 守衛違規：search navigation.js ESC 分支未呼叫 closeLightbox\n"
+            "修正：ESC 應呼叫 closeLightbox() 統一處理 kill + cleanup"
         )
 
-    def test_esc_interrupt_uses_getById_showcase(self):
-        """showcase/core.js ESC 分支用 getById kill"""
+    def test_esc_calls_closeLightbox_showcase(self):
+        """showcase/core.js ESC 分支呼叫 closeLightbox（closeLightbox 內部處理 getById kill）"""
         content = self._read_file(self.SHOWCASE_CORE)
         body = self._extract_function(content, 'handleKeydown')
         assert body, "handleKeydown 函數未找到 in showcase/core.js"
         esc_idx = body.find('ESCAPE')
         assert esc_idx >= 0, "handleKeydown 中未找到 ESCAPE 分支"
-        esc_section = body[esc_idx:esc_idx + 500]
-        assert 'getById' in esc_section, (
-            "C18 守衛違規：showcase/core.js ESC 分支缺少 getById kill\n"
-            "修正：用 gsap.getById kill 所有 showcase lightbox timeline"
+        esc_section = body[esc_idx:esc_idx + 300]
+        assert 'closeLightbox' in esc_section, (
+            "C18 守衛違規：showcase/core.js ESC 分支未呼叫 closeLightbox\n"
+            "修正：ESC 應呼叫 closeLightbox() 統一處理 kill + cleanup"
+        )
+
+    def test_closeLightbox_has_getById_kill_search(self):
+        """search closeLightbox 自身包含 getById kill（instant close 需清理進行中動畫）"""
+        content = self._read_file(self.SEARCH_GRID_MODE)
+        body = self._extract_function(content, 'closeLightbox')
+        assert body, "closeLightbox 函數未找到 in grid-mode.js"
+        assert 'getById' in body, (
+            "C18 守衛違規：search closeLightbox 缺少 getById kill\n"
+            "修正：instant close 需 kill 進行中的 lightbox timeline"
+        )
+
+    def test_closeLightbox_has_getById_kill_showcase(self):
+        """showcase closeLightbox 自身包含 getById kill（instant close 需清理進行中動畫）"""
+        content = self._read_file(self.SHOWCASE_CORE)
+        body = self._extract_function(content, 'closeLightbox')
+        assert body, "closeLightbox 函數未找到 in showcase/core.js"
+        assert 'getById' in body, (
+            "C18 守衛違規：showcase closeLightbox 缺少 getById kill\n"
+            "修正：instant close 需 kill 進行中的 lightbox timeline"
         )
 
     def test_openLightbox_same_index_noop_search(self):

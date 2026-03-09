@@ -108,25 +108,15 @@ window.SearchStateMixin_GridMode = {
      */
     closeLightbox() {
         this._lightboxGeneration++;  // B19: invalidate pending $nextTick lightbox callbacks
-        if (this._lightboxAnimating) return;  // D2: guard
-        var el = document.querySelector('.showcase-lightbox');
-        if (window.SearchAnimations?.playLightboxClose) {
-            this._lightboxAnimating = true;
-            var tl = window.SearchAnimations.playLightboxClose(el, {
-                onComplete: () => {
-                    this._lightboxAnimating = false;
-                    this.lightboxOpen = false;
-                }
-            });
-            if (!tl) {
-                // shouldSkip or early return — fallback
-                this._lightboxAnimating = false;
-                this.lightboxOpen = false;
-            }
-        } else {
-            // No GSAP — fallback
-            this.lightboxOpen = false;
+        // Instant close — kill any in-progress lightbox animations, then sync close
+        if (typeof gsap !== 'undefined') {
+            gsap.getById('lightboxOpen')?.kill();
+            gsap.getById('lightboxSwitch')?.kill();
         }
+        var lbEl = document.querySelector('.showcase-lightbox');
+        if (lbEl) lbEl.classList.remove('gsap-animating');
+        this._lightboxAnimating = false;
+        this.lightboxOpen = false;
     },
 
     /**

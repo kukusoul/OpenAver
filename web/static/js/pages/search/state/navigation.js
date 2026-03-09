@@ -121,19 +121,8 @@ window.SearchStateMixin_Navigation = {
         // T2a: Lightbox 鍵盤導航（優先）
         if (this.lightboxOpen) {
             if (event.key === 'Escape') {
-                // C18: interrupt — kill 所有 lightbox timeline
-                if (typeof gsap !== 'undefined') {
-                    gsap.getById('lightboxOpen')?.kill();
-                    gsap.getById('lightboxClose')?.kill();
-                    gsap.getById('lightboxSwitch')?.kill();
-                }
-                this._lightboxAnimating = false;
-                this._lightboxGeneration++;  // B19: invalidate pending $nextTick lightbox callbacks
-                // 移除 gsap-animating class
-                var lbEl = document.querySelector('.showcase-lightbox');
-                if (lbEl) lbEl.classList.remove('gsap-animating');
                 event.preventDefault();
-                this.closeLightbox();
+                this.closeLightbox();  // closeLightbox handles kill + cleanup + generation++
                 return;
             }
             if (event.key === 'ArrowLeft') {

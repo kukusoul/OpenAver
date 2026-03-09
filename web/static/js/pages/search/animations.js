@@ -791,24 +791,24 @@
             // 1. Backdrop fade-in
             tl.fromTo(lightboxEl,
                 { opacity: 0 },
-                { opacity: 1, duration: 0.3, ease: 'power2.out' }
+                { opacity: 1, duration: 0.16, ease: 'power2.out' }
             );
 
             // 2. Content card scale pop-in
             if (content) {
                 tl.fromTo(content,
                     { scale: 0.92, opacity: 0 },
-                    { scale: 1, opacity: 1, duration: 0.35, ease: 'back.out(1.2)' },
-                    0.05
+                    { scale: 1, opacity: 1, duration: 0.18, ease: 'back.out(1.2)' },
+                    0.03
                 );
             }
 
             // 3. Cover image slide-up fade-in
             if (coverImg) {
                 tl.fromTo(coverImg,
-                    { y: 20, opacity: 0 },
-                    { y: 0, opacity: 1, duration: 0.3, ease: 'power2.out' },
-                    '-=0.15'
+                    { y: 12, opacity: 0 },
+                    { y: 0, opacity: 1, duration: 0.16, ease: 'power2.out' },
+                    '-=0.08'
                 );
             }
 
