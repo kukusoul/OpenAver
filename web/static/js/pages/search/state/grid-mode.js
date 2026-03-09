@@ -50,6 +50,40 @@ window.SearchStateMixin_GridMode = {
      */
     openLightbox(index) {
         if (this._lightboxAnimating) return;  // D2: guard
+        if (this.lightboxOpen && this.lightboxIndex === index) return;  // 同一張，不動作
+
+        // Fix: lightbox 已開啟時走 switch 路徑（避免 backdrop click-through 重播 open 動畫）
+        if (this.lightboxOpen && this.lightboxIndex !== index) {
+            var content = document.querySelector('.lightbox-content');
+            if (window.SearchAnimations?.playLightboxSwitch) {
+                var direction = index > this.lightboxIndex ? 'next' : 'prev';
+                // C18: interrupt — kill 舊 switch timeline（含 onMidpoint/onComplete callback）
+                if (typeof gsap !== 'undefined') {
+                    gsap.getById('lightboxSwitch')?.kill();
+                }
+                this._lightboxAnimating = true;
+                var tl = window.SearchAnimations.playLightboxSwitch(content, direction, {
+                    onMidpoint: () => {
+                        this._heroLightboxImageError = false;
+                        this.lightboxIndex = index;
+                        this.currentIndex = index;
+                    },
+                    onComplete: () => { this._lightboxAnimating = false; }
+                });
+                if (!tl) {
+                    this._lightboxAnimating = false;
+                    this._heroLightboxImageError = false;
+                    this.lightboxIndex = index;
+                    this.currentIndex = index;
+                }
+            } else {
+                this._heroLightboxImageError = false;
+                this.lightboxIndex = index;
+                this.currentIndex = index;
+            }
+            return;
+        }
+
         this._heroLightboxImageError = false;  // A6-1: 重置圖片錯誤狀態
         this.lightboxIndex = index;
         this.lightboxOpen = true;
@@ -121,7 +155,15 @@ window.SearchStateMixin_GridMode = {
      * Lightbox 上一部
      */
     prevLightboxVideo() {
-        if (this._lightboxAnimating) return;  // D2: guard
+        // C18: interrupt — kill open + switch timeline（進場動畫未完也要打斷）
+        if (typeof gsap !== 'undefined') {
+            gsap.getById('lightboxOpen')?.kill();
+            gsap.getById('lightboxSwitch')?.kill();
+        }
+        this._lightboxAnimating = false;
+        var lbEl = document.querySelector('.showcase-lightbox');
+        if (lbEl) lbEl.classList.remove('gsap-animating');
+
         if (this.lightboxIndex === -1) {
             // Already at actress photo (leftmost) — do nothing
             return;
@@ -177,7 +219,14 @@ window.SearchStateMixin_GridMode = {
      * Lightbox 下一部
      */
     nextLightboxVideo() {
-        if (this._lightboxAnimating) return;  // D2: guard
+        // C18: interrupt — kill open + switch timeline（進場動畫未完也要打斷）
+        if (typeof gsap !== 'undefined') {
+            gsap.getById('lightboxOpen')?.kill();
+            gsap.getById('lightboxSwitch')?.kill();
+        }
+        this._lightboxAnimating = false;
+        var lbEl = document.querySelector('.showcase-lightbox');
+        if (lbEl) lbEl.classList.remove('gsap-animating');
 
         // D2: 計算目標 index（不立即更新 state）
         var newIdx;

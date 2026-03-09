@@ -535,6 +535,60 @@ function showcaseState() {
         openLightbox(index) {
             // B16: 動畫進行中 guard
             if (this._lightboxAnimating) return;
+            if (this.lightboxOpen && this.lightboxIndex === index) return;  // 同一張，不動作
+
+            // Fix: lightbox 已開啟時走 switch 路徑（避免 backdrop click-through 重播 open 動畫）
+            if (this.lightboxOpen && this.lightboxIndex !== index) {
+                var self = this;
+                var contentEl = document.querySelector('.showcase-lightbox .lightbox-content');
+                if (contentEl && window.ShowcaseAnimations?.playLightboxSwitch) {
+                    var direction = index > this.lightboxIndex ? 'next' : 'prev';
+                    // C18: interrupt — kill 舊 switch timeline（含 onMidpoint/onComplete callback）
+                    if (typeof gsap !== 'undefined') {
+                        gsap.getById('showcaseLightboxSwitch')?.kill();
+                    }
+                    this._lightboxAnimating = true;
+                    var tl = window.ShowcaseAnimations.playLightboxSwitch(contentEl, direction, {
+                        onMidpoint: function () {
+                            self.lightboxIndex = index;
+                            // Smart Close 重置
+                            self.lightboxMoveEnabled = false;
+                            if (self.lightboxMoveTimer) clearTimeout(self.lightboxMoveTimer);
+                            self.lightboxMoveTimer = setTimeout(function () {
+                                self.lightboxMoveEnabled = true;
+                            }, 1000);
+                            self.lightboxStartX = 0;
+                            self.lightboxStartY = 0;
+                        },
+                        onComplete: function () {
+                            self._lightboxAnimating = false;
+                        }
+                    });
+                    if (!tl) {
+                        this._lightboxAnimating = false;
+                        this.lightboxIndex = index;
+                        // Smart Close 重置
+                        this.lightboxMoveEnabled = false;
+                        if (this.lightboxMoveTimer) clearTimeout(this.lightboxMoveTimer);
+                        this.lightboxMoveTimer = setTimeout(function () {
+                            self.lightboxMoveEnabled = true;
+                        }, 1000);
+                        this.lightboxStartX = 0;
+                        this.lightboxStartY = 0;
+                    }
+                } else {
+                    this.lightboxIndex = index;
+                    // Smart Close 重置
+                    this.lightboxMoveEnabled = false;
+                    if (this.lightboxMoveTimer) clearTimeout(this.lightboxMoveTimer);
+                    this.lightboxMoveTimer = setTimeout(function () {
+                        self.lightboxMoveEnabled = true;
+                    }, 1000);
+                    this.lightboxStartX = 0;
+                    this.lightboxStartY = 0;
+                }
+                return;
+            }
 
             this.lightboxIndex = index;
             this.lightboxOpen = true;
@@ -607,15 +661,39 @@ function showcaseState() {
 
         // Metadata 點擊搜尋 (M3f)
         searchFromMetadata(term) {
-            this.closeLightbox();
+            // 同步關閉 lightbox（跳過動畫，後面馬上做 filter 動畫）
+            if (typeof gsap !== 'undefined') {
+                gsap.getById('showcaseLightboxOpen')?.kill();
+                gsap.getById('showcaseLightboxClose')?.kill();
+                gsap.getById('showcaseLightboxSwitch')?.kill();
+            }
+            var lightboxEl = document.querySelector('.showcase-lightbox');
+            if (lightboxEl) lightboxEl.classList.remove('gsap-animating');
+            this._lightboxAnimating = false;
+            this.lightboxOpen = false;
+            this.lightboxIndex = -1;
+            document.body.classList.remove('overflow-hidden');
+            if (this.lightboxMoveTimer) {
+                clearTimeout(this.lightboxMoveTimer);
+                this.lightboxMoveTimer = null;
+            }
+            this.lightboxMoveEnabled = false;
+            this.lightboxStartX = 0;
+            this.lightboxStartY = 0;
+
             this.search = term;
-            // B8: 透過 _animateFilter 觸發篩選動畫
             this._animateFilter();
         },
 
         prevLightboxVideo() {
-            // B16: 動畫進行中 guard
-            if (this._lightboxAnimating) return;
+            // C18: interrupt — kill open + switch timeline（進場動畫未完也要打斷）
+            if (typeof gsap !== 'undefined') {
+                gsap.getById('showcaseLightboxOpen')?.kill();
+                gsap.getById('showcaseLightboxSwitch')?.kill();
+            }
+            this._lightboxAnimating = false;
+            var lbEl = document.querySelector('.showcase-lightbox');
+            if (lbEl) lbEl.classList.remove('gsap-animating');
 
             if (this.lightboxIndex > 0) {
                 var self = this;
@@ -659,8 +737,14 @@ function showcaseState() {
         },
 
         nextLightboxVideo() {
-            // B16: 動畫進行中 guard
-            if (this._lightboxAnimating) return;
+            // C18: interrupt — kill open + switch timeline（進場動畫未完也要打斷）
+            if (typeof gsap !== 'undefined') {
+                gsap.getById('showcaseLightboxOpen')?.kill();
+                gsap.getById('showcaseLightboxSwitch')?.kill();
+            }
+            this._lightboxAnimating = false;
+            var lbEl = document.querySelector('.showcase-lightbox');
+            if (lbEl) lbEl.classList.remove('gsap-animating');
 
             if (this.lightboxIndex < this.filteredVideos.length - 1) {
                 var self = this;
@@ -851,6 +935,15 @@ function showcaseState() {
             // 4. Lightbox 開啟時的快捷鍵（優先處理）
             if (this.lightboxOpen) {
                 if (key === 'ESCAPE') {
+                    // C18: interrupt — kill 所有 lightbox timeline
+                    if (typeof gsap !== 'undefined') {
+                        gsap.getById('showcaseLightboxOpen')?.kill();
+                        gsap.getById('showcaseLightboxClose')?.kill();
+                        gsap.getById('showcaseLightboxSwitch')?.kill();
+                    }
+                    this._lightboxAnimating = false;
+                    var lbEl = document.querySelector('.showcase-lightbox');
+                    if (lbEl) lbEl.classList.remove('gsap-animating');
                     this.closeLightbox();
                 } else if (key === 'ARROWLEFT') {
                     this.prevLightboxVideo();

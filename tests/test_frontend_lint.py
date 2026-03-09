@@ -1881,7 +1881,7 @@ class TestFailedSlotC30Guard:
         for method_name in ['prevLightboxVideo', 'nextLightboxVideo']:
             match = re.search(rf'{method_name}\s*\(', content)
             assert match, f"grid-mode.js 缺少 {method_name}() 方法"
-            method_body = content[match.start():match.start() + 600]
+            method_body = content[match.start():match.start() + 800]
             assert '_failed' in method_body, f"{method_name}() 必須包含 _failed skip 邏輯 (C30)"
 
     def test_nav_indicator_excludes_failed(self):
@@ -3468,4 +3468,156 @@ class TestSearchConsoleLogGuard:
             "D1 守衛違規：search 頁面殘留 console.log\n"
             + "\n".join(all_violations)
             + "\n\n修正：移除 console.log，保留 console.error / console.warn"
+        )
+
+
+class TestLightboxAnimationGuard:
+    """C18 守衛：Lightbox interrupt 必須用 getById kill 整個 timeline，不可只 killTweensOf 元素"""
+
+    SEARCH_GRID_MODE = PROJECT_ROOT / 'web' / 'static' / 'js' / 'pages' / 'search' / 'state' / 'grid-mode.js'
+    SEARCH_NAVIGATION = PROJECT_ROOT / 'web' / 'static' / 'js' / 'pages' / 'search' / 'state' / 'navigation.js'
+    SHOWCASE_CORE = PROJECT_ROOT / 'web' / 'static' / 'js' / 'pages' / 'showcase' / 'core.js'
+
+    @staticmethod
+    def _read_file(path):
+        return path.read_text(encoding='utf-8')
+
+    @staticmethod
+    def _extract_function(content, func_name):
+        """粗略擷取函數內容（從函數名到下一個同級函數或檔案結尾）"""
+        # 找到函數定義行
+        pattern = re.compile(r'^\s*' + re.escape(func_name) + r'\s*\(', re.MULTILINE)
+        match = pattern.search(content)
+        if not match:
+            return ''
+        start = match.start()
+        # 取到後續 2000 字元（足夠涵蓋函數體）
+        return content[start:start + 3000]
+
+    def test_prev_next_use_getById_not_killTweensOf_search(self):
+        """search/grid-mode.js 的 prevLightboxVideo/nextLightboxVideo 用 getById kill"""
+        content = self._read_file(self.SEARCH_GRID_MODE)
+        for func in ['prevLightboxVideo', 'nextLightboxVideo']:
+            body = self._extract_function(content, func)
+            assert body, f"{func} 函數未找到 in grid-mode.js"
+            assert 'getById' in body, (
+                f"C18 守衛違規：search grid-mode.js {func} 缺少 getById kill\n"
+                "修正：用 gsap.getById()?.kill() 取代 killTweensOf"
+            )
+            # 確認 kill lightboxOpen（進場動畫未完也要打斷）+ 無 killTweensOf
+            interrupt_section = body[:500]
+            assert "lightboxOpen" in interrupt_section, (
+                f"C18 守衛違規：search grid-mode.js {func} 缺少 kill lightboxOpen timeline\n"
+                "修正：加 gsap.getById('lightboxOpen')?.kill()"
+            )
+            assert 'killTweensOf' not in interrupt_section, (
+                f"C18 守衛違規：search grid-mode.js {func} 仍使用 killTweensOf\n"
+                "修正：改用 gsap.getById()?.kill()"
+            )
+
+    def test_prev_next_use_getById_not_killTweensOf_showcase(self):
+        """showcase/core.js 的 prevLightboxVideo/nextLightboxVideo 用 getById kill"""
+        content = self._read_file(self.SHOWCASE_CORE)
+        for func in ['prevLightboxVideo', 'nextLightboxVideo']:
+            body = self._extract_function(content, func)
+            assert body, f"{func} 函數未找到 in showcase/core.js"
+            assert 'getById' in body, (
+                f"C18 守衛違規：showcase/core.js {func} 缺少 getById kill\n"
+                "修正：用 gsap.getById()?.kill() 取代 killTweensOf"
+            )
+            # 確認 kill showcaseLightboxOpen（進場動畫未完也要打斷）+ 無 killTweensOf
+            interrupt_section = body[:500]
+            assert "showcaseLightboxOpen" in interrupt_section, (
+                f"C18 守衛違規：showcase/core.js {func} 缺少 kill showcaseLightboxOpen timeline\n"
+                "修正：加 gsap.getById('showcaseLightboxOpen')?.kill()"
+            )
+            assert 'killTweensOf' not in interrupt_section, (
+                f"C18 守衛違規：showcase/core.js {func} 仍使用 killTweensOf\n"
+                "修正：改用 gsap.getById()?.kill()"
+            )
+
+    def test_esc_interrupt_uses_getById_search(self):
+        """search/navigation.js ESC 分支用 getById kill"""
+        content = self._read_file(self.SEARCH_NAVIGATION)
+        body = self._extract_function(content, 'handleKeydown')
+        assert body, "handleKeydown 函數未找到 in navigation.js"
+        # ESC 分支應含 getById
+        esc_idx = body.find('Escape')
+        assert esc_idx >= 0, "handleKeydown 中未找到 Escape 分支"
+        esc_section = body[esc_idx:esc_idx + 500]
+        assert 'getById' in esc_section, (
+            "C18 守衛違規：search navigation.js ESC 分支缺少 getById kill\n"
+            "修正：用 gsap.getById kill 所有 lightbox timeline"
+        )
+
+    def test_esc_interrupt_uses_getById_showcase(self):
+        """showcase/core.js ESC 分支用 getById kill"""
+        content = self._read_file(self.SHOWCASE_CORE)
+        body = self._extract_function(content, 'handleKeydown')
+        assert body, "handleKeydown 函數未找到 in showcase/core.js"
+        esc_idx = body.find('ESCAPE')
+        assert esc_idx >= 0, "handleKeydown 中未找到 ESCAPE 分支"
+        esc_section = body[esc_idx:esc_idx + 500]
+        assert 'getById' in esc_section, (
+            "C18 守衛違規：showcase/core.js ESC 分支缺少 getById kill\n"
+            "修正：用 gsap.getById kill 所有 showcase lightbox timeline"
+        )
+
+    def test_openLightbox_same_index_noop_search(self):
+        """search/grid-mode.js openLightbox 有 same-index no-op guard"""
+        content = self._read_file(self.SEARCH_GRID_MODE)
+        body = self._extract_function(content, 'openLightbox')
+        assert body, "openLightbox 函數未找到 in grid-mode.js"
+        assert re.search(r'lightboxIndex\s*===\s*index', body), (
+            "C18 守衛違規：search grid-mode.js openLightbox 缺少 same-index no-op\n"
+            "修正：加入 if (this.lightboxOpen && this.lightboxIndex === index) return;"
+        )
+
+    def test_openLightbox_same_index_noop_showcase(self):
+        """showcase/core.js openLightbox 有 same-index no-op guard"""
+        content = self._read_file(self.SHOWCASE_CORE)
+        body = self._extract_function(content, 'openLightbox')
+        assert body, "openLightbox 函數未找到 in showcase/core.js"
+        assert re.search(r'lightboxIndex\s*===\s*index', body), (
+            "C18 守衛違規：showcase/core.js openLightbox 缺少 same-index no-op\n"
+            "修正：加入 if (this.lightboxOpen && this.lightboxIndex === index) return;"
+        )
+
+    def test_openLightbox_switch_path_search(self):
+        """search/grid-mode.js openLightbox 有 already-open switch 路徑"""
+        content = self._read_file(self.SEARCH_GRID_MODE)
+        body = self._extract_function(content, 'openLightbox')
+        assert body, "openLightbox 函數未找到 in grid-mode.js"
+        assert 'lightboxOpen' in body, "openLightbox 缺少 lightboxOpen 檢查"
+        assert 'playLightboxSwitch' in body, (
+            "C18 守衛違規：search grid-mode.js openLightbox 缺少 switch 路徑\n"
+            "修正：lightbox 已開啟時應走 playLightboxSwitch 而非重播 open 動畫"
+        )
+
+    def test_openLightbox_switch_path_showcase(self):
+        """showcase/core.js openLightbox 有 already-open switch 路徑"""
+        content = self._read_file(self.SHOWCASE_CORE)
+        body = self._extract_function(content, 'openLightbox')
+        assert body, "openLightbox 函數未找到 in showcase/core.js"
+        assert 'lightboxOpen' in body, "openLightbox 缺少 lightboxOpen 檢查"
+        assert 'playLightboxSwitch' in body, (
+            "C18 守衛違規：showcase/core.js openLightbox 缺少 switch 路徑\n"
+            "修正：lightbox 已開啟時應走 playLightboxSwitch 而非重播 open 動畫"
+        )
+
+    def test_searchFromMetadata_sync_cleanup(self):
+        """showcase/core.js searchFromMetadata 用 getById kill + 同步設定 lightboxOpen = false"""
+        content = self._read_file(self.SHOWCASE_CORE)
+        body = self._extract_function(content, 'searchFromMetadata')
+        assert body, "searchFromMetadata 函數未找到 in showcase/core.js"
+        assert 'getById' in body, (
+            "C18 守衛違規：showcase/core.js searchFromMetadata 缺少 getById kill\n"
+            "修正：用 gsap.getById kill 所有 showcase lightbox timeline"
+        )
+        # 確認 lightboxOpen = false 在函數體直接層級（非 callback）
+        # 檢查 lightboxOpen = false 出現在 getById 之後
+        getById_idx = body.find('getById')
+        lightboxOpen_idx = body.find('lightboxOpen = false')
+        assert lightboxOpen_idx > getById_idx, (
+            "C18 守衛違規：searchFromMetadata 的 lightboxOpen = false 應在 getById kill 之後同步設定"
         )
