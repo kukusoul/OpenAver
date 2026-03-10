@@ -11,6 +11,8 @@
  *   - playGridToDetail(fromRect, detailEl, options)  Grid→Detail ghost 轉場
  *   - playDetailToGrid(fromRect, targetCardEl, options)  Detail→Grid ghost 飛回
  *   - playSlideIn(containerEl, direction)              detail 導航滑入動畫（C18 interrupt）
+ *   - playLightboxOpen(lightboxEl, options)             lightbox 進場動畫（backdrop + content + cover）
+ *   - playLightboxSwitch(contentEl, direction, options) lightbox 導航 crossfade + micro slide
  *
  * C2：此檔案是 pages/ 目錄下被允許直接呼叫 GSAP 的兩個檔案之一
  *      （另一個為 motion-lab.js）。
@@ -33,6 +35,24 @@
     function shouldSkip() {
         return !!(window.OpenAver?.prefersReducedMotion);
     }
+
+    // A4: 註冊 CustomEase "settle" 曲線（與 motion-lab.js 相同，重複 create 無害）
+    // A7-Prod: 註冊 Flip plugin（base.html L452 已載入 CDN）
+    document.addEventListener('DOMContentLoaded', function () {
+        if (typeof gsap !== 'undefined' && typeof Flip !== 'undefined') {
+            gsap.registerPlugin(Flip);
+        }
+        if (typeof CustomEase !== 'undefined') {
+            try {
+                if (!CustomEase._initted && typeof gsap !== 'undefined') {
+                    gsap.registerPlugin(CustomEase);
+                }
+                CustomEase.create("settle", "M0,0 C0.14,0 0.27,0.87 0.5,1 0.75,1 0.86,0.98 1,1");
+            } catch (e) {
+                // settle ease 註冊失敗時 playGridSettle 會 fallback 到 power2.out
+            }
+        }
+    });
 
     // ===== U4: Ghost Helpers (private to IIFE) =====
 
@@ -606,6 +626,258 @@
                 { x: xFrom, opacity: 0 },
                 { x: 0, opacity: 1, duration: 0.3, ease: 'power3.out' }
             );
+        },
+
+        /**
+         * A7-Prod: Hero Slot Flip 移除 — actressProfile 為 null 時平滑補位
+         *
+         * Fire-and-forget，不回傳 Promise。
+         * 參考 motion-lab.js L929-944，簡化版。
+         *
+         * @param {object} flipState - Flip.getState() 的回傳值（DOM 變更前捕獲）
+         * @param {object} [options] - { duration, ease }
+         */
+        playHeroRemove: function (flipState, options) {
+            options = options || {};
+            if (!flipState) return;
+            if (typeof Flip === 'undefined') return;
+            if (shouldSkip()) return;
+            var dur = options.duration || 0.4;
+            var ease = options.ease || 'power2.out';
+            Flip.from(flipState, {
+                duration: dur,
+                ease: ease
+            });
+        },
+
+        /**
+         * Grid Settle Pulse：staging exit 完成後，對前 N 排 grid 卡片做極輕微 scale pulse
+         * 營造「結果穩定落位」的收尾感。
+         *
+         * 動畫目標是 .av-card-preview-img（不是 .av-card-preview），
+         * 避免覆蓋 .av-card-preview:hover 的 CSS transform。
+         * Row bucketing 使用 2px tolerance（Math.round(top/2)*2）。
+         *
+         * C4：開頭 gsap.killTweensOf 清舊動畫。
+         * C6：不使用 rotation，只用 scale。
+         *
+         * @param {Element} gridEl - .search-grid 容器
+         * @param {object} [options] - { duration, scale, ease, rows }
+         * @returns {gsap.core.Timeline|null}
+         */
+        playGridSettle: function (gridEl, options) {
+            options = options || {};
+            if (!gridEl) return null;
+            if (typeof gsap === 'undefined') return null;
+
+            var allCards = gridEl.querySelectorAll('.av-card-preview');
+            if (!allCards.length) return null;
+
+            // A4 fix: 過濾 display:none 的卡片（_failed slot），
+            // 避免 getBoundingClientRect() 回傳 0-size rect 污染 row bucketing
+            var cards = [];
+            allCards.forEach(function (card) {
+                if (card.offsetHeight > 0) cards.push(card);
+            });
+            if (!cards.length) return null;
+
+            // 動畫目標是 .av-card-preview-img（不是 .av-card-preview），
+            // 因為 .av-card-preview:hover 有 CSS transform（theme.css），
+            // GSAP 寫 inline scale 會覆蓋 hover 效果
+            var imgTargets = [];
+            cards.forEach(function (card) {
+                var img = card.querySelector('.av-card-preview-img');
+                if (img) imgTargets.push(img);
+            });
+            if (!imgTargets.length) return null;
+
+            // C4: 清除舊動畫
+            gsap.killTweensOf(imgTargets);
+
+            // Reduced Motion 降級
+            if (shouldSkip()) {
+                gsap.set(imgTargets, { scale: 1 });
+                return null;
+            }
+
+            var dur = options.duration || 0.8;
+            var scaleVal = options.scale || 1.06;
+            var ease = options.ease || 'settle';
+            var rowCount = options.rows || 3;
+
+            // CustomEase fallback：若 settle ease 未註冊，fallback 到 power2.out
+            if (ease === 'settle' && typeof CustomEase === 'undefined') {
+                ease = 'power2.out';
+            }
+
+            // Row bucketing：2px tolerance，避免子像素差異
+            var rowMap = {};
+            imgTargets.forEach(function (img, i) {
+                var card = cards[i];
+                var top = card.getBoundingClientRect().top;
+                var rowKey = Math.round(top / 2) * 2;
+                if (!rowMap[rowKey]) rowMap[rowKey] = [];
+                rowMap[rowKey].push(img);
+            });
+
+            // 按 rowKey 升序排列
+            var sortedKeys = Object.keys(rowMap).map(Number).sort(function (a, b) { return a - b; });
+
+            // 只取前 N 行
+            var targetKeys = sortedKeys.slice(0, rowCount);
+            if (!targetKeys.length) return null;
+
+            // 建立 timeline
+            var tl = gsap.timeline({ id: 'gridSettle' });
+
+            targetKeys.forEach(function (key, rowIdx) {
+                var rowImgs = rowMap[key];
+                // 同行卡片同時，跨行 0.06s 延遲
+                tl.fromTo(rowImgs,
+                    { scale: scaleVal },
+                    { scale: 1, duration: dur, ease: ease },
+                    rowIdx * 0.06  // position parameter
+                );
+            });
+
+            // C6: 不使用 rotationX/Y/Z，只用 scale
+
+            // C21: clearProps 防護 — 清除 inline transform，避免與 CSS transition 衝突
+            tl.eventCallback('onComplete', function () {
+                targetKeys.forEach(function (key) {
+                    gsap.set(rowMap[key], { clearProps: 'transform' });
+                });
+            });
+
+            // C18: onInterrupt — killTweensOf 打斷時 onComplete 不會觸發，
+            // 需要同樣清除 inline transform 避免殘留
+            tl.eventCallback('onInterrupt', function () {
+                targetKeys.forEach(function (key) {
+                    gsap.set(rowMap[key], { clearProps: 'transform' });
+                });
+            });
+
+            return tl;
+        },
+
+        // ===== D2: Lightbox Animations =====
+
+        /**
+         * Lightbox 進場動畫：backdrop 淡入 + content scale pop-in + cover 上滑淡入
+         *
+         * C4：開頭 killTweensOf 清舊動畫。
+         * C6：不使用 rotation。
+         * C21：用 .gsap-animating class 暫時關掉 CSS transition。
+         *
+         * @param {Element} lightboxEl - .showcase-lightbox 元素
+         * @param {object} [options] - { onComplete }
+         * @returns {gsap.core.Timeline|null}
+         */
+        playLightboxOpen: function (lightboxEl, options) {
+            options = options || {};
+
+            if (!lightboxEl) return null;
+            if (typeof gsap === 'undefined') return null;
+            if (shouldSkip()) return null;
+
+            var content = lightboxEl.querySelector('.lightbox-content');
+            var coverImg = lightboxEl.querySelector('.lightbox-cover img');
+
+            // C4: 清除舊動畫
+            gsap.killTweensOf(lightboxEl);
+            if (content) gsap.killTweensOf(content);
+            if (coverImg) gsap.killTweensOf(coverImg);
+
+            // C21: 暫時關掉 CSS transition
+            lightboxEl.classList.add('gsap-animating');
+
+            var tl = gsap.timeline({
+                id: 'lightboxOpen',
+                onComplete: function () {
+                    lightboxEl.classList.remove('gsap-animating');
+                    if (typeof options.onComplete === 'function') options.onComplete();
+                },
+                onInterrupt: function () {
+                    lightboxEl.classList.remove('gsap-animating');
+                }
+            });
+
+            // 1. Backdrop fade-in
+            tl.fromTo(lightboxEl,
+                { opacity: 0 },
+                { opacity: 1, duration: 0.16, ease: 'power2.out' }
+            );
+
+            // 2. Content card scale pop-in
+            if (content) {
+                tl.fromTo(content,
+                    { scale: 0.92, opacity: 0 },
+                    { scale: 1, opacity: 1, duration: 0.18, ease: 'back.out(1.2)' },
+                    0.03
+                );
+            }
+
+            // 3. Cover image slide-up fade-in
+            if (coverImg) {
+                tl.fromTo(coverImg,
+                    { y: 12, opacity: 0 },
+                    { y: 0, opacity: 1, duration: 0.16, ease: 'power2.out' },
+                    '-=0.08'
+                );
+            }
+
+            return tl;
+        },
+
+        /**
+         * Lightbox 導航切換動畫：crossfade + micro slide
+         *
+         * direction: 'next' 從右進，'prev' 從左進（對齊 playSlideIn 方向感）。
+         * B19: 單相 slide-in（state-first 後 DOM 已是新內容，fade-out 會造成反向閃爍）。
+         *
+         * C4：開頭 killTweensOf 清舊動畫。
+         * C6：不使用 rotation。
+         * C21：用 .gsap-animating class 暫時關掉 CSS transition。
+         *
+         * @param {Element} contentEl - .lightbox-content 元素
+         * @param {'next'|'prev'} direction - 切換方向
+         * @param {object} [options] - { onComplete }
+         * @returns {gsap.core.Timeline|null}
+         */
+        playLightboxSwitch: function (contentEl, direction, options) {
+            options = options || {};
+
+            if (!contentEl) return null;
+            if (typeof gsap === 'undefined') return null;
+            if (shouldSkip()) return null;
+
+            // C4: 清除舊動畫
+            gsap.killTweensOf(contentEl);
+
+            // C21: 暫時關掉 CSS transition（contentEl 的 x 映射到 transform）
+            var lightboxEl = contentEl.closest('.showcase-lightbox');
+            if (lightboxEl) lightboxEl.classList.add('gsap-animating');
+
+            var xIn = direction === 'next' ? 20 : -20;
+
+            var tl = gsap.timeline({
+                id: 'lightboxSwitch',
+                onComplete: function () {
+                    if (lightboxEl) lightboxEl.classList.remove('gsap-animating');
+                    if (typeof options.onComplete === 'function') options.onComplete();
+                },
+                onInterrupt: function () {
+                    if (lightboxEl) lightboxEl.classList.remove('gsap-animating');
+                }
+            });
+
+            // B19: 單相 slide-in（state-first 後 DOM 已是新內容，fade-out 會造成反向閃爍）
+            tl.fromTo(contentEl,
+                { opacity: 0, x: xIn },
+                { opacity: 1, x: 0, duration: 0.25, ease: 'power2.out' }
+            );
+
+            return tl;
         }
     };
 })();

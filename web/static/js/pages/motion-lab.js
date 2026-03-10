@@ -889,6 +889,404 @@
                 visibility: 'auto',
                 loop: true
             });
+        },
+
+        /**
+         * Hero Slot: skeleton → 封面圖填充動畫
+         * C4: killTweensOf(img)
+         * C6: 不使用旋轉
+         * @param {Element} heroEl - hero placeholder DOM
+         * @param {object} options - { duration, ease, reducedMotionSim }
+         * @returns {gsap.core.Tween|null}
+         */
+        playHeroFill: function (heroEl, options) {
+            options = options || {};
+            if (!heroEl) return null;
+            var img = heroEl.querySelector('.av-card-preview-img img');
+            if (!img) return null;
+            // C4: 清除舊動畫
+            gsap.killTweensOf(img);
+            if (shouldSkip(options)) {
+                gsap.set(img, { opacity: 1, scale: 1 });
+                return null;
+            }
+            var dur = options.duration || 0.5;
+            var ease = options.ease || 'power2.out';
+            return gsap.fromTo(img,
+                { opacity: 0, scale: 1.05 },
+                { opacity: 1, scale: 1, duration: dur, ease: ease }
+            );
+        },
+
+        /**
+         * Hero Slot: Flip 補位動畫
+         * 呼叫端負責：getState → DOM 變更 → 確認 DOM 更新後呼叫此方法
+         *
+         * @param {Flip.FlipState} flipState - Flip.getState() 的結果（DOM 變更前捕獲）
+         * @param {object} options - { duration, ease, reducedMotionSim }
+         * @returns {Promise}
+         */
+        playHeroRemove: function (flipState, options) {
+            options = options || {};
+            return new Promise(function (resolve) {
+                if (!flipState) { resolve(); return; }
+                if (typeof Flip === 'undefined') { resolve(); return; }
+                if (shouldSkip(options)) { resolve(); return; }
+
+                var dur = options.duration || 0.4;
+                var ease = options.ease || 'power2.out';
+                Flip.from(flipState, {
+                    duration: dur,
+                    ease: ease,
+                    onComplete: resolve
+                });
+            });
+        },
+
+        /**
+         * Grid Settle Pulse：staging exit 完成後，前幾行卡片極輕微 scale pulse
+         * 營造「結果穩定落位」的收尾感
+         *
+         * @param {Element} gridEl - grid 容器
+         * @param {object} [options] - { duration, scale, ease, rows, reducedMotionSim }
+         * @returns {gsap.core.Timeline|null}
+         */
+        playGridSettle: function (gridEl, options) {
+            options = options || {};
+            if (!gridEl) return null;
+            if (typeof gsap === 'undefined') return null;
+
+            var cards = gridEl.querySelectorAll('.av-card-preview');
+            if (!cards.length) return null;
+
+            // 動畫目標是 .av-card-preview-img（不是 .av-card-preview），
+            // 因為 .av-card-preview:hover 有 CSS transform（theme.css），
+            // GSAP 寫 inline scale 會覆蓋 hover 效果
+            var imgTargets = [];
+            cards.forEach(function (card) {
+                var img = card.querySelector('.av-card-preview-img');
+                if (img) imgTargets.push(img);
+            });
+            if (!imgTargets.length) return null;
+
+            // C4: 清除舊動畫
+            gsap.killTweensOf(imgTargets);
+
+            // Reduced Motion 降級
+            if (shouldSkip(options)) {
+                gsap.set(imgTargets, { scale: 1 });
+                return null;
+            }
+
+            var dur = options.duration || 0.8;
+            var scaleVal = options.scale || 1.06;
+            var ease = options.ease || 'settle';
+            var rowCount = options.rows || 2;
+
+            // Row bucketing：2px tolerance，避免子像素差異
+            var rowMap = {};
+            imgTargets.forEach(function (img, i) {
+                var card = cards[i];
+                var top = card.getBoundingClientRect().top;
+                var rowKey = Math.round(top / 2) * 2;
+                if (!rowMap[rowKey]) rowMap[rowKey] = [];
+                rowMap[rowKey].push(img);
+            });
+
+            // 按 rowKey 升序排列
+            var sortedKeys = Object.keys(rowMap).map(Number).sort(function (a, b) { return a - b; });
+
+            // 只取前 N 行
+            var targetKeys = sortedKeys.slice(0, rowCount);
+            if (!targetKeys.length) return null;
+
+            // 建立 timeline
+            var tl = gsap.timeline({ id: 'gridSettle' });
+
+            targetKeys.forEach(function (key, rowIdx) {
+                var rowImgs = rowMap[key];
+                // 同行卡片同時，跨行 0.06s 延遲
+                tl.fromTo(rowImgs,
+                    { scale: scaleVal },
+                    { scale: 1, duration: dur, ease: ease },
+                    rowIdx * 0.06  // position parameter
+                );
+            });
+
+            // C6: 不使用 rotationX/Y/Z，只用 scale ✓
+
+            return tl;
+        },
+
+        /**
+         * Showcase Grid Flip 排序洗牌動畫
+         * C18: Flip.killFlipsOf 中斷進行中動畫
+         * @param {Element} gridEl - .showcase-grid 容器（x-ref="showcaseGrid"）
+         * @param {function} sortFn - Array.sort 比較函數
+         * @param {object} params - { duration, ease, prune, reducedMotionSim }
+         * @returns {Flip|null}
+         */
+        playFlipReorder: function (gridEl, sortFn, params) {
+            params = params || {};
+            if (!gridEl) return null;
+
+            var cards = gridEl.querySelectorAll('.av-card-preview');
+            if (!cards.length) return null;
+
+            // Reduced Motion 降級：DOM reorder 仍執行，不播動畫
+            if (shouldSkip(params)) {
+                var reordered = sortFn === 'reverse'
+                    ? Array.from(cards).reverse()
+                    : Array.from(cards).sort(sortFn);
+                reordered.forEach(function (card) { gridEl.appendChild(card); });
+                return null;
+            }
+
+            // C18: 中斷進行中的 Flip 動畫
+            Flip.killFlipsOf(cards);
+
+            // 1. Capture state BEFORE DOM reorder
+            var state = Flip.getState(cards, {
+                props: 'opacity',
+                simple: true
+            });
+
+            // 2. Reorder DOM（直接操作，不用 Alpine x-for）
+            var sorted = sortFn === 'reverse'
+                ? Array.from(cards).reverse()
+                : Array.from(cards).sort(sortFn);
+            sorted.forEach(function (card) {
+                gridEl.appendChild(card);
+            });
+
+            // 3. Flip.from — 動畫從舊位置到新位置
+            var dur = params.duration || 0.5;
+            var ease = params.ease || 'power2.inOut';
+
+            return Flip.from(state, {
+                duration: dur,
+                ease: ease,
+                absolute: true,
+                prune: params.prune !== false,
+                simple: true,
+                onComplete: function () {
+                    // 清除 inline transform，恢復 CSS hover
+                    gsap.set(cards, { clearProps: 'transform' });
+                }
+            });
+        },
+
+        /**
+         * Showcase Grid 篩選動畫：Flip onEnter/onLeave
+         * C18: Flip.killFlipsOf 中斷進行中的 Flip
+         * @param {Element} gridEl - .showcase-grid 容器（x-ref="showcaseGrid"）
+         * @param {function} filterFn - 接收 card element，回傳 boolean（true=顯示）
+         * @param {object} params - { duration, enterStyle, leaveStyle, reducedMotionSim }
+         * @returns {gsap.core.Timeline|null}
+         */
+        playFlipFilter: function (gridEl, filterFn, params) {
+            params = params || {};
+            if (!gridEl) return null;
+
+            var allCards = gridEl.querySelectorAll('.av-card-preview');
+            if (!allCards.length) return null;
+
+            // Reduced Motion 降級
+            if (shouldSkip(params)) {
+                Array.from(allCards).forEach(function (card) {
+                    card.style.display = filterFn(card) ? '' : 'none';
+                });
+                return null;
+            }
+
+            // C18: 中斷進行中的 Flip
+            Flip.killFlipsOf(allCards);
+
+            // 1. Capture state
+            var state = Flip.getState(allCards, { props: 'opacity' });
+
+            // 2. 套用 filter（toggle display）
+            Array.from(allCards).forEach(function (card) {
+                card.style.display = filterFn(card) ? '' : 'none';
+            });
+
+            // 3. Flip.from with onEnter/onLeave
+            var dur = params.duration || 0.4;
+            var enterStyle = params.enterStyle || 'opacityScale';
+            var leaveStyle = params.leaveStyle || 'opacityScale';
+
+            return Flip.from(state, {
+                duration: dur,
+                ease: 'power2.inOut',
+                absolute: true,
+                prune: true,
+                simple: true,
+                onEnter: function (els) {
+                    // enterStyle branching
+                    if (enterStyle === 'fadeUp') {
+                        return gsap.fromTo(els,
+                            { opacity: 0, y: 20 },
+                            { opacity: 1, y: 0, duration: dur * 0.8, ease: 'power2.out' });
+                    }
+                    // default: opacityScale
+                    return gsap.fromTo(els,
+                        { opacity: 0, scale: 0.85 },
+                        { opacity: 1, scale: 1, duration: dur * 0.8, ease: 'power2.out' });
+                },
+                onLeave: function (els) {
+                    // leaveStyle branching
+                    if (leaveStyle === 'opacityOnly') {
+                        return gsap.to(els,
+                            { opacity: 0, duration: dur * 0.6, ease: 'power2.in' });
+                    }
+                    // default: opacityScale
+                    return gsap.to(els,
+                        { opacity: 0, scale: 0.85, duration: dur * 0.6, ease: 'power2.in' });
+                },
+                onComplete: function () {
+                    var visible = gridEl.querySelectorAll(
+                        '.av-card-preview:not([style*="display: none"])');
+                    gsap.set(visible, { clearProps: 'transform' });
+                }
+            });
+        },
+
+        /**
+         * 分頁切換動畫：stagger-out 舊頁 + stagger-in 新頁
+         * C4: killTweensOf(cards)
+         * C18: interrupt 策略（不 lock）
+         * @param {Element} gridEl - .showcase-grid 容器（x-ref="showcaseGrid"）
+         * @param {string} direction - 'prev' | 'next'
+         * @param {object} params - { duration, stagger, reducedMotionSim }
+         * @returns {gsap.core.Timeline|null}
+         */
+        playPageTransition: function (gridEl, direction, params) {
+            params = params || {};
+
+            // null guard
+            if (!gridEl) return null;
+
+            var cards = gridEl.querySelectorAll('.av-card-preview');
+            if (!cards.length) return null;
+
+            // Reduced Motion 降級：瞬間顯示
+            if (shouldSkip(params)) {
+                gsap.set(cards, { opacity: 1, x: 0 });
+                return null;
+            }
+
+            // C4: 清除舊動畫（含被中斷的上一次分頁動畫）
+            gsap.killTweensOf(cards);
+
+            var dur = params.duration || 0.3;
+            var staggerVal = params.stagger || 0.02;
+            var xShift = direction === 'next' ? -20 : 20;
+            var staggerFrom = direction === 'next' ? 'start' : 'end';
+
+            var tl = gsap.timeline({ id: 'pageTransition' });
+
+            // Phase 1: stagger-out
+            tl.to(cards, {
+                opacity: 0,
+                x: xShift,
+                duration: dur * 0.6,
+                ease: 'power2.in',
+                stagger: { each: staggerVal, from: staggerFrom }
+            });
+
+            // Phase 2: set 反向起始位置 + stagger-in
+            tl.set(cards, { x: -xShift });
+            tl.to(cards, {
+                opacity: 1,
+                x: 0,
+                duration: dur,
+                ease: 'power3.out',
+                stagger: { each: staggerVal, from: staggerFrom },
+                onComplete: function () {
+                    gsap.set(cards, { clearProps: 'transform,opacity' });
+                }
+            });
+
+            return tl;
+        },
+
+        /**
+         * Showcase Grid 入場動畫：stagger 依序淡入
+         * C4: killTweensOf(cards)
+         * C6: 不使用 rotationX/Y/Z
+         * @param {Element} gridEl - .showcase-grid 容器（x-ref="showcaseGrid"）
+         * @param {object} params - { duration, stagger, easing, style, reducedMotionSim }
+         * @returns {gsap.core.Timeline|null}
+         */
+        playShowcaseEntry: function (gridEl, params) {
+            params = params || {};
+
+            // null guard
+            if (!gridEl) return null;
+
+            var cards = gridEl.querySelectorAll('.av-card-preview');
+            if (!cards.length) return null;
+
+            // C4: 清除舊動畫
+            gsap.killTweensOf(cards);
+
+            // Reduced Motion 降級：瞬間顯示
+            if (shouldSkip(params)) {
+                gsap.set(cards, { opacity: 1, y: 0, scale: 1 });
+                return null;
+            }
+
+            var dur = params.duration || 0.5;
+            var staggerVal = params.stagger || 0.04;
+            var ease = params.easing || 'power3.out';
+            var style = params.style || 'stagger';
+
+            // Viewport 分流：fold 以下卡片瞬間顯示
+            var viewportH = window.innerHeight;
+            var visible = [];
+            var offscreen = [];
+            Array.from(cards).forEach(function (card) {
+                if (card.getBoundingClientRect().top < viewportH) {
+                    visible.push(card);
+                } else {
+                    offscreen.push(card);
+                }
+            });
+
+            if (offscreen.length) {
+                gsap.set(offscreen, { opacity: 1, y: 0, scale: 1 });
+            }
+
+            if (!visible.length) return null;
+
+            // 依 style 決定動畫參數
+            var fromVars, toVars;
+            if (style === 'fadeScale') {
+                // C6: 不使用旋轉
+                fromVars = { opacity: 0, scale: 0.85 };
+                toVars = { opacity: 1, scale: 1, duration: dur, ease: ease, stagger: staggerVal };
+            } else if (style === 'fadeUp') {
+                fromVars = { opacity: 0, y: 40 };
+                toVars = { opacity: 1, y: 0, duration: dur, ease: ease, stagger: staggerVal };
+            } else {
+                // 預設 stagger
+                fromVars = { opacity: 0, y: 20 };
+                toVars = { opacity: 1, y: 0, duration: dur, ease: ease, stagger: staggerVal };
+            }
+
+            // 設定初始狀態
+            gsap.set(visible, fromVars);
+
+            var tl = gsap.timeline({ id: 'showcaseEntry' });
+            tl.to(visible, toVars);
+
+            // 動畫結束後清除 inline styles 並初始化 GSDevTools
+            tl.eventCallback('onComplete', function () {
+                gsap.set(visible, { clearProps: 'transform,opacity' });
+                MotionLab.initDevTools(tl);
+            });
+
+            return tl;
         }
     };
 
@@ -904,6 +1302,15 @@
                 console.log('[MotionLab] CustomBounce 已初始化');
             } catch (e) {
                 console.warn('[MotionLab] CustomBounce 初始化失敗:', e);
+            }
+        }
+        if (typeof CustomEase !== 'undefined') {
+            try {
+                if (!CustomEase._initted) gsap.registerPlugin(CustomEase);
+                CustomEase.create("settle", "M0,0 C0.14,0 0.27,0.87 0.5,1 0.75,1 0.86,0.98 1,1");
+                console.log('[MotionLab] CustomEase "settle" 已初始化');
+            } catch (e) {
+                console.warn('[MotionLab] CustomEase "settle" 初始化失敗:', e);
             }
         }
         if (typeof Flip !== 'undefined') {

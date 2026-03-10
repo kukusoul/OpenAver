@@ -122,7 +122,7 @@ window.SearchStateMixin_Navigation = {
         if (this.lightboxOpen) {
             if (event.key === 'Escape') {
                 event.preventDefault();
-                this.closeLightbox();
+                this.closeLightbox();  // closeLightbox handles kill + cleanup + generation++
                 return;
             }
             if (event.key === 'ArrowLeft') {

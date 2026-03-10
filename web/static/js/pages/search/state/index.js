@@ -61,6 +61,7 @@ function searchPage() {
                     },
                     cleanup: () => {
                         this.cleanupForNavigation();  // 關 SSE + abort fallback + requestId++
+                        this._lightboxGeneration++;   // B19: invalidate pending $nextTick lightbox callbacks
                     }
                 });
             }

@@ -533,6 +533,30 @@
 
 /* 讓 x-show 正確工作（避免 Tailwind .hidden !important 衝突） */
 .motion-lab-container [x-cloak] { display: none !important; }
+
+/* Showcase Grid（motion-lab 內聯，避免載入整份 showcase.css） */
+.motion-lab-container .showcase-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1.5rem;
+    padding: 1.5rem;
+    max-width: 100%;
+}
+@media (min-width: 1500px) {
+    .motion-lab-container .showcase-grid { grid-template-columns: repeat(5, 1fr); }
+}
+@media (min-width: 1100px) and (max-width: 1499px) {
+    .motion-lab-container .showcase-grid { grid-template-columns: repeat(4, 1fr); }
+}
+@media (min-width: 900px) and (max-width: 1099px) {
+    .motion-lab-container .showcase-grid { grid-template-columns: repeat(3, 1fr); }
+}
+@media (min-width: 481px) and (max-width: 899px) {
+    .motion-lab-container .showcase-grid { grid-template-columns: repeat(2, 1fr); gap: 1rem; }
+}
+@media (max-width: 480px) {
+    .motion-lab-container .showcase-grid { grid-template-columns: 1fr; padding: 1rem; }
+}
 </style>
 {% endblock %}
 
@@ -585,6 +609,43 @@
          _allItemsArrived: false,        // 所有 result-item 已推入 buffer（消除 final flush timer）
          _stagingExiting: false,         // exit 動畫進行中（防止 pulse killTweensOf 殺死 exit）
          _pulseDebounceTimer: null,      // micro-pulse debounce timer（150ms）
+
+         // Settle Pulse 沙盒 state
+         settleParams: {
+             ease: 'settle',
+             duration: 0.8,
+             scale: 1.06,
+             rows: 2,
+         },
+
+         // Hero Slot 沙盒 state
+         heroParams: {
+             heroDelay: 2000,
+             heroResult: 'found',
+             heroReserved: true,
+         },
+         _heroSlotReserved: false,
+         _heroFilled: false,
+         _heroRunning: false,
+         _heroTimers: [],
+         heroActressProfile: null,
+         heroCards: Array(12).fill(null),
+
+         // Showcase 沙盒 state
+         showcaseParams: {
+             style: 'stagger',
+             duration: 0.5,
+             stagger: 0.04,
+             flipDuration: 0.5,
+             flipEase: 'power2.inOut',
+             flipPrune: true,
+             filterQuery: '',
+             filterEnterStyle: 'opacityScale',
+             filterLeaveStyle: 'opacityScale',
+             filterDuration: 0.4,
+             pageDuration: 0.3,
+             pageStagger: 0.02,
+         },
 
          init() {
              this.fetchVideos();
@@ -1074,6 +1135,148 @@
              }
          },
 
+         // ===== Hero Slot 沙盒 methods =====
+
+         onResetHero() {
+             // 清除所有 hero timers
+             this._heroTimers.forEach(function (handle) {
+                 clearTimeout(handle);
+             });
+             this._heroTimers = [];
+             // 重置 hero state
+             this._heroSlotReserved = false;
+             this._heroFilled = false;
+             this._heroRunning = false;
+             this.heroActressProfile = null;
+             this.heroCards = Array(12).fill(null);
+             // 清除 GSAP 殘留
+             if (typeof window.MotionLab !== 'undefined') {
+                 const heroGridEl = this.$refs.heroGrid;
+                 if (heroGridEl) {
+                     window.MotionLab.resetAll(heroGridEl, null);
+                 }
+                 const heroPlaceholderEl = this.$refs.heroPlaceholder;
+                 if (heroPlaceholderEl) {
+                     heroPlaceholderEl.style.display = '';
+                     gsap.killTweensOf(heroPlaceholderEl);
+                     gsap.set(heroPlaceholderEl, { clearProps: 'all' });
+                     const heroImg = heroPlaceholderEl.querySelector('img');
+                     if (heroImg) {
+                         gsap.killTweensOf(heroImg);
+                         gsap.set(heroImg, { clearProps: 'all' });
+                     }
+                 }
+             }
+         },
+
+         async onPlayHero() {
+             if (this._heroRunning) return;
+             if (!this.hasVideos) return;
+             this.onResetHero();
+
+             this._heroRunning = true;
+             const self = this;
+             const heroDelay = this.heroParams.heroDelay;
+             const heroResult = this.heroParams.heroResult;
+             const heroReserved = this.heroParams.heroReserved;
+
+             // 填充 heroCards（瞬間填入，焦點是 hero 預留/移除）
+             const cardCount = Math.min(12, this.videos.length);
+             // 用 videos[1..12] 當卡片（留 videos[0] 給 hero profile）
+             const cardVideos = this.videos.slice(1, cardCount + 1);
+
+             if (heroReserved) {
+                 // === 路徑 A：預留 Hero Slot ===
+                 this._heroSlotReserved = true;
+                 // 填入卡片
+                 for (let i = 0; i < cardVideos.length; i++) {
+                     this.heroCards[i] = cardVideos[i];
+                 }
+
+                 // Grid 淡入
+                 await this.$nextTick();
+                 const heroGridEl = this.$refs.heroGrid;
+                 if (heroGridEl && typeof gsap !== 'undefined') {
+                     gsap.from(heroGridEl, { opacity: 0, duration: 0.25, ease: 'power1.out' });
+                 }
+
+                 // 延遲後處理 hero
+                 await new Promise(function (resolve) {
+                     const t = setTimeout(resolve, heroDelay);
+                     self._heroTimers.push(t);
+                 });
+
+                 if (!this._heroRunning) return; // guard: reset during delay
+
+                 if (heroResult === 'found') {
+                     // Hero found: 填充封面
+                     this.heroActressProfile = this.videos[0];
+                     this._heroFilled = true;
+                     await this.$nextTick();
+                     const heroEl = this.$refs.heroPlaceholder;
+                     if (heroEl && typeof window.MotionLab !== 'undefined') {
+                         window.MotionLab.playHeroFill(heroEl, {
+                             reducedMotionSim: this.params.reducedMotionSim
+                         });
+                     }
+                 } else {
+                     // Hero not found: Flip 移除（呼叫端控制時序）
+                     const gridEl = this.$refs.heroGrid;
+                     if (gridEl && typeof window.MotionLab !== 'undefined' && typeof Flip !== 'undefined') {
+                         // 1. 捕獲佈局（DOM 變更前）
+                         var gridChildren = gridEl.querySelectorAll('.av-card-preview');
+                         gsap.killTweensOf(gridChildren);  // C4
+                         var flipState = Flip.getState(gridChildren);
+
+                         // 2. Alpine state 驅動移除
+                         self._heroSlotReserved = false;
+
+                         // 3. 等 Alpine DOM patch 完成後 Flip 動畫
+                         await new Promise(function(resolve) {
+                             self.$nextTick(function() {
+                                 window.MotionLab.playHeroRemove(flipState, {
+                                     reducedMotionSim: self.params.reducedMotionSim
+                                 }).then(resolve);
+                             });
+                         });
+                     } else {
+                         this._heroSlotReserved = false;
+                     }
+                 }
+             } else {
+                 // === 路徑 B：不預留（A/B 對比：重現 bug） ===
+                 // 直接填入 12 張卡（無 hero slot）
+                 for (let i = 0; i < cardVideos.length; i++) {
+                     this.heroCards[i] = cardVideos[i];
+                 }
+
+                 // Grid 淡入
+                 await this.$nextTick();
+                 const heroGridEl = this.$refs.heroGrid;
+                 if (heroGridEl && typeof gsap !== 'undefined') {
+                     gsap.from(heroGridEl, { opacity: 0, duration: 0.25, ease: 'power1.out' });
+                 }
+
+                 // 延遲後處理 hero
+                 await new Promise(function (resolve) {
+                     const t = setTimeout(resolve, heroDelay);
+                     self._heroTimers.push(t);
+                 });
+
+                 if (!this._heroRunning) return; // guard: reset during delay
+
+                 if (heroResult === 'found') {
+                     // Hero 突然插入第一格（無 Flip — 重現 bug）
+                     this.heroActressProfile = this.videos[0];
+                     this._heroFilled = true;
+                     this._heroSlotReserved = true;
+                 }
+                 // not-found 時不做任何事
+             }
+
+             this._heroRunning = false;
+         },
+
          async triggerMiniBurst(batch, runId, isFinalBurst) {
              if (!batch || !batch.length) return;
              if (typeof window.MotionLab === 'undefined') return;
@@ -1288,18 +1491,33 @@
         <div class="motion-lab-tab-bar">
             <button class="motion-lab-tab"
                     :class="{ active: tab === 'search' }"
-                    @click="tab = 'search'; onResetStaging()">
+                    @click="tab = 'search'; onResetStaging(); onResetHero()">
                 Search
             </button>
             <button class="motion-lab-tab"
                     :class="{ active: tab === 'stream' }"
-                    @click="tab = 'stream'; onResetStream(); onResetStaging()">
+                    @click="tab = 'stream'; onResetStream(); onResetStaging(); onResetHero()">
                 Stream
             </button>
             <button class="motion-lab-tab"
                     :class="{ active: tab === 'staging' }"
-                    @click="tab = 'staging'; onResetStaging()">
+                    @click="tab = 'staging'; onResetStaging(); onResetHero()">
                 Staging Burst
+            </button>
+            <button class="motion-lab-tab"
+                    :class="{ active: tab === 'settle' }"
+                    @click="tab = 'settle'; onResetStaging(); onResetHero()">
+                Settle
+            </button>
+            <button class="motion-lab-tab"
+                    :class="{ active: tab === 'hero' }"
+                    @click="tab = 'hero'; onResetHero(); onResetStaging()">
+                Hero Slot
+            </button>
+            <button class="motion-lab-tab"
+                    :class="{ active: tab === 'showcase' }"
+                    @click="tab = 'showcase'; onResetStaging(); onResetHero()">
+                Showcase
             </button>
         </div>
     </div>
@@ -1524,6 +1742,317 @@
                    x-model.number="stagingParams.burstDuration">
             <span class="control-value" x-text="stagingParams.burstDuration.toFixed(2) + 's'"></span>
         </div>
+
+        <div class="control-divider"></div>
+
+        <!-- Settle Pulse controls -->
+        <button class="control-btn primary"
+                :disabled="!hasVideos || tab !== 'settle'"
+                @click="MotionLab.playGridSettle($refs.settleGrid, { ...settleParams, reducedMotionSim: params.reducedMotionSim })">
+            <i class="bi bi-activity"></i> Play Settle
+        </button>
+
+        <button class="control-btn danger"
+                :disabled="tab !== 'settle'"
+                @click="gsap.killTweensOf($refs.settleGrid?.querySelectorAll('.av-card-preview-img')); gsap.set($refs.settleGrid?.querySelectorAll('.av-card-preview-img'), { clearProps: 'scale' })">
+            <i class="bi bi-arrow-counterclockwise"></i> Reset
+        </button>
+
+        <!-- Settle Ease -->
+        <div class="control-group" :style="tab !== 'settle' ? 'opacity:0.4' : ''">
+            <span class="control-label">Ease</span>
+            <select class="control-select"
+                    :disabled="tab !== 'settle'"
+                    x-model="settleParams.ease">
+                <option value="settle">settle</option>
+                <option value="power2.out">power2.out</option>
+                <option value="elastic.out(1,0.5)">elastic.out(1,0.5)</option>
+            </select>
+        </div>
+
+        <!-- Settle Duration -->
+        <div class="control-group" :style="tab !== 'settle' ? 'opacity:0.4' : ''">
+            <span class="control-label">Duration</span>
+            <input type="range" class="control-slider"
+                   min="0.2" max="0.8" step="0.05"
+                   :disabled="tab !== 'settle'"
+                   x-model.number="settleParams.duration">
+            <span class="control-value" x-text="settleParams.duration.toFixed(2) + 's'"></span>
+        </div>
+
+        <!-- Settle Scale -->
+        <div class="control-group" :style="tab !== 'settle' ? 'opacity:0.4' : ''">
+            <span class="control-label">Scale</span>
+            <input type="range" class="control-slider"
+                   min="1.01" max="1.06" step="0.01"
+                   :disabled="tab !== 'settle'"
+                   x-model.number="settleParams.scale">
+            <span class="control-value" x-text="settleParams.scale.toFixed(2)"></span>
+        </div>
+
+        <!-- Settle Rows -->
+        <div class="control-group" :style="tab !== 'settle' ? 'opacity:0.4' : ''">
+            <span class="control-label">Rows</span>
+            <input type="range" class="control-slider"
+                   min="1" max="4" step="1"
+                   :disabled="tab !== 'settle'"
+                   x-model.number="settleParams.rows">
+            <span class="control-value" x-text="settleParams.rows"></span>
+        </div>
+
+        <div class="control-divider"></div>
+
+        <!-- Hero Slot controls -->
+        <button class="control-btn primary"
+                :disabled="_heroRunning || !hasVideos || tab !== 'hero'"
+                @click="onPlayHero()">
+            <i class="bi bi-person-badge"></i> Play Hero
+        </button>
+
+        <button class="control-btn danger"
+                :disabled="tab !== 'hero'"
+                @click="onResetHero()">
+            <i class="bi bi-arrow-counterclockwise"></i> Reset
+        </button>
+
+        <!-- Hero Delay slider -->
+        <div class="control-group" :style="tab !== 'hero' ? 'opacity:0.4' : ''">
+            <span class="control-label">Delay</span>
+            <input type="range" class="control-slider"
+                   min="0" max="5000" step="250"
+                   :disabled="tab !== 'hero'"
+                   x-model.number="heroParams.heroDelay">
+            <span class="control-value" x-text="heroParams.heroDelay + 'ms'"></span>
+        </div>
+
+        <!-- Hero Result radio -->
+        <div class="control-group" :style="tab !== 'hero' ? 'opacity:0.4' : ''">
+            <span class="control-label">Result</span>
+            <label style="font-size:0.75rem; cursor:pointer; display:flex; align-items:center; gap:2px;">
+                <input type="radio" value="found"
+                       :disabled="tab !== 'hero'"
+                       x-model="heroParams.heroResult"> found
+            </label>
+            <label style="font-size:0.75rem; cursor:pointer; display:flex; align-items:center; gap:2px;">
+                <input type="radio" value="not-found"
+                       :disabled="tab !== 'hero'"
+                       x-model="heroParams.heroResult"> not-found
+            </label>
+        </div>
+
+        <!-- Hero Reserved toggle（A/B 對比） -->
+        <div class="control-group" :style="tab !== 'hero' ? 'opacity:0.4' : ''">
+            <input type="checkbox" class="control-checkbox"
+                   :disabled="tab !== 'hero'"
+                   x-model="heroParams.heroReserved">
+            <span class="control-label" style="cursor:pointer">Reserve Slot</span>
+        </div>
+
+        <div class="control-divider"></div>
+
+        <!-- Showcase controls -->
+        <button class="control-btn primary"
+                :disabled="tab !== 'showcase'"
+                @click="MotionLab.playShowcaseEntry($refs.showcaseGrid, { ...showcaseParams, easing: params.easing, reducedMotionSim: params.reducedMotionSim })">
+            <i class="bi bi-play-fill"></i> Play
+        </button>
+
+        <button class="control-btn danger"
+                :disabled="tab !== 'showcase'"
+                @click="if ($refs.showcaseGrid) { var cards = $refs.showcaseGrid.querySelectorAll('.av-card-preview'); gsap.killTweensOf(cards); gsap.set(cards, { clearProps: 'all' }); }">
+            <i class="bi bi-arrow-counterclockwise"></i> Reset
+        </button>
+
+        <!-- Entry Style -->
+        <div class="control-group" :style="tab !== 'showcase' ? 'opacity:0.4' : ''">
+            <span class="control-label">Style</span>
+            <select class="control-select"
+                    :disabled="tab !== 'showcase'"
+                    x-model="showcaseParams.style">
+                <option value="stagger">stagger</option>
+                <option value="fadeScale">fadeScale</option>
+                <option value="fadeUp">fadeUp</option>
+            </select>
+        </div>
+
+        <!-- Showcase Duration -->
+        <div class="control-group" :style="tab !== 'showcase' ? 'opacity:0.4' : ''">
+            <span class="control-label">Duration</span>
+            <input type="range" class="control-slider"
+                   min="0.3" max="1.0" step="0.05"
+                   :disabled="tab !== 'showcase'"
+                   x-model.number="showcaseParams.duration">
+            <span class="control-value" x-text="showcaseParams.duration.toFixed(2) + 's'"></span>
+        </div>
+
+        <!-- Showcase Stagger -->
+        <div class="control-group" :style="tab !== 'showcase' ? 'opacity:0.4' : ''">
+            <span class="control-label">Stagger</span>
+            <input type="range" class="control-slider"
+                   min="0.02" max="0.1" step="0.01"
+                   :disabled="tab !== 'showcase'"
+                   x-model.number="showcaseParams.stagger">
+            <span class="control-value" x-text="showcaseParams.stagger.toFixed(2) + 's'"></span>
+        </div>
+
+        <div class="control-divider"></div>
+
+        <!-- Flip Sort 控制組 -->
+        <button class="control-btn"
+                :disabled="tab !== 'showcase'"
+                @click="MotionLab.playFlipReorder($refs.showcaseGrid,
+                    function(a,b){ return a.dataset.name.localeCompare(b.dataset.name) },
+                    { duration: showcaseParams.flipDuration, ease: showcaseParams.flipEase, prune: showcaseParams.flipPrune, reducedMotionSim: params.reducedMotionSim })">
+            <i class="bi bi-sort-alpha-down"></i> By Name
+        </button>
+
+        <button class="control-btn"
+                :disabled="tab !== 'showcase'"
+                @click="MotionLab.playFlipReorder($refs.showcaseGrid,
+                    function(a,b){ return Number(a.dataset.number) - Number(b.dataset.number) },
+                    { duration: showcaseParams.flipDuration, ease: showcaseParams.flipEase, prune: showcaseParams.flipPrune, reducedMotionSim: params.reducedMotionSim })">
+            <i class="bi bi-sort-numeric-down"></i> By Number
+        </button>
+
+        <button class="control-btn"
+                :disabled="tab !== 'showcase'"
+                @click="MotionLab.playFlipReorder($refs.showcaseGrid,
+                    function(){ return Math.random() - 0.5 },
+                    { duration: showcaseParams.flipDuration, ease: showcaseParams.flipEase, prune: showcaseParams.flipPrune, reducedMotionSim: params.reducedMotionSim })">
+            <i class="bi bi-shuffle"></i> Random
+        </button>
+
+        <button class="control-btn"
+                :disabled="tab !== 'showcase'"
+                @click="MotionLab.playFlipReorder($refs.showcaseGrid,
+                    'reverse',
+                    { duration: showcaseParams.flipDuration, ease: showcaseParams.flipEase, prune: showcaseParams.flipPrune, reducedMotionSim: params.reducedMotionSim })">
+            <i class="bi bi-arrow-down-up"></i> Reverse
+        </button>
+
+        <!-- Flip Duration -->
+        <div class="control-group" :style="tab !== 'showcase' ? 'opacity:0.4' : ''">
+            <span class="control-label">Flip Duration</span>
+            <input type="range" class="control-slider"
+                   min="0.3" max="0.8" step="0.05"
+                   :disabled="tab !== 'showcase'"
+                   x-model.number="showcaseParams.flipDuration">
+            <span class="control-value" x-text="showcaseParams.flipDuration.toFixed(2) + 's'"></span>
+        </div>
+
+        <!-- Flip Ease -->
+        <div class="control-group" :style="tab !== 'showcase' ? 'opacity:0.4' : ''">
+            <span class="control-label">Flip Ease</span>
+            <select class="control-select"
+                    :disabled="tab !== 'showcase'"
+                    x-model="showcaseParams.flipEase">
+                <option value="power2.inOut">power2.inOut</option>
+                <option value="power3.out">power3.out</option>
+                <option value="back.out(1.2)">back.out(1.2)</option>
+            </select>
+        </div>
+
+        <!-- Prune toggle -->
+        <div class="control-group" :style="tab !== 'showcase' ? 'opacity:0.4' : ''">
+            <input type="checkbox" class="control-checkbox"
+                   :disabled="tab !== 'showcase'"
+                   x-model="showcaseParams.flipPrune">
+            <span class="control-label" style="cursor:pointer">Prune</span>
+        </div>
+
+        <div class="control-divider"></div>
+
+        <!-- Filter Search Input -->
+        <div class="control-group" :style="tab !== 'showcase' ? 'opacity:0.4' : ''">
+            <span class="control-label">Filter</span>
+            <input type="text" class="control-input"
+                   placeholder="Filter by name..."
+                   :disabled="tab !== 'showcase'"
+                   x-model="showcaseParams.filterQuery"
+                   @input.debounce.300ms="
+                       var query = showcaseParams.filterQuery.trim().toLowerCase();
+                       var filterFn = function(card) {
+                           if (!query) return true;
+                           return card.dataset.name.toLowerCase().includes(query);
+                       };
+                       MotionLab.playFlipFilter($refs.showcaseGrid, filterFn, {
+                           duration: showcaseParams.filterDuration,
+                           enterStyle: showcaseParams.filterEnterStyle,
+                           leaveStyle: showcaseParams.filterLeaveStyle,
+                           reducedMotionSim: params.reducedMotionSim
+                       });
+                   ">
+        </div>
+
+        <!-- Leave Style -->
+        <div class="control-group" :style="tab !== 'showcase' ? 'opacity:0.4' : ''">
+            <span class="control-label">Leave Style</span>
+            <select class="control-select"
+                    :disabled="tab !== 'showcase'"
+                    x-model="showcaseParams.filterLeaveStyle">
+                <option value="opacityScale">opacity+scale</option>
+                <option value="opacityOnly">opacity only</option>
+            </select>
+        </div>
+
+        <!-- Enter Style -->
+        <div class="control-group" :style="tab !== 'showcase' ? 'opacity:0.4' : ''">
+            <span class="control-label">Enter Style</span>
+            <select class="control-select"
+                    :disabled="tab !== 'showcase'"
+                    x-model="showcaseParams.filterEnterStyle">
+                <option value="opacityScale">opacity+scale</option>
+                <option value="fadeUp">fadeUp</option>
+            </select>
+        </div>
+
+        <!-- Filter Duration -->
+        <div class="control-group" :style="tab !== 'showcase' ? 'opacity:0.4' : ''">
+            <span class="control-label">Filter Duration</span>
+            <input type="range" class="control-slider"
+                   min="0.3" max="0.6" step="0.05"
+                   :disabled="tab !== 'showcase'"
+                   x-model.number="showcaseParams.filterDuration">
+            <span class="control-value" x-text="showcaseParams.filterDuration.toFixed(2) + 's'"></span>
+        </div>
+
+        <!-- ─── B4: Page Transition ─── -->
+        <div class="control-divider"></div>
+
+        <!-- Prev / Next -->
+        <div class="control-group" :style="tab !== 'showcase' ? 'opacity:0.4' : ''">
+            <span class="control-label">Page</span>
+            <button class="control-btn"
+                    :disabled="tab !== 'showcase'"
+                    @click="MotionLab.playPageTransition($refs.showcaseGrid, 'prev', { duration: showcaseParams.pageDuration, stagger: showcaseParams.pageStagger, reducedMotionSim: params.reducedMotionSim })">
+                ← Prev
+            </button>
+            <button class="control-btn"
+                    :disabled="tab !== 'showcase'"
+                    @click="MotionLab.playPageTransition($refs.showcaseGrid, 'next', { duration: showcaseParams.pageDuration, stagger: showcaseParams.pageStagger, reducedMotionSim: params.reducedMotionSim })">
+                Next →
+            </button>
+        </div>
+
+        <!-- Page Duration -->
+        <div class="control-group" :style="tab !== 'showcase' ? 'opacity:0.4' : ''">
+            <span class="control-label">Page Duration</span>
+            <input type="range" class="control-slider"
+                   min="0.2" max="0.5" step="0.05"
+                   :disabled="tab !== 'showcase'"
+                   x-model.number="showcaseParams.pageDuration">
+            <span class="control-value" x-text="showcaseParams.pageDuration.toFixed(2) + 's'"></span>
+        </div>
+
+        <!-- Page Stagger -->
+        <div class="control-group" :style="tab !== 'showcase' ? 'opacity:0.4' : ''">
+            <span class="control-label">Page Stagger</span>
+            <input type="range" class="control-slider"
+                   min="0.01" max="0.05" step="0.005"
+                   :disabled="tab !== 'showcase'"
+                   x-model.number="showcaseParams.pageStagger">
+            <span class="control-value" x-text="showcaseParams.pageStagger.toFixed(3) + 's'"></span>
+        </div>
     </div>
 
     <!-- 預覽區 -->
@@ -1674,6 +2203,324 @@
             </template>
         </div>
 
+        <!-- Settle Grid 區（tab=settle） -->
+        <div class="motion-lab-grid"
+             x-ref="settleGrid"
+             x-show="tab === 'settle'"
+             x-cloak>
+            <template x-for="(video, index) in videos" :key="'settle_' + (video.number || index)">
+                <div class="av-card-preview">
+                    <div class="av-card-preview-img">
+                        <template x-if="video.cover_url">
+                            <img :src="video.cover_url"
+                                 :alt="video.number"
+                                 loading="lazy"
+                                 style="width:100%; height:100%; object-fit:cover; display:block;">
+                        </template>
+                        <template x-if="!video.cover_url">
+                            <div class="av-card-no-cover">
+                                <i class="bi bi-image"></i>
+                                <span>無封面</span>
+                            </div>
+                        </template>
+                    </div>
+                    <div class="av-card-preview-footer">
+                        <span class="av-num" x-text="video.number || '-'"></span>
+                        <span class="av-actress" x-text="formatActresses(video.actresses)"></span>
+                    </div>
+                </div>
+            </template>
+        </div>
+
+        <!-- Hero Slot Grid 區（tab=hero） -->
+        <div class="motion-lab-grid"
+             x-ref="heroGrid"
+             x-show="tab === 'hero'"
+             x-cloak>
+
+            <!-- Hero Placeholder（skeleton 態 / 填充態） -->
+            <div class="av-card-preview hero-card"
+                 x-show="_heroSlotReserved"
+                 x-ref="heroPlaceholder">
+                <div class="av-card-preview-img" style="position:relative;">
+                    <!-- skeleton 態：shimmer -->
+                    <div class="skeleton-cover shimmer"
+                         x-show="!_heroFilled"
+                         style="position:absolute; inset:0;"></div>
+                    <!-- 填充態：模擬 actressProfile 圖片 -->
+                    <img :src="heroActressProfile?.cover_url || ''"
+                         x-show="_heroFilled && heroActressProfile?.cover_url"
+                         style="width:100%; height:100%; object-fit:cover; display:block;">
+                    <!-- 填充態：無封面 -->
+                    <div class="av-card-no-cover"
+                         x-show="_heroFilled && heroActressProfile && !heroActressProfile.cover_url">
+                        <i class="bi bi-person-badge"></i>
+                        <span>Hero</span>
+                    </div>
+                </div>
+                <div class="av-card-preview-footer">
+                    <span class="av-num"
+                          x-text="_heroFilled ? (heroActressProfile?.actresses?.[0] || 'Hero') : '搜尋中...'"></span>
+                </div>
+            </div>
+
+            <!-- 正常卡片（skeleton → 填充） -->
+            <template x-for="(card, index) in heroCards" :key="card ? ('hero_' + card.path) : ('hero_empty_' + index)">
+                <div class="av-card-preview">
+                    <div class="av-card-preview-img">
+                        <!-- skeleton 狀態 -->
+                        <template x-if="card === null">
+                            <div class="skeleton-cover shimmer"></div>
+                        </template>
+                        <!-- 填入狀態：有封面 -->
+                        <template x-if="card !== null && card.cover_url">
+                            <img :src="card.cover_url" :alt="card.number" loading="lazy"
+                                 style="width:100%; height:100%; object-fit:cover; display:block;">
+                        </template>
+                        <!-- 填入狀態：無封面 -->
+                        <template x-if="card !== null && !card.cover_url">
+                            <div class="av-card-no-cover">
+                                <i class="bi bi-image"></i>
+                                <span>無封面</span>
+                            </div>
+                        </template>
+                    </div>
+                    <div class="av-card-preview-footer">
+                        <span class="av-num"
+                              x-text="card !== null ? (card.number || '-') : ('#' + (index + 1))">
+                        </span>
+                    </div>
+                </div>
+            </template>
+        </div>
+
+        <!-- Showcase Grid 區（tab=showcase） -->
+        <div class="showcase-grid"
+             x-ref="showcaseGrid"
+             x-show="tab === 'showcase'"
+             x-cloak>
+            <div class="av-card-preview" data-flip-id="sc-1" data-name="fanart11" data-number="14">
+                <div class="av-card-preview-img">
+                    <img src="/static/img/showcase/sc-1.jpg"
+                         alt="Showcase 1"
+                         loading="lazy"
+                         style="width:100%; height:100%; object-fit:cover; display:block;">
+                </div>
+                <div class="av-card-preview-footer">
+                    <span class="av-num">fanart11 #14</span>
+                </div>
+            </div>
+            <div class="av-card-preview" data-flip-id="sc-2" data-name="fanart12" data-number="7">
+                <div class="av-card-preview-img">
+                    <img src="/static/img/showcase/sc-2.jpg"
+                         alt="Showcase 2"
+                         loading="lazy"
+                         style="width:100%; height:100%; object-fit:cover; display:block;">
+                </div>
+                <div class="av-card-preview-footer">
+                    <span class="av-num">fanart12 #7</span>
+                </div>
+            </div>
+            <div class="av-card-preview" data-flip-id="sc-3" data-name="fanart13" data-number="19">
+                <div class="av-card-preview-img">
+                    <img src="/static/img/showcase/sc-3.jpg"
+                         alt="Showcase 3"
+                         loading="lazy"
+                         style="width:100%; height:100%; object-fit:cover; display:block;">
+                </div>
+                <div class="av-card-preview-footer">
+                    <span class="av-num">fanart13 #19</span>
+                </div>
+            </div>
+            <div class="av-card-preview" data-flip-id="sc-4" data-name="miru SONE-830" data-number="3">
+                <div class="av-card-preview-img">
+                    <img src="/static/img/showcase/sc-4.jpg"
+                         alt="Showcase 4"
+                         loading="lazy"
+                         style="width:100%; height:100%; object-fit:cover; display:block;">
+                </div>
+                <div class="av-card-preview-footer">
+                    <span class="av-num">miru SONE-830 #3</span>
+                </div>
+            </div>
+            <div class="av-card-preview" data-flip-id="sc-5" data-name="miru SONE-920" data-number="11">
+                <div class="av-card-preview-img">
+                    <img src="/static/img/showcase/sc-5.jpg"
+                         alt="Showcase 5"
+                         loading="lazy"
+                         style="width:100%; height:100%; object-fit:cover; display:block;">
+                </div>
+                <div class="av-card-preview-footer">
+                    <span class="av-num">miru SONE-920 #11</span>
+                </div>
+            </div>
+            <div class="av-card-preview" data-flip-id="sc-6" data-name="七ツ森りり SONE-917" data-number="16">
+                <div class="av-card-preview-img">
+                    <img src="/static/img/showcase/sc-6.jpg"
+                         alt="Showcase 6"
+                         loading="lazy"
+                         style="width:100%; height:100%; object-fit:cover; display:block;">
+                </div>
+                <div class="av-card-preview-footer">
+                    <span class="av-num">七ツ森りり SONE-917 #16</span>
+                </div>
+            </div>
+            <div class="av-card-preview" data-flip-id="sc-7" data-name="三田真鈴 SONE-671" data-number="1">
+                <div class="av-card-preview-img">
+                    <img src="/static/img/showcase/sc-7.jpg"
+                         alt="Showcase 7"
+                         loading="lazy"
+                         style="width:100%; height:100%; object-fit:cover; display:block;">
+                </div>
+                <div class="av-card-preview-footer">
+                    <span class="av-num">三田真鈴 SONE-671 #1</span>
+                </div>
+            </div>
+            <div class="av-card-preview" data-flip-id="sc-8" data-name="五日市芽依 WAAA-557" data-number="20">
+                <div class="av-card-preview-img">
+                    <img src="/static/img/showcase/sc-8.jpg"
+                         alt="Showcase 8"
+                         loading="lazy"
+                         style="width:100%; height:100%; object-fit:cover; display:block;">
+                </div>
+                <div class="av-card-preview-footer">
+                    <span class="av-num">五日市芽依 WAAA-557 #20</span>
+                </div>
+            </div>
+            <div class="av-card-preview" data-flip-id="sc-9" data-name="五芭 FOCS-257" data-number="8">
+                <div class="av-card-preview-img">
+                    <img src="/static/img/showcase/sc-9.jpg"
+                         alt="Showcase 9"
+                         loading="lazy"
+                         style="width:100%; height:100%; object-fit:cover; display:block;">
+                </div>
+                <div class="av-card-preview-footer">
+                    <span class="av-num">五芭 FOCS-257 #8</span>
+                </div>
+            </div>
+            <div class="av-card-preview" data-flip-id="sc-10" data-name="佐々木さき IPZZ-709" data-number="5">
+                <div class="av-card-preview-img">
+                    <img src="/static/img/showcase/sc-10.jpg"
+                         alt="Showcase 10"
+                         loading="lazy"
+                         style="width:100%; height:100%; object-fit:cover; display:block;">
+                </div>
+                <div class="av-card-preview-footer">
+                    <span class="av-num">佐々木さき IPZZ-709 #5</span>
+                </div>
+            </div>
+            <div class="av-card-preview" data-flip-id="sc-11" data-name="倉本すみれ HMN-713" data-number="18">
+                <div class="av-card-preview-img">
+                    <img src="/static/img/showcase/sc-11.jpg"
+                         alt="Showcase 11"
+                         loading="lazy"
+                         style="width:100%; height:100%; object-fit:cover; display:block;">
+                </div>
+                <div class="av-card-preview-footer">
+                    <span class="av-num">倉本すみれ HMN-713 #18</span>
+                </div>
+            </div>
+            <div class="av-card-preview" data-flip-id="sc-12" data-name="吉高寧々 FNS-089" data-number="12">
+                <div class="av-card-preview-img">
+                    <img src="/static/img/showcase/sc-12.jpg"
+                         alt="Showcase 12"
+                         loading="lazy"
+                         style="width:100%; height:100%; object-fit:cover; display:block;">
+                </div>
+                <div class="av-card-preview-footer">
+                    <span class="av-num">吉高寧々 FNS-089 #12</span>
+                </div>
+            </div>
+            <div class="av-card-preview" data-flip-id="sc-13" data-name="天馬ゆい LULU-198" data-number="6">
+                <div class="av-card-preview-img">
+                    <img src="/static/img/showcase/sc-13.jpg"
+                         alt="Showcase 13"
+                         loading="lazy"
+                         style="width:100%; height:100%; object-fit:cover; display:block;">
+                </div>
+                <div class="av-card-preview-footer">
+                    <span class="av-num">天馬ゆい LULU-198 #6</span>
+                </div>
+            </div>
+            <div class="av-card-preview" data-flip-id="sc-14" data-name="宮下玲奈 MIDA-241" data-number="9">
+                <div class="av-card-preview-img">
+                    <img src="/static/img/showcase/sc-14.jpg"
+                         alt="Showcase 14"
+                         loading="lazy"
+                         style="width:100%; height:100%; object-fit:cover; display:block;">
+                </div>
+                <div class="av-card-preview-footer">
+                    <span class="av-num">宮下玲奈 MIDA-241 #9</span>
+                </div>
+            </div>
+            <div class="av-card-preview" data-flip-id="sc-15" data-name="小倉由菜 START-344" data-number="15">
+                <div class="av-card-preview-img">
+                    <img src="/static/img/showcase/sc-15.jpg"
+                         alt="Showcase 15"
+                         loading="lazy"
+                         style="width:100%; height:100%; object-fit:cover; display:block;">
+                </div>
+                <div class="av-card-preview-footer">
+                    <span class="av-num">小倉由菜 START-344 #15</span>
+                </div>
+            </div>
+            <div class="av-card-preview" data-flip-id="sc-16" data-name="小倉由菜 START-370" data-number="2">
+                <div class="av-card-preview-img">
+                    <img src="/static/img/showcase/sc-16.jpg"
+                         alt="Showcase 16"
+                         loading="lazy"
+                         style="width:100%; height:100%; object-fit:cover; display:block;">
+                </div>
+                <div class="av-card-preview-footer">
+                    <span class="av-num">小倉由菜 START-370 #2</span>
+                </div>
+            </div>
+            <div class="av-card-preview" data-flip-id="sc-17" data-name="小倉由菜 START-453" data-number="10">
+                <div class="av-card-preview-img">
+                    <img src="/static/img/showcase/sc-17.jpg"
+                         alt="Showcase 17"
+                         loading="lazy"
+                         style="width:100%; height:100%; object-fit:cover; display:block;">
+                </div>
+                <div class="av-card-preview-footer">
+                    <span class="av-num">小倉由菜 START-453 #10</span>
+                </div>
+            </div>
+            <div class="av-card-preview" data-flip-id="sc-18" data-name="小倉由菜 唯井まひろ START-368" data-number="17">
+                <div class="av-card-preview-img">
+                    <img src="/static/img/showcase/sc-18.jpg"
+                         alt="Showcase 18"
+                         loading="lazy"
+                         style="width:100%; height:100%; object-fit:cover; display:block;">
+                </div>
+                <div class="av-card-preview-footer">
+                    <span class="av-num">小倉由菜 唯井まひろ START-368 #17</span>
+                </div>
+            </div>
+            <div class="av-card-preview" data-flip-id="sc-19" data-name="小坂七香 SONE-238" data-number="4">
+                <div class="av-card-preview-img">
+                    <img src="/static/img/showcase/sc-19.jpg"
+                         alt="Showcase 19"
+                         loading="lazy"
+                         style="width:100%; height:100%; object-fit:cover; display:block;">
+                </div>
+                <div class="av-card-preview-footer">
+                    <span class="av-num">小坂七香 SONE-238 #4</span>
+                </div>
+            </div>
+            <div class="av-card-preview" data-flip-id="sc-20" data-name="小島みなみ JUR-002" data-number="13">
+                <div class="av-card-preview-img">
+                    <img src="/static/img/showcase/sc-20.jpg"
+                         alt="Showcase 20"
+                         loading="lazy"
+                         style="width:100%; height:100%; object-fit:cover; display:block;">
+                </div>
+                <div class="av-card-preview-footer">
+                    <span class="av-num">小島みなみ JUR-002 #13</span>
+                </div>
+            </div>
+        </div>
+
         <!-- Detail 區（tab=search && mode=detail） -->
         <div class="motion-lab-detail"
              x-ref="detail"
@@ -1788,6 +2635,16 @@
 @keyframes shimmer {
     0%   { background-position: 200% 0; }
     100% { background-position: -200% 0; }
+}
+
+/* Hero Slot: hero-card 邊框提示 */
+.hero-card {
+    border: 2px solid var(--accent-primary);
+    border-radius: 8px;
+}
+
+.hero-card .av-card-preview-footer {
+    background: color-mix(in srgb, var(--accent-primary) 15%, transparent);
 }
 
 </style>

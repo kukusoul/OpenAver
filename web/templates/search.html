@@ -36,7 +36,14 @@
                          ? (actressProfile?.img ? `/api/proxy-image?url=${encodeURIComponent(actressProfile.img)}` : '')
                          : (currentLightboxVideo()?.cover ? `/api/proxy-image?url=${encodeURIComponent(currentLightboxVideo().cover)}` : '')"
                      :alt="actressLightboxMode() ? actressProfile?.name : currentLightboxVideo()?.number"
-                     @error="$event.target.onerror=null; $event.target.src='data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22400%22 height=%22300%22 fill=%22%23666%22><rect width=%22400%22 height=%22300%22 fill=%22%23222%22/><text x=%2250%%22 y=%2250%%22 text-anchor=%22middle%22 dy=%22.3em%22 font-size=%2216%22>No Image</text></svg>'">
+                     x-show="!_heroLightboxImageError"
+                     @error="_heroLightboxImageError = true">
+                <!-- A6-1: Lightbox fallback placeholder -->
+                <div x-show="_heroLightboxImageError"
+                     class="cover-error-placeholder">
+                    <i class="bi bi-image text-5xl"></i>
+                    <p class="mt-2">No Image</p>
+                </div>
             </div>
         </div>
 
@@ -169,8 +176,7 @@
             <!-- AV Card Full：封面 + 資訊並排（Detail 模式） -->
             <div class="av-card-full rotating-border-spotlight"
                  x-show="displayMode === 'detail'"
-                 :class="{ 'active once': shouldShowLocalBorder(current()) }"
-                 @animationend.self="markLocalBorderPlayed(current()?.number)">
+                 :class="{ 'active': shouldShowLocalBorder(current()) }">
                 <div class="av-card-full-cover">
                     <div class="av-card-full-cover-wrapper">
                         <img id="resultCover" x-ref="coverImg" class="av-card-full-cover-img"
@@ -379,24 +385,39 @@
 
             <!-- T2a: Grid Mode（封面牆） -->
             <div class="search-grid ds-gallery-composition" x-show="displayMode === 'grid' && listMode === 'search'" x-cloak>
-                <!-- T2d: Hero Card（第一格）-->
+                <!-- T2d: Hero Card（第一格）— A7-Prod: actressProfile || _heroSlotReserved 時顯示 -->
                 <div class="av-card-preview hero-card"
-                     x-show="actressProfile"
+                     x-show="actressProfile || _heroSlotReserved"
                      x-cloak
-                     @click="openActressLightbox()">
+                     @click="actressProfile && openActressLightbox()">
                     <div class="av-card-preview-img">
+                        <!-- A7-Prod: 正常態（actressProfile 有值） -->
                         <img :src="actressProfile?.img ? `/api/proxy-image?url=${encodeURIComponent(actressProfile.img)}` : ''"
                              :alt="actressProfile?.name"
                              loading="lazy"
-                             @error="$event.target.onerror=null; $event.target.src='data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22360%22 height=%22508%22 fill=%22%23666%22><rect width=%22360%22 height=%22508%22 fill=%22%23222%22/><text x=%2250%%22 y=%2250%%22 text-anchor=%22middle%22 dy=%22.3em%22 font-size=%2216%22>No Image</text></svg>'">
+                             x-show="actressProfile && !_heroCardImageError"
+                             @error="if (actressProfile?.img) _heroCardImageError = true">
+                        <!-- A6-1: Hero Card fallback placeholder -->
+                        <div x-show="actressProfile && _heroCardImageError"
+                             class="av-card-no-cover">
+                            <i class="bi bi-image"></i>
+                            <span>No Image</span>
+                        </div>
+                        <!-- A7-Prod: skeleton 預留態（shimmer） -->
+                        <div class="skeleton-cover shimmer" x-show="!actressProfile && _heroSlotReserved"></div>
                     </div>
                     <div class="av-card-preview-footer">
-                        <div class="footer-default">
+                        <!-- A7-Prod: 正常態 footer -->
+                        <div class="footer-default" x-show="actressProfile">
                             <span class="av-num" x-text="actressProfile?.birth || '-'">-</span>
                             <span class="av-actress" x-text="actressProfile?.height || ''"></span>
                         </div>
-                        <div class="footer-hover">
+                        <div class="footer-hover" x-show="actressProfile">
                             <div class="hover-title" x-text="[actressProfile?.name_en || '', actressProfile?.name || '', actressProfile?.age ? actressProfile?.age + '歲' : '', actressProfile?.cup ? actressProfile?.cup + '罩杯' : '', actressProfile?.bust || '', actressProfile?.waist || '', actressProfile?.hip || '', actressProfile?.hometown || '', actressProfile?.hobby || ''].filter(Boolean).join(' · ') || '-'"></div>
+                        </div>
+                        <!-- A7-Prod: skeleton 預留態 footer -->
+                        <div class="footer-default" x-show="!actressProfile && _heroSlotReserved">
+                            <span class="av-num" x-text="currentQuery || '...'">...</span>
                         </div>
                     </div>
                 </div>
@@ -408,11 +429,10 @@
                          :class="{
                              'skeleton': result._skeleton,
                              'failed-slot': result._failed,
-                             'rotating-border-spotlight active once': !result._skeleton && !result._failed && shouldShowLocalBorder(result)
+                             'rotating-border-spotlight active': !result._skeleton && !result._failed && shouldShowLocalBorder(result)
                          }"
                          :style="result._failed ? 'display: none' : ''"
-                         @click="!result._skeleton && !result._failed && openLightbox(idx)"
-                         @animationend.self="!result._skeleton && !result._failed && markLocalBorderPlayed(result?.number)">
+                         @click="!result._skeleton && !result._failed && openLightbox(idx)">
                         <div class="av-card-preview-img">
                             <!-- T4: skeleton shimmer placeholder -->
                             <div class="skeleton-cover shimmer" x-show="result._skeleton"></div>
@@ -631,7 +651,6 @@
     window.handlePyWebViewDrop = function (paths) {
         // 統一轉為陣列
         const pathList = Array.isArray(paths) ? paths : [paths];
-        console.log('PyWebView drop:', pathList.length, '個檔案');
 
         // 觸發自定義事件，讓主程式處理
         window.dispatchEvent(new CustomEvent('pywebview-files', {

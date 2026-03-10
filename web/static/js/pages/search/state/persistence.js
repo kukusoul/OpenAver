@@ -34,23 +34,45 @@ window.SearchStateMixin_Persistence = {
 
             // U8b: 清除封面狀態（防止還原時殘留舊狀態）
             this._resetCoverState();
+            // A6-1: 還原時清除舊 hero image error state
+            this._heroCardImageError = false;
+            this._heroLightboxImageError = false;
 
             // 還原顯示狀態（透過舊 JS 的 showState 同時處理 .hidden + Alpine pageState）
+            var hasResult = false;
             if (this.searchResults.length > 0) {
                 window.SearchUI.showState('result');
+                hasResult = true;
             } else if (this.fileList.length > 0 && this.listMode === 'file') {
                 const currentFile = this.fileList[this.currentFileIndex];
                 if (currentFile?.searchResults?.length > 0) {
                     this.searchResults = currentFile.searchResults;
                     this.hasMoreResults = currentFile.hasMoreResults || false;
                     window.SearchUI.showState('result');
+                    hasResult = true;
                 }
             }
 
             // 同步 clear button（直接計算 hasContent）
             this.hasContent = this.searchResults.length > 0 || this.fileList.length > 0;
 
-            console.log('[Alpine] State restored from sessionStorage');
+            // A6-2: Lightbox 狀態正規化 — 還原後 lightbox 不應開著
+            this.lightboxOpen = false;
+            if (this.actressProfile) {
+                this.lightboxIndex = -1;
+            }
+
+            // F4: grid 模式返回時觸發 settle 動畫（C17 時序：$nextTick + rAF）
+            if (hasResult && this.displayMode === 'grid') {
+                this.$nextTick(function () {
+                    requestAnimationFrame(function () {
+                        var grid = document.querySelector('.search-grid');
+                        window.SearchAnimations?.playGridSettle?.(grid);
+                    });
+                });
+            }
+
+
         } catch (e) {
             console.error('[Alpine] 還原狀態失敗:', e);
             sessionStorage.removeItem(this.STATE_KEY);

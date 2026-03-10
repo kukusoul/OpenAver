@@ -68,6 +68,9 @@ window.SearchStateMixin_SearchFlow = {
         this.pageState = 'empty';
         this.hasContent = false;
         this.errorText = '';  // T6c: 清空錯誤訊息
+        this._heroCardImageError = false;   // A6-1: 清空 Hero Card 圖片錯誤
+        this._heroLightboxImageError = false; // A6-1: 清空 Lightbox 圖片錯誤
+        this._heroSlotReserved = false;      // A7-Prod: 清空 Hero Slot 預留
     },
 
     // ===== T1b: Search Methods =====
@@ -82,9 +85,6 @@ window.SearchStateMixin_SearchFlow = {
             query = this.searchQuery?.trim();
         }
         if (!query) return;
-
-        // T4: 重置 rotating border 動畫追蹤（新搜尋允許重新觸發）
-        this._localBorderPlayed = {};
 
         // 2. 取消現有搜尋
         this.cancelSearch();
@@ -128,6 +128,9 @@ window.SearchStateMixin_SearchFlow = {
         this.actressProfile = null;  // T2d: 清空上次的女優資料
         this.displayMode = 'detail';  // T3a: 新搜尋重置顯示模式
         this._gridImageErrors = new Set();  // T6a: 清空 Grid 圖片錯誤記錄
+        this._heroCardImageError = false;   // A6-1: 清空 Hero Card 圖片錯誤
+        this._heroLightboxImageError = false; // A6-1: 清空 Lightbox 圖片錯誤
+        this._heroSlotReserved = false;      // A7-Prod: 重置 Hero Slot 預留
         this.errorText = '';  // T6c: 清空上次的錯誤訊息
         // T4: 重置 stream state（防競態 + 新搜尋乾淨起始）
         this.isStreaming = false;
@@ -179,6 +182,7 @@ window.SearchStateMixin_SearchFlow = {
                 // T4: seed handler（C11 約束）
                 else if (data.type === 'seed') {
                     this.isStreaming = true;
+                    this._heroSlotReserved = true;  // A7-Prod: 所有送 seed 的搜尋一律預留 Hero slot
                     this.streamComplete = false;
                     this.streamSlots = data.slots;
                     this.streamBurstedSlots = new Array(data.slots.length).fill(false);
@@ -261,6 +265,8 @@ window.SearchStateMixin_SearchFlow = {
                     this.$nextTick(() => { this.isStreaming = false; });
                     this.hasMoreResults = data.has_more || false;
                     this.actressProfile = data.actress_profile || null;
+                    if (this.actressProfile) this._heroCardImageError = false;  // A6-1 fix: actressProfile 到達，重新嘗試載入
+                    // A7-Prod: result-complete 不拆 Hero placeholder — 最終命運由 result 事件決定
                     // C9: 不用 filter()，失敗 slot 原地標記
                     // C13: map 回傳新 array，觸發 Alpine reactivity
                     // 只標記「尚未 burst 的 _skeleton」（已 burst 的 slot 已填入真實資料）
@@ -295,6 +301,17 @@ window.SearchStateMixin_SearchFlow = {
                             this.currentIndex = 0;
                             this.hasMoreResults = data.has_more || false;
                             this.actressProfile = data.actress_profile || null;
+                            if (this.actressProfile) this._heroCardImageError = false;  // A6-1 fix: actressProfile 到達，重新嘗試載入
+                            // A7-Prod: fallback 路徑 — 無 actressProfile 且 _heroSlotReserved 時 Flip 移除
+                            if (!this.actressProfile && this._heroSlotReserved) {
+                                var gridElFb = document.querySelector('.search-grid');
+                                var flipTargetsFb = gridElFb ? gridElFb.children : [];
+                                var flipStateFb = (typeof Flip !== 'undefined') ? Flip.getState(flipTargetsFb) : null;
+                                this._heroSlotReserved = false;
+                                this.$nextTick(() => {
+                                    window.SearchAnimations?.playHeroRemove?.(flipStateFb);
+                                });
+                            }
                             this.listMode = 'search';
                             if (data.mode) this.currentMode = data.mode;
                             // 與傳統 result 路徑一致：尊重 gallery_mode_enabled 設定
@@ -322,12 +339,28 @@ window.SearchStateMixin_SearchFlow = {
                             }
                         } else if (allFailed && (!data.success || !data.data || data.data.length === 0)) {
                             // 全部失敗且無 fallback → 顯示 error
+                            // A7-Prod: 清理 _heroSlotReserved（頁面將切到 error state）
+                            this._heroSlotReserved = false;
                             this.errorText = '找不到資料';
                             window.SearchUI.showState('error');
                         } else {
                             // 正常 stream 完成：只補充 metadata
                             this.hasMoreResults = data.has_more || false;
-                            if (data.actress_profile) this.actressProfile = data.actress_profile;
+                            if (data.actress_profile) {
+                                this.actressProfile = data.actress_profile;
+                                this._heroCardImageError = false;  // A6-1 fix: actressProfile 到達，重新嘗試載入
+                                // A7-Prod: actressProfile 到達 → Hero 填充內容（保持 _heroSlotReserved = true）
+                            }
+                            // A7-Prod: 無 actressProfile 且 _heroSlotReserved → Flip 移除 Hero placeholder
+                            if (!this.actressProfile && this._heroSlotReserved) {
+                                var gridEl = document.querySelector('.search-grid');
+                                var flipTargets = gridEl ? gridEl.children : [];
+                                var flipState = (typeof Flip !== 'undefined') ? Flip.getState(flipTargets) : null;
+                                this._heroSlotReserved = false;
+                                this.$nextTick(() => {
+                                    window.SearchAnimations?.playHeroRemove?.(flipState);
+                                });
+                            }
                             this.hasContent = this.searchResults.length > 0;
                             // Issue 2: 查詢本地狀態（只對非 _failed 結果）
                             if (window.SearchCore?.checkLocalStatus) {
@@ -350,6 +383,7 @@ window.SearchStateMixin_SearchFlow = {
                         this.currentIndex = 0;
                         this.hasMoreResults = data.has_more || false;
                         this.actressProfile = data.actress_profile || null;  // T2d: 寫入女優資料
+                        if (this.actressProfile) this._heroCardImageError = false;  // A6-1 fix: actressProfile 到達，重新嘗試載入
                         this.listMode = 'search';
 
                         // 查詢本地狀態（非同步）
@@ -444,9 +478,6 @@ window.SearchStateMixin_SearchFlow = {
      * @param {number} savedRequestId - 保存的請求 ID（防競態）
      */
     async fallbackSearch(query, savedRequestId) {
-        // T4: 重置 rotating border 動畫追蹤
-        this._localBorderPlayed = {};
-
         // 建立 AbortController（離頁時可取消）
         this._fallbackAbortController = new AbortController();
 
@@ -468,6 +499,18 @@ window.SearchStateMixin_SearchFlow = {
                 this.currentIndex = 0;
                 this.hasMoreResults = data.has_more || false;
                 this.actressProfile = data.actress_profile || null;  // T2d: 寫入女優資料
+                if (this.actressProfile) this._heroCardImageError = false;  // A6-1 fix: actressProfile 到達，重新嘗試載入
+                // A7-Prod Issue 2: fallbackSearch 處理 _heroSlotReserved
+                // SSE 可能已送過 seed（_heroSlotReserved = true），之後 SSE 斷線走 fallback
+                if (!this.actressProfile && this._heroSlotReserved) {
+                    var gridEl = document.querySelector('.search-grid');
+                    var flipTargets = gridEl ? gridEl.children : [];
+                    var flipState = (typeof Flip !== 'undefined') ? Flip.getState(flipTargets) : null;
+                    this._heroSlotReserved = false;  // Alpine 移除 Hero placeholder DOM
+                    this.$nextTick(() => {
+                        window.SearchAnimations?.playHeroRemove?.(flipState);
+                    });
+                }
                 this.listMode = 'search';
 
                 // 查詢本地狀態
@@ -502,6 +545,10 @@ window.SearchStateMixin_SearchFlow = {
                 this.addingTag = false;
             } else {
                 this._searchSnapshot = null; // Fix 2: 清空 snapshot（搜尋失敗）
+                // A7-Prod Issue 2: fallback 失敗時也要清理 _heroSlotReserved
+                if (this._heroSlotReserved) {
+                    this._heroSlotReserved = false;
+                }
                 this.errorText = data.error || '找不到資料';  // T6c: Alpine state
                 window.SearchUI.showState('error');
             }
@@ -511,7 +558,8 @@ window.SearchStateMixin_SearchFlow = {
             // Fix 3: 舊請求失敗不覆蓋新搜尋畫面
             if (savedRequestId !== this.requestId) return;
             this._searchSnapshot = null;
-            this.errorText = '網路錯誤: ' + err.message;  // T6c: Alpine state
+            console.error('[Search]', err);
+            this.errorText = '網路錯誤，請重試';  // T6c: Alpine state
             window.SearchUI.showState('error');
         }
     },
@@ -554,6 +602,7 @@ window.SearchStateMixin_SearchFlow = {
         this.stagingNumber = '';
         this.stagingReceivedCount = 0;
         this._stagingCardWidth = 0;
+        this._heroSlotReserved = false;  // A7-Prod: 重置 Hero Slot 預留
 
         // 還原到搜尋前的狀態
         const snap = this._searchSnapshot;
@@ -663,6 +712,7 @@ window.SearchStateMixin_SearchFlow = {
 
         const stagingEl = this.$refs?.stagingCard;
         const self = this;
+        const capturedRequestId = this.requestId;  // A4 fix: 捕獲 searchId 防競態
 
         function onExitComplete() {
             self.stagingVisible = false;
@@ -670,6 +720,17 @@ window.SearchStateMixin_SearchFlow = {
             self.stagingNumber = '';
             self.stagingReceivedCount = 0;
             self._stagingCardWidth = 0;
+
+            // A4: Grid Settle Pulse（fire-and-forget）
+            // requestId guard：搜尋 A 的 exit callback 晚於搜尋 B 開始時跳過
+            self.$nextTick(function () {
+                if (capturedRequestId !== self.requestId) return;
+                requestAnimationFrame(function () {
+                    if (capturedRequestId !== self.requestId) return;
+                    var grid = document.querySelector('.search-grid');
+                    window.SearchAnimations?.playGridSettle?.(grid);
+                });
+            });
         }
 
         if (!window.SearchAnimations) {

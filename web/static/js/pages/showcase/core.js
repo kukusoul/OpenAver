@@ -3,13 +3,17 @@
  * M2a: 基本骨架 + API 載入 + Image Grid 渲染
  */
 
+// F1: 大陣列移出 Alpine reactive scope — Alpine 不追蹤
+var _videos = [];
+var _filteredVideos = [];
+
 function showcaseState() {
     return {
         // --- 狀態變數 ---
         loading: true,
         error: '',           // 錯誤訊息（API 失敗時顯示）
-        videos: [],           // 全部影片資料（從 API 載入）
-        filteredVideos: [],   // 搜尋/排序後的結果
+        videoCount: 0,        // _videos.length 的 reactive scalar
+        filteredCount: 0,     // _filteredVideos.length 的 reactive scalar
         paginatedVideos: [],  // 當前頁顯示的影片
 
         // Lightbox 狀態 (M3a)
@@ -41,13 +45,17 @@ function showcaseState() {
         page: 1,
         perPage: 90,
         totalPages: 1,
+        _animGeneration: 0,  // B13: 防止 stale deferred callback
+        _lightboxAnimating: false,  // B16: Lightbox 動畫進行中 guard
+        _lightboxGeneration: 0,    // B19: invalidation token for deferred $nextTick lightbox callbacks
 
-        // --- Computed ---
-        get currentLightboxVideo() {
-            if (this.lightboxIndex >= 0 && this.lightboxIndex < this.filteredVideos.length) {
-                return this.filteredVideos[this.lightboxIndex];
-            }
-            return null;
+        currentLightboxVideo: null,
+
+        // F1: helper — 更新 lightboxIndex + currentLightboxVideo 一致性
+        _setLightboxIndex(idx) {
+            this.lightboxIndex = idx;
+            this.currentLightboxVideo = (idx >= 0 && idx < _filteredVideos.length)
+                ? _filteredVideos[idx] : null;
         },
 
         // --- 生命週期 ---
@@ -56,6 +64,8 @@ function showcaseState() {
             if (window.__registerPage) {
                 window.__registerPage({
                     cleanup: () => {
+                        this._animGeneration++;       // B13: 使 pending deferred callback 失效
+                        this._lightboxGeneration++;   // B19: invalidate pending $nextTick lightbox callbacks
                         if (this.lightboxMoveTimer) clearTimeout(this.lightboxMoveTimer);
                         if (this.toastTimer) clearTimeout(this.toastTimer);
                         if (this.lightboxOpen) document.body.classList.remove('overflow-hidden');
@@ -66,9 +76,19 @@ function showcaseState() {
             this.restoreState();        // M2c: 先恢復狀態
             const savedPage = this.page;
             await this.fetchVideos();
-            this.applyFilterAndSort();  // M4a: 套用搜尋篩選（會重置 page=1）
-            this.page = savedPage;      // 恢復儲存的頁碼
-            this.updatePagination();    // 重新分頁（會 clamp 超出範圍的頁碼）
+            this.applyFilterAndSort(true);  // M4a: 套用搜尋篩選（跳過 pagination，下面統一處理）
+            this.page = savedPage;          // 恢復儲存的頁碼
+            this.updatePagination();        // 單次分頁（會 clamp 超出範圍的頁碼）
+
+            // Settle: 初次載入用 settle（不碰 opacity → 不閃）
+            if (this.mode === 'grid') {
+                var gen = ++this._animGeneration;
+                this.$nextTick(() => { requestAnimationFrame(() => {
+                    if (this._animGeneration !== gen) return;  // stale
+                    var grid = document.querySelector('.showcase-grid');
+                    window.ShowcaseAnimations?.playSettle?.(grid);
+                }); });
+            }
         },
 
         // --- 狀態恢復 (M2c) ---
@@ -104,6 +124,11 @@ function showcaseState() {
             this.search = urlParams.get('search') || state.search || '';
             this.mode = urlParams.get('mode') || state.mode || 'grid';
             if (!['grid', 'table', 'list'].includes(this.mode)) this.mode = 'grid';
+            // F2: grid + perPage=0 組合降級 + 持久化修正值
+            if (this.mode === 'grid' && this.perPage === 0) {
+                this.perPage = 120;
+                this.saveState();
+            }
         },
 
         // --- 狀態持久化 (M2c) ---
@@ -140,24 +165,32 @@ function showcaseState() {
             try {
                 const resp = await fetch('/api/showcase/videos');
                 if (!resp.ok) {
-                    this.videos = [];
-                    this.filteredVideos = [];
+                    _videos = [];
+                    this.videoCount = 0;
+                    _filteredVideos = [];
+                    this.filteredCount = 0;
                     this.error = `伺服器錯誤 (${resp.status})`;
                     return;
                 }
                 const data = await resp.json();
                 if (!data.success) {
-                    this.videos = [];
-                    this.filteredVideos = [];
+                    _videos = [];
+                    this.videoCount = 0;
+                    _filteredVideos = [];
+                    this.filteredCount = 0;
                     this.error = data.error || '載入失敗';
                     return;
                 }
-                this.videos = data.videos || [];
-                this.filteredVideos = this.videos;
+                _videos = data.videos || [];
+                this.videoCount = _videos.length;
+                _filteredVideos = _videos;
+                this.filteredCount = _filteredVideos.length;
             } catch (e) {
                 console.error('Failed to fetch videos:', e);
-                this.videos = [];
-                this.filteredVideos = [];
+                _videos = [];
+                this.videoCount = 0;
+                _filteredVideos = [];
+                this.filteredCount = 0;
                 this.error = '無法連線到伺服器';
             } finally {
                 this.loading = false;
@@ -169,39 +202,201 @@ function showcaseState() {
             this.error = '';
             const savedPage = this.page;
             await this.fetchVideos();
-            this.applyFilterAndSort();
+            this.applyFilterAndSort(true);  // 跳過 pagination，下面統一處理
             this.page = savedPage;
             this.updatePagination();
+            // Settle: retry 也用 settle（不碰 opacity → 不閃）
+            if (this.mode === 'grid' && !this.error) {
+                var gen = ++this._animGeneration;
+                this.$nextTick(() => { requestAnimationFrame(() => {
+                    if (this._animGeneration !== gen) return;
+                    var grid = document.querySelector('.showcase-grid');
+                    window.ShowcaseAnimations?.playSettle?.(grid);
+                }); });
+            }
         },
 
         // --- 互動邏輯 (M2a 只定義骨架，M4 才實作完整邏輯) ---
         onSearchChange() {
-            // M2a 只觸發狀態更新，實際搜尋邏輯 M4 實作
-            this.applyFilterAndSort();
-            this.saveState();  // M2c: 持久化狀態
+            // B8: 透過 _animateFilter 觸發篩選動畫
+            this._animateFilter();
         },
 
         onSortChange() {
-            this.applyFilterAndSort();
-            this.saveState();  // M2c: 持久化狀態
+            this._sortWithFlip(() => {
+                this.applyFilterAndSort();
+            });
         },
 
         toggleOrder() {
-            this.order = this.order === 'asc' ? 'desc' : 'asc';
+            this._sortWithFlip(() => {
+                this.order = this.order === 'asc' ? 'desc' : 'asc';
+                this.applyFilterAndSort();
+            });
+        },
+
+        /**
+         * B7/B15: 排序動畫共用 helper — flip-guard → capture → change → Flip reorder
+         * @param {Function} changeFn - 執行 data change 的函數
+         */
+        _sortWithFlip(changeFn) {
+            var savedPage = this.page;
+            var grid = null;
+            var positionMap = null;
+
+            // Step 0: capture（僅 grid mode）
+            if (this.mode === 'grid') {
+                grid = document.querySelector('.showcase-grid');
+                if (grid) {
+                    grid.classList.add('flip-guard');
+                    void grid.offsetHeight;  // force reflow
+                    positionMap = window.ShowcaseAnimations?.capturePositions?.(grid) || null;
+                }
+            }
+
+            // Step 1: data change
+            changeFn();
+            this.page = savedPage;
+            this.updatePagination();
+            this.saveState();
+
+            // Step 2: animate
+            if (grid && positionMap) {
+                var gen = ++this._animGeneration;
+                this.$nextTick(() => { requestAnimationFrame(() => {
+                    if (this._animGeneration !== gen) {
+                        grid.classList.remove('flip-guard');
+                        return;
+                    }
+                    var result = window.ShowcaseAnimations?.playFlipReorder?.(grid, positionMap);
+                    if (!result) {
+                        // fallback: Flip 回傳 null（delta 全零、reduced motion 等）
+                        grid.classList.remove('flip-guard');
+                        window.ShowcaseAnimations?.playEntry?.(grid);
+                    }
+                    // flip-guard 由 playFlipReorder 的 onComplete 移除
+                }); });
+            } else if (grid) {
+                // capture 失敗 fallback
+                grid.classList.remove('flip-guard');
+                var gen = ++this._animGeneration;
+                this.$nextTick(() => { requestAnimationFrame(() => {
+                    if (this._animGeneration !== gen) return;
+                    window.ShowcaseAnimations?.playEntry?.(grid);
+                }); });
+            }
+        },
+
+        /**
+         * B8/B15: 篩選動畫共用 helper — flip-guard → capture → change → Flip filter
+         * onSearchChange() 和 searchFromMetadata() 共用
+         */
+        _animateFilter() {
+            var grid = null;
+            var state = null;
+
+            // Step 0: capture（僅 grid mode）
+            if (this.mode === 'grid') {
+                grid = document.querySelector('.showcase-grid');
+                if (grid) {
+                    grid.classList.add('flip-guard');
+                    void grid.offsetHeight;  // force reflow
+                    state = window.ShowcaseAnimations?.captureFlipState?.(grid) || null;
+                }
+            }
+
+            // Step 1: data change
             this.applyFilterAndSort();
-            this.saveState();  // M2c: 持久化狀態
+            this.saveState();
+
+            // Step 2: animate
+            if (grid && state) {
+                var gen = ++this._animGeneration;
+                this.$nextTick(() => { requestAnimationFrame(() => {
+                    if (this._animGeneration !== gen) {
+                        grid.classList.remove('flip-guard');
+                        return;
+                    }
+                    var result = window.ShowcaseAnimations?.playFlipFilter?.(grid, state);
+                    if (!result) {
+                        grid.classList.remove('flip-guard');
+                        window.ShowcaseAnimations?.playEntry?.(grid);
+                    }
+                    // flip-guard 由 playFlipFilter 的 onComplete 移除
+                }); });
+            } else if (grid) {
+                // capture 失敗 fallback
+                grid.classList.remove('flip-guard');
+                var gen = ++this._animGeneration;
+                this.$nextTick(() => { requestAnimationFrame(() => {
+                    if (this._animGeneration !== gen) return;
+                    window.ShowcaseAnimations?.playEntry?.(grid);
+                }); });
+            }
+        },
+
+        /**
+         * B9/B13: 分頁動畫 — state-first + playEntry
+         * @param {string} direction - 'next' | 'prev'
+         * @param {number} [targetPage] - 目標頁碼（goToPage 用，prevPage/nextPage 不傳）
+         */
+        _animatePageChange(direction, targetPage) {
+            // 清理可能殘留的 flip-guard（sort/filter 動畫被翻頁打斷時）
+            var grid = document.querySelector('.showcase-grid');
+            if (grid) grid.classList.remove('flip-guard');
+
+            // 計算目標頁碼
+            var newPage = targetPage;
+            if (newPage === undefined) {
+                newPage = direction === 'next' ? this.page + 1 : this.page - 1;
+            }
+
+            // State mutation FIRST（不再困在回調中）
+            this.page = newPage;
+            this.updatePagination();
+            this.saveState();
+            window.scrollTo(0, 0);
+
+            // Grid mode：播放進場動畫
+            if (this.mode === 'grid') {
+                var gen = ++this._animGeneration;
+                this.$nextTick(() => { requestAnimationFrame(() => {
+                    if (this._animGeneration !== gen) return;  // stale
+                    var grid = document.querySelector('.showcase-grid');
+                    window.ShowcaseAnimations?.playEntry?.(grid);
+                }); });
+            }
         },
 
         onPerPageChange() {
             this.page = 1;
             this.updatePagination();
             this.saveState();  // M2c: 持久化狀態
+            // B17: 切換每頁數量後播放進場動畫
+            if (this.mode === 'grid') {
+                var gen = ++this._animGeneration;
+                this.$nextTick(() => { requestAnimationFrame(() => {
+                    if (this._animGeneration !== gen) return;
+                    var grid = document.querySelector('.showcase-grid');
+                    window.ShowcaseAnimations?.playEntry?.(grid);
+                }); });
+            }
         },
 
         switchMode(m) {
             if (!['grid', 'table', 'list'].includes(m)) return;
+            if (m === this.mode) return;
+            var oldMode = this.mode;
             this.mode = m;
+            // F2: 切到 grid 時若 perPage=0 則降級
+            if (m === 'grid' && this.perPage == 0) {
+                this.perPage = 120;
+                this.updatePagination();
+            }
             this.saveState();  // M2c: 持久化狀態
+            this.$nextTick(() => {
+                window.ShowcaseAnimations?.playModeCrossfade?.(oldMode, m);
+            });
         },
 
         // Card Info 切換 (M3i)
@@ -211,17 +406,13 @@ function showcaseState() {
 
         prevPage() {
             if (this.page > 1) {
-                this.page--;
-                this.updatePagination();
-                this.saveState();  // M2c: 持久化狀態
+                this._animatePageChange('prev');
             }
         },
 
         nextPage() {
             if (this.page < this.totalPages) {
-                this.page++;
-                this.updatePagination();
-                this.saveState();  // M2c: 持久化狀態
+                this._animatePageChange('next');
             }
         },
 
@@ -229,20 +420,19 @@ function showcaseState() {
         goToPage(p) {
             const num = parseInt(p);
             if (Number.isNaN(num) || num < 1 || num > this.totalPages) return;
-            this.page = num;
-            this.updatePagination();
-            this.saveState();
-            window.scrollTo({ top: 0, behavior: 'smooth' });
+            if (num === this.page) return;
+            var direction = num > this.page ? 'next' : 'prev';
+            this._animatePageChange(direction, num);
         },
 
         // --- 資料處理 (M2a 基本實作，M4 完整化) ---
-        applyFilterAndSort() {
+        applyFilterAndSort(skipPagination) {
             // --- 搜尋篩選 (M4a) ---
             if (this.search && this.search.trim()) {
                 // 分割多個關鍵字（用空格分隔，過濾空字串）
                 const terms = this.search.toLowerCase().trim().split(/\s+/).filter(t => t.length > 0);
 
-                this.filteredVideos = this.videos.filter(video => {
+                _filteredVideos = _videos.filter(video => {
                     // 建立所有可搜尋欄位的組合文字（對應原版 L1216）
                     // API 欄位名稱對應：otitle → original_title, actor → actresses, num → number, genre → tags, date → release_date
                     const searchable = [
@@ -266,13 +456,15 @@ function showcaseState() {
                         return (numNorm && numNorm.includes(termNorm)) || searchable.includes(term);
                     });
                 });
+                this.filteredCount = _filteredVideos.length;
             } else {
                 // 空搜尋：回傳全部影片
-                this.filteredVideos = [...this.videos];
+                _filteredVideos = [..._videos];
+                this.filteredCount = _filteredVideos.length;
             }
 
             // --- 排序 (M4b) ---
-            this.filteredVideos.sort((a, b) => {
+            _filteredVideos.sort((a, b) => {
                 // 1. 女優卡置頂邏輯（原版 L1230-1234）
                 //    備註：Showcase 頁面目前不會有 actress: 開頭的路徑（該機制屬於女優 Gallery）
                 //    保留此邏輯以確保與原版行為 100% 一致，未來 24-migrate-3 若整合女優 Gallery 時需要
@@ -330,23 +522,29 @@ function showcaseState() {
             });
 
             // --- 重置頁碼並更新分頁 ---
-            this.page = 1;
-            this.updatePagination();
+            if (!skipPagination) {
+                this.page = 1;
+                this.updatePagination();
+            }
         },
 
         updatePagination() {
+            // F2: grid mode 禁用「全部」— perPage=0 降級為 120
+            if (parseInt(this.perPage) === 0 && this.mode === 'grid') {
+                this.perPage = 120;
+            }
             const perPage = Math.max(0, parseInt(this.perPage) || 0);
             if (perPage === 0) {
-                this.paginatedVideos = this.filteredVideos;
+                this.paginatedVideos = _filteredVideos;
                 this.totalPages = 1;
                 this.page = 1;
             } else {
-                this.totalPages = Math.max(1, Math.ceil(this.filteredVideos.length / perPage));
+                this.totalPages = Math.max(1, Math.ceil(_filteredVideos.length / perPage));
                 // clamp page 到有效範圍
                 if (this.page > this.totalPages) this.page = this.totalPages;
                 if (this.page < 1) this.page = 1;
                 const start = (this.page - 1) * perPage;
-                this.paginatedVideos = this.filteredVideos.slice(start, start + perPage);
+                this.paginatedVideos = _filteredVideos.slice(start, start + perPage);
             }
         },
 
@@ -368,7 +566,51 @@ function showcaseState() {
 
         // --- Lightbox (M3a) ---
         openLightbox(index) {
-            this.lightboxIndex = index;
+            // B16: 動畫進行中 guard
+            if (this._lightboxAnimating) return;
+            if (this.lightboxOpen && this.lightboxIndex === index) return;  // 同一張，不動作
+
+            // Fix: lightbox 已開啟時走 switch 路徑（避免 backdrop click-through 重播 open 動畫）
+            if (this.lightboxOpen && this.lightboxIndex !== index) {
+                var self = this;
+                // C18: interrupt — kill 舊 switch timeline（含 onComplete callback）
+                if (typeof gsap !== 'undefined') {
+                    gsap.getById('showcaseLightboxSwitch')?.kill();
+                }
+                var oldIndex = this.lightboxIndex;
+                var direction = index > oldIndex ? 'next' : 'prev';
+
+                // B19: state-first — 立即更新 state，避免 C18 interrupt 吞掉 index mutation
+                this._setLightboxIndex(index);
+
+                // Smart Close 重置
+                this.lightboxMoveEnabled = false;
+                if (this.lightboxMoveTimer) clearTimeout(this.lightboxMoveTimer);
+                this.lightboxMoveTimer = setTimeout(function () {
+                    self.lightboxMoveEnabled = true;
+                }, 1000);
+                this.lightboxStartX = 0;
+                this.lightboxStartY = 0;
+
+                // B19: 動畫（state 已更新，$nextTick 後 Alpine 已 patch DOM）
+                var lbGen = ++this._lightboxGeneration;
+                this.$nextTick(function () {
+                    if (self._lightboxGeneration !== lbGen) return;  // stale — lightbox was closed/interrupted
+                    var contentEl = document.querySelector('.showcase-lightbox .lightbox-content');
+                    if (contentEl && window.ShowcaseAnimations?.playLightboxSwitch) {
+                        self._lightboxAnimating = true;
+                        var tl = window.ShowcaseAnimations.playLightboxSwitch(contentEl, direction, {
+                            onComplete: function () {
+                                self._lightboxAnimating = false;
+                            }
+                        });
+                        if (!tl) self._lightboxAnimating = false;
+                    }
+                });
+                return;
+            }
+
+            this._setLightboxIndex(index);
             this.lightboxOpen = true;
             document.body.classList.add('overflow-hidden');
 
@@ -382,52 +624,165 @@ function showcaseState() {
             // 重置起始位置
             this.lightboxStartX = 0;
             this.lightboxStartY = 0;
+
+            // B16: GSAP 進場動畫（fire-and-forget）
+            var self = this;
+            var lbGen = ++this._lightboxGeneration;
+            this.$nextTick(() => {
+                if (self._lightboxGeneration !== lbGen) return;  // B19: stale
+                var lightboxEl = document.querySelector('.showcase-lightbox');
+                if (!lightboxEl) return;
+                self._lightboxAnimating = true;
+                var tl = window.ShowcaseAnimations?.playLightboxOpen?.(lightboxEl, {
+                    onComplete: function () {
+                        self._lightboxAnimating = false;
+                    }
+                });
+                if (!tl) {
+                    self._lightboxAnimating = false;
+                }
+            });
         },
 
         closeLightbox() {
+            this._lightboxGeneration++;  // B19: invalidate pending $nextTick lightbox callbacks
+            // Instant close — kill any in-progress lightbox animations, then sync cleanup
+            if (typeof gsap !== 'undefined') {
+                gsap.getById('showcaseLightboxOpen')?.kill();
+                gsap.getById('showcaseLightboxSwitch')?.kill();
+            }
+            var lbEl = document.querySelector('.showcase-lightbox');
+            if (lbEl) lbEl.classList.remove('gsap-animating');
+            this._lightboxAnimating = false;
             this.lightboxOpen = false;
+            this._setLightboxIndex(-1);
             document.body.classList.remove('overflow-hidden');
-            this.lightboxIndex = -1;
+            if (this.lightboxMoveTimer) {
+                clearTimeout(this.lightboxMoveTimer);
+                this.lightboxMoveTimer = null;
+            }
+            this.lightboxMoveEnabled = false;
             this.lightboxStartX = 0;
             this.lightboxStartY = 0;
-            if (this.lightboxMoveTimer) clearTimeout(this.lightboxMoveTimer);
-            this.lightboxMoveTimer = null;
-            this.lightboxMoveEnabled = false;
         },
 
         // Metadata 點擊搜尋 (M3f)
         searchFromMetadata(term) {
-            this.closeLightbox();
+            // 同步關閉 lightbox（跳過動畫，後面馬上做 filter 動畫）
+            if (typeof gsap !== 'undefined') {
+                gsap.getById('showcaseLightboxOpen')?.kill();
+                gsap.getById('showcaseLightboxSwitch')?.kill();
+            }
+            var lightboxEl = document.querySelector('.showcase-lightbox');
+            if (lightboxEl) lightboxEl.classList.remove('gsap-animating');
+            this._lightboxAnimating = false;
+            this._lightboxGeneration++;  // B19: invalidate pending $nextTick lightbox callbacks
+            this.lightboxOpen = false;
+            this._setLightboxIndex(-1);
+            document.body.classList.remove('overflow-hidden');
+            if (this.lightboxMoveTimer) {
+                clearTimeout(this.lightboxMoveTimer);
+                this.lightboxMoveTimer = null;
+            }
+            this.lightboxMoveEnabled = false;
+            this.lightboxStartX = 0;
+            this.lightboxStartY = 0;
+
             this.search = term;
-            this.applyFilterAndSort();
-            this.saveState();
+            this._animateFilter();
         },
 
         prevLightboxVideo() {
+            // C18: interrupt — kill open + switch timeline（進場動畫未完也要打斷）
+            if (typeof gsap !== 'undefined') {
+                gsap.getById('showcaseLightboxOpen')?.kill();
+                gsap.getById('showcaseLightboxSwitch')?.kill();
+            }
+            this._lightboxAnimating = false;
+            var lbEl = document.querySelector('.showcase-lightbox');
+            if (lbEl) lbEl.classList.remove('gsap-animating');
+
             if (this.lightboxIndex > 0) {
-                this.lightboxIndex--;
-                // 重置 Smart Close 狀態
-                this.lightboxMoveEnabled = false;
-                if (this.lightboxMoveTimer) clearTimeout(this.lightboxMoveTimer);
-                this.lightboxMoveTimer = setTimeout(() => {
-                    this.lightboxMoveEnabled = true;
-                }, 1000);
-                this.lightboxStartX = 0;
-                this.lightboxStartY = 0;
+                var self = this;
+                var newIdx = this.lightboxIndex - 1;
+
+                // B19: state-first — 立即更新 state，避免 C18 interrupt 吞掉 index mutation
+                this._setLightboxIndex(newIdx);
+
+                /** Smart Close 重置邏輯 */
+                function resetSmartClose() {
+                    self.lightboxMoveEnabled = false;
+                    if (self.lightboxMoveTimer) clearTimeout(self.lightboxMoveTimer);
+                    self.lightboxMoveTimer = setTimeout(function () {
+                        self.lightboxMoveEnabled = true;
+                    }, 1000);
+                    self.lightboxStartX = 0;
+                    self.lightboxStartY = 0;
+                }
+                resetSmartClose();
+
+                // B19: 動畫（state 已更新，$nextTick 後 Alpine 已 patch DOM）
+                var lbGen = ++this._lightboxGeneration;
+                this.$nextTick(function () {
+                    if (self._lightboxGeneration !== lbGen) return;  // stale — lightbox was closed/interrupted
+                    var contentEl = document.querySelector('.showcase-lightbox .lightbox-content');
+                    if (contentEl && window.ShowcaseAnimations?.playLightboxSwitch) {
+                        self._lightboxAnimating = true;
+                        var tl = window.ShowcaseAnimations.playLightboxSwitch(contentEl, 'prev', {
+                            onComplete: function () {
+                                self._lightboxAnimating = false;
+                            }
+                        });
+                        if (!tl) self._lightboxAnimating = false;
+                    }
+                });
             }
         },
 
         nextLightboxVideo() {
-            if (this.lightboxIndex < this.filteredVideos.length - 1) {
-                this.lightboxIndex++;
-                // 重置 Smart Close 狀態
-                this.lightboxMoveEnabled = false;
-                if (this.lightboxMoveTimer) clearTimeout(this.lightboxMoveTimer);
-                this.lightboxMoveTimer = setTimeout(() => {
-                    this.lightboxMoveEnabled = true;
-                }, 1000);
-                this.lightboxStartX = 0;
-                this.lightboxStartY = 0;
+            // C18: interrupt — kill open + switch timeline（進場動畫未完也要打斷）
+            if (typeof gsap !== 'undefined') {
+                gsap.getById('showcaseLightboxOpen')?.kill();
+                gsap.getById('showcaseLightboxSwitch')?.kill();
+            }
+            this._lightboxAnimating = false;
+            var lbEl = document.querySelector('.showcase-lightbox');
+            if (lbEl) lbEl.classList.remove('gsap-animating');
+
+            if (this.lightboxIndex < _filteredVideos.length - 1) {
+                var self = this;
+                var newIdx = this.lightboxIndex + 1;
+
+                // B19: state-first — 立即更新 state，避免 C18 interrupt 吞掉 index mutation
+                this._setLightboxIndex(newIdx);
+
+                /** Smart Close 重置邏輯 */
+                function resetSmartClose() {
+                    self.lightboxMoveEnabled = false;
+                    if (self.lightboxMoveTimer) clearTimeout(self.lightboxMoveTimer);
+                    self.lightboxMoveTimer = setTimeout(function () {
+                        self.lightboxMoveEnabled = true;
+                    }, 1000);
+                    self.lightboxStartX = 0;
+                    self.lightboxStartY = 0;
+                }
+                resetSmartClose();
+
+                // B19: 動畫（state 已更新，$nextTick 後 Alpine 已 patch DOM）
+                var lbGen = ++this._lightboxGeneration;
+                this.$nextTick(function () {
+                    if (self._lightboxGeneration !== lbGen) return;  // stale — lightbox was closed/interrupted
+                    var contentEl = document.querySelector('.showcase-lightbox .lightbox-content');
+                    if (contentEl && window.ShowcaseAnimations?.playLightboxSwitch) {
+                        self._lightboxAnimating = true;
+                        var tl = window.ShowcaseAnimations.playLightboxSwitch(contentEl, 'next', {
+                            onComplete: function () {
+                                self._lightboxAnimating = false;
+                            }
+                        });
+                        if (!tl) self._lightboxAnimating = false;
+                    }
+                });
             }
         },
 
@@ -579,7 +934,7 @@ function showcaseState() {
             // 4. Lightbox 開啟時的快捷鍵（優先處理）
             if (this.lightboxOpen) {
                 if (key === 'ESCAPE') {
-                    this.closeLightbox();
+                    this.closeLightbox();  // closeLightbox handles kill + cleanup + generation++
                 } else if (key === 'ARROWLEFT') {
                     this.prevLightboxVideo();
                 } else if (key === 'ARROWRIGHT') {

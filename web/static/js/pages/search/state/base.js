@@ -120,17 +120,22 @@ window.SearchStateMixin_Base = function () {
         displayMode: 'detail',     // 'detail' | 'grid'
         lightboxOpen: false,       // Lightbox 顯示狀態
         lightboxIndex: 0,          // Lightbox 當前索引（-1 = 女優頭像）
+        _lightboxAnimating: false, // D2: Lightbox 動畫進行中 guard
+        _lightboxGeneration: 0,    // B19: invalidation token for deferred $nextTick lightbox callbacks
 
         // ===== T2d: Actress Profile State =====
         actressProfile: null,      // { name, img, backdrop, birth, age, height, cup, bust, waist, hip, hometown, hobby }
 
-        // ===== T4: Rotating Border State =====
-        // T4: 追蹤已播放 rotating border 的番號（避免 Alpine `:class` 重複觸發動畫）
-        _localBorderPlayed: {},
-
         // ===== T6a: Grid Image Error State =====
         // Grid 模式圖片錯誤追蹤
         _gridImageErrors: new Set(),
+
+        // ===== A6-1: Hero Card / Lightbox 圖片錯誤追蹤 =====
+        _heroCardImageError: false,
+        _heroLightboxImageError: false,
+
+        // ===== A7-Prod: Hero Slot 預留 =====
+        _heroSlotReserved: false,
 
         // ===== Constants =====
         PAGE_SIZE: 20,
@@ -333,14 +338,9 @@ window.SearchStateMixin_Base = function () {
 
         // ===== T4: Rotating Border Methods =====
 
-        // T4: 檢查是否應顯示本地匹配外框（尚未播放動畫 + 本地存在）
+        // T4: 檢查是否應顯示本地匹配外框
         shouldShowLocalBorder(result) {
-            return result?._localStatus?.exists && !this._localBorderPlayed[result?.number];
-        },
-
-        // T4: 標記番號已播放動畫
-        markLocalBorderPlayed(number) {
-            if (number) this._localBorderPlayed[number] = true;
+            return result?._localStatus?.exists;
         },
 
         closeDuplicateModal() {
