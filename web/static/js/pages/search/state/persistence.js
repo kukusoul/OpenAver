@@ -39,14 +39,17 @@ window.SearchStateMixin_Persistence = {
             this._heroLightboxImageError = false;
 
             // 還原顯示狀態（透過舊 JS 的 showState 同時處理 .hidden + Alpine pageState）
+            var hasResult = false;
             if (this.searchResults.length > 0) {
                 window.SearchUI.showState('result');
+                hasResult = true;
             } else if (this.fileList.length > 0 && this.listMode === 'file') {
                 const currentFile = this.fileList[this.currentFileIndex];
                 if (currentFile?.searchResults?.length > 0) {
                     this.searchResults = currentFile.searchResults;
                     this.hasMoreResults = currentFile.hasMoreResults || false;
                     window.SearchUI.showState('result');
+                    hasResult = true;
                 }
             }
 
@@ -57,6 +60,16 @@ window.SearchStateMixin_Persistence = {
             this.lightboxOpen = false;
             if (this.actressProfile) {
                 this.lightboxIndex = -1;
+            }
+
+            // F4: grid 模式返回時觸發 settle 動畫（C17 時序：$nextTick + rAF）
+            if (hasResult && this.displayMode === 'grid') {
+                this.$nextTick(function () {
+                    requestAnimationFrame(function () {
+                        var grid = document.querySelector('.search-grid');
+                        window.SearchAnimations?.playGridSettle?.(grid);
+                    });
+                });
             }
 
 

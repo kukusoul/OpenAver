@@ -742,6 +742,21 @@
 
             // C6: 不使用 rotationX/Y/Z，只用 scale
 
+            // C21: clearProps 防護 — 清除 inline transform，避免與 CSS transition 衝突
+            tl.eventCallback('onComplete', function () {
+                targetKeys.forEach(function (key) {
+                    gsap.set(rowMap[key], { clearProps: 'transform' });
+                });
+            });
+
+            // C18: onInterrupt — killTweensOf 打斷時 onComplete 不會觸發，
+            // 需要同樣清除 inline transform 避免殘留
+            tl.eventCallback('onInterrupt', function () {
+                targetKeys.forEach(function (key) {
+                    gsap.set(rowMap[key], { clearProps: 'transform' });
+                });
+            });
+
             return tl;
         },
 
