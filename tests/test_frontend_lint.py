@@ -3854,7 +3854,7 @@ class TestShowcaseReactiveScopeGuard:
             # Remove allowed patterns first, then check for bare references
             cleaned = line
             for allowed in ['paginatedVideos', 'currentLightboxVideo', 'videoCount', 'filteredCount',
-                            'fetchVideos', 'filteredVideos', 'prevLightboxVideo', 'nextLightboxVideo',
+                            'fetchVideos', 'prevLightboxVideo', 'nextLightboxVideo',
                             'openLightbox', 'closeLightbox', 'playVideo']:
                 cleaned = cleaned.replace(allowed, '')
             # Now check for bare 'videos' (word boundary)
@@ -3998,4 +3998,30 @@ class TestGridPerPageGuard:
         assert found_mode_guard, (
             "F2 違規：showcase.html 的「全部」dropdown item (perPage=0) 缺少 mode 條件 — "
             "grid mode 下「全部」選項必須 disabled 或隱藏"
+        )
+
+    def test_guard3_restoreState_has_grid_perPage0_guard(self):
+        """Guard 3: restoreState 必須含 grid+perPage=0 降級邏輯"""
+        content = self.CORE_JS.read_text(encoding='utf-8')
+        match = re.search(r'restoreState\s*\(\s*\)\s*\{', content)
+        assert match, "找不到 restoreState 方法"
+        body = content[match.start():match.start() + 2500]
+        has_grid_check = bool(re.search(r"mode\s*===?\s*['\"]grid['\"]", body))
+        has_downgrade = bool(re.search(r'perPage\s*=\s*120', body))
+        assert has_grid_check and has_downgrade, (
+            "F2 違規：restoreState() 缺少 grid+perPage=0 降級 — "
+            "localStorage/URL 恢復 perPage=0+grid 時必須降級為 120"
+        )
+
+    def test_guard4_switchMode_has_grid_perPage0_guard(self):
+        """Guard 4: switchMode 必須含 grid+perPage=0 降級邏輯"""
+        content = self.CORE_JS.read_text(encoding='utf-8')
+        match = re.search(r'switchMode\s*\(\s*m\s*\)\s*\{', content)
+        assert match, "找不到 switchMode 方法"
+        body = content[match.start():match.start() + 600]
+        has_grid_check = bool(re.search(r"['\"]grid['\"]", body))
+        has_downgrade = bool(re.search(r'perPage\s*=\s*120', body))
+        assert has_grid_check and has_downgrade, (
+            "F2 違規：switchMode() 缺少 grid+perPage=0 降級 — "
+            "切到 grid 時若 perPage=0 必須降級為 120"
         )

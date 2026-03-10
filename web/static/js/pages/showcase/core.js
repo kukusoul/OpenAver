@@ -124,9 +124,10 @@ function showcaseState() {
             this.search = urlParams.get('search') || state.search || '';
             this.mode = urlParams.get('mode') || state.mode || 'grid';
             if (!['grid', 'table', 'list'].includes(this.mode)) this.mode = 'grid';
-            // F2: grid + perPage=0 組合降級
+            // F2: grid + perPage=0 組合降級 + 持久化修正值
             if (this.mode === 'grid' && this.perPage === 0) {
                 this.perPage = 120;
+                this.saveState();
             }
         },
 
