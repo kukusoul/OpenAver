@@ -21,6 +21,7 @@ function showcaseState() {
         lightboxIndex: -1,              // 指向 filteredVideos 的索引
         lightboxMoveEnabled: false,     // Smart Close: 延遲啟用
         lightboxMoveTimer: null,
+        lightboxCloseTimer: null,       // F2: generation-guarded delayed clear timer
         lightboxStartX: 0,
         lightboxStartY: 0,
 
@@ -67,6 +68,7 @@ function showcaseState() {
                         this._animGeneration++;       // B13: 使 pending deferred callback 失效
                         this._lightboxGeneration++;   // B19: invalidate pending $nextTick lightbox callbacks
                         if (this.lightboxMoveTimer) clearTimeout(this.lightboxMoveTimer);
+                        if (this.lightboxCloseTimer) clearTimeout(this.lightboxCloseTimer);  // F2: cleanup delayed clear timer
                         if (this.toastTimer) clearTimeout(this.toastTimer);
                         if (this.lightboxOpen) document.body.classList.remove('overflow-hidden');
                     }
@@ -566,6 +568,12 @@ function showcaseState() {
 
         // --- Lightbox (M3a) ---
         openLightbox(index) {
+            // F2: cancel pending delayed clear from previous close
+            if (this.lightboxCloseTimer) {
+                clearTimeout(this.lightboxCloseTimer);
+                this.lightboxCloseTimer = null;
+            }
+
             // B16: 動畫進行中 guard
             if (this._lightboxAnimating) return;
             if (this.lightboxOpen && this.lightboxIndex === index) return;  // 同一張，不動作
@@ -645,6 +653,12 @@ function showcaseState() {
         },
 
         closeLightbox() {
+            // F2: cancel pending delayed clear from searchFromMetadata
+            if (this.lightboxCloseTimer) {
+                clearTimeout(this.lightboxCloseTimer);
+                this.lightboxCloseTimer = null;
+            }
+
             this._lightboxGeneration++;  // B19: invalidate pending $nextTick lightbox callbacks
             // Instant close — kill any in-progress lightbox animations, then sync cleanup
             if (typeof gsap !== 'undefined') {
@@ -668,6 +682,12 @@ function showcaseState() {
 
         // Metadata 點擊搜尋 (M3f)
         searchFromMetadata(term) {
+            // F2: cancel pending delayed clear from previous close
+            if (this.lightboxCloseTimer) {
+                clearTimeout(this.lightboxCloseTimer);
+                this.lightboxCloseTimer = null;
+            }
+
             // 同步關閉 lightbox（跳過動畫，後面馬上做 filter 動畫）
             if (typeof gsap !== 'undefined') {
                 gsap.getById('showcaseLightboxOpen')?.kill();
@@ -678,7 +698,6 @@ function showcaseState() {
             this._lightboxAnimating = false;
             this._lightboxGeneration++;  // B19: invalidate pending $nextTick lightbox callbacks
             this.lightboxOpen = false;
-            this._setLightboxIndex(-1);
             document.body.classList.remove('overflow-hidden');
             if (this.lightboxMoveTimer) {
                 clearTimeout(this.lightboxMoveTimer);
@@ -687,6 +706,21 @@ function showcaseState() {
             this.lightboxMoveEnabled = false;
             this.lightboxStartX = 0;
             this.lightboxStartY = 0;
+
+            // F2: delay state clearing until CSS transition completes (250ms)
+            // Keep currentLightboxVideo intact during fade-out, then clear after
+            // Generation-guarded to prevent stale callback from clearing newly-opened lightbox
+            var self = this;
+            var gen = this._lightboxGeneration;  // capture current generation
+            this.lightboxCloseTimer = setTimeout(() => {
+                // Only proceed if:
+                // 1. Generation hasn't changed (lightbox wasn't reopened)
+                // 2. lightboxOpen is false (lightbox is actually closed)
+                if (self._lightboxGeneration === gen && !self.lightboxOpen) {
+                    self._setLightboxIndex(-1);
+                }
+                self.lightboxCloseTimer = null;
+            }, 250);
 
             this.search = term;
             this._animateFilter();
