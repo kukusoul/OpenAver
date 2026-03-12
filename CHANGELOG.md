@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 #### 💎 穩定性與效能
+- 修正 Showcase/Search 頁面 lightbox 閉包競態（closeLightbox 改用 250ms delayed clear，高延遲環境不再短暫閃爍）
 - 修正初始載入時的畫面閃爍
 - macOS launcher 完全脫離 TTY（nohup 實作）
 - 大量資料（6000+ 筆影片）時頁面反應更快
