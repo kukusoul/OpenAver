@@ -23,14 +23,9 @@ OpenAver 是一個基於 Web 技術的桌面應用程式，旨在幫助您輕鬆
 <details>
 <summary>更多截圖</summary>
 
-<div style="display: flex; gap: 20px; margin: 20px 0;">
-  <div flex="1">
-    <img src="docs/screenshots/demo.gif" width="100%" alt="Search Demo">
-  </div>
-  <div flex="1">
-    <img src="docs/screenshots/demo2.gif" width="100%" alt="Showcase Demo">
-  </div>
-</div>
+| Search Demo | Showcase Demo |
+|-------------|---------------|
+| ![Search Demo](docs/screenshots/demo.gif) | ![Showcase Demo](docs/screenshots/demo2.gif) |
 
 | 搜尋結果 | Showcase Grid | Showcase 詳細 |
 |----------|---------------|---------------|
