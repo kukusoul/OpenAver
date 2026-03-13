@@ -193,7 +193,7 @@ def get_all_dependencies():
             if pkg_normalized in EXCLUDE_PACKAGES:
                 excluded.append(pkg_name)
             else:
-                deps.append(pkg_name)
+                deps.append(line.strip())
 
     if excluded:
         print(f"  排除 {len(excluded)} 個測試/開發套件: {', '.join(excluded[:5])}{'...' if len(excluded) > 5 else ''}")
@@ -212,10 +212,11 @@ def download_and_install_packages(python_dir: Path):
     wheels_dir = CACHE_DIR / "wheels"
     wheels_dir.mkdir(parents=True, exist_ok=True)
 
-    # 從現有 venv 獲取所有已安裝的套件
+    # 從現有 venv 獲取所有已安裝的套件（帶版本號，如 "pydantic==2.11.0"）
     all_deps = get_all_dependencies()
     # 加入 pywebview（可能不在 venv 中）
-    if "pywebview" not in [d.lower() for d in all_deps]:
+    dep_names = [d.split('==')[0].lower() for d in all_deps]
+    if "pywebview" not in dep_names:
         all_deps.append("pywebview")
 
     # 額外依賴（手動補充 Windows 專用套件）
@@ -227,7 +228,7 @@ def download_and_install_packages(python_dir: Path):
 
     # 檢查已緩存的套件
     cached_files = set(f.stem.split('-')[0].lower().replace('_', '-') for f in wheels_dir.glob("*.*"))
-    to_download = [pkg for pkg in all_deps if pkg.lower().replace('_', '-') not in cached_files]
+    to_download = [pkg for pkg in all_deps if pkg.split('==')[0].lower().replace('_', '-') not in cached_files]
 
     if to_download:
         print(f"  需下載 {len(to_download)} 個新套件（已緩存 {len(all_deps) - len(to_download)} 個）")
