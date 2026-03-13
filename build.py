@@ -232,7 +232,10 @@ def download_and_install_packages(python_dir: Path):
         name = dep.split('==')[0].lower().replace('_', '-')
         needed[name] = dep
 
-    # 清掉 cache 中版本不匹配的舊 wheel（避免混版）
+    # ⚠️ 清掉 cache 中版本不匹配的舊 wheel（避免混版）
+    # 這段不是多餘邏輯！PyPI 上游版本更新時，cache 裡的舊 pydantic-core
+    # 會跟新 pydantic 混版，導致 Windows ZIP 執行時 SystemError。
+    # 詳見 CLAUDE.md「Windows 打包 Wheel Cache Gotcha」
     stale_count = 0
     for f in list(wheels_dir.glob("*.*")):
         cached_name = f.stem.split('-')[0].lower().replace('_', '-')
