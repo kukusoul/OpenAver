@@ -226,9 +226,29 @@ def download_and_install_packages(python_dir: Path):
     ]
     all_deps.extend(extra_deps)
 
-    # 檢查已緩存的套件
+    # 建立需要的套件版本映射（套件名 → 完整 spec）
+    needed = {}
+    for dep in all_deps:
+        name = dep.split('==')[0].lower().replace('_', '-')
+        needed[name] = dep
+
+    # 清掉 cache 中版本不匹配的舊 wheel（避免混版）
+    stale_count = 0
+    for f in list(wheels_dir.glob("*.*")):
+        cached_name = f.stem.split('-')[0].lower().replace('_', '-')
+        if cached_name in needed and '==' in needed[cached_name]:
+            expected_ver = needed[cached_name].split('==')[1]
+            # wheel 檔名格式: name-version-...
+            parts = f.stem.split('-')
+            if len(parts) >= 2 and parts[1] != expected_ver:
+                f.unlink()
+                stale_count += 1
+    if stale_count:
+        print(f"  清除 {stale_count} 個版本不匹配的舊 wheel")
+
+    # 檢查已緩存的套件（名稱級，舊版已清除所以不會混版）
     cached_files = set(f.stem.split('-')[0].lower().replace('_', '-') for f in wheels_dir.glob("*.*"))
-    to_download = [pkg for pkg in all_deps if pkg.split('==')[0].lower().replace('_', '-') not in cached_files]
+    to_download = [dep for dep in all_deps if dep.split('==')[0].lower().replace('_', '-') not in cached_files]
 
     if to_download:
         print(f"  需下載 {len(to_download)} 個新套件（已緩存 {len(all_deps) - len(to_download)} 個）")

@@ -32,7 +32,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .build_cache
-          key: build-cache-${{ hashFiles('build.py') }}
+          key: build-cache-${{ hashFiles('build.py', 'requirements.txt') }}
           restore-keys: |
             build-cache-
 
