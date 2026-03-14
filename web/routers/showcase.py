@@ -1,5 +1,8 @@
 """
 Showcase API 路由 - 影片展示資料端點
+
+端點：
+- GET /api/showcase/videos  — 取得所有影片資料（供 Showcase 頁面客戶端渲染）
 """
 
 import sys

@@ -14,9 +14,14 @@ pip install pytest pytest-asyncio pytest-mock httpx
 ```
 tests/
 ├── conftest.py              # 全域 Fixtures
+│
+│   ── 根目錄測試（待歸位，見下方說明）──
 ├── test_api_config.py       # Config API 整合測試
-├── test_smoke.py            # 基本煙霧測試（番號提取、爬蟲連通）
-├── test_scrapers.py         # 6 個爬蟲模組測試（Phase 16）
+├── test_smoke.py            # 基本煙霧測試（番號提取、爬蟲連通）[smoke 標記]
+├── test_scrapers.py         # 6 個爬蟲模組測試（Phase 16）[smoke 標記]
+├── test_actress_profile.py  # 女優資料 scraper 測試（actress_scraper / gfriends / graphis）
+├── test_new_scrapers.py     # 新增爬蟲模組測試
+├── test_scraper_partial.py  # 爬蟲部分結果測試
 │
 ├── unit/                    # 單元測試（不需網路）
 │   ├── test_scraper_parser.py    # 番號解析測試
@@ -39,12 +44,17 @@ tests/
 │       ├── javbus/SONE-103.json
 │       └── javdb/actress_search.json
 │
+├── mock_data/               # Mock JSON 資料（供 actress_profile 等測試使用）
+│   └── mikami_profile.json
+│
 └── samples/                 # 番號解析測試樣本
     ├── basic/               # 基本格式 (SONE-103.mp4)
     ├── real_world/          # 真實世界格式
     ├── special_format/      # 特殊片商格式
     └── expected_results.json
 ```
+
+> **注意**：根目錄的 `test_actress_profile.py`、`test_new_scrapers.py`、`test_scraper_partial.py` 目前暫放於 `tests/` 根目錄。這些檔案將在 **T7 任務**中依測試類型歸位到 `unit/`、`integration/` 或 `smoke/` 子目錄。
 
 ## 執行測試
 

@@ -1,5 +1,19 @@
 """
 設定 API 路由
+
+端點：
+- GET    /api/config                    — 取得所有設定
+- PUT    /api/config                    — 更新所有設定
+- DELETE /api/config                    — 恢復原廠設定（刪除 config.json）
+- GET    /api/tutorial-status           — 取得新手引導完成狀態
+- POST   /api/tutorial-completed        — 標記新手引導已完成
+- POST   /api/tutorial-reset            — 重置新手引導狀態
+- PUT    /api/config/general/{field}    — 更新 general 區塊單一欄位（sidebar_collapsed/theme/font_size）
+- GET    /api/version                   — 取得應用程式版本資訊
+- GET    /api/config/format-variables   — 取得刮削路徑/檔名格式可用變數
+- GET    /api/ollama/models             — 取得 Ollama 可用模型列表
+- POST   /api/ollama/test               — 測試 Ollama 模型是否能正常回應
+- POST   /api/proxy/test                — 測試 Proxy 連線（透過 DMM 驗證）
 """
 
 from fastapi import APIRouter

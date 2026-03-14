@@ -1,5 +1,14 @@
 """
 搜尋 API 路由
+
+端點：
+- GET  /api/proxy-image              — 代理外部圖片請求（解決防盜鏈問題）
+- GET  /api/search                   — 搜尋 JAV 資訊（REST，支援番號/女優/局部番號）
+- GET  /api/search/stream            — 搜尋 JAV 資訊（SSE 串流，即時回報狀態與結果）
+- GET  /api/search/sources           — 取得可用的搜尋來源列表
+- GET  /api/search/favorite-files    — 取得我的最愛資料夾的影片檔案列表
+- POST /api/search/filter-files      — 過濾檔案列表（移除非影片或過小檔案）
+- GET  /api/search/local-status      — 批次查詢番號在本地庫的存在狀態
 """
 
 from fastapi import APIRouter, Query, Request

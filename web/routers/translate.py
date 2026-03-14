@@ -1,5 +1,9 @@
 """
 翻譯 API 路由
+
+端點：
+- POST /api/translate        — 翻譯或優化單一標題（日文→中文 或 清理中文，支援 Ollama/Gemini）
+- POST /api/translate-batch  — 批次翻譯多個標題（自動跳過非日文，支援 Ollama/Gemini）
 """
 
 from fastapi import APIRouter

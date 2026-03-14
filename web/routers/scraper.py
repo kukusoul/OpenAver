@@ -1,5 +1,8 @@
 """
 Scraper API 路由 - 單檔刮削
+
+端點：
+- POST /api/scrape-single  — 單一影片刮削（搜尋元數據、建資料夾、重命名、下載封面、產生 NFO）
 """
 
 from fastapi import APIRouter

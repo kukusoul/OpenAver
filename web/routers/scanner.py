@@ -1,5 +1,23 @@
 """
 Scanner API 路由 - 影片列表生成
+
+端點：
+- GET  /api/gallery/generate              — 掃描資料夾並產生影片列表（SSE 串流）
+- GET  /api/gallery/stats                 — 取得 Scanner 統計資訊（影片總數）
+- DELETE /api/gallery/cache               — 清除所有影片快取（清空 SQLite）
+- GET  /api/gallery/update-check          — 檢查需要補全 NFO 的影片數量
+- GET  /api/gallery/update                — 執行 NFO 補全更新（SSE 串流）
+- GET  /api/gallery/view                  — 取得產生的 HTML 列表頁面
+- GET  /api/gallery/image                 — 代理圖片請求（解決 file:// 限制）
+- GET  /api/gallery/video                 — 代理影片請求，支援 Range 請求（影片 seek）
+- GET  /api/gallery/player                — 影片播放頁面（HTML5 player）
+- GET  /api/gallery/actress-aliases       — 取得所有女優別名對照
+- POST /api/gallery/actress-aliases       — 新增女優別名對照
+- DELETE /api/gallery/actress-aliases/{id} — 刪除指定女優別名對照
+- GET  /api/gallery/actress-stats         — 查詢指定女優名稱的片數
+- GET  /api/gallery/apply-actress-aliases — 批次套用女優別名到資料庫（SSE 串流）
+- GET  /api/gallery/jellyfin-check        — 檢查多少影片缺少 Jellyfin poster/fanart
+- GET  /api/gallery/jellyfin-update       — 批次產生 Jellyfin poster + fanart（SSE 串流）
 """
 
 import json
