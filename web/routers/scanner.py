@@ -566,9 +566,10 @@ async def view_list():
         content = re.sub(r'file:///([^"\'<>]+?)(?=["\'])', replace_file_url, content)
 
         return HTMLResponse(content=content)
-    except Exception as e:
+    except Exception:
+        logger.exception("view_list 讀取失敗")
         return HTMLResponse(
-            content=f"<html><body><h1>錯誤</h1><p>{e}</p></body></html>",
+            content="<html><body><h1>錯誤</h1><p>列表載入失敗，請重試。</p></body></html>",
             status_code=500
         )
 
