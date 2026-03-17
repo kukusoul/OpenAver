@@ -11,7 +11,7 @@ def temp_config_path(tmp_path, monkeypatch):
     """
     # Create a temp config file
     d = tmp_path / "config"
-    d.mkdir()
+    d.mkdir(exist_ok=True)
     p = d / "test_config.json"
 
     # Write default config
