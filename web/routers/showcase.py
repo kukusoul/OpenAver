@@ -5,15 +5,10 @@ Showcase API 路由 - 影片展示資料端點
 - GET /api/showcase/videos  — 取得所有影片資料（供 Showcase 頁面客戶端渲染）
 """
 
-import sys
-from pathlib import Path
 from urllib.parse import quote
 
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
-
-# 加入 core 模組路徑
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from core.database import VideoRepository, get_db_path, init_db
 from core.path_utils import to_file_uri, is_path_under_dir, uri_to_fs_path

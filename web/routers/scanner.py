@@ -22,19 +22,14 @@ Scanner API 路由 - 影片列表生成
 
 import json
 import os
-import sys
 from urllib.parse import unquote, quote
-from datetime import datetime
 from pathlib import Path
 from typing import Generator
 
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import StreamingResponse, HTMLResponse, Response, FileResponse
 
-# 加入 core 模組路徑
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-
-from core.gallery_scanner import VideoScanner, load_cache, save_cache, fast_scan_directory, VideoInfo
+from core.gallery_scanner import VideoScanner, fast_scan_directory, VideoInfo
 from core.video_extensions import get_proxy_extensions, get_video_extensions
 from core.gallery_generator import HTMLGenerator
 from core.path_utils import normalize_path, to_file_uri, is_path_under_dir, uri_to_fs_path
@@ -399,8 +394,7 @@ async def clear_cache():
         deleted = repo.clear_all()
         return {"success": True, "deleted": deleted}
     except Exception as e:
-        import logging
-        logging.getLogger(__name__).error("清除快取失敗: %s", e)
+        logger.error("清除快取失敗: %s", e)
         return {"success": False, "error": "清除快取失敗"}
 
 
@@ -894,11 +888,6 @@ async def apply_actress_aliases():
 
 # === Jellyfin 圖片批次補齊 ===
 
-def _file_uri_to_fs_path(uri: str) -> str:
-    """file:/// URI → 本機檔案系統路徑"""
-    return uri_to_fs_path(uri)
-
-
 def _cover_base_stem(cover_fs: str) -> str:
     """從封面路徑取得 base stem，移除 -poster / -fanart 後綴避免重複"""
     stem = os.path.splitext(cover_fs)[0]
@@ -916,7 +905,7 @@ def check_jellyfin_images_needed(repo: VideoRepository) -> dict:
     for v in videos:
         if not v.cover_path:
             continue
-        cover_fs = _file_uri_to_fs_path(v.cover_path)
+        cover_fs = uri_to_fs_path(v.cover_path)
         if not os.path.exists(cover_fs):
             continue
         base_stem = _cover_base_stem(cover_fs)

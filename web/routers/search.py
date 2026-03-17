@@ -22,11 +22,7 @@ from collections import Counter
 from queue import Queue
 from threading import Thread
 
-import sys
 from pathlib import Path
-
-# 加入 core 模組路徑
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from core.logger import get_logger
 from core.video_extensions import ZERO_SIZE_EXTENSIONS, get_video_extensions

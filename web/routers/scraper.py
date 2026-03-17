@@ -8,11 +8,6 @@ Scraper API 路由 - 單檔刮削
 from fastapi import APIRouter
 from pydantic import BaseModel
 from typing import Optional
-import sys
-from pathlib import Path
-
-# 加入 core 模組路徑
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from core.organizer import organize_file
 from core.scraper import search_jav
