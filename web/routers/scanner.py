@@ -121,7 +121,8 @@ def generate_avlist() -> Generator[str, None, None]:
             try:
                 normalized_dir = normalize_path(directory)
             except ValueError as e:
-                yield send({"type": "log", "level": "warn", "message": f"路徑轉換失敗: {e}"})
+                logger.exception("路徑轉換失敗: %s", directory)
+                yield send({"type": "log", "level": "warn", "message": "路徑轉換失敗"})
                 continue
 
             yield send({
@@ -193,7 +194,8 @@ def generate_avlist() -> Generator[str, None, None]:
                         session_added_paths.append(video.path)
                         cache_misses += 1
                     except Exception as e:
-                        yield send({"type": "log", "level": "warn", "message": f"  [{i}] 錯誤: {e}"})
+                        logger.exception("掃描檔案失敗: %s", file_info.get('path', ''))
+                        yield send({"type": "log", "level": "warn", "message": f"  [{i}] 掃描發生錯誤，已跳過"})
 
                 # 批次寫入
                 if videos_to_upsert:
@@ -209,7 +211,8 @@ def generate_avlist() -> Generator[str, None, None]:
                     "message": f"{directory}: {len(all_files)} 部 (快取: {cache_hits}, 新增/更新: {cache_misses})"
                 })
             except Exception as e:
-                yield send({"type": "log", "level": "error", "message": f"掃描錯誤: {e}"})
+                logger.exception("掃描資料夾失敗: %s", directory)
+                yield send({"type": "log", "level": "error", "message": "掃描發生錯誤，已跳過此資料夾"})
 
         # 建立「當前設定資料夾」URI 集合，用於過濾 DB 記錄
         # DB 保留所有歷史資料當 cache，但只輸出當前設定的資料夾
