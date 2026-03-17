@@ -4,8 +4,6 @@ OpenAver Web GUI - FastAPI Application
 from pathlib import Path
 import re
 
-import logging
-
 from fastapi import FastAPI, Request
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -15,10 +13,10 @@ from fastapi.templating import Jinja2Templates
 from core.version import VERSION
 
 # 確保 logging 在非 standalone 模式（uvicorn 直接啟動）也有初始化
-from core.logger import setup_logging
+from core.logger import setup_logging, get_logger
 setup_logging()
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # 路徑設定
 BASE_DIR = Path(__file__).parent
