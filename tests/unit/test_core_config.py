@@ -337,3 +337,83 @@ class TestSaveConfigRoundtrip:
         assert config_path.exists()
         data = json.loads(config_path.read_text())
         assert data["scraper"]["create_folder"] is False
+
+
+# ============ test_migration_source_links ============
+
+class TestMigrationSourceLinks:
+    """source_links 區段新增 + 深層合併保證"""
+
+    def test_missing_source_links_section_gets_defaults(self, tmp_path, monkeypatch):
+        """config.json 無 source_links key → load_config() 後補入全部 8 個預設值"""
+        config_path = tmp_path / "config.json"
+        _write_config(config_path, {"general": {"theme": "light"}})
+        monkeypatch.setattr(core_config, "CONFIG_PATH", config_path)
+        monkeypatch.setattr(core_config, "CONFIG_DEFAULT_PATH", tmp_path / "config.default.json")
+
+        result = load_config()
+
+        sl = result["source_links"]
+        assert sl["dmm"] is True
+        assert sl["d2pass"] is True
+        assert sl["heyzo"] is True
+        assert sl["fc2"] is True
+        assert sl["javbus"] is False
+        assert sl["jav321"] is False
+        assert sl["javdb"] is False
+        assert sl["avsox"] is False
+
+    def test_existing_source_links_preserved(self, tmp_path, monkeypatch):
+        """config.json 有完整 source_links 且用戶已覆寫 javdb: true → 保持不動"""
+        config_path = tmp_path / "config.json"
+        _write_config(config_path, {
+            "source_links": {
+                "dmm": True,
+                "d2pass": True,
+                "heyzo": True,
+                "fc2": True,
+                "javbus": False,
+                "jav321": False,
+                "javdb": True,   # user override
+                "avsox": False,
+            }
+        })
+        monkeypatch.setattr(core_config, "CONFIG_PATH", config_path)
+        monkeypatch.setattr(core_config, "CONFIG_DEFAULT_PATH", tmp_path / "config.default.json")
+
+        result = load_config()
+
+        assert result["source_links"]["javdb"] is True
+
+    def test_partial_source_links_filled(self, tmp_path, monkeypatch):
+        """config.json 的 source_links 只有 {"dmm": true} → 補齊其餘 7 個 key，dmm 保持 true"""
+        config_path = tmp_path / "config.json"
+        _write_config(config_path, {"source_links": {"dmm": True}})
+        monkeypatch.setattr(core_config, "CONFIG_PATH", config_path)
+        monkeypatch.setattr(core_config, "CONFIG_DEFAULT_PATH", tmp_path / "config.default.json")
+
+        result = load_config()
+
+        sl = result["source_links"]
+        assert sl["dmm"] is True          # preserved
+        assert sl["d2pass"] is True       # filled from defaults
+        assert sl["heyzo"] is True        # filled from defaults
+        assert sl["fc2"] is True          # filled from defaults
+        assert sl["javbus"] is False      # filled from defaults
+        assert sl["jav321"] is False      # filled from defaults
+        assert sl["javdb"] is False       # filled from defaults
+        assert sl["avsox"] is False       # filled from defaults
+
+    def test_non_dict_source_links_replaced(self, tmp_path, monkeypatch):
+        """config.json 有 source_links: null → 整個替換為預設 dict"""
+        config_path = tmp_path / "config.json"
+        _write_config(config_path, {"source_links": None})
+        monkeypatch.setattr(core_config, "CONFIG_PATH", config_path)
+        monkeypatch.setattr(core_config, "CONFIG_DEFAULT_PATH", tmp_path / "config.default.json")
+
+        result = load_config()
+
+        sl = result["source_links"]
+        assert isinstance(sl, dict)
+        assert sl["dmm"] is True
+        assert sl["javdb"] is False

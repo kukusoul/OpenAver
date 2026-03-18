@@ -50,6 +50,18 @@ class SearchConfig(BaseModel):
     proxy_url: str = ""
 
 
+class SourceLinksConfig(BaseModel):
+    """各來源連結開關；官方/合法來源預設 true，含盜版連結的站台預設 false"""
+    dmm: bool = True
+    d2pass: bool = True
+    heyzo: bool = True
+    fc2: bool = True
+    javbus: bool = False
+    jav321: bool = False
+    javdb: bool = False
+    avsox: bool = False
+
+
 class OllamaConfig(BaseModel):
     """串接結構：Ollama 配置"""
     url: str = "http://localhost:11434"
@@ -103,6 +115,7 @@ class GeneralConfig(BaseModel):
 class AppConfig(BaseModel):
     scraper: ScraperConfig = ScraperConfig()
     search: SearchConfig = SearchConfig()
+    source_links: SourceLinksConfig = SourceLinksConfig()
     translate: TranslateConfig = TranslateConfig()
     gallery: GalleryConfig = GalleryConfig()
     showcase: ShowcaseConfig = ShowcaseConfig()
@@ -218,6 +231,20 @@ def load_config() -> dict:
         if 'jellyfin_mode' not in s:
             s['jellyfin_mode'] = False
             need_save = True
+
+        # Migration: source_links 區段新增 + 深層合併保證（T18b-pre）
+        sl_defaults = SourceLinksConfig().model_dump()
+        if 'source_links' not in raw_config or not isinstance(raw_config.get('source_links'), dict):
+            # 層 1：整個區段缺少，或值不是 dict（如 null）→ 補整個預設 dict
+            raw_config['source_links'] = sl_defaults
+            need_save = True
+        else:
+            # 層 2：區段存在但個別 key 缺少 → 逐一補缺少的 key
+            sl = raw_config['source_links']
+            for key, default_val in sl_defaults.items():
+                if key not in sl:
+                    sl[key] = default_val
+                    need_save = True
 
         # Save migrated config
         if need_save:
