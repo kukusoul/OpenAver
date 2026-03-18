@@ -57,6 +57,14 @@
                             data-tooltip="開啟資料夾" aria-label="開啟資料夾">
                         <i class="bi bi-folder2-open"></i>
                     </button>
+                    <button class="lb-action-btn"
+                            @click="openSourceUrl(currentLightboxVideo()?.url || '')"
+                            x-show="!actressLightboxMode()
+                                    && appConfig?.source_links?.[currentLightboxVideo()?.source]
+                                    && currentLightboxVideo()?.url"
+                            data-tooltip="開啟來源頁面" aria-label="開啟來源頁面">
+                        <i class="bi bi-box-arrow-up-right"></i>
+                    </button>
                 </div>
             </div>
             <!-- lightbox-metadata: actress mode 時隱藏 -->
