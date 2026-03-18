@@ -531,7 +531,7 @@
     border: 1px solid var(--stroke-subtle);
 }
 
-/* Cover Actions Overlay — 預設可見，不靠 hover reveal */
+/* Cover Actions Overlay — 預設隱藏，hover / focus-within 時 fade in */
 .lightbox-cover .cover-actions {
     position: absolute;
     bottom: 0;
@@ -543,6 +543,13 @@
     gap: 12px;
     background: linear-gradient(to top, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.2) 60%, transparent 100%);
     border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+    opacity: 0;
+    transition: opacity var(--duration-fast) var(--ease-out);
+}
+
+.lightbox-cover:hover .cover-actions,
+.lightbox-cover:focus-within .cover-actions {
+    opacity: 1;
 }
 
 /* Glass Circle Button — 對齊 theme.css .btn-glass-circle，尺寸略縮為 46px */
