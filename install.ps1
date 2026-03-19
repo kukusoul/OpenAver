@@ -53,6 +53,13 @@ $ProgressPreference = "SilentlyContinue"
 Invoke-WebRequest -Uri $DownloadUrl -OutFile $TmpZip
 $ProgressPreference = "Continue"
 
+# --- 清除舊版 embedded Python（避免套件混版）---
+$PythonDir = Join-Path $InstallDir "python"
+if (Test-Path $PythonDir) {
+    Write-Host "🧹 清除舊版 Python runtime..."
+    Remove-Item $PythonDir -Recurse -Force
+}
+
 # --- 解壓安裝（覆蓋程式檔案，保留用戶資料）---
 Write-Host "📂 安裝到 $InstallDir..."
 Expand-Archive -Path $TmpZip -DestinationPath $HOME -Force

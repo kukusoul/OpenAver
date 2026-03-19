@@ -125,6 +125,7 @@ irm https://raw.githubusercontent.com/slive777/OpenAver/main/install.ps1 | iex
 - 解除 Windows 下載安全限制（無需手動 Unblock）
 - 建立桌面快捷方式（Windows）
 - 保留設定與日誌檔案（升級時）
+- 清除舊版 Python runtime（避免套件混版）
 
 ### 備用方式：手動下載 ZIP
 
@@ -174,6 +175,15 @@ python windows/launcher.py
 ## ❓ 疑難排解
 
 > 💡 如果您使用上方推薦的 **curl 一行安裝**，以下步驟通常不需要。疑難排解僅適用於手動 ZIP 安裝。
+
+### 升級注意事項（ZIP 手動安裝）
+
+覆蓋安裝可能殘留舊版 Python 套件，導致啟動失敗或版本衝突。**升級前請先刪除 `python` 資料夾**，再解壓覆蓋：
+
+- **Windows**: 刪除 `%USERPROFILE%\OpenAver\python\` 資料夾
+- **macOS**: 刪除 `~/OpenAver/python/` 資料夾
+
+> 💡 使用 curl / PowerShell 一行安裝會自動處理，無需手動操作。
 
 ### ZIP 安裝專用
 

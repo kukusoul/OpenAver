@@ -5,6 +5,55 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.4] - 2026-03-19
+
+### Added
+
+#### 🎨 Lightbox 按鈕重設計 (Phase 34-4)
+- Showcase Lightbox 按鈕從 footer 文字改為封面上 glass circle overlay（hover-reveal）
+- Search Lightbox 新增完整 metadata panel（標題、演員、番號·片商·日期、標籤）
+- Search Lightbox 新增 glass circle 按鈕（返回詳情 / 開啟資料夾 / 來源頁面）
+- Source Link 瀏覽器按鈕 — 依 config `source_links` 控制（正版來源預設開啟）
+- Actress mode 簡化版 Lightbox（僅封面 + 返回詳情按鈕）
+- CSS tooltip + aria-label + focus-visible 無障礙支援
+
+#### 📦 安裝升級改善
+- install.ps1 / install.sh 升級時自動清除舊版 `python/` 目錄（避免套件混版）
+- README 新增 ZIP 手動安裝升級說明
+
+#### ⚙️ Config source_links
+- 新增 `source_links` 設定區段（8 個來源開關，正版預設 true）
+- 深層合併 migration — 既有用戶自動補齊新設定、不覆蓋已有值
+
+#### 🔧 PyWebView API
+- 新增 `open_url()` — 系統瀏覽器開啟 URL（http/https scheme 限制）
+
+### Changed
+
+#### 🧹 程式碼品質清理 (Phase 34-3)
+- 死碼清理 — `sys.path.insert` 殘留、unused wrapper、dead import 移除
+- Logger 統一 — 全站改用 `core.logger.get_logger`
+- SSE Helper 統一 — scanner.py `send()` 提取為 `_sse_event()`
+- Showcase GSAP 歸位 — `core.js` 直接 GSAP 呼叫移至 `animations.js`
+- Config 模組抽取 — `load_config`/`save_config` 從 router 移至 `core/config.py`
+
+#### 🧪 測試與 CI
+- 測試結構歸位 — 6 孤兒測試移入 unit/integration/smoke 正確目錄
+- 測試品質提升 — 重複 setup 消除 + 弱斷言加強
+- CI test.yml 修正 — pytest 涵蓋根目錄 + cache 版本隔離
+- 測試總數 974 → 1007（+33）
+
+### Fixed
+
+#### 🔒 安全加固
+- 2 處 exception 洩漏修復（str(e) → 固定訊息）
+- SSE 洩漏封堵 + smoke 斷言補強
+- Source Link 前端 scheme 驗證 + noopener,noreferrer 防護
+- open_url macOS/Linux returncode 檢查
+- 封面載入失敗時 Lightbox 按鈕仍可操作
+
+---
+
 ## [0.4.3] - 2026-03-13
 
 ### Added

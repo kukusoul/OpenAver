@@ -61,6 +61,12 @@ TMP_DIR=$(mktemp -d)
 TMP_ZIP="$TMP_DIR/OpenAver.zip"
 curl -fSL --progress-bar "$DOWNLOAD_URL" -o "$TMP_ZIP"
 
+# --- 清除舊版 embedded Python（避免套件混版）---
+if [[ -d "$INSTALL_DIR/python" ]]; then
+    echo "🧹 清除舊版 Python runtime..."
+    rm -rf "$INSTALL_DIR/python"
+fi
+
 # --- 解壓安裝（覆蓋程式檔案，保留用戶資料）---
 echo "📂 安裝到 $INSTALL_DIR..."
 unzip -o -q "$TMP_ZIP" -d "$HOME"
