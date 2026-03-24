@@ -16,9 +16,11 @@ from concurrent.futures import ThreadPoolExecutor
 # ============ Fixtures ============
 
 def make_mock_scraper_prefix(ids):
-    """Mock JavBusScraper for prefix search."""
+    """Mock JavBusScraper for prefix search.
+    Returns ids on the first call, then [] on subsequent calls (simulates single page).
+    """
     mock_scraper = MagicMock()
-    mock_scraper.get_ids_from_search.return_value = ids
+    mock_scraper.get_ids_from_search.side_effect = [ids, []]
     return mock_scraper
 
 
@@ -161,6 +163,49 @@ class TestSearchPrefixResultCallback:
         item_calls = [(s, d) for s, d in callback_calls if s >= 0]
         for slot, data in item_calls:
             assert data is not None, "result_callback should not be called with None data"
+
+    def test_search_prefix_cross_page_boundary(self, make_mock_search_jav):
+        """offset=20 + limit=20 需要跨頁抓取，不能只拿 10 筆"""
+        from core.scraper import search_prefix
+
+        # 模擬兩頁：page 1 有 30 筆，page 2 有 30 筆
+        page1_ids = [f'SONE-{i:03d}' for i in range(1, 31)]   # SONE-001 ~ SONE-030
+        page2_ids = [f'SONE-{i:03d}' for i in range(31, 61)]  # SONE-031 ~ SONE-060
+
+        mock_scraper = MagicMock()
+        mock_scraper.get_ids_from_search.side_effect = [page1_ids, page2_ids, []]
+
+        # 每筆 search_jav 都回傳有效結果
+        all_ids = page1_ids + page2_ids
+        results_map = {num: {'number': num, 'title': f'Title {num}'} for num in all_ids}
+
+        with patch('core.scraper.JavBusScraper', return_value=mock_scraper), \
+             patch('core.scraper.search_jav', side_effect=make_mock_search_jav(results_map)):
+            results = search_prefix('SONE', limit=20, offset=20)
+
+        # offset=20 意味著跳過前 20 筆，應該拿到 SONE-021 ~ SONE-040（20 筆）
+        assert len(results) == 20, f"Expected 20 results, got {len(results)}"
+
+    def test_search_prefix_results_sorted_by_date(self, make_mock_search_jav):
+        """同步 API 回傳結果應按日期排序"""
+        from core.scraper import search_prefix
+
+        ids = ['SONE-100', 'SONE-101', 'SONE-102']
+        results_map = {
+            'SONE-100': {'number': 'SONE-100', 'title': 'T1', 'date': '2025-01-01'},
+            'SONE-101': {'number': 'SONE-101', 'title': 'T2', 'date': '2025-03-01'},
+            'SONE-102': {'number': 'SONE-102', 'title': 'T3', 'date': '2025-02-01'},
+        }
+
+        mock_scraper = MagicMock()
+        mock_scraper.get_ids_from_search.side_effect = [ids, []]
+
+        with patch('core.scraper.JavBusScraper', return_value=mock_scraper), \
+             patch('core.scraper.search_jav', side_effect=make_mock_search_jav(results_map)):
+            results = search_prefix('SONE', limit=20)
+
+        dates = [r['date'] for r in results]
+        assert dates == sorted(dates, reverse=True), f"Results not sorted by date: {dates}"
 
 
 # ============ search_actress result_callback 測試 ============

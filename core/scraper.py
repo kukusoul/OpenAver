@@ -344,17 +344,26 @@ def search_prefix(prefix: str, limit: int = 20, offset: int = 0, status_callback
 
     try:
         scraper = JavBusScraper()
-        page = (offset // 30) + 1
+        start_page = (offset // 30) + 1
         skip_in_page = offset % 30
+        pages_needed = ((limit + skip_in_page) // 30) + 2
 
-        ids = scraper.get_ids_from_search(prefix, page=page, search_type=1)
+        all_ids: List[str] = []
+        for page in range(start_page, start_page + pages_needed):
+            ids = scraper.get_ids_from_search(prefix, page=page, search_type=1)
+            if ids:
+                all_ids.extend(ids)
+                if len(all_ids) >= limit + skip_in_page:
+                    break
+            else:
+                break
 
-        if not ids:
+        if not all_ids:
             if status_callback:
                 status_callback('javbus', 'found:0')
             return []
 
-        target_ids = ids[skip_in_page:][:limit]
+        target_ids = all_ids[skip_in_page:][:limit]
 
         if status_callback:
             status_callback('javbus', f'found:{len(target_ids)}')
@@ -385,13 +394,13 @@ def search_prefix(prefix: str, limit: int = 20, offset: int = 0, status_callback
                     logger.error('search_prefix: %s failed', num)
                 time.sleep(REQUEST_DELAY)
 
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error('search_prefix failed: %s', e)
 
     if status_callback:
         status_callback('done', f'found:{len(results)}')
 
-    return results
+    return sort_results_by_date(results)
 
 
 def search_actress(name: str, limit: int = 20, offset: int = 0, status_callback: Optional[Callable[[str, str], None]] = None, result_callback: Optional[Callable[[int, Any], None]] = None) -> List[Dict[str, Any]]:
@@ -447,8 +456,8 @@ def search_actress(name: str, limit: int = 20, offset: int = 0, status_callback:
                 status_callback('done', f'found:{len(results)}')
             return sort_results_by_date(results)
 
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error('search_actress failed: %s', e)
 
     # Fallback: JavDB 關鍵字搜尋（JavBus 失敗時）
     if status_callback:
@@ -494,8 +503,8 @@ def get_all_variant_ids(number: str) -> List[str]:
                 if base_id.upper().replace('-', '') == number_normalized:
                     variant_ids.append(id)
             variant_ids.sort(reverse=True)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error('get_all_variant_ids failed: %s', e)
 
     return variant_ids
 
@@ -515,8 +524,8 @@ def search_by_variant_id(variant_id: str, base_number: str) -> Optional[Dict[str
             result['_source'] = 'javbus'
             result['_variant_id'] = variant_id
             return result
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error('search_by_variant_id failed: %s', e)
     return None
 
 
