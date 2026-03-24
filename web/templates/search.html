@@ -263,7 +263,7 @@
                              x-show="!coverError && current().cover"
                              :src="coverUrl()"
                              @error="handleCoverError()"
-                             @load="_coverLoaded = true; coverError = ''; _coverRetried = false"
+                             @load="_coverLoaded = true; coverError = ''; _coverRetried = false; _updateCoverHeight()"
                              alt="封面">
                         <!-- U8d: Cover loading shimmer -->
                         <div x-show="!coverError && current().cover && !_coverLoaded"
@@ -307,6 +307,7 @@
                         <template x-for="(url, idx) in (current().sample_images || [])" :key="url">
                             <button class="sample-thumb-btn"
                                     @click="openSampleLightbox(idx)"
+                                    :class="{ 'sample-thumb-active': sampleLightboxOpen && sampleLightboxIndex === idx }"
                                     :title="'樣品圖 ' + (idx + 1)">
                                 <img :src="`/api/proxy-image?url=${encodeURIComponent(url)}`"
                                      :alt="'樣品圖 ' + (idx + 1)"

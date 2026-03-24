@@ -813,16 +813,19 @@
     padding: 0.5rem 0.25rem;
     scrollbar-width: thin;
     /* 不佔滿封面欄高度，自然 shrink */
+    /* Fix D：分隔線 */
+    border-top: 1px solid var(--stroke-subtle);
 }
 
 .sample-thumb-btn {
     flex-shrink: 0;
-    border: none;
     padding: 0;
     background: none;
     cursor: pointer;
-    border-radius: var(--fluent-radius-sm);
     overflow: hidden;
+    /* Fix D：border + 圓角修正（--fluent-radius-sm 未定義，改用 --radius-xs = 4px） */
+    border: 1px solid var(--stroke-subtle);
+    border-radius: var(--radius-xs);
     transition: opacity var(--fluent-duration-fast) var(--fluent-ease-standard),
                 transform var(--fluent-duration-fast) var(--fluent-ease-standard);
 }
@@ -832,11 +835,23 @@
     transform: scale(1.05);
 }
 
-.sample-thumb-img {
-    width: 96px;
-    height: 64px;
-    object-fit: cover;
+/* Fix C：active 高亮（outline 不影響 box model，不觸發 layout shift） */
+.sample-thumb-active {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 1px;
+}
+
+/* Fix B：比例縮放（覆蓋 theme.css `.av-card-full-cover img` specificity 0-1-1）
+   --cover-height: 由 JS (_updateCoverHeight) 在封面載入 / 導航 / resize 後動態設定，
+                   預設 400px（對應 .av-card-full-cover-wrapper 的 min-height）
+   --sample-thumb-ratio: 縮圖高度佔封面高度的比例（小數），預設 0.18 ≈ 18%
+   例：封面高 500px → 縮圖高 90px（clamp 上限 120px 保護超大視窗） */
+.sample-strip .sample-thumb-img {
+    height: clamp(48px, calc(var(--cover-height, 400px) * var(--sample-thumb-ratio, 0.18)), 120px);
+    width: auto;
     display: block;
+    object-fit: cover;
+    transition: none;   /* 覆蓋 theme.css 的 transform transition */
 }
 
 /* ==================== T7: Sample Lightbox ==================== */

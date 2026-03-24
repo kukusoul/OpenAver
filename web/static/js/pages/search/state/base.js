@@ -371,7 +371,20 @@ window.SearchStateMixin_Base = function () {
                 if (img && img.complete && img.naturalWidth > 0 && !this._coverLoaded) {
                     this._coverLoaded = true;
                 }
+                // Issue-2: 更新封面高度 CSS variable（供 sample-thumb 高度計算）
+                this._updateCoverHeight();
             });
+        },
+
+        // Issue-2: 讀取封面容器實際高度，設定 --cover-height CSS variable
+        // 讓 sample-thumb 用比例縮放取代 vw 單位，在任意視窗尺寸下保持正確比例
+        _updateCoverHeight() {
+            var cover = this.$el.querySelector('.av-card-full-cover');
+            if (!cover) return;
+            var h = cover.offsetHeight;
+            if (h > 0) {
+                cover.style.setProperty('--cover-height', h + 'px');
+            }
         },
     };
 };
