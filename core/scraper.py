@@ -270,7 +270,17 @@ def search_jav(number: str, source: str = 'auto', proxy_url: str = '') -> Option
             updates['cover_url'] = backup_video.cover_url
         if not main_video.tags and backup_video.tags:
             updates['tags'] = backup_video.tags
-            
+        if not main_video.director and backup_video.director:
+            updates['director'] = backup_video.director
+        if main_video.duration is None and backup_video.duration is not None:
+            updates['duration'] = backup_video.duration
+        if not main_video.label and backup_video.label:
+            updates['label'] = backup_video.label
+        if not main_video.series and backup_video.series:
+            updates['series'] = backup_video.series
+        if not main_video.sample_images and backup_video.sample_images:
+            updates['sample_images'] = backup_video.sample_images
+
         if updates:
             main_video = main_video.model_copy(update=updates)
 
