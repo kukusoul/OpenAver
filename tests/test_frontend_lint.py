@@ -406,6 +406,13 @@ class TestJellyfinFrontend:
         assert 'runJellyfinImageUpdate' in content, \
             "scanner.html 缺少 runJellyfinImageUpdate（T6d Jellyfin 批次補齊）"
 
+    def test_jellyfin_settings_hint_has_extrafanart(self):
+        """settings.html Jellyfin 模式描述文字應包含 extrafanart/ 說明（T5b）"""
+        html_file = PROJECT_ROOT / "web" / "templates" / "settings.html"
+        content = html_file.read_text(encoding='utf-8')
+        assert 'extrafanart' in content, \
+            "settings.html Jellyfin 圖片模式描述缺少 extrafanart/ 說明（T5b）"
+
 
 class TestOpenLocalGuard:
     """確認 openLocal() 綁定和 open_folder() API 的結構完整性（T5a / T5b）"""
