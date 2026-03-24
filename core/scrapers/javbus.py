@@ -7,7 +7,7 @@ from bs4 import BeautifulSoup
 
 from .base import BaseScraper
 from .models import Video, Actress
-from .utils import rate_limit
+from .utils import rate_limit, strip_number_prefix
 from core.logger import get_logger
 
 logger = get_logger(__name__)
@@ -124,6 +124,8 @@ class JavBusScraper(BaseScraper):
                 img = big_image.find("img", {"title": True})
                 if img:
                     title = img.get("title", "")
+        # 剝除番號前綴（兩條路徑都可能帶番號，統一在此處理）
+        title = strip_number_prefix(title, number)
 
         # Cover URL
         big_image = soup.find(class_="bigImage")
