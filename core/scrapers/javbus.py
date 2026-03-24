@@ -307,6 +307,24 @@ class JavBusScraper(BaseScraper):
         soup = BeautifulSoup(resp.text, "html.parser")
         return self._parse_search_ids(soup)
 
+    def _fetch_by_id(self, id_str: str) -> Optional[Video]:
+        """直接用 ID 取得影片資訊（繞過 validate_number，支援 variant ID 如 SONE-001_2026-03-20）"""
+        prefix = self._get_lang_prefix()
+        url = f"{self.BASE_URL}{prefix}/{id_str}"
+
+        try:
+            resp = self._session.get(url, timeout=self.config.timeout)
+        except requests.Timeout:
+            raise TimeoutError(f"Request timed out for {id_str}")
+
+        if resp.status_code != 200:
+            return None
+
+        soup = BeautifulSoup(resp.text, "html.parser")
+        # 用 id_str 的 base part（去掉日期後綴）作為 number
+        base_number = id_str.split('_')[0]
+        return self._parse_detail_page(soup, base_number, url)
+
     def search_by_keyword(self, keyword: str, limit: int = 20, page: int = 1) -> list[Video]:
         """
         關鍵字搜尋，回傳 Video 列表。
