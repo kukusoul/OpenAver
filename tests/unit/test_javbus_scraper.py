@@ -769,3 +769,16 @@ class TestRealActressStructure:
             assert video is not None
             assert len(video.actresses) >= 1
             assert video.actresses[0].name == '渚あいり'
+
+
+# ============================================================
+# Accept-Encoding guard — br 不應出現（無 Brotli 解碼器）
+# ============================================================
+
+def test_accept_encoding_no_brotli():
+    """JavBusScraper headers 不應宣告 br（專案無 brotli 依賴）"""
+    from core.scrapers import JavBusScraper
+    scraper = JavBusScraper()
+    ae = scraper._session.headers.get('Accept-Encoding', '')
+    assert 'br' not in ae, f"Accept-Encoding 不應含 br: {ae!r}"
+    assert 'gzip' in ae, f"Accept-Encoding 應含 gzip: {ae!r}"

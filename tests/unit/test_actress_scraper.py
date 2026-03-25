@@ -216,3 +216,15 @@ def test_search_star_on_javbus_request_exception():
         result = _search_star_on_javbus("桜空もも")
 
     assert result is None
+
+
+# ============================================================
+# Accept-Encoding guard — br 不應出現（無 Brotli 解碼器）
+# ============================================================
+
+def test_javbus_headers_no_brotli():
+    """_JAVBUS_HEADERS 不應宣告 br（專案無 brotli 依賴）"""
+    from core.actress_scraper import _JAVBUS_HEADERS
+    ae = _JAVBUS_HEADERS.get('Accept-Encoding', '')
+    assert 'br' not in ae, f"Accept-Encoding 不應含 br: {ae!r}"
+    assert 'gzip' in ae, f"Accept-Encoding 應含 gzip: {ae!r}"
