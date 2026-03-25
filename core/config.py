@@ -48,6 +48,7 @@ class SearchConfig(BaseModel):
     uncensored_mode_enabled: bool = False  # 無碼模式 - 只搜尋 AVSOX / FC2
     favorite_folder: str = ""  # 我的最愛資料夾 - 空字串 = 使用系統下載資料夾
     proxy_url: str = ""
+    primary_source: str = "javbus"  # 主要搜尋來源: "javbus" | "dmm"
 
 
 class SourceLinksConfig(BaseModel):
@@ -245,6 +246,14 @@ def load_config() -> dict:
                 if key not in sl:
                     sl[key] = default_val
                     need_save = True
+
+        # Migration: primary_source 補齊（Phase 36 T4）
+        if 'search' not in raw_config or not isinstance(raw_config.get('search'), dict):
+            raw_config['search'] = {}
+        search_section = raw_config['search']
+        if 'primary_source' not in search_section:
+            search_section['primary_source'] = 'javbus'
+            need_save = True
 
         # Save migrated config
         if need_save:
