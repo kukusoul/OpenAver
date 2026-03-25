@@ -1346,6 +1346,40 @@ class TestDMMTags:
         assert result == ["https://a.jpg", "https://b.jpg"]
         assert dmm_module._sample_images_supported is True
 
+    def test_sample_images_probe_high_res_url(self, dmm_scraper, monkeypatch):
+        """sampleImages URL 轉換為高解析度版本（-N.jpg → jp-N.jpg）"""
+        import core.scrapers.dmm as dmm_module
+        monkeypatch.setattr(dmm_module, '_sample_images_supported', None)
+
+        success_resp = _make_mock_resp(status_code=200, json_data={
+            "data": {"ppvContent": {"sampleImages": [
+                {"imageUrl": "https://pics.dmm.co.jp/digital/video/ipzz00698/ipzz00698-1.jpg"},
+                {"imageUrl": "https://pics.dmm.co.jp/digital/video/ipzz00698/ipzz00698-10.jpg"},
+            ]}}
+        })
+        with patch.object(dmm_scraper._session, 'post', return_value=success_resp):
+            result = dmm_scraper._probe_sample_images("ipzz00698")
+
+        assert result == [
+            "https://pics.dmm.co.jp/digital/video/ipzz00698/ipzz00698jp-1.jpg",
+            "https://pics.dmm.co.jp/digital/video/ipzz00698/ipzz00698jp-10.jpg",
+        ]
+
+    def test_sample_images_probe_non_jpg_preserved(self, dmm_scraper, monkeypatch):
+        """非 -N.jpg 格式的 URL 原樣保留"""
+        import core.scrapers.dmm as dmm_module
+        monkeypatch.setattr(dmm_module, '_sample_images_supported', None)
+
+        success_resp = _make_mock_resp(status_code=200, json_data={
+            "data": {"ppvContent": {"sampleImages": [
+                {"imageUrl": "https://example.com/sample.png"},
+            ]}}
+        })
+        with patch.object(dmm_scraper._session, 'post', return_value=success_resp):
+            result = dmm_scraper._probe_sample_images("test001")
+
+        assert result == ["https://example.com/sample.png"]
+
     def test_sample_images_probe_cache_false_skip(self, dmm_scraper, monkeypatch):
         """_sample_images_supported=False → 不發請求"""
         import core.scrapers.dmm as dmm_module
