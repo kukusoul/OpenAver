@@ -723,7 +723,7 @@ def smart_search(query: str, limit: int = 20, offset: int = 0, status_callback: 
             if videos:
                 results = [v.to_legacy_dict() for v in videos]
                 for r in results:
-                    r['_mode'] = 'fuzzy'
+                    r['_mode'] = 'actress'
                 # SSE 漸進回報：先送 seed（slot=-1），再逐筆送 result-item
                 if result_callback:
                     seed_ids = [r.get('number', '') for r in results]
