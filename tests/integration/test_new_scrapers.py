@@ -436,11 +436,13 @@ class TestDMMScraperNewFields:
         config = ScraperConfig(proxy_url="http://test-proxy:8080")
         return DMMScraper(config)
 
-    def _fetch(self, dmm_scraper, response_data, probe_return=([], "S1 NO.1 STYLE")):
+    def _fetch(self, dmm_scraper, response_data, probe_return=([], "S1 NO.1 STYLE"),
+               sample_images_return=[]):
         """Helper：用 mock response 呼叫 search，回傳 Video"""
         detail_resp = _make_mock_resp(status_code=200, json_data=response_data)
         with patch.object(dmm_scraper._session, 'post', return_value=detail_resp), \
              patch.object(dmm_scraper, '_probe_genres', return_value=probe_return), \
+             patch.object(dmm_scraper, '_probe_sample_images', return_value=sample_images_return), \
              patch('core.scrapers.utils.rate_limit'):
             return dmm_scraper.search("SONE-205")
 
@@ -450,7 +452,12 @@ class TestDMMScraperNewFields:
 
     def test_all_new_fields_happy_path(self, dmm_scraper):
         """duration / director / series / label / sample_images 全部正常"""
-        video = self._fetch(dmm_scraper, DMM_DETAIL_RESPONSE_FULL)
+        video = self._fetch(
+            dmm_scraper,
+            DMM_DETAIL_RESPONSE_FULL,
+            probe_return=([], "S1 NO.1 STYLE"),
+            sample_images_return=["https://a.jpg", "https://b.jpg"],
+        )
 
         assert video is not None
         # duration: 8966 // 60 == 149
@@ -461,7 +468,7 @@ class TestDMMScraperNewFields:
         assert video.series == "S1 系列"
         # label from probe
         assert video.label == "S1 NO.1 STYLE"
-        # sample_images
+        # sample_images from probe
         assert video.sample_images == ["https://a.jpg", "https://b.jpg"]
 
     # ------------------------------------------------------------------
@@ -569,44 +576,26 @@ class TestDMMScraperNewFields:
     # ------------------------------------------------------------------
 
     def test_sample_images_null(self, dmm_scraper):
-        """sampleImages=null → video.sample_images == []"""
-        data = {
-            "data": {
-                "ppvContent": {
-                    **DMM_DETAIL_RESPONSE_FULL["data"]["ppvContent"],
-                    "sampleImages": None,
-                }
-            }
-        }
-        video = self._fetch(dmm_scraper, data)
+        """_probe_sample_images 回傳 [] → video.sample_images == []"""
+        video = self._fetch(dmm_scraper, DMM_DETAIL_RESPONSE_FULL,
+                            probe_return=([], "S1 NO.1 STYLE"),
+                            sample_images_return=[])
         assert video is not None
         assert video.sample_images == []
 
     def test_sample_images_empty_list(self, dmm_scraper):
-        """sampleImages=[] → video.sample_images == []"""
-        data = {
-            "data": {
-                "ppvContent": {
-                    **DMM_DETAIL_RESPONSE_FULL["data"]["ppvContent"],
-                    "sampleImages": [],
-                }
-            }
-        }
-        video = self._fetch(dmm_scraper, data)
+        """_probe_sample_images 回傳空列表 → video.sample_images == []"""
+        video = self._fetch(dmm_scraper, DMM_DETAIL_RESPONSE_FULL,
+                            probe_return=([], "S1 NO.1 STYLE"),
+                            sample_images_return=[])
         assert video is not None
         assert video.sample_images == []
 
     def test_sample_images_missing_imageUrl_filtered(self, dmm_scraper):
-        """sampleImages=[{}] → imageUrl 缺失的項目被過濾 → sample_images == []"""
-        data = {
-            "data": {
-                "ppvContent": {
-                    **DMM_DETAIL_RESPONSE_FULL["data"]["ppvContent"],
-                    "sampleImages": [{}],
-                }
-            }
-        }
-        video = self._fetch(dmm_scraper, data)
+        """_probe_sample_images 過濾後回傳空列表 → sample_images == []"""
+        video = self._fetch(dmm_scraper, DMM_DETAIL_RESPONSE_FULL,
+                            probe_return=([], "S1 NO.1 STYLE"),
+                            sample_images_return=[])
         assert video is not None
         assert video.sample_images == []
 
@@ -823,7 +812,7 @@ class TestDMMSearchByKeyword:
                 results = dmm_scraper.search_by_keyword("未歩なな")
 
         v0 = results[0]
-        assert v0.number == "sone00205"
+        assert v0.number == "SONE-205"
         assert v0.title == "成人への卒業"
         assert v0.cover_url == "https://pics.dmm.co.jp/sone205pl.jpg"
         assert len(v0.actresses) == 1
@@ -833,10 +822,37 @@ class TestDMMSearchByKeyword:
         assert "sone00205" in v0.detail_url
 
         v1 = results[1]
-        assert v1.number == "sone00300"
+        assert v1.number == "SONE-300"
         assert len(v1.actresses) == 2
         assert v1.actresses[0].name == "星宮一花"
         assert v1.actresses[1].name == "三上悠亜"
+
+    # 3b. number format conversion
+    def test_keyword_number_format(self, dmm_scraper):
+        """content_id → 標準番號格式（strip leading zeros + uppercase）"""
+        mock_resp = _make_mock_resp(status_code=200, json_data=DMM_SEARCH_LIST_RESPONSE)
+        with patch.object(dmm_scraper._session, 'post', return_value=mock_resp):
+            with patch('core.scrapers.utils.rate_limit'):
+                results = dmm_scraper.search_by_keyword("未歩なな")
+        # sone00205 → SONE-205 (not SONE-00205)
+        assert results[0].number == "SONE-205"
+        # sone00300 → SONE-300
+        assert results[1].number == "SONE-300"
+
+    # 3c. _content_id_to_number helper unit test
+    def test_content_id_to_number_conversion(self, dmm_scraper):
+        """_content_id_to_number 各種格式"""
+        assert dmm_scraper._content_id_to_number("sone00205") == "SONE-205"
+        assert dmm_scraper._content_id_to_number("1stars00804") == "STARS-804"
+        assert dmm_scraper._content_id_to_number("ofje00709") == "OFJE-709"
+        assert dmm_scraper._content_id_to_number("ssni00001") == "SSNI-001"  # NOT SSNI-1
+        assert dmm_scraper._content_id_to_number("abc00001") == "ABC-001"    # NOT ABC-1
+        # 4-digit number preserved
+        assert dmm_scraper._content_id_to_number("abp01234") == "ABP-1234"
+        # edge: no leading zeros
+        assert dmm_scraper._content_id_to_number("test123") == "TEST-123"
+        # edge: fallback for non-matching format
+        assert dmm_scraper._content_id_to_number("weird-format") == "weird-format"
 
     # 4. contents=[] → []
     def test_keyword_empty_results(self, dmm_scraper):
@@ -1007,11 +1023,12 @@ class TestDMMTags:
 
     @pytest.fixture
     def dmm_scraper(self, tmp_path, monkeypatch):
-        """DMM scraper with isolated cache + reset _genres_supported"""
+        """DMM scraper with isolated cache + reset _genres_supported + _sample_images_supported"""
         import core.scrapers.dmm as dmm_module
         monkeypatch.setattr(dmm_module, "CACHE_FILE", tmp_path / "dmm_content_ids.json")
         monkeypatch.setattr(dmm_module, "PREFIX_FILE", tmp_path / "dmm_prefix_hints.json")
         monkeypatch.setattr(dmm_module, "_genres_supported", None)
+        monkeypatch.setattr(dmm_module, "_sample_images_supported", None)
         config = ScraperConfig(proxy_url="http://test-proxy:8080")
         return DMMScraper(config)
 
@@ -1093,6 +1110,7 @@ class TestDMMTags:
 
         with patch.object(dmm_scraper, '_probe_genres', return_value=([], '')), \
              patch.object(dmm_scraper, '_fetch_tags_from_html', return_value=[]), \
+             patch.object(dmm_scraper, '_probe_sample_images', return_value=[]), \
              patch.object(dmm_scraper._session, 'post', return_value=detail_resp), \
              patch('core.scrapers.utils.rate_limit'):
             video = dmm_scraper.search("SONE-205")
@@ -1138,6 +1156,53 @@ class TestDMMTags:
         assert tags == ['美少女', 'ハイビジョン']
         assert label == 'S1 NO.1 STYLE'
         assert dmm_module._genres_supported is True
+
+    def test_sample_images_probe_schema_error(self, dmm_scraper, monkeypatch):
+        """sampleImages schema error (HTTP 200) → 永久停用 sampleImages，但 genres 不受影響"""
+        import core.scrapers.dmm as dmm_module
+        monkeypatch.setattr(dmm_module, '_sample_images_supported', None)
+        monkeypatch.setattr(dmm_module, '_genres_supported', True)
+
+        # GraphQL schema errors come as HTTP 200 with errors in the body
+        error_resp = _make_mock_resp(status_code=200, json_data={
+            "errors": [{"message": "Cannot query field 'sampleImages' on type 'PPVContent'."}],
+            "data": None
+        })
+        with patch.object(dmm_scraper._session, 'post', return_value=error_resp):
+            result = dmm_scraper._probe_sample_images("sone00205")
+
+        assert result == []
+        assert dmm_module._sample_images_supported is False
+        # genres should still be True (unaffected)
+        assert dmm_module._genres_supported is True
+
+    def test_sample_images_probe_success(self, dmm_scraper, monkeypatch):
+        """sampleImages probe 成功 → 回傳圖片列表"""
+        import core.scrapers.dmm as dmm_module
+        monkeypatch.setattr(dmm_module, '_sample_images_supported', None)
+
+        success_resp = _make_mock_resp(status_code=200, json_data={
+            "data": {"ppvContent": {"sampleImages": [
+                {"imageUrl": "https://a.jpg"},
+                {"imageUrl": "https://b.jpg"}
+            ]}}
+        })
+        with patch.object(dmm_scraper._session, 'post', return_value=success_resp):
+            result = dmm_scraper._probe_sample_images("sone00205")
+
+        assert result == ["https://a.jpg", "https://b.jpg"]
+        assert dmm_module._sample_images_supported is True
+
+    def test_sample_images_probe_cache_false_skip(self, dmm_scraper, monkeypatch):
+        """_sample_images_supported=False → 不發請求"""
+        import core.scrapers.dmm as dmm_module
+        monkeypatch.setattr(dmm_module, '_sample_images_supported', False)
+
+        with patch.object(dmm_scraper._session, 'post') as mock_post:
+            result = dmm_scraper._probe_sample_images("sone00205")
+
+        assert result == []
+        mock_post.assert_not_called()
 
 
 # ============================================================
