@@ -417,3 +417,42 @@ class TestMigrationSourceLinks:
         assert isinstance(sl, dict)
         assert sl["dmm"] is True
         assert sl["javdb"] is False
+
+
+# ============ test_migration_primary_source ============
+
+class TestMigrationPrimarySource:
+    """primary_source 補齊 migration"""
+
+    def test_missing_primary_source_gets_default(self, tmp_path, monkeypatch):
+        """primary_source 不存在 → 補齊為 javbus"""
+        config_path = tmp_path / "config.json"
+        _write_config(config_path, {"search": {"proxy_url": ""}})
+        monkeypatch.setattr(core_config, "CONFIG_PATH", config_path)
+        monkeypatch.setattr(core_config, "CONFIG_DEFAULT_PATH", tmp_path / "config.default.json")
+
+        result = load_config()
+
+        assert result["search"]["primary_source"] == "javbus"
+
+    def test_existing_primary_source_preserved(self, tmp_path, monkeypatch):
+        """primary_source 已為 dmm → 不覆蓋"""
+        config_path = tmp_path / "config.json"
+        _write_config(config_path, {"search": {"proxy_url": "", "primary_source": "dmm"}})
+        monkeypatch.setattr(core_config, "CONFIG_PATH", config_path)
+        monkeypatch.setattr(core_config, "CONFIG_DEFAULT_PATH", tmp_path / "config.default.json")
+
+        result = load_config()
+
+        assert result["search"]["primary_source"] == "dmm"
+
+    def test_search_section_missing(self, tmp_path, monkeypatch):
+        """search section 不存在 → 建立並補齊"""
+        config_path = tmp_path / "config.json"
+        _write_config(config_path, {})
+        monkeypatch.setattr(core_config, "CONFIG_PATH", config_path)
+        monkeypatch.setattr(core_config, "CONFIG_DEFAULT_PATH", tmp_path / "config.default.json")
+
+        result = load_config()
+
+        assert result["search"]["primary_source"] == "javbus"

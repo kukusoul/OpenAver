@@ -154,6 +154,21 @@ class D2PassScraper(BaseScraper):
         avg_rating = data.get('AvgRating')
         rating = float(avg_rating) if avg_rating is not None else None
 
+        # Series
+        series = data.get('Series') or data.get('SeriesJa') or data.get('SeriesEn') or ''
+
+        # Duration（秒 → 分鐘；可能是整數或字串）
+        duration_raw = data.get('Duration')
+        duration: Optional[int] = None
+        if duration_raw is not None:
+            try:
+                duration = int(duration_raw) // 60
+            except (ValueError, TypeError):
+                pass
+
+        # SampleImages
+        sample_images: list = data.get('SampleImages') or []
+
         return Video(
             number=movie_id,
             title=title,
@@ -165,7 +180,126 @@ class D2PassScraper(BaseScraper):
             source=self.source_name,
             detail_url=detail_url,
             rating=rating,
+            series=series,
+            duration=duration,
+            sample_images=sample_images,
         )
+
+    def _fetch_gallery_from_html(self, site: str, movie_id: str) -> list[str]:
+        """caribbeancom HTML 頁面から gallery 画像 URL を抽出する。
+
+        1pondo / 10musume は SPA のため raw HTML に gallery が含まれず、
+        画像 URL も会員限定（404）のため caribbeancom のみ対応。
+        """
+        html_url = self.SITE_DETAIL_URL[site].format(id=movie_id)
+        try:
+            resp = self._session.get(html_url, timeout=self.config.timeout)
+            if resp.status_code != 200:
+                return []
+            # Extract images/l/NNN.jpg pattern
+            nums = re.findall(r'images/l/(\d{3})\.jpg', resp.text)
+            if not nums:
+                return []
+            base = f'https://www.caribbeancom.com/moviepages/{movie_id}/images/l'
+            # Deduplicate while preserving order
+            seen = set()
+            images = []
+            for n in nums:
+                if n not in seen:
+                    seen.add(n)
+                    images.append(f'{base}/{n}.jpg')
+            return images
+        except Exception as e:
+            logger.debug(f"D2Pass gallery fetch failed for {site}/{movie_id}: {e}")
+            return []
+
+    def _parse_caribbeancom_html(self, movie_id: str) -> Optional[Video]:
+        """caribbeancom JSON API 404 時的 HTML fallback。
+
+        從 HTML 頁面解析完整 Video（含 gallery）。
+        用 regex 解析，不引入 BeautifulSoup/lxml 依賴。
+        """
+        html_url = self.SITE_DETAIL_URL['caribbeancom'].format(id=movie_id)
+        try:
+            resp = self._session.get(html_url, timeout=self.config.timeout)
+            if resp.status_code != 200:
+                logger.debug(f"D2Pass caribbeancom HTML fallback: HTTP {resp.status_code} for {movie_id}")
+                return None
+            html_text = resp.text
+
+            # Title — <h1> 第一個
+            title = ''
+            m = re.search(r'<h1[^>]*>([^<]+)</h1>', html_text)
+            if m:
+                title = m.group(1).strip()
+            if not title:
+                logger.debug(f"D2Pass caribbeancom HTML fallback: no title found for {movie_id}")
+                return None
+
+            # Duration — 再生時間 後的 HH:MM:SS → 分鐘
+            duration: Optional[int] = None
+            m = re.search(r'再生時間.*?(\d{2}):(\d{2}):(\d{2})', html_text, re.DOTALL)
+            if m:
+                h, mn, s = int(m.group(1)), int(m.group(2)), int(m.group(3))
+                duration = h * 60 + mn
+
+            # Series — シリーズ 後的 <a> 文字
+            series = ''
+            m = re.search(r'シリーズ.*?<a[^>]*>([^<]+)</a>', html_text, re.DOTALL)
+            if m:
+                series = m.group(1).strip()
+
+            # Actresses — 出演 後的 </li> 區間內所有 <a> 文字
+            actresses: list[Actress] = []
+            m = re.search(r'出演(.*?)</li>', html_text, re.DOTALL)
+            if m:
+                block = m.group(1)
+                names = re.findall(r'<a[^>]*>([^<]+)</a>', block)
+                actresses = [Actress(name=n.strip()) for n in names if n.strip()]
+
+            # Tags — タグ 後的 </li> 區間內所有 <a> 文字
+            tags: list[str] = []
+            m = re.search(r'タグ(.*?)</li>', html_text, re.DOTALL)
+            if m:
+                block = m.group(1)
+                tags = [t.strip() for t in re.findall(r'<a[^>]*>([^<]+)</a>', block) if t.strip()]
+                # 過濾解析度標籤
+                tags = [t for t in tags if not re.match(r'^\d+p$', t)]
+
+            # Gallery — images/l/NNN.jpg pattern（去重保序）
+            nums = re.findall(r'images/l/(\d{3})\.jpg', html_text)
+            seen: set[str] = set()
+            sample_images: list[str] = []
+            base = f'https://www.caribbeancom.com/moviepages/{movie_id}/images/l'
+            for n in nums:
+                if n not in seen:
+                    seen.add(n)
+                    sample_images.append(f'{base}/{n}.jpg')
+
+            # Cover
+            cover_url = f'https://www.caribbeancom.com/moviepages/{movie_id}/images/l_l.jpg'
+
+            # Detail URL
+            detail_url = self.SITE_DETAIL_URL['caribbeancom'].format(id=movie_id)
+
+            return Video(
+                number=movie_id,
+                title=title,
+                actresses=actresses,
+                date='',
+                maker='',
+                cover_url=cover_url,
+                tags=tags,
+                source=self.source_name,
+                detail_url=detail_url,
+                rating=None,
+                series=series,
+                duration=duration,
+                sample_images=sample_images,
+            )
+        except Exception as e:
+            logger.debug(f"D2Pass caribbeancom HTML fallback failed: {e}")
+            return None
 
     def search(self, number: str) -> Optional[Video]:
         """
@@ -184,10 +318,21 @@ class D2PassScraper(BaseScraper):
             try:
                 data = self._fetch_json(site, movie_id)
                 if data is None:
+                    # caribbeancom JSON API 全面 404，嘗試 HTML fallback
+                    if site == 'caribbeancom':
+                        video = self._parse_caribbeancom_html(movie_id)
+                        if video is not None:
+                            rate_limit(self.config.delay)
+                            return video
                     continue
 
                 video = self._parse_json(data, site, movie_id)
                 if video is not None:
+                    # caribbeancom HTML has gallery images; 1pondo/10musume are member-only
+                    if not video.sample_images and site == 'caribbeancom':
+                        gallery = self._fetch_gallery_from_html(site, movie_id)
+                        if gallery:
+                            video = video.model_copy(update={'sample_images': gallery})
                     rate_limit(self.config.delay)
                     return video
 

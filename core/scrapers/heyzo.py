@@ -83,23 +83,49 @@ class HEYZOScraper(BaseScraper):
         從 HTML table.movieInfo 提取補充資料。
 
         Returns:
-            dict with keys: 'series', 'tags'
+            dict with keys: 'series', 'tags', 'duration', 'sample_images'
         """
-        result = {'series': '', 'tags': []}
+        result = {'series': '', 'tags': [], 'duration': None, 'sample_images': []}
         try:
             html = etree.fromstring(html_content, etree.HTMLParser())
 
             # Series
             series = html.xpath(
-                '//table[@class="movieInfo"]//th[contains(text(),"Series")]/following-sibling::td[1]/text()'
+                '//table[@class="movieInfo"]//tr/td[contains(text(),"Series")]/following-sibling::td[1]/text()'
             )
-            result['series'] = series[0].strip() if series else ''
+            series_text = series[0].strip() if series else ''
+            # Filter out placeholder values like "-----" or "---"
+            if series_text and all(c == '-' for c in series_text):
+                series_text = ''
+            result['series'] = series_text
 
-            # Tags（Actress Type 欄位）
+            # Tags（Type 欄位）
             tags = html.xpath(
-                '//table[@class="movieInfo"]//th[contains(text(),"Type")]/following-sibling::td[1]//a/text()'
+                '//table[@class="movieInfo"]//tr/td[contains(text(),"Type")]/following-sibling::td[1]//a/text()'
             )
             result['tags'] = [t.strip() for t in tags if t.strip()]
+
+            # Duration（從 JS 變數 heyzo.duration 提取 "full":"HH:MM:SS"）
+            html_text = html_content.decode('utf-8', errors='replace')
+            dur_match = re.search(r'"full"\s*:\s*"(\d{2}):(\d{2}):(\d{2})"', html_text)
+            if dur_match:
+                try:
+                    h, m = int(dur_match.group(1)), int(dur_match.group(2))
+                    result['duration'] = h * 60 + m
+                except ValueError:
+                    pass
+
+            # Sample images（gallery は JS document.write で生成、dir_gallery + thumbnail 連番から構築）
+            dir_match = re.search(r'dir_gallery\s*=\s*"(/contents/[^"]+)"', html_text)
+            if dir_match:
+                dir_gallery = dir_match.group(1)
+                # sample-images セクション内の thumbnail_NNN.jpg から NNN を抽出
+                si_idx = html_text.find('sample-images')
+                if si_idx >= 0:
+                    section = html_text[si_idx:si_idx + 5000]
+                    gallery_nums = re.findall(r'thumbnail_(\d{3})\.jpg', section)
+                    for num in gallery_nums:
+                        result['sample_images'].append(f"https://en.heyzo.com{dir_gallery}{num}.jpg")
 
         except Exception as e:
             logger.debug(f"HEYZO table parse error: {e}")
@@ -184,6 +210,9 @@ class HEYZOScraper(BaseScraper):
                 detail_url=ja_url,
                 rating=rating,
                 votes=votes,
+                series=table_data['series'],
+                duration=table_data['duration'],
+                sample_images=table_data['sample_images'],
             )
 
         except requests.Timeout:

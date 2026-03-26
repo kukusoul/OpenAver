@@ -21,6 +21,7 @@ PREFIX_FILE = PROJECT_ROOT / "dmm_prefix_hints.json"    # 番號前綴 → DMM �
 # module-level capability cache（三態）
 # None = 未知（首次或暫時性失敗），True = schema 支援，False = schema 不支援
 _genres_supported: Optional[bool] = None
+_sample_images_supported: Optional[bool] = None
 
 
 class DMMScraper(BaseScraper):
@@ -70,12 +71,36 @@ class DMMScraper(BaseScraper):
         }
     """
 
+    SEARCH_LIST_QUERY = """
+        query AvSearch($limit: Int!, $offset: Int!, $sort: ContentSearchPPVSort!, $queryWord: String) {
+            legacySearchPPV(limit: $limit, offset: $offset, sort: $sort, queryWord: $queryWord) {
+                result {
+                    contents {
+                        id
+                        title
+                        packageImage { largeUrl }
+                        actresses { name }
+                        maker { name }
+                    }
+                }
+            }
+        }
+    """
+
     # 獨立 probe query — 與 DETAIL_QUERY 分離，失敗不影響主流程
     GENRES_PROBE_QUERY = """
         query ProbeGenres($id: ID!) {
             ppvContent(id: $id) {
                 genres { name }
                 label { name }
+            }
+        }
+    """
+
+    SAMPLE_IMAGES_PROBE_QUERY = """
+        query ProbeSampleImages($id: ID!) {
+            ppvContent(id: $id) {
+                sampleImages { imageUrl }
             }
         }
     """
@@ -159,6 +184,52 @@ class DMMScraper(BaseScraper):
         except Exception:
             # 網路錯誤、timeout → 暫時性失敗，維持 None（不設 False）
             return [], ''
+
+    def _probe_sample_images(self, content_id: str) -> list[str]:
+        """
+        探測 ppvContent 是否支援 sampleImages 欄位。
+
+        獨立於 genres/label probe，避免互相干擾。
+        三態 cache 控制同 _probe_genres()。
+        """
+        global _sample_images_supported
+
+        if _sample_images_supported is False:
+            return []
+
+        try:
+            payload = {
+                'query': self.SAMPLE_IMAGES_PROBE_QUERY,
+                'variables': {'id': content_id}
+            }
+            resp = self._session.post(self.API_URL, json=payload, timeout=5)
+
+            if resp.status_code != 200:
+                return []
+
+            resp_json = resp.json()
+            errors = resp_json.get('errors', [])
+
+            if any(
+                any(pat in (e.get('message', '') or '') for pat in self.SCHEMA_ERROR_PATTERNS)
+                for e in errors
+            ):
+                _sample_images_supported = False
+                logger.info("[DMM] GraphQL schema 不支援 sampleImages，已永久停用 probe")
+                return []
+
+            data = resp_json.get('data') or {}
+            item = data.get('ppvContent')
+
+            if item is None:
+                return []
+
+            _sample_images_supported = True
+            raw_samples = item.get('sampleImages') or []
+            return [re.sub(r'(?<!jp)-(\d+)\.jpg$', r'jp-\1.jpg', s['imageUrl']) for s in raw_samples if s.get('imageUrl')]
+
+        except Exception:
+            return []
 
     def _fetch_tags_from_html(self, content_id: str) -> list[str]:
         """
@@ -306,6 +377,31 @@ class DMMScraper(BaseScraper):
             # 儲存學習到的映射
             self._save_prefix_hint(prefix, dmm_prefix)
 
+    def _content_id_to_number(self, content_id: str) -> str:
+        """
+        從 content_id 推導標準番號格式。
+
+        DMM content_id 固定 5 位數字零補位（zfill(5)）。
+        反向推導時 strip leading zeros 但保留至少 3 位數字。
+
+        Examples:
+            sone00205   → SONE-205
+            1stars00804 → STARS-804
+            ssni00001   → SSNI-001
+            ofje00709   → OFJE-709
+            abp01234    → ABP-1234
+        """
+        m = re.match(r'^(\d*)([a-z]+)(\d+)$', content_id.lower())
+        if m:
+            alpha = m.group(2).upper()
+            num = m.group(3)
+            # Strip leading zeros but keep at least 3 digits
+            stripped = num.lstrip('0') or '0'
+            if len(stripped) < 3 and len(num) >= 3:
+                stripped = num[-3:]
+            return f"{alpha}-{stripped}"
+        return content_id
+
     def _search_content_id(self, number: str) -> Optional[str]:
         """
         用搜索 API 查找正確的 content_id（MDCX 方法）
@@ -387,9 +483,20 @@ class DMMScraper(BaseScraper):
                 release_date = release_date.split('T')[0]
 
             # T5a: GraphQL probe → T5b: HTML fallback
-            tags, _label = self._probe_genres(content_id)
+            tags, label = self._probe_genres(content_id)
             if not tags:
                 tags = self._fetch_tags_from_html(content_id)
+
+            sample_images = self._probe_sample_images(content_id)
+
+            # 新欄位提取
+            directors_list = item.get('directors') or []
+            director = directors_list[0]['name'] if directors_list else ''
+
+            raw_duration = item.get('duration')
+            duration = raw_duration // 60 if raw_duration is not None else None
+
+            series = (item.get('series') or {}).get('name', '')
 
             video = Video(
                 number=item.get('makerContentId', ''),
@@ -401,6 +508,11 @@ class DMMScraper(BaseScraper):
                 tags=tags,
                 source=self.source_name,
                 detail_url=f"https://www.dmm.co.jp/digital/videoa/-/detail/=/cid={content_id}/",
+                director=director,
+                duration=duration,
+                label=label,
+                series=series,
+                sample_images=sample_images,
             )
 
             return video
@@ -471,7 +583,131 @@ class DMMScraper(BaseScraper):
         # 4. 完全失敗
         return None
 
+    def search_by_keyword_with_ids(self, keyword: str, limit: int = 20) -> list[tuple[str, Video]]:
+        """
+        關鍵字搜尋（輕量版）— 回傳 (content_id, shallow_Video) tuples。
+        供 facade 層 ThreadPoolExecutor enrichment 使用。
+        不呼叫 _fetch_by_id（不做 enrichment）。
+        """
+        if not self.config.proxy_url:
+            return []
+
+        try:
+            payload = {
+                'query': self.SEARCH_LIST_QUERY,
+                'variables': {
+                    'limit': limit,
+                    'offset': 0,
+                    'sort': 'RELEASE_DATE',
+                    'queryWord': keyword,
+                }
+            }
+            response = self._session.post(
+                self.API_URL,
+                json=payload,
+                timeout=self.config.timeout,
+            )
+
+            if response.status_code != 200:
+                return []
+
+            data = response.json()
+            if not data.get('data') or not data['data'].get('legacySearchPPV'):
+                return []
+
+            contents = data['data']['legacySearchPPV']['result']['contents']
+            if not contents:
+                return []
+
+            pairs = []
+            for item in contents:
+                content_id = item.get('id', '')
+                if not content_id:
+                    continue
+                actresses = [
+                    Actress(name=a['name'])
+                    for a in (item.get('actresses') or [])
+                    if a.get('name')
+                ]
+                video = Video(
+                    number=self._content_id_to_number(content_id),
+                    title=item.get('title', ''),
+                    actresses=actresses,
+                    maker=(item.get('maker') or {}).get('name', ''),
+                    cover_url=(item.get('packageImage') or {}).get('largeUrl', ''),
+                    source=self.source_name,
+                    detail_url=f"https://www.dmm.co.jp/digital/videoa/-/detail/=/cid={content_id}/",
+                )
+                pairs.append((content_id, video))
+
+            return pairs
+
+        except Exception:
+            return []
+
     def search_by_keyword(self, keyword: str, limit: int = 20) -> list[Video]:
-        """關鍵字搜尋（目前僅支援番號）"""
-        result = self.search(keyword)
-        return [result] if result else []
+        """關鍵字搜尋（女優名、片商名等日文關鍵字）"""
+        if not self.config.proxy_url:
+            return []
+
+        try:
+            payload = {
+                'query': self.SEARCH_LIST_QUERY,
+                'variables': {
+                    'limit': limit,
+                    'offset': 0,
+                    'sort': 'RELEASE_DATE',
+                    'queryWord': keyword,
+                }
+            }
+            response = self._session.post(
+                self.API_URL,
+                json=payload,
+                timeout=self.config.timeout,
+            )
+
+            if response.status_code != 200:
+                return []
+
+            data = response.json()
+            if not data.get('data') or not data['data'].get('legacySearchPPV'):
+                return []
+
+            contents = data['data']['legacySearchPPV']['result']['contents']
+            if not contents:
+                return []
+
+            results = []
+            for item in contents:
+                content_id = item.get('id', '')
+                if not content_id:
+                    continue
+
+                # Enrichment: 逐筆 _fetch_by_id 取得完整 Video
+                try:
+                    video = self._fetch_by_id(content_id)
+                except Exception:
+                    video = None
+                if video is None:
+                    # Fallback: 從搜尋結果建構 shallow Video
+                    actresses = [
+                        Actress(name=a['name'])
+                        for a in (item.get('actresses') or [])
+                        if a.get('name')
+                    ]
+                    video = Video(
+                        number=self._content_id_to_number(content_id),
+                        title=item.get('title', ''),
+                        actresses=actresses,
+                        maker=(item.get('maker') or {}).get('name', ''),
+                        cover_url=(item.get('packageImage') or {}).get('largeUrl', ''),
+                        source=self.source_name,
+                        detail_url=f"https://www.dmm.co.jp/digital/videoa/-/detail/=/cid={content_id}/",
+                    )
+                results.append(video)
+                rate_limit(self.config.delay)
+
+            return results
+
+        except Exception:
+            return []

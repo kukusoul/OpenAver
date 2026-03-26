@@ -68,8 +68,8 @@ HEYZO_EN_HTML = b"""
 </head>
 <body>
 <table class="movieInfo">
-<tr><th>Series</th><td>Premium Collection</td></tr>
-<tr><th>Actress Type</th><td><a>Cute</a> <a>Slender</a></td></tr>
+<tr><td>Series</td><td>Premium Collection</td></tr>
+<tr><td>Type</td><td><a>Cute</a> <a>Slender</a></td></tr>
 </table>
 </body>
 </html>
@@ -399,6 +399,208 @@ class TestDMMScraper:
 
 
 # ============================================================
+# DMM_DETAIL_RESPONSE_FULL — 包含所有新欄位的完整 fixture
+# ============================================================
+
+DMM_DETAIL_RESPONSE_FULL = {
+    "data": {
+        "ppvContent": {
+            "id": "sone00205",
+            "title": "成人への卒業",
+            "description": "テスト",
+            "packageImage": {"largeUrl": "https://pics.dmm.co.jp/sone205pl.jpg"},
+            "makerReleasedAt": "2024-03-19T00:00:00+09:00",
+            "duration": 8966,
+            "actresses": [{"name": "Nana Miho"}],
+            "directors": [{"name": "前田文豪"}],
+            "series": {"name": "S1 系列"},
+            "maker": {"name": "S1 NO.1 STYLE"},
+            "makerContentId": "SONE-205",
+            "sampleImages": [
+                {"imageUrl": "https://a.jpg"},
+                {"imageUrl": "https://b.jpg"},
+            ],
+        }
+    }
+}
+
+
+class TestDMMScraperNewFields:
+    """DMM 爬蟲新欄位測試（director / duration / series / label / sample_images）"""
+
+    @pytest.fixture
+    def dmm_scraper(self, tmp_path, monkeypatch):
+        import core.scrapers.dmm as dmm_module
+        monkeypatch.setattr(dmm_module, "CACHE_FILE", tmp_path / "dmm_content_ids.json")
+        monkeypatch.setattr(dmm_module, "PREFIX_FILE", tmp_path / "dmm_prefix_hints.json")
+        config = ScraperConfig(proxy_url="http://test-proxy:8080")
+        return DMMScraper(config)
+
+    def _fetch(self, dmm_scraper, response_data, probe_return=([], "S1 NO.1 STYLE"),
+               sample_images_return=[]):
+        """Helper：用 mock response 呼叫 search，回傳 Video"""
+        detail_resp = _make_mock_resp(status_code=200, json_data=response_data)
+        with patch.object(dmm_scraper._session, 'post', return_value=detail_resp), \
+             patch.object(dmm_scraper, '_probe_genres', return_value=probe_return), \
+             patch.object(dmm_scraper, '_probe_sample_images', return_value=sample_images_return), \
+             patch('core.scrapers.utils.rate_limit'):
+            return dmm_scraper.search("SONE-205")
+
+    # ------------------------------------------------------------------
+    # Happy path — all fields present
+    # ------------------------------------------------------------------
+
+    def test_all_new_fields_happy_path(self, dmm_scraper):
+        """duration / director / series / label / sample_images 全部正常"""
+        video = self._fetch(
+            dmm_scraper,
+            DMM_DETAIL_RESPONSE_FULL,
+            probe_return=([], "S1 NO.1 STYLE"),
+            sample_images_return=["https://a.jpg", "https://b.jpg"],
+        )
+
+        assert video is not None
+        # duration: 8966 // 60 == 149
+        assert video.duration == 149
+        # director
+        assert video.director == "前田文豪"
+        # series
+        assert video.series == "S1 系列"
+        # label from probe
+        assert video.label == "S1 NO.1 STYLE"
+        # sample_images from probe
+        assert video.sample_images == ["https://a.jpg", "https://b.jpg"]
+
+    # ------------------------------------------------------------------
+    # duration edge cases
+    # ------------------------------------------------------------------
+
+    def test_duration_null(self, dmm_scraper):
+        """duration=null → Video.duration is None"""
+        data = {
+            "data": {
+                "ppvContent": {
+                    **DMM_DETAIL_RESPONSE_FULL["data"]["ppvContent"],
+                    "duration": None,
+                }
+            }
+        }
+        video = self._fetch(dmm_scraper, data)
+        assert video is not None
+        assert video.duration is None
+
+    def test_duration_zero(self, dmm_scraper):
+        """duration=0 → Video.duration == 0"""
+        data = {
+            "data": {
+                "ppvContent": {
+                    **DMM_DETAIL_RESPONSE_FULL["data"]["ppvContent"],
+                    "duration": 0,
+                }
+            }
+        }
+        video = self._fetch(dmm_scraper, data)
+        assert video is not None
+        assert video.duration == 0
+
+    # ------------------------------------------------------------------
+    # director edge cases
+    # ------------------------------------------------------------------
+
+    def test_directors_empty_list(self, dmm_scraper):
+        """directors=[] → Video.director == ''"""
+        data = {
+            "data": {
+                "ppvContent": {
+                    **DMM_DETAIL_RESPONSE_FULL["data"]["ppvContent"],
+                    "directors": [],
+                }
+            }
+        }
+        video = self._fetch(dmm_scraper, data)
+        assert video is not None
+        assert video.director == ""
+
+    def test_directors_null(self, dmm_scraper):
+        """directors=null → Video.director == ''"""
+        data = {
+            "data": {
+                "ppvContent": {
+                    **DMM_DETAIL_RESPONSE_FULL["data"]["ppvContent"],
+                    "directors": None,
+                }
+            }
+        }
+        video = self._fetch(dmm_scraper, data)
+        assert video is not None
+        assert video.director == ""
+
+    # ------------------------------------------------------------------
+    # series edge cases
+    # ------------------------------------------------------------------
+
+    def test_series_null(self, dmm_scraper):
+        """series=null → Video.series == ''"""
+        data = {
+            "data": {
+                "ppvContent": {
+                    **DMM_DETAIL_RESPONSE_FULL["data"]["ppvContent"],
+                    "series": None,
+                }
+            }
+        }
+        video = self._fetch(dmm_scraper, data)
+        assert video is not None
+        assert video.series == ""
+
+    # ------------------------------------------------------------------
+    # label edge cases (from _probe_genres return value)
+    # ------------------------------------------------------------------
+
+    def test_label_from_probe(self, dmm_scraper):
+        """probe 回傳 label → Video.label 正確設定"""
+        video = self._fetch(dmm_scraper, DMM_DETAIL_RESPONSE_FULL,
+                            probe_return=([], "S1 NO.1 STYLE"))
+        assert video is not None
+        assert video.label == "S1 NO.1 STYLE"
+
+    def test_label_probe_empty(self, dmm_scraper):
+        """probe 回傳 '' → Video.label == ''"""
+        video = self._fetch(dmm_scraper, DMM_DETAIL_RESPONSE_FULL,
+                            probe_return=([], ""))
+        assert video is not None
+        assert video.label == ""
+
+    # ------------------------------------------------------------------
+    # sample_images edge cases
+    # ------------------------------------------------------------------
+
+    def test_sample_images_null(self, dmm_scraper):
+        """_probe_sample_images 回傳 [] → video.sample_images == []"""
+        video = self._fetch(dmm_scraper, DMM_DETAIL_RESPONSE_FULL,
+                            probe_return=([], "S1 NO.1 STYLE"),
+                            sample_images_return=[])
+        assert video is not None
+        assert video.sample_images == []
+
+    def test_sample_images_empty_list(self, dmm_scraper):
+        """_probe_sample_images 回傳空列表 → video.sample_images == []"""
+        video = self._fetch(dmm_scraper, DMM_DETAIL_RESPONSE_FULL,
+                            probe_return=([], "S1 NO.1 STYLE"),
+                            sample_images_return=[])
+        assert video is not None
+        assert video.sample_images == []
+
+    def test_sample_images_missing_imageUrl_filtered(self, dmm_scraper):
+        """_probe_sample_images 過濾後回傳空列表 → sample_images == []"""
+        video = self._fetch(dmm_scraper, DMM_DETAIL_RESPONSE_FULL,
+                            probe_return=([], "S1 NO.1 STYLE"),
+                            sample_images_return=[])
+        assert video is not None
+        assert video.sample_images == []
+
+
+# ============================================================
 # Class 4: TestProxyAPI
 # ============================================================
 
@@ -504,12 +706,12 @@ class TestPipeline:
         mock_heyzo.assert_called()
 
     def test_dmm_top1_when_proxy(self):
-        """有 proxy_url 且搜尋番號格式 → DMM 優先於 variant IDs"""
+        """primary_source='dmm' + proxy_url + 番號格式 → DMM Top-1 shortcut 被觸發"""
         mock_video = _make_video("dmm", "SONE-205")
 
         with patch.object(DMMScraper, 'search', return_value=mock_video) as mock_dmm:
             with patch('core.scrapers.utils.rate_limit'):
-                results = smart_search("SONE-205", proxy_url="http://proxy:8080")
+                results = smart_search("SONE-205", proxy_url="http://proxy:8080", primary_source="dmm")
 
         mock_dmm.assert_called()
         assert len(results) >= 1
@@ -531,6 +733,578 @@ class TestPipeline:
 
         assert len(results) == 1
         mock_d2.assert_not_called()
+
+    def test_primary_source_javbus_skips_dmm_shortcut(self):
+        """primary_source='javbus'（預設）→ 不走 DMM Top-1 shortcut，走 search_jav(auto)"""
+        mock_video = _make_video("javbus", "SONE-205")
+        with patch('core.scraper.search_jav', return_value=mock_video.to_legacy_dict()) as mock_sj:
+            with patch.object(DMMScraper, 'search') as mock_dmm:
+                with patch('core.scraper.get_all_variant_ids', return_value=[]):
+                    results = smart_search("SONE-205", proxy_url="http://proxy:8080", primary_source="javbus")
+        # DMM shortcut should NOT be called directly
+        mock_dmm.assert_not_called()
+        # search_jav(auto) should be called
+        mock_sj.assert_called()
+
+    def test_dmm_top1_when_proxy_primary_dmm(self):
+        """primary_source='dmm' + proxy → DMM Top-1 shortcut"""
+        mock_video = _make_video("dmm", "SONE-205")
+        with patch.object(DMMScraper, 'search', return_value=mock_video) as mock_dmm:
+            with patch('core.scrapers.utils.rate_limit'):
+                results = smart_search("SONE-205", proxy_url="http://proxy:8080", primary_source="dmm")
+        mock_dmm.assert_called()
+        assert len(results) >= 1
+        assert results[0]['_mode'] == 'exact'
+
+    def test_primary_source_dmm_no_proxy_fallback(self):
+        """primary_source='dmm' + 無 proxy → search_jav(auto) 不含 DMM"""
+        mock_video = _make_video("javbus", "SONE-205")
+        with patch('core.scraper.search_jav', return_value=mock_video.to_legacy_dict()) as mock_sj:
+            with patch('core.scraper.get_all_variant_ids', return_value=[]):
+                results = smart_search("SONE-205", proxy_url="", primary_source="dmm")
+        # Should still work via search_jav(auto)
+        mock_sj.assert_called()
+
+    def test_merge_priority_dmm(self):
+        """primary_source='dmm' → DMM 為 main_video"""
+        from core.scrapers.jav321 import JAV321Scraper
+        from core.scrapers.javdb import JavDBScraper
+        from core.scrapers.fc2 import FC2Scraper
+        from core.scrapers.avsox import AVSOXScraper
+        dmm_video = _make_video("dmm", "SONE-205")
+        javbus_video = _make_video("javbus", "SONE-205")
+
+        with patch.object(DMMScraper, 'search', return_value=dmm_video), \
+             patch.object(JavBusScraper, 'search', return_value=javbus_video), \
+             patch.object(JAV321Scraper, 'search', return_value=None), \
+             patch.object(JavDBScraper, 'search', return_value=None), \
+             patch.object(FC2Scraper, 'search', return_value=None), \
+             patch.object(AVSOXScraper, 'search', return_value=None), \
+             patch('core.scrapers.utils.rate_limit'):
+            result = search_jav("SONE-205", proxy_url="http://proxy:8080", primary_source="dmm")
+
+        assert result['_source'] == 'dmm'
+
+    def test_merge_priority_javbus(self):
+        """primary_source='javbus' → JavBus 為 main_video（即使 DMM 也有結果）"""
+        from core.scrapers.jav321 import JAV321Scraper
+        from core.scrapers.javdb import JavDBScraper
+        from core.scrapers.fc2 import FC2Scraper
+        from core.scrapers.avsox import AVSOXScraper
+        dmm_video = _make_video("dmm", "SONE-205")
+        javbus_video = _make_video("javbus", "SONE-205")
+
+        with patch.object(DMMScraper, 'search', return_value=dmm_video), \
+             patch.object(JavBusScraper, 'search', return_value=javbus_video), \
+             patch.object(JAV321Scraper, 'search', return_value=None), \
+             patch.object(JavDBScraper, 'search', return_value=None), \
+             patch.object(FC2Scraper, 'search', return_value=None), \
+             patch.object(AVSOXScraper, 'search', return_value=None), \
+             patch('core.scrapers.utils.rate_limit'):
+            result = search_jav("SONE-205", proxy_url="http://proxy:8080", primary_source="javbus")
+
+        assert result['_source'] == 'javbus'
+
+    def test_get_fuzzy_source_dmm_no_proxy(self):
+        """primary_source='dmm' + 無 proxy → fallback to javbus"""
+        from core.scraper import _get_fuzzy_source
+        assert _get_fuzzy_source('dmm', '') == 'javbus'
+        assert _get_fuzzy_source('dmm', None) == 'javbus'
+        assert _get_fuzzy_source('dmm', 'http://proxy') == 'dmm'
+        assert _get_fuzzy_source('javbus', '') == 'javbus'
+        assert _get_fuzzy_source('javbus', 'http://proxy') == 'javbus'
+
+    def test_exact_mode_passes_primary_source(self):
+        """REST mode=exact → search_jav() 收到 primary_source（不再被忽略）"""
+        from unittest.mock import patch
+        from fastapi.testclient import TestClient
+        from web.app import app
+        from core.scraper import search_jav as real_search_jav
+
+        client = TestClient(app)
+
+        captured_kwargs = {}
+
+        def fake_search_jav(number, source='auto', proxy_url='', primary_source='javbus'):
+            captured_kwargs['primary_source'] = primary_source
+            captured_kwargs['proxy_url'] = proxy_url
+            return None  # no result needed; we only check kwargs
+
+        with patch('core.config.load_config', return_value={
+            'search': {
+                'proxy_url': 'http://test-proxy:8080',
+                'primary_source': 'dmm',
+                'uncensored_mode_enabled': False,
+            }
+        }):
+            with patch('web.routers.search.search_jav', side_effect=fake_search_jav):
+                client.get("/api/search", params={"q": "SONE-205", "mode": "exact"})
+
+        assert captured_kwargs.get('primary_source') == 'dmm', (
+            "mode=exact branch must pass primary_source to search_jav(); "
+            f"got {captured_kwargs.get('primary_source')!r}"
+        )
+
+    def test_search_actress_dmm_routing(self):
+        """search_actress(primary_source='dmm', proxy_url=...) → DMM search_by_keyword_with_ids 先被呼叫"""
+        from core.scraper import search_actress
+
+        mock_video = _make_video("dmm", "SONE-205")
+        mock_pairs = [("sone00205", mock_video)]
+
+        with patch.object(DMMScraper, 'search_by_keyword_with_ids', return_value=mock_pairs) as mock_dmm_kw, \
+             patch.object(DMMScraper, '_fetch_by_id', return_value=mock_video), \
+             patch.object(JavBusScraper, 'get_ids_from_search', return_value=[]) as mock_jb, \
+             patch('core.scrapers.utils.rate_limit'):
+            results = search_actress(
+                "未歩なな",
+                limit=10,
+                primary_source='dmm',
+                proxy_url='http://test-proxy:8080',
+            )
+
+        mock_dmm_kw.assert_called_once()
+        # JavBus should NOT be called since DMM returned results
+        mock_jb.assert_not_called()
+        assert len(results) == 1
+        assert results[0]['source'] == 'dmm'
+
+    def test_search_actress_dmm_fallback_to_javbus(self):
+        """search_actress(primary_source='dmm') → DMM 無結果時 fallback 到 JavBus"""
+        from core.scraper import search_actress
+        from core.scrapers.javdb import JavDBScraper
+
+        # DMM returns nothing → should fall through to JavBus path
+        with patch.object(DMMScraper, 'search_by_keyword_with_ids', return_value=[]) as mock_dmm_kw, \
+             patch.object(JavBusScraper, 'get_ids_from_search', return_value=[]) as mock_jb, \
+             patch.object(JavDBScraper, 'search_by_keyword', return_value=[]) as mock_javdb_kw:
+            results = search_actress(
+                "未歩なな",
+                limit=10,
+                primary_source='dmm',
+                proxy_url='http://test-proxy:8080',
+            )
+
+        mock_dmm_kw.assert_called_once()
+        # After DMM returns nothing, JavBus path should be tried
+        mock_jb.assert_called()
+
+
+# ============================================================
+# Mock Data — DMM Search List
+# ============================================================
+
+DMM_SEARCH_LIST_RESPONSE = {
+    "data": {
+        "legacySearchPPV": {
+            "result": {
+                "contents": [
+                    {
+                        "id": "sone00205",
+                        "title": "成人への卒業",
+                        "packageImage": {"largeUrl": "https://pics.dmm.co.jp/sone205pl.jpg"},
+                        "actresses": [{"name": "未歩なな"}],
+                        "maker": {"name": "S1 NO.1 STYLE"},
+                    },
+                    {
+                        "id": "sone00300",
+                        "title": "第二作品",
+                        "packageImage": {"largeUrl": "https://pics.dmm.co.jp/sone300pl.jpg"},
+                        "actresses": [{"name": "星宮一花"}, {"name": "三上悠亜"}],
+                        "maker": {"name": "S1 NO.1 STYLE"},
+                    },
+                ]
+            }
+        }
+    }
+}
+
+
+# ============================================================
+# Class 6: TestDMMSearchByKeyword
+# ============================================================
+
+class TestDMMSearchByKeyword:
+    """DMM search_by_keyword() 單元測試（全 mock）"""
+
+    @pytest.fixture
+    def dmm_scraper(self, tmp_path, monkeypatch):
+        import core.scrapers.dmm as dmm_module
+        monkeypatch.setattr(dmm_module, "CACHE_FILE", tmp_path / "dmm_content_ids.json")
+        monkeypatch.setattr(dmm_module, "PREFIX_FILE", tmp_path / "dmm_prefix_hints.json")
+        config = ScraperConfig(proxy_url="http://test-proxy:8080")
+        return DMMScraper(config)
+
+    # 1. no proxy → []
+    def test_keyword_no_proxy(self):
+        """無 proxy_url → search_by_keyword 立即返回 []，不發請求"""
+        scraper = DMMScraper()  # no proxy_url
+
+        with patch.object(scraper._session, 'post') as mock_post:
+            result = scraper.search_by_keyword("未歩なな")
+
+        assert result == []
+        mock_post.assert_not_called()
+
+    # 2. mock response → 2 Videos
+    def test_keyword_returns_multiple(self, dmm_scraper):
+        """mock response → 回傳 2 個 Video 物件"""
+        mock_resp = _make_mock_resp(status_code=200, json_data=DMM_SEARCH_LIST_RESPONSE)
+
+        with patch.object(dmm_scraper._session, 'post', return_value=mock_resp), \
+             patch.object(dmm_scraper, '_fetch_by_id', return_value=None), \
+             patch('core.scrapers.utils.rate_limit'):
+            results = dmm_scraper.search_by_keyword("未歩なな")
+
+        assert len(results) == 2
+
+    # 3. verify each field (fallback path — _fetch_by_id returns None)
+    def test_keyword_video_fields(self, dmm_scraper):
+        """各欄位正確對應：title, cover_url, actresses, maker, source, number, detail_url"""
+        mock_resp = _make_mock_resp(status_code=200, json_data=DMM_SEARCH_LIST_RESPONSE)
+
+        with patch.object(dmm_scraper._session, 'post', return_value=mock_resp), \
+             patch.object(dmm_scraper, '_fetch_by_id', return_value=None), \
+             patch('core.scrapers.utils.rate_limit'):
+            results = dmm_scraper.search_by_keyword("未歩なな")
+
+        v0 = results[0]
+        assert v0.number == "SONE-205"
+        assert v0.title == "成人への卒業"
+        assert v0.cover_url == "https://pics.dmm.co.jp/sone205pl.jpg"
+        assert len(v0.actresses) == 1
+        assert v0.actresses[0].name == "未歩なな"
+        assert v0.maker == "S1 NO.1 STYLE"
+        assert v0.source == "dmm"
+        assert "sone00205" in v0.detail_url
+
+        v1 = results[1]
+        assert v1.number == "SONE-300"
+        assert len(v1.actresses) == 2
+        assert v1.actresses[0].name == "星宮一花"
+        assert v1.actresses[1].name == "三上悠亜"
+
+    # 3b. number format conversion
+    def test_keyword_number_format(self, dmm_scraper):
+        """content_id → 標準番號格式（strip leading zeros + uppercase）"""
+        mock_resp = _make_mock_resp(status_code=200, json_data=DMM_SEARCH_LIST_RESPONSE)
+        with patch.object(dmm_scraper._session, 'post', return_value=mock_resp), \
+             patch.object(dmm_scraper, '_fetch_by_id', return_value=None), \
+             patch('core.scrapers.utils.rate_limit'):
+            results = dmm_scraper.search_by_keyword("未歩なな")
+        # sone00205 → SONE-205 (not SONE-00205)
+        assert results[0].number == "SONE-205"
+        # sone00300 → SONE-300
+        assert results[1].number == "SONE-300"
+
+    # 3c. _content_id_to_number helper unit test
+    def test_content_id_to_number_conversion(self, dmm_scraper):
+        """_content_id_to_number 各種格式"""
+        assert dmm_scraper._content_id_to_number("sone00205") == "SONE-205"
+        assert dmm_scraper._content_id_to_number("1stars00804") == "STARS-804"
+        assert dmm_scraper._content_id_to_number("ofje00709") == "OFJE-709"
+        assert dmm_scraper._content_id_to_number("ssni00001") == "SSNI-001"  # NOT SSNI-1
+        assert dmm_scraper._content_id_to_number("abc00001") == "ABC-001"    # NOT ABC-1
+        # 4-digit number preserved
+        assert dmm_scraper._content_id_to_number("abp01234") == "ABP-1234"
+        # edge: no leading zeros
+        assert dmm_scraper._content_id_to_number("test123") == "TEST-123"
+        # edge: fallback for non-matching format
+        assert dmm_scraper._content_id_to_number("weird-format") == "weird-format"
+
+    # 4. contents=[] → []
+    def test_keyword_empty_results(self, dmm_scraper):
+        """contents=[] → 回傳空列表"""
+        empty_resp = {
+            "data": {
+                "legacySearchPPV": {
+                    "result": {"contents": []}
+                }
+            }
+        }
+        mock_resp = _make_mock_resp(status_code=200, json_data=empty_resp)
+
+        with patch.object(dmm_scraper._session, 'post', return_value=mock_resp):
+            results = dmm_scraper.search_by_keyword("xyz")
+
+        assert results == []
+
+    # 5. HTTP 500 → []
+    def test_keyword_http_error(self, dmm_scraper):
+        """HTTP 500 → 回傳空列表"""
+        mock_resp = _make_mock_resp(status_code=500)
+
+        with patch.object(dmm_scraper._session, 'post', return_value=mock_resp):
+            results = dmm_scraper.search_by_keyword("未歩なな")
+
+        assert results == []
+
+    # 6. data=null → []
+    def test_keyword_data_null(self, dmm_scraper):
+        """data=null in response → 回傳空列表"""
+        null_resp = {"data": None}
+        mock_resp = _make_mock_resp(status_code=200, json_data=null_resp)
+
+        with patch.object(dmm_scraper._session, 'post', return_value=mock_resp):
+            results = dmm_scraper.search_by_keyword("未歩なな")
+
+        assert results == []
+
+    # 7. requests.Timeout → []
+    def test_keyword_network_exception(self, dmm_scraper):
+        """requests.Timeout → 回傳空列表（不 raise）"""
+        with patch.object(dmm_scraper._session, 'post', side_effect=requests.Timeout):
+            results = dmm_scraper.search_by_keyword("未歩なな")
+
+        assert results == []
+
+    # 8. actresses=[] → Video.actresses==[]
+    def test_keyword_actresses_empty(self, dmm_scraper):
+        """actresses=[] → Video.actresses 為空列表"""
+        no_actress_resp = {
+            "data": {
+                "legacySearchPPV": {
+                    "result": {
+                        "contents": [{
+                            "id": "test00001",
+                            "title": "テスト",
+                            "packageImage": {"largeUrl": "https://example.com/cover.jpg"},
+                            "actresses": [],
+                            "maker": {"name": "TestMaker"},
+                        }]
+                    }
+                }
+            }
+        }
+        mock_resp = _make_mock_resp(status_code=200, json_data=no_actress_resp)
+
+        with patch.object(dmm_scraper._session, 'post', return_value=mock_resp), \
+             patch.object(dmm_scraper, '_fetch_by_id', return_value=None), \
+             patch('core.scrapers.utils.rate_limit'):
+            results = dmm_scraper.search_by_keyword("テスト")
+
+        assert len(results) == 1
+        assert results[0].actresses == []
+
+    # 9. packageImage=null → cover_url==""
+    def test_keyword_cover_null(self, dmm_scraper):
+        """packageImage=null → cover_url 為空字串"""
+        no_cover_resp = {
+            "data": {
+                "legacySearchPPV": {
+                    "result": {
+                        "contents": [{
+                            "id": "test00002",
+                            "title": "テスト2",
+                            "packageImage": None,
+                            "actresses": [{"name": "テスト女優"}],
+                            "maker": {"name": "TestMaker"},
+                        }]
+                    }
+                }
+            }
+        }
+        mock_resp = _make_mock_resp(status_code=200, json_data=no_cover_resp)
+
+        with patch.object(dmm_scraper._session, 'post', return_value=mock_resp), \
+             patch.object(dmm_scraper, '_fetch_by_id', return_value=None), \
+             patch('core.scrapers.utils.rate_limit'):
+            results = dmm_scraper.search_by_keyword("テスト")
+
+        assert len(results) == 1
+        assert results[0].cover_url == ""
+
+    # 10. limit is passed to GraphQL variables
+    def test_keyword_limit_passed(self, dmm_scraper):
+        """limit 參數被正確傳入 GraphQL variables"""
+        mock_resp = _make_mock_resp(status_code=200, json_data=DMM_SEARCH_LIST_RESPONSE)
+
+        with patch.object(dmm_scraper._session, 'post', return_value=mock_resp) as mock_post, \
+             patch.object(dmm_scraper, '_fetch_by_id', return_value=None), \
+             patch('core.scrapers.utils.rate_limit'):
+            dmm_scraper.search_by_keyword("未歩なな", limit=5)
+
+        # First call is the list query; check its variables
+        call_kwargs = mock_post.call_args_list[0][1]
+        payload = call_kwargs.get('json', {})
+        assert payload['variables']['limit'] == 5
+
+    # 11. enrichment — _fetch_by_id called per item
+    def test_keyword_enrichment_calls_fetch_by_id(self, dmm_scraper):
+        """search_by_keyword 對每筆結果呼叫 _fetch_by_id"""
+        list_resp = _make_mock_resp(status_code=200, json_data=DMM_SEARCH_LIST_RESPONSE)
+        enriched_video1 = Video(number="SONE-205", title="Full Title 1", source="dmm",
+                                date="2024-03-19", director="Director1", duration=149,
+                                tags=["tag1"], sample_images=["https://img1.jpg"])
+        enriched_video2 = Video(number="SONE-300", title="Full Title 2", source="dmm",
+                                date="2024-05-01", director="Director2", duration=120)
+
+        with patch.object(dmm_scraper._session, 'post', return_value=list_resp), \
+             patch.object(dmm_scraper, '_fetch_by_id', side_effect=[enriched_video1, enriched_video2]) as mock_fetch, \
+             patch('core.scrapers.utils.rate_limit'):
+            results = dmm_scraper.search_by_keyword("test")
+
+        assert mock_fetch.call_count == 2
+        mock_fetch.assert_any_call("sone00205")
+        mock_fetch.assert_any_call("sone00300")
+        assert results[0].date == "2024-03-19"
+        assert results[0].director == "Director1"
+        assert results[1].date == "2024-05-01"
+
+    # 12. enrichment fallback — _fetch_by_id returns None → shallow Video
+    def test_keyword_enrichment_fallback_on_fetch_fail(self, dmm_scraper):
+        """_fetch_by_id 返回 None → fallback 到 shallow Video"""
+        list_resp = _make_mock_resp(status_code=200, json_data=DMM_SEARCH_LIST_RESPONSE)
+
+        with patch.object(dmm_scraper._session, 'post', return_value=list_resp), \
+             patch.object(dmm_scraper, '_fetch_by_id', return_value=None), \
+             patch('core.scrapers.utils.rate_limit'):
+            results = dmm_scraper.search_by_keyword("test")
+
+        assert len(results) == 2
+        assert results[0].title == "成人への卒業"
+        assert results[0].number == "SONE-205"
+        assert results[0].date == ""
+        assert results[0].tags == []
+
+    def test_keyword_enrichment_fallback_on_fetch_raise(self, dmm_scraper):
+        """_fetch_by_id 拋 exception → per-item catch，不清空整批結果"""
+        list_resp = _make_mock_resp(status_code=200, json_data=DMM_SEARCH_LIST_RESPONSE)
+
+        with patch.object(dmm_scraper._session, 'post', return_value=list_resp), \
+             patch.object(dmm_scraper, '_fetch_by_id', side_effect=TimeoutError('boom')), \
+             patch('core.scrapers.utils.rate_limit'):
+            results = dmm_scraper.search_by_keyword("test")
+
+        # Should still get 2 shallow fallback results (not [])
+        assert len(results) == 2
+        assert results[0].title == "成人への卒業"
+        assert results[0].date == ""  # not enriched
+
+    # 13. rate_limit called per item (not once for the whole batch)
+    def test_keyword_rate_limit_per_item(self, dmm_scraper):
+        """rate_limit 逐筆呼叫（不是整批一次）"""
+        list_resp = _make_mock_resp(status_code=200, json_data=DMM_SEARCH_LIST_RESPONSE)
+        enriched = Video(number="SONE-205", title="test", source="dmm")
+
+        with patch.object(dmm_scraper._session, 'post', return_value=list_resp), \
+             patch.object(dmm_scraper, '_fetch_by_id', return_value=enriched), \
+             patch('core.scrapers.dmm.rate_limit') as mock_rl:
+            dmm_scraper.search_by_keyword("test")
+
+        # 2 items in DMM_SEARCH_LIST_RESPONSE → rate_limit called 2 times
+        assert mock_rl.call_count == 2
+
+    # ============================================================
+    # T3: search_by_keyword_with_ids() tests
+    # ============================================================
+
+    def test_keyword_with_ids_returns_tuples(self, dmm_scraper):
+        """search_by_keyword_with_ids 回傳 (content_id, Video) tuples"""
+        list_resp = _make_mock_resp(status_code=200, json_data=DMM_SEARCH_LIST_RESPONSE)
+        with patch.object(dmm_scraper._session, 'post', return_value=list_resp), \
+             patch('core.scrapers.utils.rate_limit'):
+            pairs = dmm_scraper.search_by_keyword_with_ids("test")
+
+        assert len(pairs) == 2
+        assert pairs[0][0] == "sone00205"   # content_id
+        assert pairs[0][1].number == "SONE-205"  # shallow Video
+        assert pairs[1][0] == "sone00300"
+
+    def test_keyword_with_ids_no_enrichment(self, dmm_scraper):
+        """search_by_keyword_with_ids 不呼叫 _fetch_by_id"""
+        list_resp = _make_mock_resp(status_code=200, json_data=DMM_SEARCH_LIST_RESPONSE)
+        with patch.object(dmm_scraper._session, 'post', return_value=list_resp), \
+             patch.object(dmm_scraper, '_fetch_by_id') as mock_fetch, \
+             patch('core.scrapers.utils.rate_limit'):
+            dmm_scraper.search_by_keyword_with_ids("test")
+        mock_fetch.assert_not_called()
+
+
+# ============================================================
+# T3: Facade progressive tests (in TestDMMPipeline class)
+# ============================================================
+
+class TestDMMProgressiveFacade:
+    """DMM progressive SSE facade tests"""
+
+    def test_search_actress_dmm_routing(self):
+        """primary_source='dmm' + proxy → DMM search_by_keyword_with_ids called"""
+        from core.scraper import search_actress
+
+        mock_video = _make_video("dmm", "SONE-205")
+        mock_pairs = [("sone00205", mock_video)]
+
+        with patch.object(DMMScraper, 'search_by_keyword_with_ids', return_value=mock_pairs), \
+             patch.object(DMMScraper, '_fetch_by_id', return_value=mock_video), \
+             patch('core.scrapers.utils.rate_limit'):
+            results = search_actress("三上悠亜", primary_source="dmm", proxy_url="http://proxy:8080")
+
+        assert len(results) >= 1
+
+    def test_search_actress_dmm_fallback_to_javbus(self):
+        """DMM 無結果 → fallback to JavBus"""
+        from core.scraper import search_actress
+
+        with patch.object(DMMScraper, 'search_by_keyword_with_ids', return_value=[]), \
+             patch.object(JavBusScraper, 'get_ids_from_search', return_value=[]), \
+             patch('core.scrapers.utils.rate_limit'):
+            results = search_actress("三上悠亜", primary_source="dmm", proxy_url="http://proxy:8080")
+
+        # Falls through to JavBus path; empty result is fine as long as no exception
+        assert isinstance(results, list)
+
+    def test_dmm_progressive_fires_callback_per_item(self):
+        """DMM progressive: result_callback fires per item via as_completed"""
+        from core.scraper import search_actress
+
+        mock_video = _make_video("dmm", "SONE-205")
+        mock_pairs = [("sone00205", mock_video), ("sone00300", mock_video)]
+        callbacks = []
+
+        def mock_result_callback(slot, data):
+            callbacks.append((slot, data))
+
+        with patch.object(DMMScraper, 'search_by_keyword_with_ids', return_value=mock_pairs), \
+             patch.object(DMMScraper, '_fetch_by_id', return_value=mock_video), \
+             patch('core.scrapers.utils.rate_limit'):
+            results = search_actress(
+                "三上悠亜",
+                primary_source="dmm",
+                proxy_url="http://proxy:8080",
+                result_callback=mock_result_callback,
+            )
+
+        # Should have seed (-1) + 2 items
+        seed_calls = [c for c in callbacks if c[0] == -1]
+        item_calls = [c for c in callbacks if c[0] >= 0]
+        assert len(seed_calls) == 1
+        assert len(item_calls) == 2
+
+    def test_dmm_progressive_results_order_matches_seed(self):
+        """DMM progressive: 最終回傳順序必須與 seed slot 一致，不受 as_completed 亂序影響"""
+        from core.scraper import search_actress
+
+        video1 = _make_video("dmm", "SONE-205")
+        video2 = _make_video("dmm", "SONE-300")
+        mock_pairs = [("sone00205", video1), ("sone00300", video2)]
+
+        # _fetch_by_id returns enriched videos in predictable order
+        enriched1 = Video(number="SONE-205", title="Title 1", source="dmm")
+        enriched2 = Video(number="SONE-300", title="Title 2", source="dmm")
+
+        with patch.object(DMMScraper, 'search_by_keyword_with_ids', return_value=mock_pairs), \
+             patch.object(DMMScraper, '_fetch_by_id', side_effect=[enriched1, enriched2]), \
+             patch('core.scrapers.utils.rate_limit'):
+            results = search_actress(
+                "三上悠亜",
+                primary_source="dmm",
+                proxy_url="http://proxy:8080",
+            )
+
+        # Results order must match seed order (SONE-205 first, SONE-300 second)
+        assert results[0]['number'] == "SONE-205"
+        assert results[1]['number'] == "SONE-300"
 
     def test_uncensored_mode_fast_path_heyzo(self):
         """uncensored_mode=True + HEYZO 前綴 → D2PassScraper 不被呼叫"""
@@ -588,11 +1362,12 @@ class TestDMMTags:
 
     @pytest.fixture
     def dmm_scraper(self, tmp_path, monkeypatch):
-        """DMM scraper with isolated cache + reset _genres_supported"""
+        """DMM scraper with isolated cache + reset _genres_supported + _sample_images_supported"""
         import core.scrapers.dmm as dmm_module
         monkeypatch.setattr(dmm_module, "CACHE_FILE", tmp_path / "dmm_content_ids.json")
         monkeypatch.setattr(dmm_module, "PREFIX_FILE", tmp_path / "dmm_prefix_hints.json")
         monkeypatch.setattr(dmm_module, "_genres_supported", None)
+        monkeypatch.setattr(dmm_module, "_sample_images_supported", None)
         config = ScraperConfig(proxy_url="http://test-proxy:8080")
         return DMMScraper(config)
 
@@ -674,6 +1449,7 @@ class TestDMMTags:
 
         with patch.object(dmm_scraper, '_probe_genres', return_value=([], '')), \
              patch.object(dmm_scraper, '_fetch_tags_from_html', return_value=[]), \
+             patch.object(dmm_scraper, '_probe_sample_images', return_value=[]), \
              patch.object(dmm_scraper._session, 'post', return_value=detail_resp), \
              patch('core.scrapers.utils.rate_limit'):
             video = dmm_scraper.search("SONE-205")
@@ -719,6 +1495,103 @@ class TestDMMTags:
         assert tags == ['美少女', 'ハイビジョン']
         assert label == 'S1 NO.1 STYLE'
         assert dmm_module._genres_supported is True
+
+    def test_sample_images_probe_schema_error(self, dmm_scraper, monkeypatch):
+        """sampleImages schema error (HTTP 200) → 永久停用 sampleImages，但 genres 不受影響"""
+        import core.scrapers.dmm as dmm_module
+        monkeypatch.setattr(dmm_module, '_sample_images_supported', None)
+        monkeypatch.setattr(dmm_module, '_genres_supported', True)
+
+        # GraphQL schema errors come as HTTP 200 with errors in the body
+        error_resp = _make_mock_resp(status_code=200, json_data={
+            "errors": [{"message": "Cannot query field 'sampleImages' on type 'PPVContent'."}],
+            "data": None
+        })
+        with patch.object(dmm_scraper._session, 'post', return_value=error_resp):
+            result = dmm_scraper._probe_sample_images("sone00205")
+
+        assert result == []
+        assert dmm_module._sample_images_supported is False
+        # genres should still be True (unaffected)
+        assert dmm_module._genres_supported is True
+
+    def test_sample_images_probe_success(self, dmm_scraper, monkeypatch):
+        """sampleImages probe 成功 → 回傳圖片列表"""
+        import core.scrapers.dmm as dmm_module
+        monkeypatch.setattr(dmm_module, '_sample_images_supported', None)
+
+        success_resp = _make_mock_resp(status_code=200, json_data={
+            "data": {"ppvContent": {"sampleImages": [
+                {"imageUrl": "https://a.jpg"},
+                {"imageUrl": "https://b.jpg"}
+            ]}}
+        })
+        with patch.object(dmm_scraper._session, 'post', return_value=success_resp):
+            result = dmm_scraper._probe_sample_images("sone00205")
+
+        assert result == ["https://a.jpg", "https://b.jpg"]
+        assert dmm_module._sample_images_supported is True
+
+    def test_sample_images_probe_high_res_url(self, dmm_scraper, monkeypatch):
+        """sampleImages URL 轉換為高解析度版本（-N.jpg → jp-N.jpg）"""
+        import core.scrapers.dmm as dmm_module
+        monkeypatch.setattr(dmm_module, '_sample_images_supported', None)
+
+        success_resp = _make_mock_resp(status_code=200, json_data={
+            "data": {"ppvContent": {"sampleImages": [
+                {"imageUrl": "https://pics.dmm.co.jp/digital/video/ipzz00698/ipzz00698-1.jpg"},
+                {"imageUrl": "https://pics.dmm.co.jp/digital/video/ipzz00698/ipzz00698-10.jpg"},
+            ]}}
+        })
+        with patch.object(dmm_scraper._session, 'post', return_value=success_resp):
+            result = dmm_scraper._probe_sample_images("ipzz00698")
+
+        assert result == [
+            "https://pics.dmm.co.jp/digital/video/ipzz00698/ipzz00698jp-1.jpg",
+            "https://pics.dmm.co.jp/digital/video/ipzz00698/ipzz00698jp-10.jpg",
+        ]
+
+    def test_sample_images_probe_non_jpg_preserved(self, dmm_scraper, monkeypatch):
+        """非 -N.jpg 格式的 URL 原樣保留"""
+        import core.scrapers.dmm as dmm_module
+        monkeypatch.setattr(dmm_module, '_sample_images_supported', None)
+
+        success_resp = _make_mock_resp(status_code=200, json_data={
+            "data": {"ppvContent": {"sampleImages": [
+                {"imageUrl": "https://example.com/sample.png"},
+            ]}}
+        })
+        with patch.object(dmm_scraper._session, 'post', return_value=success_resp):
+            result = dmm_scraper._probe_sample_images("test001")
+
+        assert result == ["https://example.com/sample.png"]
+
+    def test_sample_images_probe_already_high_res_idempotent(self, dmm_scraper, monkeypatch):
+        """已是高解析度 jp-N.jpg → 不重複轉換（冪等性）"""
+        import core.scrapers.dmm as dmm_module
+        monkeypatch.setattr(dmm_module, '_sample_images_supported', None)
+
+        success_resp = _make_mock_resp(status_code=200, json_data={
+            "data": {"ppvContent": {"sampleImages": [
+                {"imageUrl": "https://pics.dmm.co.jp/digital/video/ipzz00698/ipzz00698jp-1.jpg"},
+            ]}}
+        })
+        with patch.object(dmm_scraper._session, 'post', return_value=success_resp):
+            result = dmm_scraper._probe_sample_images("ipzz00698")
+
+        # Should NOT become ipzz00698jpjp-1.jpg
+        assert result == ["https://pics.dmm.co.jp/digital/video/ipzz00698/ipzz00698jp-1.jpg"]
+
+    def test_sample_images_probe_cache_false_skip(self, dmm_scraper, monkeypatch):
+        """_sample_images_supported=False → 不發請求"""
+        import core.scrapers.dmm as dmm_module
+        monkeypatch.setattr(dmm_module, '_sample_images_supported', False)
+
+        with patch.object(dmm_scraper._session, 'post') as mock_post:
+            result = dmm_scraper._probe_sample_images("sone00205")
+
+        assert result == []
+        mock_post.assert_not_called()
 
 
 # ============================================================
