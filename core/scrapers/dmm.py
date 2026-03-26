@@ -583,6 +583,68 @@ class DMMScraper(BaseScraper):
         # 4. 完全失敗
         return None
 
+    def search_by_keyword_with_ids(self, keyword: str, limit: int = 20) -> list[tuple[str, Video]]:
+        """
+        關鍵字搜尋（輕量版）— 回傳 (content_id, shallow_Video) tuples。
+        供 facade 層 ThreadPoolExecutor enrichment 使用。
+        不呼叫 _fetch_by_id（不做 enrichment）。
+        """
+        if not self.config.proxy_url:
+            return []
+
+        try:
+            payload = {
+                'query': self.SEARCH_LIST_QUERY,
+                'variables': {
+                    'limit': limit,
+                    'offset': 0,
+                    'sort': 'RELEASE_DATE',
+                    'queryWord': keyword,
+                }
+            }
+            response = self._session.post(
+                self.API_URL,
+                json=payload,
+                timeout=self.config.timeout,
+            )
+
+            if response.status_code != 200:
+                return []
+
+            data = response.json()
+            if not data.get('data') or not data['data'].get('legacySearchPPV'):
+                return []
+
+            contents = data['data']['legacySearchPPV']['result']['contents']
+            if not contents:
+                return []
+
+            pairs = []
+            for item in contents:
+                content_id = item.get('id', '')
+                if not content_id:
+                    continue
+                actresses = [
+                    Actress(name=a['name'])
+                    for a in (item.get('actresses') or [])
+                    if a.get('name')
+                ]
+                video = Video(
+                    number=self._content_id_to_number(content_id),
+                    title=item.get('title', ''),
+                    actresses=actresses,
+                    maker=(item.get('maker') or {}).get('name', ''),
+                    cover_url=(item.get('packageImage') or {}).get('largeUrl', ''),
+                    source=self.source_name,
+                    detail_url=f"https://www.dmm.co.jp/digital/videoa/-/detail/=/cid={content_id}/",
+                )
+                pairs.append((content_id, video))
+
+            return pairs
+
+        except Exception:
+            return []
+
     def search_by_keyword(self, keyword: str, limit: int = 20) -> list[Video]:
         """關鍵字搜尋（女優名、片商名等日文關鍵字）"""
         if not self.config.proxy_url:

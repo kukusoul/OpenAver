@@ -413,6 +413,53 @@ def search_prefix(prefix: str, limit: int = 20, offset: int = 0, status_callback
     return sort_results_by_date(results)
 
 
+def _dmm_keyword_search_progressive(
+    dmm_scraper,
+    query: str,
+    limit: int,
+    status_callback,
+    result_callback,
+) -> Optional[List[Dict[str, Any]]]:
+    """DMM keyword search with progressive enrichment (mirrors JavBus pattern).
+
+    Returns a list of result dicts on success, or None if DMM returned nothing
+    (caller should fall through to JavBus).
+    """
+    pairs = dmm_scraper.search_by_keyword_with_ids(query, limit=limit)
+    if not pairs:
+        return None
+
+    # Seed: frontend renders skeleton cards immediately
+    if result_callback:
+        seed_ids = [video.number for _, video in pairs]
+        result_callback(-1, seed_ids)
+
+    results = [None] * len(pairs)  # pre-allocate to preserve seed order
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        futures = {}
+        for idx, (content_id, shallow) in enumerate(pairs):
+            future = executor.submit(dmm_scraper._fetch_by_id, content_id)
+            futures[future] = (idx, content_id, shallow)
+
+        for future in as_completed(futures):
+            idx, content_id, shallow = futures[future]
+            try:
+                video = future.result()
+                if video is None:
+                    video = shallow
+            except Exception:
+                logger.error('DMM enrichment failed: %s', content_id)
+                video = shallow
+            data = video.to_legacy_dict()
+            results[idx] = data  # slot-indexed, not append
+            if result_callback:
+                result_callback(idx, data)
+
+    if status_callback:
+        status_callback('done', f'found:{len(results)}')
+    return results
+
+
 def search_actress(name: str, limit: int = 20, offset: int = 0, status_callback: Optional[Callable[[str, str], None]] = None, result_callback: Optional[Callable[[int, Any], None]] = None, primary_source: str = 'javbus', proxy_url: str = '') -> List[Dict[str, Any]]:
     """女優搜尋"""
     # DMM routing: when primary_source='dmm' and proxy is available, try DMM first
@@ -422,18 +469,11 @@ def search_actress(name: str, limit: int = 20, offset: int = 0, status_callback:
             status_callback('dmm', 'searching')
         dmm_config = ScraperConfig(proxy_url=proxy_url)
         dmm_scraper = DMMScraper(dmm_config)
-        videos = dmm_scraper.search_by_keyword(name, limit=limit)
-        if videos:
-            results = [v.to_legacy_dict() for v in videos]
-            # SSE 漸進回報：先送 seed（slot=-1），再逐筆送 result-item
-            if result_callback:
-                seed_ids = [r.get('number', '') for r in results]
-                result_callback(-1, seed_ids)
-                for i, r in enumerate(results):
-                    result_callback(i, r)
-            if status_callback:
-                status_callback('done', f'found:{len(results)}')
-            return results
+        dmm_results = _dmm_keyword_search_progressive(
+            dmm_scraper, name, limit, status_callback, result_callback
+        )
+        if dmm_results is not None:
+            return dmm_results
         # DMM returned nothing → fall through to JavBus path
 
     try:
@@ -714,25 +754,18 @@ def smart_search(query: str, limit: int = 20, offset: int = 0, status_callback: 
         # 模糊搜尋路由
         fuzzy_source = _get_fuzzy_source(primary_source, proxy_url)
         if fuzzy_source == 'dmm':
-            # DMM keyword search
+            # DMM keyword search (progressive)
             if status_callback:
                 status_callback('dmm', 'searching')
             dmm_config = ScraperConfig(proxy_url=proxy_url)
             dmm_scraper = DMMScraper(dmm_config)
-            videos = dmm_scraper.search_by_keyword(query, limit=limit)
-            if videos:
-                results = [v.to_legacy_dict() for v in videos]
-                for r in results:
+            dmm_results = _dmm_keyword_search_progressive(
+                dmm_scraper, query, limit, status_callback, result_callback
+            )
+            if dmm_results is not None:
+                for r in dmm_results:
                     r['_mode'] = 'actress'
-                # SSE 漸進回報：先送 seed（slot=-1），再逐筆送 result-item
-                if result_callback:
-                    seed_ids = [r.get('number', '') for r in results]
-                    result_callback(-1, seed_ids)
-                    for i, r in enumerate(results):
-                        result_callback(i, r)
-                if status_callback:
-                    status_callback('done', f'found:{len(results)}')
-                return results
+                return dmm_results
             # DMM returned nothing → fall through to JavBus
 
         results = search_actress(query, limit=limit, offset=offset, status_callback=status_callback, result_callback=result_callback, primary_source=primary_source, proxy_url=proxy_url)

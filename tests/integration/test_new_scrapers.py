@@ -846,20 +846,22 @@ class TestPipeline:
         )
 
     def test_search_actress_dmm_routing(self):
-        """search_actress(primary_source='dmm', proxy_url=...) → DMM search_by_keyword 先被呼叫"""
+        """search_actress(primary_source='dmm', proxy_url=...) → DMM search_by_keyword_with_ids 先被呼叫"""
         from core.scraper import search_actress
 
         mock_video = _make_video("dmm", "SONE-205")
-        mock_video_dict = mock_video.to_legacy_dict()
+        mock_pairs = [("sone00205", mock_video)]
 
-        with patch.object(DMMScraper, 'search_by_keyword', return_value=[mock_video]) as mock_dmm_kw:
-            with patch.object(JavBusScraper, 'get_ids_from_search', return_value=[]) as mock_jb:
-                results = search_actress(
-                    "未歩なな",
-                    limit=10,
-                    primary_source='dmm',
-                    proxy_url='http://test-proxy:8080',
-                )
+        with patch.object(DMMScraper, 'search_by_keyword_with_ids', return_value=mock_pairs) as mock_dmm_kw, \
+             patch.object(DMMScraper, '_fetch_by_id', return_value=mock_video), \
+             patch.object(JavBusScraper, 'get_ids_from_search', return_value=[]) as mock_jb, \
+             patch('core.scrapers.utils.rate_limit'):
+            results = search_actress(
+                "未歩なな",
+                limit=10,
+                primary_source='dmm',
+                proxy_url='http://test-proxy:8080',
+            )
 
         mock_dmm_kw.assert_called_once()
         # JavBus should NOT be called since DMM returned results
@@ -873,15 +875,15 @@ class TestPipeline:
         from core.scrapers.javdb import JavDBScraper
 
         # DMM returns nothing → should fall through to JavBus path
-        with patch.object(DMMScraper, 'search_by_keyword', return_value=[]) as mock_dmm_kw:
-            with patch.object(JavBusScraper, 'get_ids_from_search', return_value=[]) as mock_jb:
-                with patch.object(JavDBScraper, 'search_by_keyword', return_value=[]) as mock_javdb_kw:
-                    results = search_actress(
-                        "未歩なな",
-                        limit=10,
-                        primary_source='dmm',
-                        proxy_url='http://test-proxy:8080',
-                    )
+        with patch.object(DMMScraper, 'search_by_keyword_with_ids', return_value=[]) as mock_dmm_kw, \
+             patch.object(JavBusScraper, 'get_ids_from_search', return_value=[]) as mock_jb, \
+             patch.object(JavDBScraper, 'search_by_keyword', return_value=[]) as mock_javdb_kw:
+            results = search_actress(
+                "未歩なな",
+                limit=10,
+                primary_source='dmm',
+                proxy_url='http://test-proxy:8080',
+            )
 
         mock_dmm_kw.assert_called_once()
         # After DMM returns nothing, JavBus path should be tried
@@ -1192,6 +1194,117 @@ class TestDMMSearchByKeyword:
 
         # 2 items in DMM_SEARCH_LIST_RESPONSE → rate_limit called 2 times
         assert mock_rl.call_count == 2
+
+    # ============================================================
+    # T3: search_by_keyword_with_ids() tests
+    # ============================================================
+
+    def test_keyword_with_ids_returns_tuples(self, dmm_scraper):
+        """search_by_keyword_with_ids 回傳 (content_id, Video) tuples"""
+        list_resp = _make_mock_resp(status_code=200, json_data=DMM_SEARCH_LIST_RESPONSE)
+        with patch.object(dmm_scraper._session, 'post', return_value=list_resp), \
+             patch('core.scrapers.utils.rate_limit'):
+            pairs = dmm_scraper.search_by_keyword_with_ids("test")
+
+        assert len(pairs) == 2
+        assert pairs[0][0] == "sone00205"   # content_id
+        assert pairs[0][1].number == "SONE-205"  # shallow Video
+        assert pairs[1][0] == "sone00300"
+
+    def test_keyword_with_ids_no_enrichment(self, dmm_scraper):
+        """search_by_keyword_with_ids 不呼叫 _fetch_by_id"""
+        list_resp = _make_mock_resp(status_code=200, json_data=DMM_SEARCH_LIST_RESPONSE)
+        with patch.object(dmm_scraper._session, 'post', return_value=list_resp), \
+             patch.object(dmm_scraper, '_fetch_by_id') as mock_fetch, \
+             patch('core.scrapers.utils.rate_limit'):
+            dmm_scraper.search_by_keyword_with_ids("test")
+        mock_fetch.assert_not_called()
+
+
+# ============================================================
+# T3: Facade progressive tests (in TestDMMPipeline class)
+# ============================================================
+
+class TestDMMProgressiveFacade:
+    """DMM progressive SSE facade tests"""
+
+    def test_search_actress_dmm_routing(self):
+        """primary_source='dmm' + proxy → DMM search_by_keyword_with_ids called"""
+        from core.scraper import search_actress
+
+        mock_video = _make_video("dmm", "SONE-205")
+        mock_pairs = [("sone00205", mock_video)]
+
+        with patch.object(DMMScraper, 'search_by_keyword_with_ids', return_value=mock_pairs), \
+             patch.object(DMMScraper, '_fetch_by_id', return_value=mock_video), \
+             patch('core.scrapers.utils.rate_limit'):
+            results = search_actress("三上悠亜", primary_source="dmm", proxy_url="http://proxy:8080")
+
+        assert len(results) >= 1
+
+    def test_search_actress_dmm_fallback_to_javbus(self):
+        """DMM 無結果 → fallback to JavBus"""
+        from core.scraper import search_actress
+
+        with patch.object(DMMScraper, 'search_by_keyword_with_ids', return_value=[]), \
+             patch.object(JavBusScraper, 'get_ids_from_search', return_value=[]), \
+             patch('core.scrapers.utils.rate_limit'):
+            results = search_actress("三上悠亜", primary_source="dmm", proxy_url="http://proxy:8080")
+
+        # Falls through to JavBus path; empty result is fine as long as no exception
+        assert isinstance(results, list)
+
+    def test_dmm_progressive_fires_callback_per_item(self):
+        """DMM progressive: result_callback fires per item via as_completed"""
+        from core.scraper import search_actress
+
+        mock_video = _make_video("dmm", "SONE-205")
+        mock_pairs = [("sone00205", mock_video), ("sone00300", mock_video)]
+        callbacks = []
+
+        def mock_result_callback(slot, data):
+            callbacks.append((slot, data))
+
+        with patch.object(DMMScraper, 'search_by_keyword_with_ids', return_value=mock_pairs), \
+             patch.object(DMMScraper, '_fetch_by_id', return_value=mock_video), \
+             patch('core.scrapers.utils.rate_limit'):
+            results = search_actress(
+                "三上悠亜",
+                primary_source="dmm",
+                proxy_url="http://proxy:8080",
+                result_callback=mock_result_callback,
+            )
+
+        # Should have seed (-1) + 2 items
+        seed_calls = [c for c in callbacks if c[0] == -1]
+        item_calls = [c for c in callbacks if c[0] >= 0]
+        assert len(seed_calls) == 1
+        assert len(item_calls) == 2
+
+    def test_dmm_progressive_results_order_matches_seed(self):
+        """DMM progressive: 最終回傳順序必須與 seed slot 一致，不受 as_completed 亂序影響"""
+        from core.scraper import search_actress
+
+        video1 = _make_video("dmm", "SONE-205")
+        video2 = _make_video("dmm", "SONE-300")
+        mock_pairs = [("sone00205", video1), ("sone00300", video2)]
+
+        # _fetch_by_id returns enriched videos in predictable order
+        enriched1 = Video(number="SONE-205", title="Title 1", source="dmm")
+        enriched2 = Video(number="SONE-300", title="Title 2", source="dmm")
+
+        with patch.object(DMMScraper, 'search_by_keyword_with_ids', return_value=mock_pairs), \
+             patch.object(DMMScraper, '_fetch_by_id', side_effect=[enriched1, enriched2]), \
+             patch('core.scrapers.utils.rate_limit'):
+            results = search_actress(
+                "三上悠亜",
+                primary_source="dmm",
+                proxy_url="http://proxy:8080",
+            )
+
+        # Results order must match seed order (SONE-205 first, SONE-300 second)
+        assert results[0]['number'] == "SONE-205"
+        assert results[1]['number'] == "SONE-300"
 
     def test_uncensored_mode_fast_path_heyzo(self):
         """uncensored_mode=True + HEYZO 前綴 → D2PassScraper 不被呼叫"""
