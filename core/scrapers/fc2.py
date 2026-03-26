@@ -174,6 +174,7 @@ class FC2Scraper(BaseScraper):
             tags = self._get_tags(html)
             outline = self._get_outline(html)
             is_uncensored = self._is_uncensored(tags, title)
+            sample_images = self._get_extrafanart(html)
 
             # 移除無修正標籤（已用其他方式表示）
             tags = [t for t in tags if t not in ["無修正", "无修正"]]
@@ -191,6 +192,7 @@ class FC2Scraper(BaseScraper):
                 tags=tags,
                 source=self.source_name,
                 detail_url=detail_url,
+                sample_images=sample_images,
             )
 
             # 節流

@@ -211,6 +211,8 @@ class AVSOXScraper(BaseScraper):
             studio = self._get_studio(html)
             series = self._get_series(html)
             tags = self._get_tags(html)
+            runtime_str = self._get_runtime(html)
+            duration = int(runtime_str) if runtime_str else None
 
             # 建立女優列表
             actresses = [Actress(name=name) for name in actors]
@@ -225,6 +227,8 @@ class AVSOXScraper(BaseScraper):
                 tags=tags,
                 source=self.source_name,
                 detail_url=detail_url,
+                duration=duration,
+                series=series,
             )
 
             # 節流

@@ -154,6 +154,21 @@ class D2PassScraper(BaseScraper):
         avg_rating = data.get('AvgRating')
         rating = float(avg_rating) if avg_rating is not None else None
 
+        # Series
+        series = data.get('Series') or data.get('SeriesJa') or data.get('SeriesEn') or ''
+
+        # Duration（秒 → 分鐘；可能是整數或字串）
+        duration_raw = data.get('Duration')
+        duration: Optional[int] = None
+        if duration_raw is not None:
+            try:
+                duration = int(duration_raw) // 60
+            except (ValueError, TypeError):
+                pass
+
+        # SampleImages
+        sample_images: list = data.get('SampleImages') or []
+
         return Video(
             number=movie_id,
             title=title,
@@ -165,6 +180,9 @@ class D2PassScraper(BaseScraper):
             source=self.source_name,
             detail_url=detail_url,
             rating=rating,
+            series=series,
+            duration=duration,
+            sample_images=sample_images,
         )
 
     def search(self, number: str) -> Optional[Video]:
