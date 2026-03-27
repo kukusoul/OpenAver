@@ -4,6 +4,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from core.database import init_db, Video, VideoRepository
+from core.path_utils import to_file_uri
 
 
 # temp_db fixture 定義於 tests/unit/conftest.py
@@ -862,3 +863,101 @@ class TestVideoProxy:
         content = scanner_py.read_text(encoding='utf-8')
         assert 'get_proxy_extensions' in content, \
             "scanner.py get_video() should use get_proxy_extensions from core.video_extensions"
+
+
+class TestSampleImagesAPI:
+    """sample_images 欄位 — Showcase API integration 測試"""
+
+    @pytest.fixture
+    def populated_db_with_sample_images(self, make_populated_db, tmp_path):
+        from core.database import Video
+        # 建立假圖片檔案供 URI 使用
+        img1 = tmp_path / "extrafanart" / "fanart1.jpg"
+        img1.parent.mkdir(parents=True, exist_ok=True)
+        img1.write_bytes(b"img")
+        img2 = tmp_path / "extrafanart" / "fanart2.jpg"
+        img2.write_bytes(b"img")
+
+        videos = [
+            Video(
+                path="file:////home/user/media/ABC-001.mp4",
+                number="ABC-001",
+                title="Video with sample images",
+                original_title="",
+                actresses=[],
+                maker="",
+                release_date="",
+                tags=[],
+                size_bytes=0,
+                cover_path="",
+                mtime=0.0,
+                sample_images=[
+                    to_file_uri(str(img1)),
+                    to_file_uri(str(img2)),
+                ],
+            ),
+            Video(
+                path="file:////home/user/media/ABC-002.mp4",
+                number="ABC-002",
+                title="Video without sample images",
+                original_title="",
+                actresses=[],
+                maker="",
+                release_date="",
+                tags=[],
+                size_bytes=0,
+                cover_path="",
+                mtime=0.0,
+                sample_images=[],
+            ),
+        ]
+        return make_populated_db(videos)
+
+    @pytest.fixture
+    def client_media(self, make_client, populated_db_with_sample_images):
+        return make_client(
+            ["core.database.get_db_path", "web.routers.showcase.get_db_path", "web.routers.showcase.load_config"],
+            mock_db_path=populated_db_with_sample_images,
+            config_override={
+                "gallery": {
+                    "directories": ["/home/user/media"],
+                    "path_mappings": {},
+                    "min_size_mb": 0,
+                    "thumbnail_width": 400,
+                },
+                "scraper": {"video_extensions": [".mp4"], "image_extensions": [".jpg"]},
+                "database": {"path": ":memory:"},
+                "translate": {"provider": "ollama", "ollama_model": "llama3"},
+            },
+        )
+
+    def test_sample_images_key_present(self, client_media, populated_db_with_sample_images, monkeypatch):
+        """API response 包含 sample_images key（即使無資料也需存在）"""
+        monkeypatch.setattr("web.routers.showcase.get_db_path", lambda: populated_db_with_sample_images)
+        response = client_media.get("/api/showcase/videos")
+        assert response.status_code == 200
+        data = response.json()
+        for video in data["videos"]:
+            assert "sample_images" in video, "每筆 video 必須含 sample_images 欄位"
+
+    def test_sample_images_empty_list_when_no_images(self, client_media, populated_db_with_sample_images, monkeypatch):
+        """v.sample_images 為 [] → 回傳 sample_images: []，不拋 exception"""
+        monkeypatch.setattr("web.routers.showcase.get_db_path", lambda: populated_db_with_sample_images)
+        response = client_media.get("/api/showcase/videos")
+        assert response.status_code == 200
+        data = response.json()
+        # 第二筆無 sample_images
+        video2 = next(v for v in data["videos"] if v["number"] == "ABC-002")
+        assert video2["sample_images"] == []
+
+    def test_sample_images_uri_converted_to_api_url(self, client_media, populated_db_with_sample_images, monkeypatch):
+        """含有效 file:/// URI → 轉換為 /api/gallery/image?path=...（路徑已 percent-encode）"""
+        monkeypatch.setattr("web.routers.showcase.get_db_path", lambda: populated_db_with_sample_images)
+        response = client_media.get("/api/showcase/videos")
+        assert response.status_code == 200
+        data = response.json()
+        video1 = next(v for v in data["videos"] if v["number"] == "ABC-001")
+        assert len(video1["sample_images"]) == 2
+        for url in video1["sample_images"]:
+            assert url.startswith("/api/gallery/image?path="), f"期望 /api/gallery/image?path=... 格式，實際: {url}"
+            assert "fanart" in url

@@ -51,6 +51,7 @@ def init_db(db_path: Path = None) -> None:
             series TEXT,
             label TEXT DEFAULT '',
             tags TEXT,
+            sample_images TEXT DEFAULT '',
             duration INTEGER,
             size_bytes INTEGER,
             cover_path TEXT,
@@ -107,6 +108,8 @@ def init_db(db_path: Path = None) -> None:
         cursor.execute("ALTER TABLE videos ADD COLUMN director TEXT DEFAULT ''")
     if 'label' not in existing_cols:
         cursor.execute("ALTER TABLE videos ADD COLUMN label TEXT DEFAULT ''")
+    if 'sample_images' not in existing_cols:
+        cursor.execute("ALTER TABLE videos ADD COLUMN sample_images TEXT DEFAULT ''")
 
     conn.commit()
     conn.close()
@@ -126,6 +129,7 @@ class Video:
     series: Optional[str] = None
     label: str = ""
     tags: List[str] = field(default_factory=list)  # JSON
+    sample_images: List[str] = field(default_factory=list)  # JSON
     duration: Optional[int] = None
     size_bytes: int = 0
     cover_path: str = ""
@@ -165,6 +169,7 @@ class Video:
             series=info.series or None,
             label=info.label or '',
             tags=tags,
+            sample_images=info.sample_images or [],
             duration=info.duration,
             size_bytes=info.size,
             cover_path=info.img,
@@ -179,6 +184,7 @@ class Video:
         # 序列化 JSON 欄位
         data['actresses'] = json.dumps(self.actresses, ensure_ascii=False)
         data['tags'] = json.dumps(self.tags, ensure_ascii=False)
+        data['sample_images'] = json.dumps(self.sample_images, ensure_ascii=False)
         # 序列化 datetime
         if self.created_at:
             data['created_at'] = self.created_at.isoformat()
@@ -207,6 +213,14 @@ class Video:
                 data['tags'] = []
         else:
             data['tags'] = []
+
+        if 'sample_images' in data and data['sample_images']:
+            try:
+                data['sample_images'] = json.loads(data['sample_images'])
+            except json.JSONDecodeError:
+                data['sample_images'] = []
+        else:
+            data['sample_images'] = []
 
         # 反序列化 datetime
         if 'created_at' in data and data['created_at']:

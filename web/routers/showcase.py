@@ -62,6 +62,11 @@ async def get_videos():
                 local_path = uri_to_fs_path(v.cover_path)
                 cover_url = f"/api/gallery/image?path={quote(local_path, safe='')}"
 
+            sample_urls = []
+            for img_uri in (v.sample_images or []):
+                local_path = uri_to_fs_path(img_uri)
+                sample_urls.append(f"/api/gallery/image?path={quote(local_path, safe='')}")
+
             videos_json.append({
                 "path": v.path,                                          # file:/// URI（開啟影片用）
                 "title": v.title,
@@ -78,6 +83,7 @@ async def get_videos():
                 "duration": v.duration,                                  # Optional[int]，None 時前端 x-show 隱藏
                 "series": v.series or '',
                 "label": v.label or '',
+                "sample_images": sample_urls,
             })
 
         return JSONResponse({

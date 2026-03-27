@@ -60,6 +60,7 @@ class VideoInfo:
     duration: Optional[int] = None
     series: str = ""
     label: str = ""
+    sample_images: List[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
@@ -78,6 +79,7 @@ class VideoInfo:
             "duration": self.duration,
             "series": self.series,
             "label": self.label,
+            "sample_images": self.sample_images,
         }
 
     @classmethod
@@ -481,6 +483,22 @@ class VideoScanner:
                     info.img = img_path.replace('\\', '/')
             else:
                 info.img = to_file_uri(img_path, self.path_mappings)
+
+        # 掃描 extrafanart/ 目錄（sample images）
+        extrafanart_dir = video_path.parent / 'extrafanart'
+        if extrafanart_dir.is_dir():
+            try:
+                for img_path in sorted(extrafanart_dir.glob('fanart*.jpg')):
+                    if base_path:
+                        try:
+                            rel_img = img_path.relative_to(base_path)
+                            info.sample_images.append(str(rel_img).replace('\\', '/'))
+                        except ValueError:
+                            info.sample_images.append(str(img_path).replace('\\', '/'))
+                    else:
+                        info.sample_images.append(to_file_uri(str(img_path), self.path_mappings))
+            except OSError as e:
+                logger.warning(f"  [!] extrafanart 掃描失敗: {extrafanart_dir} - {e}")
 
         t_end = time.time()
         logger.debug(f"[Scan] {video_name} 完成 ({t_end - t_start:.2f}s)")
