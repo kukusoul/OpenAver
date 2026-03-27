@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.2] - 2026-03-27
+
+### Added
+
+#### 🔗 Metadata Pipeline 補齊 (Phase 37a)
+- NFO 讀寫補齊 director/duration/series/label 四個欄位，從 Scraper 到 DB 全鏈路流通
+- `parse_nfo()` 新增讀取 `<runtime>`、`<director>`、`<set><name>`、`<label>` 標籤
+- `VideoInfo` dataclass 新增四欄位 + `from_dict()` 防禦性過濾未知 key（舊 cache 向下相容）
+- DB schema migration 自動補齊 `director`、`label` 欄位（ALTER TABLE）
+- `_get_columns()` 改為 PRAGMA 動態查詢（新舊 DB 欄位順序自動對齊）
+
+#### 📝 NFO 批量更新擴充
+- `nfo_updater` 補齊 director/duration/series/label 寫入（含 `<set><name>` 巢狀結構）
+- `needs_update()` 新增四欄位缺失檢查（duration 用 `is None` 防 0 短路）
+
+#### 🖥️ Showcase 新欄位顯示
+- Grid info panel 新增系列 + 片長（有值才顯示）
+- Table mode 新增「導演」「片長」兩欄
+- Lightbox 新增 director/duration/series/label 四欄位（可點擊搜尋）
+
+#### 🔍 Search Lightbox 新欄位
+- Main Lightbox 新增 director/duration/series/label 顯示（有值才顯示）
+
+### Changed
+- 測試總數 1171 → 1250（+79）
+
 ## [0.5.1] - 2026-03-27
 
 ### Added
