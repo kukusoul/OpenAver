@@ -44,6 +44,14 @@ def needs_update(info: dict, has_nfo: bool = True) -> Tuple[bool, List[str]]:
         missing.append('genre')
     if not info.get('maker'):
         missing.append('maker')
+    if not info.get('director'):
+        missing.append('director')
+    if info.get('duration') is None:   # 0 是有效值，不能用 not
+        missing.append('duration')
+    if not info.get('series'):
+        missing.append('series')
+    if not info.get('label'):
+        missing.append('label')
 
     return len(missing) > 0, missing
 
@@ -228,7 +236,7 @@ def update_nfo_file(nfo_path: str, metadata: dict, info: dict) -> Tuple[bool, st
         Tuple[bool, str]: (是否有修改, 訊息)
     """
     tree, root = parse_nfo(nfo_path)
-    if not root:
+    if root is None:
         return False, "無法解析 NFO"
 
     modified = False
@@ -270,6 +278,36 @@ def update_nfo_file(nfo_path: str, metadata: dict, info: dict) -> Tuple[bool, st
         set_element_text(root, 'studio', metadata['maker'])
         modified = True
         changes.append('maker')
+
+    # 補導演
+    if not info.get('director') and metadata.get('director'):
+        set_element_text(root, 'director', metadata['director'])
+        modified = True
+        changes.append('director')
+
+    # 補時長（duration=0 也要寫入）
+    if info.get('duration') is None and metadata.get('duration') is not None:
+        set_element_text(root, 'runtime', str(metadata['duration']))
+        modified = True
+        changes.append('runtime')
+
+    # 補系列（<set><name> 巢狀結構）
+    if not info.get('series') and metadata.get('series'):
+        set_elem = root.find('set')
+        if set_elem is None:
+            set_elem = ET.SubElement(root, 'set')
+        name_elem = set_elem.find('name')
+        if name_elem is None:
+            name_elem = ET.SubElement(set_elem, 'name')
+        name_elem.text = metadata['series']
+        modified = True
+        changes.append('series')
+
+    # 補廠牌標籤
+    if not info.get('label') and metadata.get('label'):
+        set_element_text(root, 'label', metadata['label'])
+        modified = True
+        changes.append('label')
 
     if modified:
         indent_xml(root)
