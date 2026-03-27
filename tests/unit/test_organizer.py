@@ -1001,6 +1001,46 @@ class TestGenerateNfoNewFields:
         assert "<director>A&amp;B&lt;C&gt;</director>" in content
         assert "<director>A&B<C></director>" not in content
 
+    def test_nfo_label_filled(self, tmp_path):
+        """label 有值 → <label>S1</label>"""
+        nfo_path = tmp_path / "SNOS-143.nfo"
+        result = generate_nfo(
+            number="SNOS-143",
+            title="テスト",
+            output_path=str(nfo_path),
+            label="S1",
+        )
+        assert result is True
+        content = nfo_path.read_text(encoding="utf-8")
+        assert "<label>S1</label>" in content
+
+    def test_nfo_label_empty(self, tmp_path):
+        """label 空字串 → <label></label>（保留空標籤）"""
+        nfo_path = tmp_path / "SNOS-143.nfo"
+        result = generate_nfo(
+            number="SNOS-143",
+            title="テスト",
+            output_path=str(nfo_path),
+            label="",
+        )
+        assert result is True
+        content = nfo_path.read_text(encoding="utf-8")
+        assert "<label></label>" in content
+
+    def test_nfo_label_special_chars(self, tmp_path):
+        """label 含特殊字元 → html.escape 正確轉義"""
+        nfo_path = tmp_path / "SNOS-143.nfo"
+        result = generate_nfo(
+            number="SNOS-143",
+            title="テスト",
+            output_path=str(nfo_path),
+            label="A&B<C>",
+        )
+        assert result is True
+        content = nfo_path.read_text(encoding="utf-8")
+        assert "<label>A&amp;B&lt;C&gt;</label>" in content
+        assert "<label>A&B<C></label>" not in content
+
 
 # ============ organize_file() extrafanart 測試 (T5b) ============
 

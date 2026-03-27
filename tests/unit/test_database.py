@@ -471,9 +471,255 @@ def test_migrate_json_to_sqlite_invalid_json(tmp_path):
     db_path = tmp_path / "test.db"
     json_path = tmp_path / "bad.json"
     json_path.write_text("{bad json")
-    
+
     result = migrate_json_to_sqlite(json_path, db_path, delete_on_success=False)
     assert result['errors'] == 1
+
+
+# ============ Phase 37 新欄位映射測試 ============
+
+class TestFromVideoInfoNewFields:
+    """from_video_info() Phase 37 新欄位映射測試"""
+
+    def test_from_video_info_director_mapped(self):
+        """director 欄位正確映射"""
+        info = VideoInfo(
+            path="/test.mp4",
+            num="ABC-001",
+            title="テスト",
+            director="テスト監督",
+        )
+        video = Video.from_video_info(info)
+        assert video.director == "テスト監督"
+
+    def test_from_video_info_label_mapped(self):
+        """label 欄位正確映射"""
+        info = VideoInfo(
+            path="/test.mp4",
+            num="ABC-001",
+            title="テスト",
+            label="S1",
+        )
+        video = Video.from_video_info(info)
+        assert video.label == "S1"
+
+    def test_from_video_info_series_mapped(self):
+        """series 欄位正確映射"""
+        info = VideoInfo(
+            path="/test.mp4",
+            num="ABC-001",
+            title="テスト",
+            series="テストシリーズ",
+        )
+        video = Video.from_video_info(info)
+        assert video.series == "テストシリーズ"
+
+    def test_from_video_info_series_empty_becomes_none(self):
+        """series='' → None（與 Optional[str] 語意一致）"""
+        info = VideoInfo(
+            path="/test.mp4",
+            num="ABC-001",
+            title="テスト",
+            series="",
+        )
+        video = Video.from_video_info(info)
+        assert video.series is None
+
+    def test_from_video_info_duration_mapped(self):
+        """duration 欄位正確映射"""
+        info = VideoInfo(
+            path="/test.mp4",
+            num="ABC-001",
+            title="テスト",
+            duration=120,
+        )
+        video = Video.from_video_info(info)
+        assert video.duration == 120
+
+    def test_from_video_info_duration_zero_preserved(self):
+        """duration=0 保持 0（不被 or 短路為 None）"""
+        info = VideoInfo(
+            path="/test.mp4",
+            num="ABC-001",
+            title="テスト",
+            duration=0,
+        )
+        video = Video.from_video_info(info)
+        assert video.duration == 0
+
+    def test_from_video_info_duration_none_preserved(self):
+        """duration=None 保持 None"""
+        info = VideoInfo(
+            path="/test.mp4",
+            num="ABC-001",
+            title="テスト",
+            duration=None,
+        )
+        video = Video.from_video_info(info)
+        assert video.duration is None
+
+    def test_from_video_info_all_new_fields(self):
+        """all 4 new fields mapped correctly in single call"""
+        info = VideoInfo(
+            path="/test.mp4",
+            num="ABC-001",
+            title="テスト",
+            director="監督X",
+            duration=90,
+            series="シリーズX",
+            label="premium",
+        )
+        video = Video.from_video_info(info)
+        assert video.director == "監督X"
+        assert video.duration == 90
+        assert video.series == "シリーズX"
+        assert video.label == "premium"
+
+
+class TestVideoDirectorLabelFields:
+    """Video dataclass 新增 director/label 欄位測試"""
+
+    def test_video_director_default_empty_string(self):
+        """Video.director 預設值為 ''"""
+        video = Video()
+        assert hasattr(video, 'director')
+        assert video.director == ''
+
+    def test_video_label_default_empty_string(self):
+        """Video.label 預設值為 ''"""
+        video = Video()
+        assert hasattr(video, 'label')
+        assert video.label == ''
+
+
+class TestDbMigration:
+    """DB migration 測試：舊 schema 升級後確認新欄位存在"""
+
+    def _create_old_schema_db(self, db_path: Path):
+        """建立沒有 director/label 的舊 schema DB"""
+        conn = sqlite3.connect(str(db_path))
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE videos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                path TEXT UNIQUE NOT NULL,
+                number TEXT,
+                title TEXT,
+                original_title TEXT,
+                actresses TEXT,
+                maker TEXT,
+                series TEXT,
+                tags TEXT,
+                duration INTEGER,
+                size_bytes INTEGER,
+                cover_path TEXT,
+                release_date TEXT,
+                mtime REAL,
+                nfo_mtime REAL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        # 插入一筆舊資料
+        cursor.execute(
+            "INSERT INTO videos (path, number, title) VALUES (?, ?, ?)",
+            ("file:///old.mp4", "OLD-001", "舊資料")
+        )
+        conn.commit()
+        conn.close()
+
+    def test_migration_adds_director_column(self, tmp_path):
+        """舊 schema 升級後，PRAGMA table_info 確認 director 欄位存在"""
+        db_path = tmp_path / "old.db"
+        self._create_old_schema_db(db_path)
+
+        # 執行 init_db (migration)
+        init_db(db_path)
+
+        conn = sqlite3.connect(str(db_path))
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(videos)")
+        columns = [row[1] for row in cursor.fetchall()]
+        conn.close()
+
+        assert 'director' in columns
+
+    def test_migration_adds_label_column(self, tmp_path):
+        """舊 schema 升級後，PRAGMA table_info 確認 label 欄位存在"""
+        db_path = tmp_path / "old.db"
+        self._create_old_schema_db(db_path)
+
+        init_db(db_path)
+
+        conn = sqlite3.connect(str(db_path))
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(videos)")
+        columns = [row[1] for row in cursor.fetchall()]
+        conn.close()
+
+        assert 'label' in columns
+
+    def test_migration_preserves_existing_data(self, tmp_path):
+        """升級後舊資料仍然存在"""
+        db_path = tmp_path / "old.db"
+        self._create_old_schema_db(db_path)
+
+        init_db(db_path)
+
+        conn = sqlite3.connect(str(db_path))
+        cursor = conn.cursor()
+        cursor.execute("SELECT number, title FROM videos WHERE path = ?", ("file:///old.mp4",))
+        row = cursor.fetchone()
+        conn.close()
+
+        assert row is not None
+        assert row[0] == "OLD-001"
+        assert row[1] == "舊資料"
+
+    def test_new_db_includes_director_and_label(self, tmp_path):
+        """全新 DB 的 CREATE TABLE 也包含 director 和 label"""
+        db_path = tmp_path / "new.db"
+        init_db(db_path)
+
+        conn = sqlite3.connect(str(db_path))
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(videos)")
+        columns = [row[1] for row in cursor.fetchall()]
+        conn.close()
+
+        assert 'director' in columns
+        assert 'label' in columns
+
+
+class TestGetColumnsOrder:
+    """_get_columns() 順序與 SELECT * 一致，upsert + get_by_path round-trip 驗證"""
+
+    def test_upsert_and_get_by_path_roundtrip(self, tmp_path):
+        """upsert + get_by_path round-trip 驗證 director/label 欄位正確"""
+        db_path = tmp_path / "test.db"
+        init_db(db_path)
+
+        repo = VideoRepository(db_path)
+
+        # 建立含新欄位的 Video
+        video = Video(
+            path="file:///test/roundtrip.mp4",
+            number="RT-001",
+            title="Round-trip 測試",
+            director="監督名",
+            label="S1",
+            series="シリーズ",
+            duration=75,
+        )
+        repo.upsert(video)
+
+        # 讀回來
+        result = repo.get_by_path("file:///test/roundtrip.mp4")
+        assert result is not None
+        assert result.director == "監督名"
+        assert result.label == "S1"
+        assert result.series == "シリーズ"
+        assert result.duration == 75
 
 
 # ============ ActressAliasRepository 測試 ============

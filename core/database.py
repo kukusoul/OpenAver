@@ -47,7 +47,9 @@ def init_db(db_path: Path = None) -> None:
             original_title TEXT,
             actresses TEXT,
             maker TEXT,
+            director TEXT DEFAULT '',
             series TEXT,
+            label TEXT DEFAULT '',
             tags TEXT,
             duration INTEGER,
             size_bytes INTEGER,
@@ -99,6 +101,13 @@ def init_db(db_path: Path = None) -> None:
             ('心菜りお', '深田えいみ')
         """)
 
+    # Migration: 加入 Phase 37 新欄位
+    existing_cols = {row[1] for row in cursor.execute("PRAGMA table_info(videos)").fetchall()}
+    if 'director' not in existing_cols:
+        cursor.execute("ALTER TABLE videos ADD COLUMN director TEXT DEFAULT ''")
+    if 'label' not in existing_cols:
+        cursor.execute("ALTER TABLE videos ADD COLUMN label TEXT DEFAULT ''")
+
     conn.commit()
     conn.close()
 
@@ -113,7 +122,9 @@ class Video:
     original_title: str = ""
     actresses: List[str] = field(default_factory=list)  # JSON
     maker: str = ""
+    director: str = ""
     series: Optional[str] = None
+    label: str = ""
     tags: List[str] = field(default_factory=list)  # JSON
     duration: Optional[int] = None
     size_bytes: int = 0
@@ -150,9 +161,11 @@ class Video:
             original_title=info.originaltitle,
             actresses=actresses,
             maker=info.maker,
-            series=None,  # VideoInfo 沒有 series 欄位
+            director=info.director or '',
+            series=info.series or None,
+            label=info.label or '',
             tags=tags,
-            duration=None,  # VideoInfo 沒有 duration 欄位
+            duration=info.duration,
             size_bytes=info.size,
             cover_path=info.img,
             release_date=info.date,
@@ -212,19 +225,23 @@ class VideoRepository:
 
     def __init__(self, db_path: Path = None):
         self.db_path = db_path or get_db_path()
+        self._columns_cache: Optional[List[str]] = None
 
     def _get_connection(self) -> sqlite3.Connection:
         """取得資料庫連線"""
         return get_connection(self.db_path)
 
     def _get_columns(self) -> List[str]:
-        """取得欄位名稱列表"""
-        return [
-            'id', 'path', 'number', 'title', 'original_title',
-            'actresses', 'maker', 'series', 'tags', 'duration',
-            'size_bytes', 'cover_path', 'release_date', 'mtime', 'nfo_mtime',
-            'created_at', 'updated_at'
-        ]
+        """取得欄位名稱列表（動態從 PRAGMA table_info 取得，確保與 SELECT * 順序一致）"""
+        if self._columns_cache is None:
+            conn = self._get_connection()
+            try:
+                cursor = conn.cursor()
+                cursor.execute("PRAGMA table_info(videos)")
+                self._columns_cache = [row[1] for row in cursor.fetchall()]
+            finally:
+                conn.close()
+        return self._columns_cache
 
     def upsert(self, video: Video) -> int:
         """新增或更新影片（根據 path 判斷）

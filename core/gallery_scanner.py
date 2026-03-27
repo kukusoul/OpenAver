@@ -12,7 +12,7 @@ import os
 import re
 import time
 import xml.etree.ElementTree as ET
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields as dataclass_fields
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -56,6 +56,10 @@ class VideoInfo:
     size: int = 0
     mtime: int = 0
     img: str = ""
+    director: str = ""
+    duration: Optional[int] = None
+    series: str = ""
+    label: str = ""
 
     def to_dict(self) -> dict:
         return {
@@ -70,11 +74,16 @@ class VideoInfo:
             "size": self.size,
             "mtime": self.mtime,
             "img": self.img,
+            "director": self.director,
+            "duration": self.duration,
+            "series": self.series,
+            "label": self.label,
         }
 
     @classmethod
     def from_dict(cls, d: dict) -> 'VideoInfo':
-        return cls(**d)
+        known = {f.name for f in dataclass_fields(cls)}
+        return cls(**{k: v for k, v in d.items() if k in known})
 
 
 # 支援的影片副檔名（from core.video_extensions Single Source of Truth）
@@ -342,6 +351,29 @@ class VideoScanner:
                     genres.append(tag_elem.text.strip())
             info.genre = ','.join(genres)
 
+            # 時長 (runtime)
+            runtime_elem = root.find('runtime')
+            if runtime_elem is not None and runtime_elem.text:
+                try:
+                    info.duration = int(runtime_elem.text.strip())
+                except ValueError:
+                    info.duration = None
+
+            # 導演
+            director_elem = root.find('director')
+            if director_elem is not None and director_elem.text:
+                info.director = director_elem.text.strip()
+
+            # 系列 (set/name)
+            set_name_elem = root.find('set/name')
+            if set_name_elem is not None and set_name_elem.text:
+                info.series = set_name_elem.text.strip()
+
+            # 廠牌/標籤 (label)
+            label_elem = root.find('label')
+            if label_elem is not None and label_elem.text:
+                info.label = label_elem.text.strip()
+
             return info
 
         except Exception as e:
@@ -420,6 +452,10 @@ class VideoScanner:
                 info.maker = nfo_info.maker or info.maker
                 info.date = nfo_info.date or info.date
                 info.genre = nfo_info.genre or info.genre
+                info.director = nfo_info.director or info.director
+                info.duration = nfo_info.duration if nfo_info.duration is not None else info.duration
+                info.series = nfo_info.series or info.series
+                info.label = nfo_info.label or info.label
 
         # 如果 NFO 沒有資料，從檔名解析
         if not info.title or not info.num:

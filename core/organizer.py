@@ -311,6 +311,7 @@ def generate_nfo(
     director: str = '',
     duration: Optional[int] = None,
     series: str = '',
+    label: str = '',
 ) -> bool:
     """
     生成 NFO 檔案
@@ -348,6 +349,7 @@ def generate_nfo(
     )
     runtime_tag = f"<runtime>{duration}</runtime>" if duration is not None else "<runtime></runtime>"
     director_tag = f"<director>{html.escape(director)}</director>" if director else "<director></director>"
+    label_tag = f"<label>{html.escape(label)}</label>"
 
     nfo_content = f'''<?xml version="1.0" encoding="utf-8"?>
 <movie>
@@ -355,6 +357,7 @@ def generate_nfo(
   <originaltitle>{html.escape(original_title)}</originaltitle>
   {set_tag}
   <studio>{html.escape(maker)}</studio>
+  {label_tag}
   <year>{html.escape(year)}</year>
   <premiered>{html.escape(date)}</premiered>
   <plot></plot>
@@ -637,6 +640,7 @@ def organize_file(
             director=metadata.get('director', ''),
             duration=metadata.get('duration'),
             series=metadata.get('series', ''),
+            label=metadata.get('label', ''),
         ):
             result['nfo_path'] = nfo_path
 
