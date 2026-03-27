@@ -73,3 +73,43 @@ class TestShowcaseMetadataGuard:
         assert ("searchFromMetadata(video.series)" in html or
                 "searchFromMetadata(currentLightboxVideo?.series)" in html), \
             "showcase.html 缺少 series 的 searchFromMetadata 呼叫"
+
+
+SEARCH_HTML = Path(__file__).parent.parent.parent / "web" / "templates" / "search.html"
+
+
+class TestSearchLightboxMetadataGuard:
+    """T4: 確保 search.html lightbox 包含 director/duration/series/label 的 Alpine 綁定"""
+
+    def _html(self):
+        return SEARCH_HTML.read_text(encoding="utf-8")
+
+    def test_lightbox_has_current_lightbox_video_director(self):
+        """Lightbox 含 currentLightboxVideo()?.director 綁定"""
+        html = self._html()
+        assert "currentLightboxVideo()?.director" in html, \
+            "search.html 缺少 currentLightboxVideo()?.director 綁定（Lightbox）"
+
+    def test_lightbox_has_current_lightbox_video_duration(self):
+        """Lightbox 含 currentLightboxVideo()?.duration 綁定"""
+        html = self._html()
+        assert "currentLightboxVideo()?.duration" in html, \
+            "search.html 缺少 currentLightboxVideo()?.duration 綁定（Lightbox）"
+
+    def test_lightbox_has_current_lightbox_video_series(self):
+        """Lightbox 含 currentLightboxVideo()?.series 綁定"""
+        html = self._html()
+        assert "currentLightboxVideo()?.series" in html, \
+            "search.html 缺少 currentLightboxVideo()?.series 綁定（Lightbox）"
+
+    def test_lightbox_has_current_lightbox_video_label(self):
+        """Lightbox 含 currentLightboxVideo()?.label 綁定"""
+        html = self._html()
+        assert "currentLightboxVideo()?.label" in html, \
+            "search.html 缺少 currentLightboxVideo()?.label 綁定（Lightbox）"
+
+    def test_lb_meta_extra_div_exists(self):
+        """Lightbox 含 lb-meta-extra div（新增的 meta 列）"""
+        html = self._html()
+        assert "lb-meta-extra" in html, \
+            "search.html 缺少 lb-meta-extra（Lightbox 新 meta 列）"

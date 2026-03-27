@@ -76,6 +76,19 @@
                     <span x-show="currentLightboxVideo()?.maker" x-text="currentLightboxVideo()?.maker"></span>
                     <span x-show="currentLightboxVideo()?.date" x-text="currentLightboxVideo()?.date"></span>
                 </div>
+                <div class="lb-meta lb-meta-extra">
+                    <span x-show="currentLightboxVideo()?.director">
+                        <b>導演：</b><span x-text="currentLightboxVideo()?.director"></span>
+                    </span>
+                    <span x-show="currentLightboxVideo()?.duration"
+                          x-text="currentLightboxVideo()?.duration ? currentLightboxVideo().duration + ' 分鐘' : ''"></span>
+                    <span x-show="currentLightboxVideo()?.series">
+                        <b>系列：</b><span x-text="currentLightboxVideo()?.series"></span>
+                    </span>
+                    <span x-show="currentLightboxVideo()?.label">
+                        <b>發行：</b><span x-text="currentLightboxVideo()?.label"></span>
+                    </span>
+                </div>
                 <div class="lb-tags" x-show="(currentLightboxVideo()?.tags || []).length > 0">
                     <template x-for="tag in (currentLightboxVideo()?.tags || [])" :key="tag">
                         <span class="lb-tag" x-text="tag"></span>
