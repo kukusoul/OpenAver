@@ -57,13 +57,12 @@ class TestDmmProxyUrl:
 class TestDmmScraperDirect:
     """DMMScraper session.proxies 行為"""
 
-    def test_empty_proxy_url_no_proxies_set(self):
-        """proxy_url='' → session.proxies 不被設定（直連模式）"""
+    def test_empty_proxy_url_trust_env_false(self):
+        """proxy_url='' → trust_env=False（不吃環境 proxy，直連模式）"""
         from core.scrapers import DMMScraper, ScraperConfig
         scraper = DMMScraper(ScraperConfig(proxy_url=''))
-        # requests.Session 預設 proxies 是 {}（空 dict），不應被覆寫
-        assert not scraper._session.proxies, \
-            "proxy_url='' 時不應設定 session.proxies"
+        assert scraper._session.trust_env is False, \
+            "proxy_url='' 時 trust_env 必須為 False（阻止環境 proxy 介入）"
 
     def test_real_proxy_url_proxies_set(self):
         """proxy_url='http://...' → session.proxies 已設定"""
@@ -90,8 +89,8 @@ class TestSearchDirect:
         from core.scrapers import DMMScraper, ScraperConfig
         dmm_config = ScraperConfig(proxy_url=_dmm_proxy_url(proxy_url))
         scraper = DMMScraper(dmm_config)
-        assert not scraper._session.proxies, \
-            "direct 模式下 DMMScraper 不應設定 session.proxies"
+        assert scraper._session.trust_env is False, \
+            "direct 模式下 DMMScraper 的 trust_env 必須為 False（不走環境 proxy）"
 
     def test_search_jav_direct_dmm_config_not_none(self):
         """proxy_url='direct' → _is_dmm_enabled=True → dmm_config 建立（非 None）"""

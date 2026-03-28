@@ -234,7 +234,7 @@ def test_proxy(request: ProxyTestRequest) -> dict:
 
     is_direct = request.proxy_url.strip().lower() == 'direct'
     if is_direct:
-        proxies = {}
+        proxies = {'http': None, 'https': None}
         success_message = "直連測試成功（DMM 可達）"
         non_jp_message = "直連可達，但 DMM 回傳 403（非日本 IP，建議使用 Proxy）"
     else:

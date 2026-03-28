@@ -546,12 +546,13 @@ def organize_file(
         if '{title}' in folder_template and not format_data.get('title'):
             used_fallbacks.append('標題')
 
-    # 自動偵測字幕標記（如果 metadata 沒有指定）
+    # 字幕偵測：先看 metadata，再補檔案系統級偵測
     has_subtitle = metadata.get('has_subtitle')
-    subtitle_files = []
+    subtitle_files = find_subtitle_files(file_path)
     if has_subtitle is None:
-        subtitle_files = find_subtitle_files(file_path)
         has_subtitle = check_subtitle(original_filename) or bool(subtitle_files)
+    elif subtitle_files:
+        has_subtitle = True  # sidecar 字幕存在 → 覆寫上游 False
 
     # 計算目標路徑
     if config.get('create_folder', True):
@@ -619,8 +620,7 @@ def organize_file(
             shutil.move(file_path, target_path)
 
             # 搬移字幕檔（影片有搬移時才執行）
-            # fallback：metadata 有 has_subtitle 時上面沒呼叫 find_subtitle_files
-            subs_to_move = subtitle_files if subtitle_files else find_subtitle_files(file_path)
+            subs_to_move = subtitle_files
             video_stem = Path(file_path).stem
             for sub_path in subs_to_move:
                 try:

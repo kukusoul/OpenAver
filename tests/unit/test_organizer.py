@@ -1510,3 +1510,42 @@ class TestOrganizeSubtitle:
         if result.get("nfo_path"):
             nfo_content = Path(result["nfo_path"]).read_text(encoding="utf-8")
             assert "中文字幕" in nfo_content, "有字幕檔時 NFO 應包含中文字幕 tag"
+
+    def test_explicit_false_with_sidecar_subtitle(self, tmp_path):
+        """has_subtitle=False 但有 sidecar 字幕 → has_subtitle 應為 True，NFO 有 tag"""
+        # 檔名無字幕標記（check_subtitle 為 False），metadata 明確傳 has_subtitle=False
+        src = tmp_path / "SONE-205.mp4"
+        src.write_bytes(b"fake mp4")
+        # sidecar 字幕與影片同目錄
+        sub = tmp_path / "SONE-205.srt"
+        sub.write_text("subtitle content")
+
+        config = {
+            "create_folder": False,
+            "filename_format": "[{num}] {title}",
+            "download_cover": False,
+            "create_nfo": True,
+            "max_title_length": 50,
+            "max_filename_length": 60,
+            "suffix_keywords": [],
+        }
+        metadata = {
+            "number": "SONE-205",
+            "title": "Test Title",
+            "actors": [],
+            "tags": [],
+            "maker": "S1",
+            "date": "2024-01-15",
+            "cover": "",
+            "url": "",
+            "has_subtitle": False,  # 上游明確設為 False
+        }
+
+        result = organize_file(str(src), metadata, config)
+
+        assert result["success"] is True, f"organize 失敗: {result.get('error')}"
+        # sidecar 字幕存在 → 應覆寫上游 False → NFO 必須包含中文字幕 tag
+        assert result.get("nfo_path"), "NFO 應被建立"
+        nfo_content = Path(result["nfo_path"]).read_text(encoding="utf-8")
+        assert "中文字幕" in nfo_content, \
+            "has_subtitle=False 但有 sidecar 字幕時，NFO 應包含中文字幕 tag"

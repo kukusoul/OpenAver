@@ -65,18 +65,23 @@
 
                     <!-- Source Badges -->
                     <div class="source-badges-row mt-2">
-                        <small class="settings-hint" style="margin-right: 0.25rem;">預設搜尋來源</small>
+                        <small class="settings-hint" style="margin-right: 0.5rem;">預設搜尋來源</small>
                         <!-- 有碼來源 -->
                         <template x-for="src in CENSORED_SOURCES" :key="src">
-                            <span class="badge badge-sm source-badge"
-                                :class="{
-                                    'source-active': isSourceActive(src),
-                                    'source-dmm-disabled': src === 'dmm' && !isDmmAvailable(),
-                                    'source-primary': form.primarySource === src && (src === 'dmm' || src === 'javbus'),
-                                    'cursor-pointer': src === 'javbus' || (src === 'dmm' && isDmmAvailable())
-                                }"
-                                @click="(src === 'javbus' || (src === 'dmm' && isDmmAvailable())) && (form.primarySource = src)"
-                                x-text="SOURCE_NAMES[src] || src">
+                            <span class="inline-flex items-center gap-0.5"
+                                @click="(src === 'javbus' || (src === 'dmm' && isDmmAvailable())) && (form.primarySource = src)">
+                                <span x-show="src === 'dmm' || src === 'javbus'"
+                                    class="text-xs cursor-pointer"
+                                    :class="{ 'opacity-30': src === 'dmm' && !isDmmAvailable() }"
+                                    x-text="form.primarySource === src ? '●' : '○'"></span>
+                                <span class="badge badge-sm source-badge"
+                                    :class="{
+                                        'source-active': isSourceActive(src),
+                                        'source-dmm-disabled': src === 'dmm' && !isDmmAvailable(),
+                                        'cursor-pointer': src === 'javbus' || (src === 'dmm' && isDmmAvailable())
+                                    }"
+                                    x-text="SOURCE_NAMES[src] || src">
+                                </span>
                             </span>
                         </template>
 
@@ -102,7 +107,7 @@
                         <div class="variable-input-group">
                             <input type="text" class="input input-bordered input-sm flex-1"
                                 x-model="form.proxyUrl"
-                                placeholder="http://位址:埠號 — 已有日本 IP 可輸入 direct">
+                                placeholder="http://帳號:密碼@主機:埠號 — 已有日本 IP 可輸入 direct">
                             <button class="btn btn-sm btn-outline" type="button"
                                 @click="testProxy()"
                                 :disabled="!form.proxyUrl.trim() || testProxyLoading">

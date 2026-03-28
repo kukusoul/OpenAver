@@ -278,6 +278,11 @@
     gap: 6px;
 }
 
+/* 覆蓋 theme.css 的 .settings-form-group .settings-hint { margin-left: 48px } */
+#settings-components .source-badges-row .settings-hint {
+    margin-left: 0;
+}
+
 /* 預設：淡出（未啟用狀態）*/
 #settings-components .source-badge {
     opacity: 0.35;
@@ -301,12 +306,6 @@
 #settings-components .source-badge.source-dmm-disabled {
     opacity: 0.25;
     text-decoration: line-through;
-}
-
-/* 主要來源選中狀態：ring highlight + 加粗 */
-#settings-components .source-badge.source-primary {
-    box-shadow: 0 0 0 2px var(--accent, oklch(0.65 0.18 250));
-    font-weight: 600;
 }
 
 /* 有碼/無碼分隔符 */
