@@ -4096,49 +4096,59 @@ class TestGridPerPageGuard:
         )
 
 
-class TestSampleLightboxTemplateGuard:
-    """Fix A (T7-fix)：Sample Lightbox 模板位置回歸守衛
+class TestSampleGalleryTemplateGuard:
+    """T8：Search Sample Gallery 模板守衛
 
-    靜態確認 sampleLightboxOpen / sampleLightboxIndex 只出現在 search.html
-    及 base.html（body x-data fallback）中，且 .sample-lightbox overlay
-    在 searchPage() x-data scope 範圍內。
+    靜態確認舊 sampleLightboxOpen / sampleLightboxIndex 已從所有模板移除，
+    新 sampleGalleryOpen / sampleGalleryImages / sampleGalleryIndex 已正確
+    出現在 search.html 及 base.html（body x-data fallback）中，且
+    .sample-gallery overlay 在 searchPage() x-data scope 範圍內。
 
-    base.html 例外說明：body[x-data] 加入 sampleLightboxOpen/sampleLightboxIndex
-    fallback 是必要的。Alpine 嵌套 scope 初始化期間，body scope 偶爾會在
+    base.html 例外說明：body[x-data] 加入 sampleGalleryOpen 等 fallback
+    是必要的。Alpine 嵌套 scope 初始化期間，body scope 偶爾會在
     子 x-data（searchPage()）建立前先評估子元素的 binding，導致
-    ReferenceError: sampleLightboxOpen is not defined。Fallback 提供安全預設值，
-    不影響 searchPage() scope 的正常運作（子 scope 覆蓋父 scope）。
+    ReferenceError。Fallback 提供安全預設值。
 
-    此 guard 防止未來模板重構時 .sample-lightbox 被移出正確 scope。
-    不驗證 runtime Alpine 初始化（需手動 DevTools 確認）。
+    此 guard 防止未來模板重構時 .sample-gallery 被移出正確 scope，
+    或舊 sampleLightbox* 狀態殘留。
     """
 
     SEARCH_HTML = PROJECT_ROOT / 'web' / 'templates' / 'search.html'
     BASE_HTML = PROJECT_ROOT / 'web' / 'templates' / 'base.html'
     TEMPLATES_DIR = PROJECT_ROOT / 'web' / 'templates'
 
-    def test_sampleLightboxOpen_only_in_search_html(self):
-        """sampleLightboxOpen 不應出現在 search.html / base.html 以外的模板
-
-        base.html 允許出現：body x-data fallback（防止 Alpine 嵌套 scope ReferenceError）
-        """
+    def test_old_sampleLightbox_state_absent(self):
+        """T8：舊 sampleLightboxOpen / sampleLightboxIndex 不應出現在任何模板"""
         pattern = re.compile(r'sampleLightboxOpen|sampleLightboxIndex')
         violations = []
 
         for tmpl in self.TEMPLATES_DIR.glob('**/*.html'):
-            if tmpl in (self.SEARCH_HTML, self.BASE_HTML):
-                continue
             content = tmpl.read_text(encoding='utf-8')
             if pattern.search(content):
                 violations.append(str(tmpl.relative_to(PROJECT_ROOT)))
 
         assert not violations, (
-            "Fix A 違規：sampleLightboxOpen/sampleLightboxIndex 出現在 search.html/base.html 以外的模板 — "
-            f"請確認這些 state 只存在於 searchPage() scope 或 body fallback：{violations}"
+            "T8 違規：舊 sampleLightboxOpen/sampleLightboxIndex 仍殘留於模板 — "
+            f"請確認所有模板已遷移至 sampleGallery* state：{violations}"
         )
 
-    def test_sample_lightbox_inside_searchPage_scope(self):
-        """search.html 中 .sample-lightbox 必須在 x-data=\"searchPage()\" 的 div 之後（scope 內）"""
+    def test_sampleGalleryOpen_in_search_and_base(self):
+        """T8：sampleGalleryOpen / sampleGalleryImages / sampleGalleryIndex 必須出現在 search.html 且 base.html"""
+        search_content = self.SEARCH_HTML.read_text(encoding='utf-8')
+        base_content = self.BASE_HTML.read_text(encoding='utf-8')
+
+        for state in ('sampleGalleryOpen', 'sampleGalleryImages', 'sampleGalleryIndex'):
+            assert state in search_content, (
+                f"T8 違規：search.html 缺少 {state} — "
+                "Sample Gallery state 必須存在於 searchPage() scope"
+            )
+            assert state in base_content, (
+                f"T8 違規：base.html 缺少 {state} fallback — "
+                "body x-data 必須包含 sampleGallery* fallback"
+            )
+
+    def test_sample_gallery_inside_searchPage_scope(self):
+        """T8：search.html 中 class=\"sample-gallery\" 必須在 x-data=\"searchPage()\" 之後（scope 內）"""
         content = self.SEARCH_HTML.read_text(encoding='utf-8')
         lines = content.split('\n')
 
@@ -4150,61 +4160,69 @@ class TestSampleLightboxTemplateGuard:
                 break
 
         assert search_page_line is not None, (
-            "Fix A 違規：search.html 找不到 x-data=\"searchPage()\" — "
+            "T8 違規：search.html 找不到 x-data=\"searchPage()\" — "
             "searchPage() Alpine 組件必須存在"
         )
 
-        # 找到 sample-lightbox 的行號
-        sample_lightbox_line = None
+        # 找到 class="sample-gallery" 的行號
+        sample_gallery_line = None
         for i, line in enumerate(lines):
-            if 'class="sample-lightbox"' in line:
-                sample_lightbox_line = i
+            if 'class="sample-gallery"' in line:
+                sample_gallery_line = i
                 break
 
-        assert sample_lightbox_line is not None, (
-            "Fix A 違規：search.html 找不到 .sample-lightbox 元素 — "
-            "Sample Lightbox overlay 必須存在於 search.html"
+        assert sample_gallery_line is not None, (
+            "T8 違規：search.html 找不到 class=\"sample-gallery\" 元素 — "
+            "Sample Gallery overlay 必須存在於 search.html"
         )
 
-        # .sample-lightbox 必須在 searchPage() x-data scope 之後（行號較大）
-        assert sample_lightbox_line > search_page_line, (
-            f"Fix A 違規：.sample-lightbox（L{sample_lightbox_line + 1}）在 "
+        assert sample_gallery_line > search_page_line, (
+            f"T8 違規：.sample-gallery（L{sample_gallery_line + 1}）在 "
             f"x-data=\"searchPage()\"（L{search_page_line + 1}）之前 — "
-            "sample-lightbox overlay 必須在 searchPage() x-data scope 內"
+            "sample-gallery overlay 必須在 searchPage() x-data scope 內"
         )
 
-    def test_sample_lightbox_uses_searchPage_state(self):
-        """search.html 的 .sample-lightbox 必須引用 sampleLightboxOpen（確認綁定存在）"""
+    def test_old_sample_lightbox_html_absent(self):
+        """T8：search.html 不應含 class=\"sample-lightbox\"（舊 overlay 已移除）"""
         content = self.SEARCH_HTML.read_text(encoding='utf-8')
-
-        # .sample-lightbox 必須有 sampleLightboxOpen 綁定（:class 或 x-show）
-        has_open_binding = bool(re.search(
-            r'sampleLightboxOpen',
-            content
-        ))
-        assert has_open_binding, (
-            "Fix A 違規：search.html 的 .sample-lightbox 缺少 sampleLightboxOpen 綁定 — "
-            "overlay 必須用 sampleLightboxOpen 控制顯示"
+        assert 'class="sample-lightbox"' not in content, (
+            "T8 違規：search.html 仍含 class=\"sample-lightbox\" — "
+            "舊 Sample Lightbox overlay 必須完整移除，改用 sample-gallery"
         )
 
-    def test_sample_thumb_active_binding_in_x_for(self):
-        """Fix C：sample-thumb-btn 的 :class active 綁定必須在 x-for template 內"""
+    def test_sg_open_btn_in_lightbox_metadata(self):
+        """T8：search.html 含 sg-open-btn，且其行號在 class=\"lightbox-metadata\" 之後"""
         content = self.SEARCH_HTML.read_text(encoding='utf-8')
+        lines = content.split('\n')
 
-        # 確認 sample-thumb-active 綁定存在
-        assert 'sample-thumb-active' in content, (
-            "Fix C 違規：search.html 缺少 sample-thumb-active class 綁定 — "
-            "縮圖 active 高亮需要在 .sample-thumb-btn 加 :class=\"{ 'sample-thumb-active': ... }\""
+        # 找到 lightbox-metadata 行號
+        lightbox_metadata_line = None
+        for i, line in enumerate(lines):
+            if 'class="lightbox-metadata"' in line:
+                lightbox_metadata_line = i
+                break
+
+        assert lightbox_metadata_line is not None, (
+            "T8 違規：search.html 找不到 class=\"lightbox-metadata\" — "
+            "Grid Lightbox metadata 區塊必須存在"
         )
 
-        # 確認 :class 綁定引用了正確的 state
-        has_correct_binding = bool(re.search(
-            r":class=.*sample-thumb-active.*sampleLightboxOpen.*sampleLightboxIndex",
-            content
-        ))
-        assert has_correct_binding, (
-            "Fix C 違規：sample-thumb-active 的 :class 綁定格式不正確 — "
-            "必須形如 :class=\"{ 'sample-thumb-active': sampleLightboxOpen && sampleLightboxIndex === idx }\""
+        # 找到 sg-open-btn 行號
+        sg_open_btn_line = None
+        for i, line in enumerate(lines):
+            if 'sg-open-btn' in line:
+                sg_open_btn_line = i
+                break
+
+        assert sg_open_btn_line is not None, (
+            "T8 違規：search.html 找不到 sg-open-btn — "
+            "Grid Lightbox 必須在 .lb-tags 之後含 Sample Gallery 入口按鈕"
+        )
+
+        assert sg_open_btn_line > lightbox_metadata_line, (
+            f"T8 違規：sg-open-btn（L{sg_open_btn_line + 1}）在 "
+            f"lightbox-metadata（L{lightbox_metadata_line + 1}）之前 — "
+            "入口按鈕必須在 .lightbox-metadata 內部"
         )
 
 

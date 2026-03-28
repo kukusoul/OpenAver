@@ -281,8 +281,7 @@
             event.preventDefault();
         }
     },
-    sampleLightboxOpen: false,
-    sampleLightboxIndex: 0
+    sampleGalleryOpen: false, sampleGalleryImages: [], sampleGalleryIndex: 0
 }"
      x-init="$watch('sidebarCollapsed', configSync('sidebar_collapsed'))"
      :class="{ 'sidebar-collapsed': sidebarCollapsed }"

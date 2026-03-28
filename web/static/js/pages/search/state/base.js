@@ -116,10 +116,13 @@ window.SearchStateMixin_Base = function () {
         _activeConnections: [],    // Array<EventSource> — 追蹤所有進行中的 SSE 連線
         _searchSnapshot: null,     // cancelSearch 用的狀態快照
 
-        // ===== T7: Sample Lightbox State =====
-        sampleLightboxOpen: false,   // Sample Lightbox 顯示狀態
-        sampleLightboxIndex: 0,      // 當前顯示的 sample 索引（0-based）
-        _sampleTouchStartX: null,    // T7-fix: touch swipe 起始 X 座標
+        // ===== T8: Sample Gallery State =====
+        sampleGalleryOpen: false,
+        sampleGalleryImages: [],
+        sampleGalleryIndex: 0,
+        _sgTouchStartX: null,
+        _sgAnimating: false,
+        _sgGeneration: 0,
 
         // ===== T2a: Display Mode State =====
         displayMode: 'detail',     // 'detail' | 'grid'

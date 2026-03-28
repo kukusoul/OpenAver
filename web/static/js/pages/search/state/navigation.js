@@ -10,8 +10,8 @@ window.SearchStateMixin_Navigation = {
      * @param {number} delta - 偏移量（-1 = 上一個，1 = 下一個）
      */
     navigate(delta) {
-        // T7: nav-btn 點擊觸發 navigate 時，自動關閉 Sample Lightbox
-        if (this.sampleLightboxOpen) this.closeSampleLightbox();
+        // T8: nav-btn 點擊觸發 navigate 時，自動關閉 Sample Gallery
+        if (this.sampleGalleryOpen) this.closeSampleGallery();
 
         let newIndex = this.currentIndex + delta;
 
@@ -140,21 +140,21 @@ window.SearchStateMixin_Navigation = {
             }
         }
 
-        // T7: Sample Lightbox 鍵盤導航（Grid Lightbox 已排除後處理，兩者不同時為 true）
-        if (this.sampleLightboxOpen) {
+        // T8: Sample Gallery 鍵盤導航（Grid Lightbox 已排除後處理，sampleGalleryOpen 疊在 lightboxOpen 之上）
+        if (this.sampleGalleryOpen) {
             if (event.key === 'Escape') {
                 event.preventDefault();
-                this.closeSampleLightbox();
+                this.closeSampleGallery();
                 return;
             }
             if (event.key === 'ArrowLeft') {
                 event.preventDefault();
-                this.prevSample();
+                this.prevSampleGallery();
                 return;
             }
             if (event.key === 'ArrowRight') {
                 event.preventDefault();
-                this.nextSample();
+                this.nextSampleGallery();
                 return;
             }
             return;

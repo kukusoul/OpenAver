@@ -13,6 +13,7 @@
  *   - playSlideIn(containerEl, direction)              detail 導航滑入動畫（C18 interrupt）
  *   - playLightboxOpen(lightboxEl, options)             lightbox 進場動畫（backdrop + content + cover）
  *   - playLightboxSwitch(contentEl, direction, options) lightbox 導航 crossfade + micro slide
+ *   - playSampleGallerySwitch(imgEl, direction, options) sample gallery 圖片切換 fade+slide（C18/C21）
  *
  * C2：此檔案是 pages/ 目錄下被允許直接呼叫 GSAP 的兩個檔案之一
  *      （另一個為 motion-lab.js）。
@@ -878,6 +879,53 @@
             );
 
             return tl;
+        },
+
+        /**
+         * T8: Sample Gallery 圖片切換動畫（fade + micro slide）
+         *
+         * C18: killTweensOf 打斷舊動畫（不用 isNavigating lock）
+         * C21: .gsap-animating class 暫時關掉 CSS transition
+         *
+         * @param {Element} imgEl - .sg-main-img 元素
+         * @param {'next'|'prev'} direction - 切換方向
+         * @param {object} [options] - { onComplete }
+         * @returns {gsap.core.Tween|null}
+         */
+        playSampleGallerySwitch: function (imgEl, direction, options) {
+            options = options || {};
+
+            if (!imgEl) return null;
+            if (typeof gsap === 'undefined') return null;
+            if (shouldSkip()) return null;
+
+            // C18: 打斷舊動畫
+            gsap.killTweensOf(imgEl);
+
+            // C21: 暫時關掉 imgEl 的 CSS transition
+            imgEl.classList.add('gsap-animating');
+
+            var xIn = direction === 'next' ? 30 : -30;
+
+            var tween = gsap.fromTo(imgEl,
+                { opacity: 0, x: xIn },
+                {
+                    opacity: 1,
+                    x: 0,
+                    duration: 0.22,
+                    ease: 'power2.out',
+                    clearProps: 'transform,opacity',
+                    onComplete: function () {
+                        imgEl.classList.remove('gsap-animating');
+                        if (typeof options.onComplete === 'function') options.onComplete();
+                    },
+                    onInterrupt: function () {
+                        imgEl.classList.remove('gsap-animating');
+                    }
+                }
+            );
+
+            return tween;
         }
     };
 })();
