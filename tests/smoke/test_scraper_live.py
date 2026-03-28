@@ -183,23 +183,20 @@ class TestSpecialNumbers:
             normalized = scraper._normalize_fc2_number(fmt)
             assert normalized == "1723984", f"{fmt} 正規化失敗: {normalized}"
 
-    def test_uncensored_smart_search(self):
+    @pytest.mark.parametrize("number,desc", [
+        ("FC2-PPV-2200414", "fc2"),
+        ("FC2-PPV-2781063", "fc2"),
+        ("FC2-PPV-2865434", "fc2"),
+        ("010120-001", "1pondo"),
+        ("031515-828", "carib"),
+    ])
+    def test_uncensored_smart_search(self, number, desc):
         """無碼番號 smart_search 觸發測試"""
         from core.scraper import smart_search
 
-        test_cases = [
-            ("FC2-PPV-2200414", "fc2"),
-            ("FC2-PPV-2781063", "fc2"),
-            ("FC2-PPV-2865434", "fc2"),
-            ("010120-001", "1pondo"),
-            ("031515-828", "carib"),
-        ]
-
-        for number, desc in test_cases:
-            results = smart_search(number, limit=1)
-            if results:
-                assert results[0].get('_mode') == 'uncensored', \
-                    f"{number} ({desc}) 應為 uncensored 模式，實際: {results[0].get('_mode')}"
-            else:
-                pytest.skip(f"{number} ({desc}) 無法搜尋到結果")
+        results = smart_search(number, limit=1)
+        if not results:
+            pytest.skip(f"{number} ({desc}) 無法搜尋到結果")
+        assert results[0].get('_mode') == 'uncensored', \
+            f"{number} ({desc}) 應為 uncensored 模式，實際: {results[0].get('_mode')}"
 
