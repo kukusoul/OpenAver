@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.3] - 2026-03-28
+
+### Added
+
+#### 🖼️ Sample Gallery 元件 (Phase 37b)
+- extrafanart/ 本地圖片接入 Showcase Lightbox（scanner 掃描 → DB → API 全鏈路）
+- 全新 `sample-gallery` overlay 元件：大圖瀏覽 + 縮圖列 + GSAP slide 動畫
+- Showcase Lightbox 新增「查看樣品圖 (N)」入口按鈕
+- /search Grid Lightbox 同步新增入口按鈕
+- /search Detail 模式舊 sample-lightbox 完整替換為 sample-gallery
+- 鍵盤導航（ESC/←/→）+ 觸控 swipe 手勢 + Reduced Motion 降級
+- DB schema migration 自動補齊 `sample_images` 欄位
+
+### Changed
+- 測試總數 1250 → 1280（+30）
+
 ## [0.5.2] - 2026-03-27
 
 ### Added
