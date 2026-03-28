@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.5] - 2026-03-28
+
+### Added
+
+#### 🎬 字幕檔自動偵測與搬移 (Phase 37d-T1)
+- 新增 `find_subtitle_files()` 掃描同目錄同名字幕檔（.srt/.ass/.ssa + 語言後綴）
+- `organize_file()` 影片搬移成功後字幕自動跟隨，保留語言後綴命名
+- 字幕偵測與 NFO 標記一致：sidecar 字幕存在時覆寫上游 `has_subtitle=False`
+
+#### ⚙️ Settings 搜尋來源 UI 簡化 (Phase 37d-T2)
+- 移除頁面底部獨立「主要搜尋來源」radio 區塊
+- DMM/JavBus badge 可直接點擊切換，以 ●/○ 符號標示選中狀態
+
+#### 🌐 Proxy direct 模式 (Phase 37d-T3)
+- Proxy 欄位輸入 `direct` 代表已有日本 IP，免填 proxy 即可啟用 DMM
+- DMMScraper direct 模式設 `trust_env=False`，確保不繼承環境 proxy 變數
+- DMM 內部三處 proxy guard 移除，可用性判斷統一由呼叫端控制
+
+#### 📖 Help 頁面更新 (Phase 37d-T4)
+- 搜尋功能：Lightbox 新欄位 + 劇照按鈕說明
+- Scanner：字幕檔自動偵測與搬移說明
+- Showcase：Lightbox/Table 新欄位 + 劇照按鈕說明
+- Scraper 來源：預設搜尋來源 / DMM 模糊搜尋 / Proxy direct 模式說明
+- 疑難排解：DMM 段落補充 direct 說明
+
+### Changed
+- 測試總數 1324 → 1366（+42）
+
 ## [0.5.4] - 2026-03-28
 
 ### Added
