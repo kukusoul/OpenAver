@@ -69,13 +69,42 @@
             </div>
             <!-- lightbox-metadata: actress mode 時隱藏 -->
             <div class="lightbox-metadata" x-show="!actressLightboxMode()">
-                <div class="lb-title" x-text="currentLightboxVideo()?.title || '-'"></div>
-                <div class="lb-actor" x-text="(currentLightboxVideo()?.actors || []).join(', ') || '-'"></div>
-                <div class="lb-meta">
-                    <span x-text="currentLightboxVideo()?.number || '-'"></span>
-                    <span x-show="currentLightboxVideo()?.maker" x-text="currentLightboxVideo()?.maker"></span>
-                    <span x-show="currentLightboxVideo()?.date" x-text="currentLightboxVideo()?.date"></span>
+                <!-- Row 1: Header (title + sample gallery button) -->
+                <div class="lb-header">
+                    <div class="lb-title" x-text="currentLightboxVideo()?.title || '-'"></div>
+                    <!-- T8: Sample Gallery 入口按鈕 -->
+                    <button class="sg-open-btn"
+                            x-show="(currentLightboxVideo()?.sample_images || []).length > 0"
+                            @click="openSampleGallery((currentLightboxVideo()?.sample_images || []).map(url => '/api/proxy-image?url=' + encodeURIComponent(url)), 0)"
+                            x-text="'劇照 (' + (currentLightboxVideo()?.sample_images || []).length + ')'">
+                    </button>
                 </div>
+                <!-- Row 3: Actresses -->
+                <div class="lb-actor" x-text="(currentLightboxVideo()?.actors || []).join(', ') || '-'"></div>
+                <!-- Row 4: Details (merged) -->
+                <!-- 分隔符 " · " 內嵌於各 span 開頭，隨 x-show 一起顯示/隱藏，避免孤立 · -->
+                <div class="lb-details">
+                    <span x-text="currentLightboxVideo()?.number || '-'"></span>
+                    <span x-show="currentLightboxVideo()?.maker">
+                        &nbsp;·&nbsp;<span x-text="currentLightboxVideo()?.maker"></span>
+                    </span>
+                    <span x-show="currentLightboxVideo()?.director">
+                        &nbsp;·&nbsp;<b>導演：</b><span x-text="currentLightboxVideo()?.director"></span>
+                    </span>
+                    <span x-show="currentLightboxVideo()?.duration">
+                        &nbsp;·&nbsp;<span x-text="currentLightboxVideo()?.duration ? currentLightboxVideo().duration + ' 分鐘' : ''"></span>
+                    </span>
+                    <span x-show="currentLightboxVideo()?.series">
+                        &nbsp;·&nbsp;<b>系列：</b><span x-text="currentLightboxVideo()?.series"></span>
+                    </span>
+                    <span x-show="currentLightboxVideo()?.label && currentLightboxVideo()?.label !== currentLightboxVideo()?.maker">
+                        &nbsp;·&nbsp;<b>發行：</b><span x-text="currentLightboxVideo()?.label"></span>
+                    </span>
+                    <span x-show="currentLightboxVideo()?.date">
+                        &nbsp;·&nbsp;<span x-text="currentLightboxVideo()?.date"></span>
+                    </span>
+                </div>
+                <!-- Row 5: Tags -->
                 <div class="lb-tags" x-show="(currentLightboxVideo()?.tags || []).length > 0">
                     <template x-for="tag in (currentLightboxVideo()?.tags || [])" :key="tag">
                         <span class="lb-tag" x-text="tag"></span>
@@ -99,47 +128,54 @@
         </button>
     </div>
 
-    <!-- T7: Sample Lightbox（純圖模式，獨立 overlay） -->
-    <div class="sample-lightbox"
-         :class="{ 'show': sampleLightboxOpen }"
-         @click.self="closeSampleLightbox()"
-         @touchstart="_sampleTouchStart($event)"
-         @touchend="_sampleTouchEnd($event)">
+    <!-- T8: Sample Gallery Overlay（縮圖列 + 切換動畫） -->
+    <div class="sample-gallery"
+         :class="{ 'show': sampleGalleryOpen }"
+         @click.self="closeSampleGallery()"
+         @touchstart.passive="_sgTouchStart($event)"
+         @touchend.passive="_sgTouchEnd($event)">
 
-        <!-- Close Button -->
-        <button class="lightbox-close"
-                @click="closeSampleLightbox()"
-                title="關閉 (ESC)">
+        <!-- 關閉按鈕 -->
+        <button class="sg-close" @click="closeSampleGallery()" title="關閉 (ESC)">
             <i class="bi bi-x-lg"></i>
         </button>
 
-        <!-- Sample Image（純圖，無 metadata） -->
-        <div class="sample-lightbox-img-wrap">
-            <img :src="sampleLightboxOpen && (current().sample_images || [])[sampleLightboxIndex]
-                       ? `/api/proxy-image?url=${encodeURIComponent((current().sample_images || [])[sampleLightboxIndex])}`
-                       : ''"
-                 :alt="'樣品圖 ' + (sampleLightboxIndex + 1)"
-                 class="sample-lightbox-img">
-        </div>
+        <!-- 計數器 -->
+        <div class="sg-counter"
+             x-text="(sampleGalleryIndex + 1) + ' / ' + sampleGalleryImages.length"></div>
 
-        <!-- [n/total] 計數器 -->
-        <div class="sample-lightbox-counter"
-             x-text="(sampleLightboxIndex + 1) + ' / ' + (current().sample_images || []).length">
+        <!-- 主圖 -->
+        <div class="sg-main-wrap">
+            <img class="sg-main-img"
+                 :src="sampleGalleryImages[sampleGalleryIndex]"
+                 :alt="'樣品圖 ' + (sampleGalleryIndex + 1)"
+                 @click.stop>
         </div>
 
         <!-- 左右導航 -->
-        <button class="lightbox-nav lightbox-nav-prev"
-                @click.stop="prevSample()"
-                x-show="sampleLightboxIndex > 0"
+        <button class="sg-nav sg-prev"
+                x-show="sampleGalleryIndex > 0"
+                @click.stop="prevSampleGallery()"
                 title="上一張 (←)">
             <i class="bi bi-chevron-left"></i>
         </button>
-        <button class="lightbox-nav lightbox-nav-next"
-                @click.stop="nextSample()"
-                x-show="sampleLightboxIndex < (current().sample_images || []).length - 1"
+        <button class="sg-nav sg-next"
+                x-show="sampleGalleryIndex < sampleGalleryImages.length - 1"
+                @click.stop="nextSampleGallery()"
                 title="下一張 (→)">
             <i class="bi bi-chevron-right"></i>
         </button>
+
+        <!-- 縮圖列 -->
+        <div class="sg-thumbs">
+            <template x-for="(url, idx) in sampleGalleryImages" :key="url">
+                <button class="sg-thumb-btn"
+                        :class="{ 'sg-thumb-active': idx === sampleGalleryIndex }"
+                        @click.stop="jumpSampleGallery(idx)">
+                    <img class="sg-thumb-img" :src="url" :alt="'縮圖 ' + (idx + 1)">
+                </button>
+            </template>
+        </div>
     </div>
 
     <!-- 搜尋框 -->
@@ -306,8 +342,8 @@
                          x-cloak>
                         <template x-for="(url, idx) in (current().sample_images || [])" :key="url">
                             <button class="sample-thumb-btn"
-                                    @click="openSampleLightbox(idx)"
-                                    :class="{ 'sample-thumb-active': sampleLightboxOpen && sampleLightboxIndex === idx }"
+                                    @click="openSampleGallery((current().sample_images || []).map(u => '/api/proxy-image?url=' + encodeURIComponent(u)), idx)"
+                                    :class="{ 'sample-thumb-active': sampleGalleryOpen && sampleGalleryIndex === idx }"
                                     :title="'樣品圖 ' + (idx + 1)">
                                 <img :src="`/api/proxy-image?url=${encodeURIComponent(url)}`"
                                      :alt="'樣品圖 ' + (idx + 1)"

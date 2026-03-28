@@ -47,8 +47,11 @@ def init_db(db_path: Path = None) -> None:
             original_title TEXT,
             actresses TEXT,
             maker TEXT,
+            director TEXT DEFAULT '',
             series TEXT,
+            label TEXT DEFAULT '',
             tags TEXT,
+            sample_images TEXT DEFAULT '',
             duration INTEGER,
             size_bytes INTEGER,
             cover_path TEXT,
@@ -99,6 +102,15 @@ def init_db(db_path: Path = None) -> None:
             ('心菜りお', '深田えいみ')
         """)
 
+    # Migration: 加入 Phase 37 新欄位
+    existing_cols = {row[1] for row in cursor.execute("PRAGMA table_info(videos)").fetchall()}
+    if 'director' not in existing_cols:
+        cursor.execute("ALTER TABLE videos ADD COLUMN director TEXT DEFAULT ''")
+    if 'label' not in existing_cols:
+        cursor.execute("ALTER TABLE videos ADD COLUMN label TEXT DEFAULT ''")
+    if 'sample_images' not in existing_cols:
+        cursor.execute("ALTER TABLE videos ADD COLUMN sample_images TEXT DEFAULT ''")
+
     conn.commit()
     conn.close()
 
@@ -113,8 +125,11 @@ class Video:
     original_title: str = ""
     actresses: List[str] = field(default_factory=list)  # JSON
     maker: str = ""
+    director: str = ""
     series: Optional[str] = None
+    label: str = ""
     tags: List[str] = field(default_factory=list)  # JSON
+    sample_images: List[str] = field(default_factory=list)  # JSON
     duration: Optional[int] = None
     size_bytes: int = 0
     cover_path: str = ""
@@ -150,9 +165,12 @@ class Video:
             original_title=info.originaltitle,
             actresses=actresses,
             maker=info.maker,
-            series=None,  # VideoInfo 沒有 series 欄位
+            director=info.director or '',
+            series=info.series or None,
+            label=info.label or '',
             tags=tags,
-            duration=None,  # VideoInfo 沒有 duration 欄位
+            sample_images=info.sample_images or [],
+            duration=info.duration,
             size_bytes=info.size,
             cover_path=info.img,
             release_date=info.date,
@@ -166,6 +184,7 @@ class Video:
         # 序列化 JSON 欄位
         data['actresses'] = json.dumps(self.actresses, ensure_ascii=False)
         data['tags'] = json.dumps(self.tags, ensure_ascii=False)
+        data['sample_images'] = json.dumps(self.sample_images, ensure_ascii=False)
         # 序列化 datetime
         if self.created_at:
             data['created_at'] = self.created_at.isoformat()
@@ -195,6 +214,14 @@ class Video:
         else:
             data['tags'] = []
 
+        if 'sample_images' in data and data['sample_images']:
+            try:
+                data['sample_images'] = json.loads(data['sample_images'])
+            except json.JSONDecodeError:
+                data['sample_images'] = []
+        else:
+            data['sample_images'] = []
+
         # 反序列化 datetime
         if 'created_at' in data and data['created_at']:
             if isinstance(data['created_at'], str):
@@ -212,19 +239,23 @@ class VideoRepository:
 
     def __init__(self, db_path: Path = None):
         self.db_path = db_path or get_db_path()
+        self._columns_cache: Optional[List[str]] = None
 
     def _get_connection(self) -> sqlite3.Connection:
         """取得資料庫連線"""
         return get_connection(self.db_path)
 
     def _get_columns(self) -> List[str]:
-        """取得欄位名稱列表"""
-        return [
-            'id', 'path', 'number', 'title', 'original_title',
-            'actresses', 'maker', 'series', 'tags', 'duration',
-            'size_bytes', 'cover_path', 'release_date', 'mtime', 'nfo_mtime',
-            'created_at', 'updated_at'
-        ]
+        """取得欄位名稱列表（動態從 PRAGMA table_info 取得，確保與 SELECT * 順序一致）"""
+        if self._columns_cache is None:
+            conn = self._get_connection()
+            try:
+                cursor = conn.cursor()
+                cursor.execute("PRAGMA table_info(videos)")
+                self._columns_cache = [row[1] for row in cursor.fetchall()]
+            finally:
+                conn.close()
+        return self._columns_cache
 
     def upsert(self, video: Video) -> int:
         """新增或更新影片（根據 path 判斷）

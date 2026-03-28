@@ -118,6 +118,9 @@ window.SearchStateMixin_GridMode = {
             this.lightboxCloseTimer = null;
         }
 
+        // T8: 若 gallery 開啟中一併關閉（外部直接關 lightbox 時 gallery 不應殘留）
+        if (this.sampleGalleryOpen) this.closeSampleGallery();
+
         this._lightboxGeneration++;  // B19: invalidate pending $nextTick lightbox callbacks
         // Instant close — kill any in-progress lightbox animations, then sync close
         if (typeof gsap !== 'undefined') {
@@ -358,65 +361,93 @@ window.SearchStateMixin_GridMode = {
         this._gridImageErrors = new Set([...this._gridImageErrors, index]);
     },
 
-    // ===== T7: Sample Lightbox Methods =====
+    // ==================== T8: Sample Gallery Methods ====================
 
-    /**
-     * 開啟 Sample Lightbox
-     * @param {number} idx - 樣品圖索引（0-based）
-     */
-    openSampleLightbox(idx) {
-        this.sampleLightboxIndex = idx;
-        this.sampleLightboxOpen = true;
+    openSampleGallery(images, startIdx) {
+        if (!images || images.length === 0) return;
+        this.sampleGalleryImages = images;
+        this.sampleGalleryIndex = startIdx || 0;
+        this._sgGeneration++;
+        this.sampleGalleryOpen = true;
     },
 
-    /**
-     * 關閉 Sample Lightbox
-     */
-    closeSampleLightbox() {
-        this.sampleLightboxOpen = false;
-        // 無狀態記憶：關閉後不保留 index（下次開啟從點擊的縮圖重新設定）
+    closeSampleGallery() {
+        this.sampleGalleryOpen = false;
+        // 不影響 lightboxOpen 狀態（lightbox 維持開啟）
     },
 
-    /**
-     * Sample Lightbox 上一張
-     */
-    prevSample() {
-        if (this.sampleLightboxIndex > 0) {
-            this.sampleLightboxIndex--;
+    prevSampleGallery() {
+        if (this.sampleGalleryIndex <= 0) return;
+        var prevIdx = this.sampleGalleryIndex - 1;
+        this._sgGeneration++;
+        var gen = this._sgGeneration;
+        this.sampleGalleryIndex = prevIdx;
+        // C17: state-first，$nextTick 後播動畫
+        var self = this;
+        this.$nextTick(() => {
+            if (self._sgGeneration !== gen) return; // stale check
+            var imgEl = document.querySelector('.sg-main-img');
+            if (imgEl) {
+                window.SearchAnimations?.playSampleGallerySwitch?.(imgEl, 'prev', {});
+            }
+        });
+    },
+
+    nextSampleGallery() {
+        if (this.sampleGalleryIndex >= this.sampleGalleryImages.length - 1) return;
+        var nextIdx = this.sampleGalleryIndex + 1;
+        this._sgGeneration++;
+        var gen = this._sgGeneration;
+        this.sampleGalleryIndex = nextIdx;
+        // C17: state-first，$nextTick 後播動畫
+        var self = this;
+        this.$nextTick(() => {
+            if (self._sgGeneration !== gen) return; // stale check
+            var imgEl = document.querySelector('.sg-main-img');
+            if (imgEl) {
+                window.SearchAnimations?.playSampleGallerySwitch?.(imgEl, 'next', {});
+            }
+        });
+    },
+
+    jumpSampleGallery(idx) {
+        if (idx === this.sampleGalleryIndex) return;
+        var direction = idx > this.sampleGalleryIndex ? 'next' : 'prev';
+        this._sgGeneration++;
+        var gen = this._sgGeneration;
+        this.sampleGalleryIndex = idx;
+        // C17: state-first，$nextTick 後播動畫
+        var self = this;
+        this.$nextTick(() => {
+            if (self._sgGeneration !== gen) return; // stale check
+            var imgEl = document.querySelector('.sg-main-img');
+            if (imgEl) {
+                window.SearchAnimations?.playSampleGallerySwitch?.(imgEl, direction, {});
+            }
+        });
+    },
+
+    _sgTouchStart(e) {
+        if (e.touches && e.touches.length > 0) {
+            this._sgTouchStartX = e.touches[0].clientX;
         }
     },
 
-    /**
-     * Sample Lightbox 下一張
-     */
-    nextSample() {
-        var images = this.current().sample_images || [];
-        if (this.sampleLightboxIndex < images.length - 1) {
-            this.sampleLightboxIndex++;
-        }
-    },
-
-    // ===== T7-fix: Sample Lightbox touch swipe =====
-
-    /**
-     * touchstart — 記錄起始 X 座標
-     */
-    _sampleTouchStart(event) {
-        this._sampleTouchStartX = event.touches[0].clientX;
-    },
-
-    /**
-     * touchend — 計算滑動方向，最小 50px 防誤觸
-     */
-    _sampleTouchEnd(event) {
-        if (this._sampleTouchStartX === null || this._sampleTouchStartX === undefined) return;
-        const dx = event.changedTouches[0].clientX - this._sampleTouchStartX;
-        this._sampleTouchStartX = null;
-        if (Math.abs(dx) < 50) return;
-        if (dx > 0) {
-            this.prevSample();
+    _sgTouchEnd(e) {
+        if (this._sgTouchStartX === null) return;
+        var endX = e.changedTouches && e.changedTouches.length > 0
+            ? e.changedTouches[0].clientX
+            : null;
+        if (endX === null) { this._sgTouchStartX = null; return; }
+        var delta = endX - this._sgTouchStartX;
+        this._sgTouchStartX = null;
+        if (Math.abs(delta) < 50) return; // swipe threshold
+        if (delta < 0) {
+            this.nextSampleGallery(); // swipe left → next
         } else {
-            this.nextSample();
+            this.prevSampleGallery(); // swipe right → prev
         }
     }
+
+    // ==================== End Sample Gallery Methods ====================
 };

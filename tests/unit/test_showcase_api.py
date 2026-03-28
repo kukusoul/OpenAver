@@ -4,6 +4,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from core.database import init_db, Video, VideoRepository
+from core.path_utils import to_file_uri
 
 
 # temp_db fixture 定義於 tests/unit/conftest.py
@@ -400,6 +401,143 @@ class TestShowcaseVideosAPI:
         assert data["total"] == 0
 
 
+class TestShowcaseMetadataFields:
+    """T3: 驗證 /api/showcase/videos 回傳含 director/duration/series/label 欄位"""
+
+    @pytest.fixture
+    def populated_db_with_meta(self, make_populated_db):
+        """含有 director/duration/series/label 資料的 DB"""
+        videos = [
+            Video(
+                path="file:////home/user/media/SONE-205.mp4",
+                number="SONE-205",
+                title="Full Meta Video",
+                original_title="",
+                actresses=["坂道みる"],
+                maker="S1 NO.1 STYLE",
+                release_date="2024-01-15",
+                tags=["単体作品"],
+                size_bytes=3145728000,
+                cover_path="",
+                mtime=1705276800.0,
+                director="山田太郎",
+                duration=120,
+                series="素人シリーズ",
+                label="S1",
+            ),
+            Video(
+                path="file:///C:/Videos/ABW-001.mp4",
+                number="ABW-001",
+                title="Empty Meta Video",
+                original_title="",
+                actresses=[],
+                maker="",
+                release_date="",
+                tags=[],
+                size_bytes=0,
+                cover_path="",
+                mtime=0.0,
+                director="",
+                duration=None,
+                series=None,
+                label="",
+            ),
+        ]
+        return make_populated_db(videos)
+
+    def test_new_fields_present_in_response(self, client, populated_db_with_meta, monkeypatch):
+        """API 回傳每個 video 物件都包含 director/duration/series/label 欄位"""
+        def mock_get_db_path():
+            return populated_db_with_meta
+        monkeypatch.setattr("web.routers.showcase.get_db_path", mock_get_db_path)
+
+        response = client.get("/api/showcase/videos")
+        assert response.status_code == 200
+
+        data = response.json()
+        for video in data["videos"]:
+            assert "director" in video, "回應缺少 director 欄位"
+            assert "duration" in video, "回應缺少 duration 欄位"
+            assert "series" in video, "回應缺少 series 欄位"
+            assert "label" in video, "回應缺少 label 欄位"
+
+    def test_duration_is_int_when_present(self, client, populated_db_with_meta, monkeypatch):
+        """duration 有值時為 int（非字串）"""
+        def mock_get_db_path():
+            return populated_db_with_meta
+        monkeypatch.setattr("web.routers.showcase.get_db_path", mock_get_db_path)
+
+        response = client.get("/api/showcase/videos")
+        data = response.json()
+
+        video1 = data["videos"][0]
+        assert video1["duration"] == 120
+        assert isinstance(video1["duration"], int)
+
+    def test_duration_is_none_when_absent(self, client, populated_db_with_meta, monkeypatch):
+        """duration 無值時為 None（前端 x-show 自動隱藏）"""
+        def mock_get_db_path():
+            return populated_db_with_meta
+        monkeypatch.setattr("web.routers.showcase.get_db_path", mock_get_db_path)
+
+        response = client.get("/api/showcase/videos")
+        data = response.json()
+
+        video2 = data["videos"][1]
+        assert video2["duration"] is None
+
+    def test_director_empty_string_when_absent(self, client, populated_db_with_meta, monkeypatch):
+        """director 無值時為空字串（不是 None）"""
+        def mock_get_db_path():
+            return populated_db_with_meta
+        monkeypatch.setattr("web.routers.showcase.get_db_path", mock_get_db_path)
+
+        response = client.get("/api/showcase/videos")
+        data = response.json()
+
+        video2 = data["videos"][1]
+        assert video2["director"] == ""
+
+    def test_series_empty_string_when_absent(self, client, populated_db_with_meta, monkeypatch):
+        """series 為 None 時回傳空字串（v.series or ''）"""
+        def mock_get_db_path():
+            return populated_db_with_meta
+        monkeypatch.setattr("web.routers.showcase.get_db_path", mock_get_db_path)
+
+        response = client.get("/api/showcase/videos")
+        data = response.json()
+
+        video2 = data["videos"][1]
+        assert video2["series"] == ""
+
+    def test_label_empty_string_when_absent(self, client, populated_db_with_meta, monkeypatch):
+        """label 無值時為空字串"""
+        def mock_get_db_path():
+            return populated_db_with_meta
+        monkeypatch.setattr("web.routers.showcase.get_db_path", mock_get_db_path)
+
+        response = client.get("/api/showcase/videos")
+        data = response.json()
+
+        video2 = data["videos"][1]
+        assert video2["label"] == ""
+
+    def test_full_meta_values_returned_correctly(self, client, populated_db_with_meta, monkeypatch):
+        """有值時 director/duration/series/label 正確回傳"""
+        def mock_get_db_path():
+            return populated_db_with_meta
+        monkeypatch.setattr("web.routers.showcase.get_db_path", mock_get_db_path)
+
+        response = client.get("/api/showcase/videos")
+        data = response.json()
+
+        video1 = data["videos"][0]
+        assert video1["director"] == "山田太郎"
+        assert video1["duration"] == 120
+        assert video1["series"] == "素人シリーズ"
+        assert video1["label"] == "S1"
+
+
 class TestShowcaseDirectoryFiltering:
     """測試 Showcase 只回傳「當前設定資料夾」底下的影片"""
 
@@ -725,3 +863,101 @@ class TestVideoProxy:
         content = scanner_py.read_text(encoding='utf-8')
         assert 'get_proxy_extensions' in content, \
             "scanner.py get_video() should use get_proxy_extensions from core.video_extensions"
+
+
+class TestSampleImagesAPI:
+    """sample_images 欄位 — Showcase API integration 測試"""
+
+    @pytest.fixture
+    def populated_db_with_sample_images(self, make_populated_db, tmp_path):
+        from core.database import Video
+        # 建立假圖片檔案供 URI 使用
+        img1 = tmp_path / "extrafanart" / "fanart1.jpg"
+        img1.parent.mkdir(parents=True, exist_ok=True)
+        img1.write_bytes(b"img")
+        img2 = tmp_path / "extrafanart" / "fanart2.jpg"
+        img2.write_bytes(b"img")
+
+        videos = [
+            Video(
+                path="file:////home/user/media/ABC-001.mp4",
+                number="ABC-001",
+                title="Video with sample images",
+                original_title="",
+                actresses=[],
+                maker="",
+                release_date="",
+                tags=[],
+                size_bytes=0,
+                cover_path="",
+                mtime=0.0,
+                sample_images=[
+                    to_file_uri(str(img1)),
+                    to_file_uri(str(img2)),
+                ],
+            ),
+            Video(
+                path="file:////home/user/media/ABC-002.mp4",
+                number="ABC-002",
+                title="Video without sample images",
+                original_title="",
+                actresses=[],
+                maker="",
+                release_date="",
+                tags=[],
+                size_bytes=0,
+                cover_path="",
+                mtime=0.0,
+                sample_images=[],
+            ),
+        ]
+        return make_populated_db(videos)
+
+    @pytest.fixture
+    def client_media(self, make_client, populated_db_with_sample_images):
+        return make_client(
+            ["core.database.get_db_path", "web.routers.showcase.get_db_path", "web.routers.showcase.load_config"],
+            mock_db_path=populated_db_with_sample_images,
+            config_override={
+                "gallery": {
+                    "directories": ["/home/user/media"],
+                    "path_mappings": {},
+                    "min_size_mb": 0,
+                    "thumbnail_width": 400,
+                },
+                "scraper": {"video_extensions": [".mp4"], "image_extensions": [".jpg"]},
+                "database": {"path": ":memory:"},
+                "translate": {"provider": "ollama", "ollama_model": "llama3"},
+            },
+        )
+
+    def test_sample_images_key_present(self, client_media, populated_db_with_sample_images, monkeypatch):
+        """API response 包含 sample_images key（即使無資料也需存在）"""
+        monkeypatch.setattr("web.routers.showcase.get_db_path", lambda: populated_db_with_sample_images)
+        response = client_media.get("/api/showcase/videos")
+        assert response.status_code == 200
+        data = response.json()
+        for video in data["videos"]:
+            assert "sample_images" in video, "每筆 video 必須含 sample_images 欄位"
+
+    def test_sample_images_empty_list_when_no_images(self, client_media, populated_db_with_sample_images, monkeypatch):
+        """v.sample_images 為 [] → 回傳 sample_images: []，不拋 exception"""
+        monkeypatch.setattr("web.routers.showcase.get_db_path", lambda: populated_db_with_sample_images)
+        response = client_media.get("/api/showcase/videos")
+        assert response.status_code == 200
+        data = response.json()
+        # 第二筆無 sample_images
+        video2 = next(v for v in data["videos"] if v["number"] == "ABC-002")
+        assert video2["sample_images"] == []
+
+    def test_sample_images_uri_converted_to_api_url(self, client_media, populated_db_with_sample_images, monkeypatch):
+        """含有效 file:/// URI → 轉換為 /api/gallery/image?path=...（路徑已 percent-encode）"""
+        monkeypatch.setattr("web.routers.showcase.get_db_path", lambda: populated_db_with_sample_images)
+        response = client_media.get("/api/showcase/videos")
+        assert response.status_code == 200
+        data = response.json()
+        video1 = next(v for v in data["videos"] if v["number"] == "ABC-001")
+        assert len(video1["sample_images"]) == 2
+        for url in video1["sample_images"]:
+            assert url.startswith("/api/gallery/image?path="), f"期望 /api/gallery/image?path=... 格式，實際: {url}"
+            assert "fanart" in url

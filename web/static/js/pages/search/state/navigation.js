@@ -10,8 +10,8 @@ window.SearchStateMixin_Navigation = {
      * @param {number} delta - 偏移量（-1 = 上一個，1 = 下一個）
      */
     navigate(delta) {
-        // T7: nav-btn 點擊觸發 navigate 時，自動關閉 Sample Lightbox
-        if (this.sampleLightboxOpen) this.closeSampleLightbox();
+        // T8: nav-btn 點擊觸發 navigate 時，自動關閉 Sample Gallery
+        if (this.sampleGalleryOpen) this.closeSampleGallery();
 
         let newIndex = this.currentIndex + delta;
 
@@ -121,7 +121,27 @@ window.SearchStateMixin_Navigation = {
         const queryInput = this.$refs.searchQuery;
         if (document.activeElement === queryInput) return;
 
-        // T2a: Lightbox 鍵盤導航（優先）
+        // T8: Sample Gallery 鍵盤導航（最高優先：gallery 疊在 lightbox 之上，ESC 先關 gallery）
+        if (this.sampleGalleryOpen) {
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                this.closeSampleGallery();
+                return;
+            }
+            if (event.key === 'ArrowLeft') {
+                event.preventDefault();
+                this.prevSampleGallery();
+                return;
+            }
+            if (event.key === 'ArrowRight') {
+                event.preventDefault();
+                this.nextSampleGallery();
+                return;
+            }
+            return;
+        }
+
+        // T2a: Lightbox 鍵盤導航（sampleGalleryOpen 已排除後處理）
         if (this.lightboxOpen) {
             if (event.key === 'Escape') {
                 event.preventDefault();
@@ -138,26 +158,6 @@ window.SearchStateMixin_Navigation = {
                 this.nextLightboxVideo();
                 return;
             }
-        }
-
-        // T7: Sample Lightbox 鍵盤導航（Grid Lightbox 已排除後處理，兩者不同時為 true）
-        if (this.sampleLightboxOpen) {
-            if (event.key === 'Escape') {
-                event.preventDefault();
-                this.closeSampleLightbox();
-                return;
-            }
-            if (event.key === 'ArrowLeft') {
-                event.preventDefault();
-                this.prevSample();
-                return;
-            }
-            if (event.key === 'ArrowRight') {
-                event.preventDefault();
-                this.nextSample();
-                return;
-            }
-            return;
         }
 
         // Detail 模式導航（Grid 模式不觸發）

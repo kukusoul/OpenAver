@@ -311,6 +311,7 @@ def generate_nfo(
     director: str = '',
     duration: Optional[int] = None,
     series: str = '',
+    label: str = '',
 ) -> bool:
     """
     生成 NFO 檔案
@@ -348,6 +349,7 @@ def generate_nfo(
     )
     runtime_tag = f"<runtime>{duration}</runtime>" if duration is not None else "<runtime></runtime>"
     director_tag = f"<director>{html.escape(director)}</director>" if director else "<director></director>"
+    label_tag = f"<label>{html.escape(label)}</label>"
 
     nfo_content = f'''<?xml version="1.0" encoding="utf-8"?>
 <movie>
@@ -355,6 +357,7 @@ def generate_nfo(
   <originaltitle>{html.escape(original_title)}</originaltitle>
   {set_tag}
   <studio>{html.escape(maker)}</studio>
+  {label_tag}
   <year>{html.escape(year)}</year>
   <premiered>{html.escape(date)}</premiered>
   <plot></plot>
@@ -401,6 +404,43 @@ def generate_nfo(
     except Exception as e:
         logger.error(f"[!] 生成 NFO 失敗: {e}")
         return False
+
+
+def find_subtitle_files(video_path: str) -> List[str]:
+    """
+    找出與影片同名的字幕檔（.srt/.ass/.ssa）。
+
+    匹配規則：
+    - {stem}.srt / {stem}.ass / {stem}.ssa  （完全同名）
+    - {stem}.*.srt / {stem}.*.ass / {stem}.*.ssa  （帶語言後綴，如 .cht.srt）
+
+    不匹配：
+    - 不同名字幕（bbb.srt）
+    - 底線分隔（aaa_chs.srt）
+
+    Args:
+        video_path: 影片完整路徑
+
+    Returns:
+        符合規則的字幕路徑列表（影片不存在時回傳空列表）
+    """
+    p = Path(video_path)
+    if not p.parent.exists():
+        return []
+
+    stem = p.stem
+    # escape glob 特殊字元（如 [ ] ? *），防止檔名被誤解讀
+    from glob import escape as glob_escape
+    stem_esc = glob_escape(stem)
+    results = []
+    for ext in ('srt', 'ass', 'ssa'):
+        # 完全同名：aaa.srt
+        for match in p.parent.glob(f"{stem_esc}.{ext}"):
+            results.append(str(match))
+        # 帶語言後綴：aaa.*.srt（.cht.srt, .chs.srt 等）
+        for match in p.parent.glob(f"{stem_esc}.*.{ext}"):
+            results.append(str(match))
+    return results
 
 
 def organize_file(
@@ -506,10 +546,13 @@ def organize_file(
         if '{title}' in folder_template and not format_data.get('title'):
             used_fallbacks.append('標題')
 
-    # 自動偵測字幕標記（如果 metadata 沒有指定）
+    # 字幕偵測：先看 metadata，再補檔案系統級偵測
     has_subtitle = metadata.get('has_subtitle')
+    subtitle_files = find_subtitle_files(file_path)
     if has_subtitle is None:
-        has_subtitle = check_subtitle(original_filename)
+        has_subtitle = check_subtitle(original_filename) or bool(subtitle_files)
+    elif subtitle_files:
+        has_subtitle = True  # sidecar 字幕存在 → 覆寫上游 False
 
     # 計算目標路徑
     if config.get('create_folder', True):
@@ -575,6 +618,19 @@ def organize_file(
                 result['duplicate_target'] = os.path.basename(target_path)
                 return result
             shutil.move(file_path, target_path)
+
+            # 搬移字幕檔（影片有搬移時才執行）
+            subs_to_move = subtitle_files
+            video_stem = Path(file_path).stem
+            for sub_path in subs_to_move:
+                try:
+                    sub_name = os.path.basename(sub_path)
+                    sub_suffix = sub_name[len(video_stem):]  # e.g. ".cht.srt" or ".srt"
+                    sub_target = os.path.join(target_dir, filename_base + sub_suffix)
+                    shutil.move(sub_path, sub_target)
+                except Exception as e:
+                    logger.warning(f"字幕搬移失敗 {sub_path}: {e}")
+
         result['new_filename'] = target_path
 
         # 下載封面（檔名跟隨影片命名）
@@ -637,6 +693,7 @@ def organize_file(
             director=metadata.get('director', ''),
             duration=metadata.get('duration'),
             series=metadata.get('series', ''),
+            label=metadata.get('label', ''),
         ):
             result['nfo_path'] = nfo_path
 

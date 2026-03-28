@@ -6,7 +6,6 @@ Scraper 模組（向後相容層）
 """
 import re
 import time
-import json
 from pathlib import Path
 
 from core.logger import get_logger
@@ -23,7 +22,7 @@ from core.scrapers import (
     Video, ScraperConfig, BaseScraper
 )
 from core.scrapers.utils import extract_number as _new_extract_number
-
+from core.maker_mapping import get_maker_by_prefix
 
 
 # ============ 全域設定 ============
@@ -37,11 +36,6 @@ SCRAPER_CLASSES: List[Type[BaseScraper]] = [
     FC2Scraper, AVSOXScraper,
     D2PassScraper, HEYZOScraper,
 ]
-
-# 片商對照表檔案路徑
-MAKER_MAPPING_FILE = Path(__file__).parent.parent / "maker_mapping.json"
-_maker_mapping_cache: Dict[str, str] = {}
-_maker_mapping_loaded = False
 
 
 # ============ 輔助函數 (與舊版相容) ============
@@ -79,62 +73,6 @@ def is_prefix_only(s: str) -> bool:
     return bool(re.match(r'^[A-Z]{2,6}$', s))
 
 
-def load_maker_mapping() -> Dict[str, str]:
-    """載入片商對照表"""
-    global _maker_mapping_cache, _maker_mapping_loaded
-    if _maker_mapping_loaded:
-        return _maker_mapping_cache
-
-    if MAKER_MAPPING_FILE.exists():
-        try:
-            with open(MAKER_MAPPING_FILE, 'r', encoding='utf-8') as f:
-                _maker_mapping_cache = json.load(f)
-        except (json.JSONDecodeError, IOError):
-            _maker_mapping_cache = {}
-    _maker_mapping_loaded = True
-    return _maker_mapping_cache
-
-
-def save_maker_mapping(mapping: Dict[str, str]) -> None:
-    """儲存片商對照表"""
-    global _maker_mapping_cache, _maker_mapping_loaded
-    try:
-        with open(MAKER_MAPPING_FILE, 'w', encoding='utf-8') as f:
-            json.dump(mapping, f, ensure_ascii=False, indent=2)
-        _maker_mapping_cache = mapping
-        _maker_mapping_loaded = True
-    except IOError:
-        pass
-
-
-def get_maker_by_prefix(number: str) -> str:
-    """
-    從對照表查片商，沒有則查 JavDB 並更新對照表
-    """
-    mapping = load_maker_mapping()
-    match = re.match(r'^([A-Za-z]+)', number)
-    if not match:
-        return ""
-
-    prefix = match.group(1).upper()
-    if prefix in mapping:
-        return mapping[prefix]
-
-    # 查 JavDB
-    try:
-        scraper = JavDBScraper()
-        # 這裡可能會觸發網路請求，如果是測試環境可能會失敗，加 try-except
-        video = scraper.search(number)
-        if video and video.maker and not re.match(r'^\d{4}(-\d{2}){0,2}$', video.maker):
-            mapping[prefix] = video.maker
-            save_maker_mapping(mapping)
-            return video.maker
-    except Exception:
-        pass
-
-    return ""
-
-
 def sort_results_by_date(results: List[Dict[str, Any]], reverse: bool = True) -> List[Dict[str, Any]]:
     """按發行日期排序搜尋結果"""
     def sort_key(item: Dict[str, Any]) -> tuple[str, str]:
@@ -168,9 +106,23 @@ def expand_partial_number(partial: str) -> List[str]:
 
 # ============ 核心搜尋函數 ============
 
+def _is_dmm_enabled(proxy_url: str) -> bool:
+    """空字串 → False；'direct' / 真 proxy → True"""
+    return bool(proxy_url and proxy_url.strip())
+
+
+def _dmm_proxy_url(proxy_url: str) -> str:
+    """'direct'（大小寫不敏感）→ ''（直連）；其他 → 原值"""
+    if not proxy_url:
+        return ''
+    if proxy_url.strip().lower() == 'direct':
+        return ''
+    return proxy_url
+
+
 def _get_fuzzy_source(primary_source: str, proxy_url: str) -> str:
     """決定實際使用的模糊搜尋來源（含降級）"""
-    if primary_source == 'dmm' and not proxy_url:
+    if primary_source == 'dmm' and not _is_dmm_enabled(proxy_url):
         logger.info("[Search] primary_source=dmm but no proxy, fallback to javbus")
         return 'javbus'
     return primary_source
@@ -190,8 +142,8 @@ def search_jav(number: str, source: str = 'auto', proxy_url: str = '', primary_s
         logger.warning(f"[Search] 未知來源: {source}")
         return None
 
-    # DMM 需要 proxy，有 proxy_url 才建立
-    dmm_config = ScraperConfig(proxy_url=proxy_url) if proxy_url else None
+    # DMM 需要日本 IP（proxy 或 direct），有啟用才建立
+    dmm_config = ScraperConfig(proxy_url=_dmm_proxy_url(proxy_url)) if _is_dmm_enabled(proxy_url) else None
 
     # 決定要跑哪些爬蟲
     scrapers = []
@@ -467,7 +419,7 @@ def search_actress(name: str, limit: int = 20, offset: int = 0, status_callback:
     if fuzzy_source == 'dmm':
         if status_callback:
             status_callback('dmm', 'searching')
-        dmm_config = ScraperConfig(proxy_url=proxy_url)
+        dmm_config = ScraperConfig(proxy_url=_dmm_proxy_url(proxy_url))
         dmm_scraper = DMMScraper(dmm_config)
         dmm_results = _dmm_keyword_search_progressive(
             dmm_scraper, name, limit, status_callback, result_callback
@@ -690,8 +642,8 @@ def smart_search(query: str, limit: int = 20, offset: int = 0, status_callback: 
         if offset > 0:
             return []
 
-        # DMM Top-1（primary_source='dmm' 且有 proxy 時精確搜尋優先用 DMM）
-        if primary_source == 'dmm' and proxy_url:
+        # DMM Top-1（primary_source='dmm' 且 DMM 已啟用時精確搜尋優先用 DMM）
+        if primary_source == 'dmm' and _is_dmm_enabled(proxy_url):
             if status_callback:
                 status_callback('dmm', 'searching')
             res = search_jav(query, source='dmm', proxy_url=proxy_url)
@@ -757,7 +709,7 @@ def smart_search(query: str, limit: int = 20, offset: int = 0, status_callback: 
             # DMM keyword search (progressive)
             if status_callback:
                 status_callback('dmm', 'searching')
-            dmm_config = ScraperConfig(proxy_url=proxy_url)
+            dmm_config = ScraperConfig(proxy_url=_dmm_proxy_url(proxy_url))
             dmm_scraper = DMMScraper(dmm_config)
             dmm_results = _dmm_keyword_search_progressive(
                 dmm_scraper, query, limit, status_callback, result_callback

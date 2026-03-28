@@ -278,6 +278,11 @@
     gap: 6px;
 }
 
+/* 覆蓋 theme.css 的 .settings-form-group .settings-hint { margin-left: 48px } */
+#settings-components .source-badges-row .settings-hint {
+    margin-left: 0;
+}
+
 /* 預設：淡出（未啟用狀態）*/
 #settings-components .source-badge {
     opacity: 0.35;

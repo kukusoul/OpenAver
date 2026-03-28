@@ -366,3 +366,180 @@ class TestScanToSqliteIntegration:
         assert len(videos) == 1
         assert videos[0].title == "影片2"
         assert videos[0].number == "ABC-002"
+
+
+class TestSampleImagesScanner:
+    """extrafanart 掃描邊界條件測試"""
+
+    def test_extrafanart_dir_not_exist(self, temp_video_dir):
+        """extrafanart 目錄不存在 → sample_images == []"""
+        from core.gallery_scanner import VideoScanner
+        video_path = create_video_file(temp_video_dir, "test.mp4")
+        create_nfo_file(video_path)
+        scanner = VideoScanner()
+        info = scanner.scan_file(str(video_path))
+        assert info.sample_images == []
+
+    def test_extrafanart_dir_empty(self, temp_video_dir):
+        """extrafanart 目錄存在但空 → sample_images == []"""
+        from core.gallery_scanner import VideoScanner
+        video_path = create_video_file(temp_video_dir, "test.mp4")
+        create_nfo_file(video_path)
+        extrafanart = temp_video_dir / "extrafanart"
+        extrafanart.mkdir()
+        scanner = VideoScanner()
+        info = scanner.scan_file(str(video_path))
+        assert info.sample_images == []
+
+    def test_extrafanart_three_fanart_jpgs(self, temp_video_dir):
+        """extrafanart 下有 fanart1/2/3.jpg → 含 3 個 URI，排序"""
+        from core.gallery_scanner import VideoScanner
+        video_path = create_video_file(temp_video_dir, "test.mp4")
+        create_nfo_file(video_path)
+        extrafanart = temp_video_dir / "extrafanart"
+        extrafanart.mkdir()
+        for name in ["fanart1.jpg", "fanart2.jpg", "fanart3.jpg"]:
+            (extrafanart / name).write_bytes(b"img")
+        scanner = VideoScanner()
+        info = scanner.scan_file(str(video_path))
+        assert len(info.sample_images) == 3
+        # 確認排序（fanart1 < fanart2 < fanart3）
+        names = [s.split("/")[-1] for s in info.sample_images]
+        assert names == sorted(names)
+
+    def test_extrafanart_only_fanart_jpg_glob(self, temp_video_dir):
+        """非 fanart*.jpg 檔案不被掃入"""
+        from core.gallery_scanner import VideoScanner
+        video_path = create_video_file(temp_video_dir, "test.mp4")
+        create_nfo_file(video_path)
+        extrafanart = temp_video_dir / "extrafanart"
+        extrafanart.mkdir()
+        (extrafanart / "fanart1.jpg").write_bytes(b"img")
+        (extrafanart / "fanart1.png").write_bytes(b"img")
+        (extrafanart / "thumb.jpg").write_bytes(b"img")
+        scanner = VideoScanner()
+        info = scanner.scan_file(str(video_path))
+        assert len(info.sample_images) == 1
+        assert "fanart1.jpg" in info.sample_images[0]
+
+    def test_extrafanart_with_base_path_relative(self, temp_video_dir):
+        """有 base_path → 存相對路徑字串，非 file:/// URI"""
+        from core.gallery_scanner import VideoScanner
+        video_path = create_video_file(temp_video_dir, "test.mp4")
+        create_nfo_file(video_path)
+        extrafanart = temp_video_dir / "extrafanart"
+        extrafanart.mkdir()
+        (extrafanart / "fanart1.jpg").write_bytes(b"img")
+        scanner = VideoScanner()
+        info = scanner.scan_file(str(video_path), base_path=str(temp_video_dir))
+        assert len(info.sample_images) == 1
+        assert not info.sample_images[0].startswith("file:///")
+        assert "fanart1.jpg" in info.sample_images[0]
+
+    def test_extrafanart_without_base_path_file_uri(self, temp_video_dir):
+        """無 base_path → 存 file:/// URI"""
+        from core.gallery_scanner import VideoScanner
+        video_path = create_video_file(temp_video_dir, "test.mp4")
+        create_nfo_file(video_path)
+        extrafanart = temp_video_dir / "extrafanart"
+        extrafanart.mkdir()
+        (extrafanart / "fanart1.jpg").write_bytes(b"img")
+        scanner = VideoScanner()
+        info = scanner.scan_file(str(video_path))
+        assert len(info.sample_images) == 1
+        assert info.sample_images[0].startswith("file:///")
+
+
+class TestSampleImagesDB:
+    """sample_images DB 序列化/反序列化邊界條件"""
+
+    def test_from_row_empty_string(self, temp_db):
+        """from_row 空字串 → []"""
+        import sqlite3
+        from core.database import Video
+        conn = sqlite3.connect(str(temp_db))
+        conn.execute("UPDATE videos SET sample_images = '' WHERE 1=0")  # no-op, just warmup
+        conn.close()
+
+        # 直接呼叫 from_row 模擬空字串
+        columns = ["id", "path", "number", "title", "original_title", "actresses",
+                   "maker", "director", "series", "label", "tags", "sample_images",
+                   "duration", "size_bytes", "cover_path", "release_date",
+                   "mtime", "nfo_mtime", "created_at", "updated_at"]
+        row = (1, "file:///test.mp4", "ABC-001", "Title", "", "[]",
+               "", "", None, "", "[]", "",
+               None, 0, "", "", 0.0, 0.0, None, None)
+        v = Video.from_row(row, columns)
+        assert v.sample_images == []
+
+    def test_from_row_corrupt_json(self, temp_db):
+        """from_row 損毀 JSON → []"""
+        from core.database import Video
+        columns = ["id", "path", "number", "title", "original_title", "actresses",
+                   "maker", "director", "series", "label", "tags", "sample_images",
+                   "duration", "size_bytes", "cover_path", "release_date",
+                   "mtime", "nfo_mtime", "created_at", "updated_at"]
+        row = (1, "file:///test.mp4", "ABC-001", "Title", "", "[]",
+               "", "", None, "", "[]", "not-json",
+               None, 0, "", "", 0.0, 0.0, None, None)
+        v = Video.from_row(row, columns)
+        assert v.sample_images == []
+
+    def test_to_dict_empty_list_serializes_json(self):
+        """to_dict 空 list → '[]'"""
+        from core.database import Video
+        v = Video(path="file:///test.mp4", sample_images=[])
+        d = v.to_dict()
+        assert d["sample_images"] == "[]"
+
+    def test_video_info_from_dict_missing_key_defaults_empty(self):
+        """VideoInfo.from_dict 舊資料無 sample_images key → 預設 []"""
+        from core.gallery_scanner import VideoInfo
+        d = {
+            "path": "file:///test.mp4",
+            "title": "Test",
+            "num": "ABC-001",
+        }
+        info = VideoInfo.from_dict(d)
+        assert info.sample_images == []
+
+    def test_migration_adds_sample_images_column(self, tmp_path):
+        """migration: 舊 schema 無 sample_images 欄位，init_db 後應自動補齊"""
+        import sqlite3
+        from core.database import init_db
+
+        db_path = tmp_path / "migration_test.db"
+
+        # 建立舊 schema（不含 sample_images、director、label 欄位）
+        conn = sqlite3.connect(str(db_path))
+        conn.execute("""
+            CREATE TABLE videos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                path TEXT UNIQUE NOT NULL,
+                number TEXT,
+                title TEXT,
+                original_title TEXT,
+                actresses TEXT,
+                maker TEXT,
+                tags TEXT,
+                duration INTEGER,
+                size_bytes INTEGER,
+                cover_path TEXT,
+                release_date TEXT,
+                mtime REAL,
+                nfo_mtime REAL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        conn.commit()
+        conn.close()
+
+        # 執行 init_db（應執行 migration）
+        init_db(db_path)
+
+        # 驗證 sample_images 欄位存在
+        conn = sqlite3.connect(str(db_path))
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(videos)").fetchall()}
+        conn.close()
+        assert 'sample_images' in cols, "migration 應補齊 sample_images 欄位"

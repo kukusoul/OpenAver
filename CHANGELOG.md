@@ -5,6 +5,90 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.5] - 2026-03-28
+
+### Added
+
+#### 🎬 字幕檔自動偵測與搬移 (Phase 37d-T1)
+- 新增 `find_subtitle_files()` 掃描同目錄同名字幕檔（.srt/.ass/.ssa + 語言後綴）
+- `organize_file()` 影片搬移成功後字幕自動跟隨，保留語言後綴命名
+- 字幕偵測與 NFO 標記一致：sidecar 字幕存在時覆寫上游 `has_subtitle=False`
+
+#### ⚙️ Settings 搜尋來源 UI 簡化 (Phase 37d-T2)
+- 移除頁面底部獨立「主要搜尋來源」radio 區塊
+- DMM/JavBus badge 可直接點擊切換，以 ●/○ 符號標示選中狀態
+
+#### 🌐 Proxy direct 模式 (Phase 37d-T3)
+- Proxy 欄位輸入 `direct` 代表已有日本 IP，免填 proxy 即可啟用 DMM
+- DMMScraper direct 模式設 `trust_env=False`，確保不繼承環境 proxy 變數
+- DMM 內部三處 proxy guard 移除，可用性判斷統一由呼叫端控制
+
+#### 📖 Help 頁面更新 (Phase 37d-T4)
+- 搜尋功能：Lightbox 新欄位 + 劇照按鈕說明
+- Scanner：字幕檔自動偵測與搬移說明
+- Showcase：Lightbox/Table 新欄位 + 劇照按鈕說明
+- Scraper 來源：預設搜尋來源 / DMM 模糊搜尋 / Proxy direct 模式說明
+- 疑難排解：DMM 段落補充 direct 說明
+
+### Changed
+- 測試總數 1324 → 1366（+42）
+
+## [0.5.4] - 2026-03-28
+
+### Added
+
+#### 🏭 Maker 名稱對照表重建 (Phase 37c)
+- `maker_mapping.json` 改為雙層格式（name_mapping + prefix_mapping），合併 DMM 72 筆名稱對照
+- 新增 `core/maker_mapping.py` shared loader 模組，統一供 search / showcase / scraper 共用
+- `/search` 路徑：`Video.to_legacy_dict()` 自動套用 name normalize（片假名/英文長名 → 短名）
+- `/showcase` 路徑：`normalize_maker()` 改為兩步查詢（name mapping 優先 → prefix fallback）
+- gfriends lookup 補齊 SCOOP → x-KMP 對應
+
+### Changed
+- 測試總數 1280 → 1324（+44）
+
+## [0.5.3] - 2026-03-28
+
+### Added
+
+#### 🖼️ Sample Gallery 元件 (Phase 37b)
+- extrafanart/ 本地圖片接入 Showcase Lightbox（scanner 掃描 → DB → API 全鏈路）
+- 全新 `sample-gallery` overlay 元件：大圖瀏覽 + 縮圖列 + GSAP slide 動畫
+- Showcase Lightbox 新增「查看樣品圖 (N)」入口按鈕
+- /search Grid Lightbox 同步新增入口按鈕
+- /search Detail 模式舊 sample-lightbox 完整替換為 sample-gallery
+- 鍵盤導航（ESC/←/→）+ 觸控 swipe 手勢 + Reduced Motion 降級
+- DB schema migration 自動補齊 `sample_images` 欄位
+
+### Changed
+- 測試總數 1250 → 1280（+30）
+
+## [0.5.2] - 2026-03-27
+
+### Added
+
+#### 🔗 Metadata Pipeline 補齊 (Phase 37a)
+- NFO 讀寫補齊 director/duration/series/label 四個欄位，從 Scraper 到 DB 全鏈路流通
+- `parse_nfo()` 新增讀取 `<runtime>`、`<director>`、`<set><name>`、`<label>` 標籤
+- `VideoInfo` dataclass 新增四欄位 + `from_dict()` 防禦性過濾未知 key（舊 cache 向下相容）
+- DB schema migration 自動補齊 `director`、`label` 欄位（ALTER TABLE）
+- `_get_columns()` 改為 PRAGMA 動態查詢（新舊 DB 欄位順序自動對齊）
+
+#### 📝 NFO 批量更新擴充
+- `nfo_updater` 補齊 director/duration/series/label 寫入（含 `<set><name>` 巢狀結構）
+- `needs_update()` 新增四欄位缺失檢查（duration 用 `is None` 防 0 短路）
+
+#### 🖥️ Showcase 新欄位顯示
+- Grid info panel 新增系列 + 片長（有值才顯示）
+- Table mode 新增「導演」「片長」兩欄
+- Lightbox 新增 director/duration/series/label 四欄位（可點擊搜尋）
+
+#### 🔍 Search Lightbox 新欄位
+- Main Lightbox 新增 director/duration/series/label 顯示（有值才顯示）
+
+### Changed
+- 測試總數 1171 → 1250（+79）
+
 ## [0.5.1] - 2026-03-27
 
 ### Added

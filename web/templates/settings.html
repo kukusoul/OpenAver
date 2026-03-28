@@ -65,14 +65,23 @@
 
                     <!-- Source Badges -->
                     <div class="source-badges-row mt-2">
+                        <small class="settings-hint" style="margin-right: 0.5rem;">預設搜尋來源</small>
                         <!-- 有碼來源 -->
                         <template x-for="src in CENSORED_SOURCES" :key="src">
-                            <span class="badge badge-sm source-badge"
-                                :class="{
-                                    'source-active': isSourceActive(src),
-                                    'source-dmm-disabled': src === 'dmm' && !isDmmAvailable()
-                                }"
-                                x-text="SOURCE_NAMES[src] || src">
+                            <span class="inline-flex items-center gap-0.5"
+                                @click="(src === 'javbus' || (src === 'dmm' && isDmmAvailable())) && (form.primarySource = src)">
+                                <span x-show="src === 'dmm' || src === 'javbus'"
+                                    class="text-xs cursor-pointer"
+                                    :class="{ 'opacity-30': src === 'dmm' && !isDmmAvailable() }"
+                                    x-text="form.primarySource === src ? '●' : '○'"></span>
+                                <span class="badge badge-sm source-badge"
+                                    :class="{
+                                        'source-active': isSourceActive(src),
+                                        'source-dmm-disabled': src === 'dmm' && !isDmmAvailable(),
+                                        'cursor-pointer': src === 'javbus' || (src === 'dmm' && isDmmAvailable())
+                                    }"
+                                    x-text="SOURCE_NAMES[src] || src">
+                                </span>
                             </span>
                         </template>
 
@@ -98,7 +107,7 @@
                         <div class="variable-input-group">
                             <input type="text" class="input input-bordered input-sm flex-1"
                                 x-model="form.proxyUrl"
-                                placeholder="http://帳號:密碼@主機:埠號">
+                                placeholder="http://帳號:密碼@主機:埠號 — 已有日本 IP 可輸入 direct">
                             <button class="btn btn-sm btn-outline" type="button"
                                 @click="testProxy()"
                                 :disabled="!form.proxyUrl.trim() || testProxyLoading">
@@ -108,31 +117,6 @@
                         </div>
                         <small class="settings-hint" x-show="proxyStatus" x-text="proxyStatus"
                             :class="{ 'text-success': proxyStatusOk, 'text-error': proxyStatus && !proxyStatusOk && !testProxyLoading }"></small>
-                    </div>
-                </div>
-
-                <!-- 主要搜尋來源 -->
-                <div class="settings-form-row">
-                    <label class="row-label">
-                        主要搜尋來源
-                        <small class="settings-hint">精確搜尋優先使用的資料庫</small>
-                    </label>
-                    <div class="flex gap-4">
-                        <label class="flex items-center gap-2 cursor-pointer">
-                            <input type="radio" class="radio radio-primary radio-sm"
-                                   name="primarySource" value="javbus"
-                                   x-model="form.primarySource">
-                            <span class="label-text">JavBus</span>
-                        </label>
-                        <label class="flex items-center gap-2 cursor-pointer"
-                               :class="{ 'opacity-50': !isDmmAvailable() }">
-                            <input type="radio" class="radio radio-primary radio-sm"
-                                   name="primarySource" value="dmm"
-                                   x-model="form.primarySource"
-                                   :disabled="!isDmmAvailable()">
-                            <span class="label-text">DMM</span>
-                            <small class="settings-hint" x-show="!isDmmAvailable()">(需設定 Proxy)</small>
-                        </label>
                     </div>
                 </div>
 

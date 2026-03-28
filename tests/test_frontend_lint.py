@@ -793,6 +793,22 @@ class TestPageLifecycleGuard:
             "scanner.html 缺少 __registerPage 呼叫 — Scanner lifecycle 未接入統一機制"
 
 
+class TestSettingsSourceBadge:
+    """37d T2 守衛 — Settings radio 區塊已移除，badge 改為 primarySource 選擇器"""
+
+    def test_settings_html_no_radio_primary_source(self):
+        """settings.html 不含獨立的主要搜尋來源 radio 區塊"""
+        html = (PROJECT_ROOT / 'web/templates/settings.html').read_text(encoding='utf-8')
+        assert 'name="primarySource"' not in html, \
+            "settings.html 仍含 radio name=primarySource — 應已改為 badge 選擇器"
+
+    def test_settings_html_badge_binds_primary_source(self):
+        """settings.html source badge 仍綁 form.primarySource（badge 選擇器）"""
+        html = (PROJECT_ROOT / 'web/templates/settings.html').read_text(encoding='utf-8')
+        assert 'primarySource' in html, \
+            "settings.html 缺少 primarySource 綁定 — badge 選擇器應綁定 form.primarySource"
+
+
 class TestScannerLifecycleGuard:
     """T5.1 守衛 — Scanner 已接入 __registerPage，不再使用舊 shim"""
 
@@ -3533,28 +3549,50 @@ class TestLightboxAnimationGuard:
             )
 
     def test_esc_calls_closeLightbox_search(self):
-        """search/navigation.js ESC 分支呼叫 closeLightbox（closeLightbox 內部處理 getById kill）"""
+        """search/navigation.js handleKeydown：sampleGalleryOpen 在 lightboxOpen 之前，兩者 ESC 分支各自正確"""
         content = self._read_file(self.SEARCH_NAVIGATION)
         body = self._extract_function(content, 'handleKeydown')
         assert body, "handleKeydown 函數未找到 in navigation.js"
-        esc_idx = body.find('Escape')
-        assert esc_idx >= 0, "handleKeydown 中未找到 Escape 分支"
-        esc_section = body[esc_idx:esc_idx + 300]
-        assert 'closeLightbox' in esc_section, (
-            "C18 守衛違規：search navigation.js ESC 分支未呼叫 closeLightbox\n"
+
+        # P1 修正守衛：sampleGalleryOpen block 必須在 lightboxOpen block 之前（行號更小）
+        sg_idx = body.find('this.sampleGalleryOpen')
+        lb_idx = body.find('this.lightboxOpen')
+        assert sg_idx >= 0, "handleKeydown 中未找到 this.sampleGalleryOpen 分支"
+        assert lb_idx >= 0, "handleKeydown 中未找到 this.lightboxOpen 分支"
+        assert sg_idx < lb_idx, (
+            "P1 守衛違規：search navigation.js handleKeydown 的 sampleGalleryOpen block 應在 "
+            "lightboxOpen block 之前（sampleGalleryOpen 優先攔截鍵盤事件）\n"
+            "修正：將 sampleGalleryOpen 判斷移到 lightboxOpen 判斷之前"
+        )
+
+        # sampleGalleryOpen block：ESC 分支應呼叫 closeSampleGallery
+        sg_section = body[sg_idx:lb_idx]
+        assert 'closeSampleGallery' in sg_section, (
+            "P1 守衛違規：search navigation.js sampleGalleryOpen ESC 分支缺少 closeSampleGallery 呼叫\n"
+            "修正：sampleGalleryOpen block 的 ESC 應呼叫 closeSampleGallery()"
+        )
+
+        # lightboxOpen block：ESC 分支應呼叫 closeLightbox
+        lb_section = body[lb_idx:lb_idx + 500]
+        assert 'closeLightbox' in lb_section, (
+            "C18 守衛違規：search navigation.js lightboxOpen ESC 分支未呼叫 closeLightbox\n"
             "修正：ESC 應呼叫 closeLightbox() 統一處理 kill + cleanup"
         )
 
     def test_esc_calls_closeLightbox_showcase(self):
-        """showcase/core.js ESC 分支呼叫 closeLightbox（closeLightbox 內部處理 getById kill）"""
+        """showcase/core.js lightboxOpen ESC 分支呼叫 closeLightbox（closeLightbox 內部處理 getById kill）"""
         content = self._read_file(self.SHOWCASE_CORE)
         body = self._extract_function(content, 'handleKeydown')
         assert body, "handleKeydown 函數未找到 in showcase/core.js"
-        esc_idx = body.find('ESCAPE')
-        assert esc_idx >= 0, "handleKeydown 中未找到 ESCAPE 分支"
-        esc_section = body[esc_idx:esc_idx + 300]
+        # T7 後 sampleGalleryOpen 在 lightboxOpen 之前，必須找 lightboxOpen 區段內的 ESCAPE
+        lightbox_open_idx = body.find('this.lightboxOpen')
+        assert lightbox_open_idx >= 0, "handleKeydown 中未找到 this.lightboxOpen 分支"
+        lightbox_section = body[lightbox_open_idx:lightbox_open_idx + 500]
+        esc_idx = lightbox_section.find('ESCAPE')
+        assert esc_idx >= 0, "handleKeydown lightboxOpen 區段中未找到 ESCAPE 分支"
+        esc_section = lightbox_section[esc_idx:esc_idx + 300]
         assert 'closeLightbox' in esc_section, (
-            "C18 守衛違規：showcase/core.js ESC 分支未呼叫 closeLightbox\n"
+            "C18 守衛違規：showcase/core.js lightboxOpen ESC 分支未呼叫 closeLightbox\n"
             "修正：ESC 應呼叫 closeLightbox() 統一處理 kill + cleanup"
         )
 
@@ -4092,49 +4130,59 @@ class TestGridPerPageGuard:
         )
 
 
-class TestSampleLightboxTemplateGuard:
-    """Fix A (T7-fix)：Sample Lightbox 模板位置回歸守衛
+class TestSampleGalleryTemplateGuard:
+    """T8：Search Sample Gallery 模板守衛
 
-    靜態確認 sampleLightboxOpen / sampleLightboxIndex 只出現在 search.html
-    及 base.html（body x-data fallback）中，且 .sample-lightbox overlay
-    在 searchPage() x-data scope 範圍內。
+    靜態確認舊 sampleLightboxOpen / sampleLightboxIndex 已從所有模板移除，
+    新 sampleGalleryOpen / sampleGalleryImages / sampleGalleryIndex 已正確
+    出現在 search.html 及 base.html（body x-data fallback）中，且
+    .sample-gallery overlay 在 searchPage() x-data scope 範圍內。
 
-    base.html 例外說明：body[x-data] 加入 sampleLightboxOpen/sampleLightboxIndex
-    fallback 是必要的。Alpine 嵌套 scope 初始化期間，body scope 偶爾會在
+    base.html 例外說明：body[x-data] 加入 sampleGalleryOpen 等 fallback
+    是必要的。Alpine 嵌套 scope 初始化期間，body scope 偶爾會在
     子 x-data（searchPage()）建立前先評估子元素的 binding，導致
-    ReferenceError: sampleLightboxOpen is not defined。Fallback 提供安全預設值，
-    不影響 searchPage() scope 的正常運作（子 scope 覆蓋父 scope）。
+    ReferenceError。Fallback 提供安全預設值。
 
-    此 guard 防止未來模板重構時 .sample-lightbox 被移出正確 scope。
-    不驗證 runtime Alpine 初始化（需手動 DevTools 確認）。
+    此 guard 防止未來模板重構時 .sample-gallery 被移出正確 scope，
+    或舊 sampleLightbox* 狀態殘留。
     """
 
     SEARCH_HTML = PROJECT_ROOT / 'web' / 'templates' / 'search.html'
     BASE_HTML = PROJECT_ROOT / 'web' / 'templates' / 'base.html'
     TEMPLATES_DIR = PROJECT_ROOT / 'web' / 'templates'
 
-    def test_sampleLightboxOpen_only_in_search_html(self):
-        """sampleLightboxOpen 不應出現在 search.html / base.html 以外的模板
-
-        base.html 允許出現：body x-data fallback（防止 Alpine 嵌套 scope ReferenceError）
-        """
+    def test_old_sampleLightbox_state_absent(self):
+        """T8：舊 sampleLightboxOpen / sampleLightboxIndex 不應出現在任何模板"""
         pattern = re.compile(r'sampleLightboxOpen|sampleLightboxIndex')
         violations = []
 
         for tmpl in self.TEMPLATES_DIR.glob('**/*.html'):
-            if tmpl in (self.SEARCH_HTML, self.BASE_HTML):
-                continue
             content = tmpl.read_text(encoding='utf-8')
             if pattern.search(content):
                 violations.append(str(tmpl.relative_to(PROJECT_ROOT)))
 
         assert not violations, (
-            "Fix A 違規：sampleLightboxOpen/sampleLightboxIndex 出現在 search.html/base.html 以外的模板 — "
-            f"請確認這些 state 只存在於 searchPage() scope 或 body fallback：{violations}"
+            "T8 違規：舊 sampleLightboxOpen/sampleLightboxIndex 仍殘留於模板 — "
+            f"請確認所有模板已遷移至 sampleGallery* state：{violations}"
         )
 
-    def test_sample_lightbox_inside_searchPage_scope(self):
-        """search.html 中 .sample-lightbox 必須在 x-data=\"searchPage()\" 的 div 之後（scope 內）"""
+    def test_sampleGalleryOpen_in_search_and_base(self):
+        """T8：sampleGalleryOpen / sampleGalleryImages / sampleGalleryIndex 必須出現在 search.html 且 base.html"""
+        search_content = self.SEARCH_HTML.read_text(encoding='utf-8')
+        base_content = self.BASE_HTML.read_text(encoding='utf-8')
+
+        for state in ('sampleGalleryOpen', 'sampleGalleryImages', 'sampleGalleryIndex'):
+            assert state in search_content, (
+                f"T8 違規：search.html 缺少 {state} — "
+                "Sample Gallery state 必須存在於 searchPage() scope"
+            )
+            assert state in base_content, (
+                f"T8 違規：base.html 缺少 {state} fallback — "
+                "body x-data 必須包含 sampleGallery* fallback"
+            )
+
+    def test_sample_gallery_inside_searchPage_scope(self):
+        """T8：search.html 中 class=\"sample-gallery\" 必須在 x-data=\"searchPage()\" 之後（scope 內）"""
         content = self.SEARCH_HTML.read_text(encoding='utf-8')
         lines = content.split('\n')
 
@@ -4146,59 +4194,395 @@ class TestSampleLightboxTemplateGuard:
                 break
 
         assert search_page_line is not None, (
-            "Fix A 違規：search.html 找不到 x-data=\"searchPage()\" — "
+            "T8 違規：search.html 找不到 x-data=\"searchPage()\" — "
             "searchPage() Alpine 組件必須存在"
         )
 
-        # 找到 sample-lightbox 的行號
-        sample_lightbox_line = None
+        # 找到 class="sample-gallery" 的行號
+        sample_gallery_line = None
         for i, line in enumerate(lines):
-            if 'class="sample-lightbox"' in line:
-                sample_lightbox_line = i
+            if 'class="sample-gallery"' in line:
+                sample_gallery_line = i
                 break
 
-        assert sample_lightbox_line is not None, (
-            "Fix A 違規：search.html 找不到 .sample-lightbox 元素 — "
-            "Sample Lightbox overlay 必須存在於 search.html"
+        assert sample_gallery_line is not None, (
+            "T8 違規：search.html 找不到 class=\"sample-gallery\" 元素 — "
+            "Sample Gallery overlay 必須存在於 search.html"
         )
 
-        # .sample-lightbox 必須在 searchPage() x-data scope 之後（行號較大）
-        assert sample_lightbox_line > search_page_line, (
-            f"Fix A 違規：.sample-lightbox（L{sample_lightbox_line + 1}）在 "
+        assert sample_gallery_line > search_page_line, (
+            f"T8 違規：.sample-gallery（L{sample_gallery_line + 1}）在 "
             f"x-data=\"searchPage()\"（L{search_page_line + 1}）之前 — "
-            "sample-lightbox overlay 必須在 searchPage() x-data scope 內"
+            "sample-gallery overlay 必須在 searchPage() x-data scope 內"
         )
 
-    def test_sample_lightbox_uses_searchPage_state(self):
-        """search.html 的 .sample-lightbox 必須引用 sampleLightboxOpen（確認綁定存在）"""
+    def test_old_sample_lightbox_html_absent(self):
+        """T8：search.html 不應含 class=\"sample-lightbox\"（舊 overlay 已移除）"""
         content = self.SEARCH_HTML.read_text(encoding='utf-8')
-
-        # .sample-lightbox 必須有 sampleLightboxOpen 綁定（:class 或 x-show）
-        has_open_binding = bool(re.search(
-            r'sampleLightboxOpen',
-            content
-        ))
-        assert has_open_binding, (
-            "Fix A 違規：search.html 的 .sample-lightbox 缺少 sampleLightboxOpen 綁定 — "
-            "overlay 必須用 sampleLightboxOpen 控制顯示"
+        assert 'class="sample-lightbox"' not in content, (
+            "T8 違規：search.html 仍含 class=\"sample-lightbox\" — "
+            "舊 Sample Lightbox overlay 必須完整移除，改用 sample-gallery"
         )
 
-    def test_sample_thumb_active_binding_in_x_for(self):
-        """Fix C：sample-thumb-btn 的 :class active 綁定必須在 x-for template 內"""
+    def test_sg_open_btn_in_lightbox_metadata(self):
+        """T8：search.html 含 sg-open-btn，且其行號在 class=\"lb-header\" 內（開始行與結束行之間）"""
         content = self.SEARCH_HTML.read_text(encoding='utf-8')
+        lines = content.split('\n')
 
-        # 確認 sample-thumb-active 綁定存在
-        assert 'sample-thumb-active' in content, (
-            "Fix C 違規：search.html 缺少 sample-thumb-active class 綁定 — "
-            "縮圖 active 高亮需要在 .sample-thumb-btn 加 :class=\"{ 'sample-thumb-active': ... }\""
+        # 找到 lb-header 開始行號
+        lb_header_line = None
+        for i, line in enumerate(lines):
+            if 'lb-header' in line:
+                lb_header_line = i
+                break
+
+        assert lb_header_line is not None, (
+            "T8 違規：search.html 找不到 lb-header — "
+            "Grid Lightbox metadata 標題行必須存在"
         )
 
-        # 確認 :class 綁定引用了正確的 state
-        has_correct_binding = bool(re.search(
-            r":class=.*sample-thumb-active.*sampleLightboxOpen.*sampleLightboxIndex",
+        # 找到 lb-header 容器的閉合 </div>（用深度計數器追蹤巢狀）
+        lb_header_close_line = None
+        depth = 0
+        for i in range(lb_header_line, len(lines)):
+            ln = lines[i]
+            depth += ln.count('<div') - ln.count('</div>')
+            if i > lb_header_line and depth <= 0:
+                lb_header_close_line = i
+                break
+
+        assert lb_header_close_line is not None, (
+            "T8 違規：search.html lb-header 找不到對應的 </div> — "
+            "lb-header 容器必須正確閉合"
+        )
+
+        # 找到 sg-open-btn 行號
+        sg_open_btn_line = None
+        for i, line in enumerate(lines):
+            if 'sg-open-btn' in line:
+                sg_open_btn_line = i
+                break
+
+        assert sg_open_btn_line is not None, (
+            "T8 違規：search.html 找不到 sg-open-btn — "
+            "Grid Lightbox 必須在 .lb-header 內含 Sample Gallery 入口按鈕"
+        )
+
+        assert lb_header_line < sg_open_btn_line < lb_header_close_line, (
+            f"T8 違規：sg-open-btn（L{sg_open_btn_line + 1}）不在 "
+            f"lb-header（L{lb_header_line + 1}～L{lb_header_close_line + 1}）內 — "
+            "入口按鈕必須在 .lb-header 開始與結束之間"
+        )
+
+    def test_lb_meta_extra_removed_from_search_html(self):
+        """37b-layout 守衛：search.html 不應殘留 lb-meta-extra class"""
+        content = self.SEARCH_HTML.read_text(encoding='utf-8')
+        assert 'lb-meta-extra' not in content, (
+            "37b-layout 違規：search.html 仍含 lb-meta-extra — "
+            "合併後應改用 .lb-details，lb-meta-extra 已廢棄"
+        )
+
+    def test_lb_header_in_search_html(self):
+        """37b-layout 守衛：search.html 應含 lb-header class"""
+        content = self.SEARCH_HTML.read_text(encoding='utf-8')
+        assert 'lb-header' in content, (
+            "37b-layout 違規：search.html 缺少 lb-header — "
+            "標題行容器（標題 + 樣品圖按鈕）必須存在"
+        )
+
+
+class TestProxyDirectGuard:
+    """37d T3 守衛 — settings.html proxy placeholder 包含 direct 提示"""
+
+    def test_settings_proxy_placeholder_has_direct(self):
+        html = (PROJECT_ROOT / 'web/templates/settings.html').read_text(encoding='utf-8')
+        assert 'direct' in html.lower(), \
+            "settings.html proxy placeholder 應包含 direct 提示"
+
+
+class TestShowcaseSampleGalleryGuard:
+    """T7：Showcase Sample Gallery 靜態守衛
+
+    確保 sample-gallery 元件正確實作於 showcase.html / core.js / animations.js：
+    1. Scope 守衛：.sample-gallery 在 x-data="showcaseState()" scope 之後
+    2. State 存在守衛：core.js 包含 sampleGalleryOpen / sampleGalleryImages / sampleGalleryIndex
+    3. Method 存在守衛：core.js 包含全部 5 個方法
+    4. 入口按鈕守衛：showcase.html 包含 sg-open-btn 和 openSampleGallery( 綁定
+    5. Overlay 綁定守衛：.sample-gallery 有 sampleGalleryOpen 的 :class / x-show 綁定
+    6. 縮圖 active 守衛：sg-thumb-active 和 sampleGalleryIndex 在同一區域
+    7. playSampleGallerySwitch 守衛：animations.js 包含完整 C18/C21 實作
+    """
+
+    SHOWCASE_HTML = PROJECT_ROOT / 'web' / 'templates' / 'showcase.html'
+    CORE_JS = PROJECT_ROOT / 'web' / 'static' / 'js' / 'pages' / 'showcase' / 'core.js'
+    ANIMATIONS_JS = PROJECT_ROOT / 'web' / 'static' / 'js' / 'pages' / 'showcase' / 'animations.js'
+
+    def test_sample_gallery_inside_showcaseState_scope(self):
+        """守衛 1：.sample-gallery overlay 必須在 x-data="showcaseState()" scope 之後（確保 Alpine binding 正確）"""
+        content = self.SHOWCASE_HTML.read_text(encoding='utf-8')
+        lines = content.split('\n')
+
+        # 找到 x-data="showcaseState()" 的行號
+        showcase_state_line = None
+        for i, line in enumerate(lines):
+            if 'x-data="showcaseState()"' in line:
+                showcase_state_line = i
+                break
+
+        assert showcase_state_line is not None, (
+            "T7 守衛 1 違規：showcase.html 找不到 x-data=\"showcaseState()\" — "
+            "Alpine scope 根元素必須存在"
+        )
+
+        # 找到 .sample-gallery 的行號
+        sample_gallery_line = None
+        for i, line in enumerate(lines):
+            if 'sample-gallery' in line:
+                sample_gallery_line = i
+                break
+
+        assert sample_gallery_line is not None, (
+            "T7 守衛 1 違規：showcase.html 找不到 .sample-gallery 元素 — "
+            "sample-gallery overlay 必須存在於 showcase.html"
+        )
+
+        assert sample_gallery_line > showcase_state_line, (
+            f"T7 守衛 1 違規：.sample-gallery（L{sample_gallery_line + 1}）在 "
+            f"x-data=\"showcaseState()\"（L{showcase_state_line + 1}）之前 — "
+            "sample-gallery overlay 必須在 showcaseState() x-data scope 內"
+        )
+
+    def test_sample_gallery_state_properties_in_core_js(self):
+        """守衛 2：core.js 的 showcaseState() 必須包含 sampleGalleryOpen / sampleGalleryImages / sampleGalleryIndex"""
+        content = self.CORE_JS.read_text(encoding='utf-8')
+
+        for state_prop in ('sampleGalleryOpen', 'sampleGalleryImages', 'sampleGalleryIndex'):
+            assert state_prop in content, (
+                f"T7 守衛 2 違規：core.js 缺少 state 屬性 {state_prop} — "
+                "showcaseState() return 物件必須包含此屬性"
+            )
+
+    def test_sample_gallery_methods_in_core_js(self):
+        """守衛 3：core.js 必須包含 openSampleGallery / closeSampleGallery / prevSampleGallery / nextSampleGallery / jumpSampleGallery"""
+        content = self.CORE_JS.read_text(encoding='utf-8')
+
+        for method in ('openSampleGallery', 'closeSampleGallery', 'prevSampleGallery',
+                       'nextSampleGallery', 'jumpSampleGallery'):
+            assert method in content, (
+                f"T7 守衛 3 違規：core.js 缺少 method {method} — "
+                "必須在 showcaseState() 內實作此方法"
+            )
+
+    def test_sg_open_btn_and_openSampleGallery_in_showcase_html(self):
+        """守衛 4：showcase.html 必須包含 sg-open-btn class 和 openSampleGallery( 呼叫（入口按鈕）"""
+        content = self.SHOWCASE_HTML.read_text(encoding='utf-8')
+
+        assert 'sg-open-btn' in content, (
+            "T7 守衛 4 違規：showcase.html 缺少 sg-open-btn class — "
+            "入口按鈕必須有 sg-open-btn class"
+        )
+
+        assert 'openSampleGallery(' in content, (
+            "T7 守衛 4 違規：showcase.html 缺少 openSampleGallery( 呼叫 — "
+            "入口按鈕必須綁定 @click=\"openSampleGallery(...)\""
+        )
+
+    def test_sample_gallery_overlay_bound_to_sampleGalleryOpen(self):
+        """守衛 5：showcase.html 的 .sample-gallery 必須有 sampleGalleryOpen 的 :class 或 x-show 綁定"""
+        content = self.SHOWCASE_HTML.read_text(encoding='utf-8')
+
+        has_binding = bool(re.search(
+            r'sample-gallery[^>]*sampleGalleryOpen|sampleGalleryOpen[^>]*sample-gallery',
             content
-        ))
-        assert has_correct_binding, (
-            "Fix C 違規：sample-thumb-active 的 :class 綁定格式不正確 — "
-            "必須形如 :class=\"{ 'sample-thumb-active': sampleLightboxOpen && sampleLightboxIndex === idx }\""
+        )) or bool(re.search(
+            r"class=['\"]sample-gallery['\"][^>]*\n[^>]*sampleGalleryOpen"
+            r"|sampleGalleryOpen.*sample-gallery",
+            content
+        )) or ('sampleGalleryOpen' in content and 'sample-gallery' in content)
+
+        assert has_binding, (
+            "T7 守衛 5 違規：showcase.html 的 .sample-gallery 缺少 sampleGalleryOpen 綁定 — "
+            "overlay 必須用 sampleGalleryOpen 控制顯示（:class=\"{ 'show': sampleGalleryOpen }\" 或 x-show）"
         )
+
+        # 更精確：確認 sampleGalleryOpen 在 sample-gallery 元素區域出現
+        lines = content.split('\n')
+        gallery_start = None
+        for i, line in enumerate(lines):
+            if 'sample-gallery' in line and ('class=' in line or 'class =' in line):
+                gallery_start = i
+                break
+
+        assert gallery_start is not None, (
+            "T7 守衛 5 違規：showcase.html 找不到含 class 的 .sample-gallery 元素 — "
+            "overlay 根元素必須有 class=\"sample-gallery\" 屬性"
+        )
+
+        # 在 gallery 元素附近 10 行內找 sampleGalleryOpen
+        nearby_lines = lines[gallery_start:gallery_start + 10]
+        nearby_content = '\n'.join(nearby_lines)
+        assert 'sampleGalleryOpen' in nearby_content, (
+            "T7 守衛 5 違規：.sample-gallery 元素附近缺少 sampleGalleryOpen 綁定 — "
+            "必須在 overlay 根元素上加 :class=\"{ 'show': sampleGalleryOpen }\""
+        )
+
+    def test_sg_thumb_active_references_sampleGalleryIndex(self):
+        """守衛 6：showcase.html 必須有 sg-thumb-active 和 sampleGalleryIndex 的關聯綁定"""
+        content = self.SHOWCASE_HTML.read_text(encoding='utf-8')
+
+        assert 'sg-thumb-active' in content, (
+            "T7 守衛 6 違規：showcase.html 缺少 sg-thumb-active class — "
+            "縮圖 active 高亮需要此 class"
+        )
+
+        assert 'sampleGalleryIndex' in content, (
+            "T7 守衛 6 違規：showcase.html 缺少 sampleGalleryIndex 引用 — "
+            "縮圖 active 高亮必須引用 sampleGalleryIndex"
+        )
+
+        # 確認 sg-thumb-active 與 sampleGalleryIndex 在同一行或附近（5 行內）
+        lines = content.split('\n')
+        thumb_active_lines = [i for i, l in enumerate(lines) if 'sg-thumb-active' in l]
+        gallery_index_lines = [i for i, l in enumerate(lines) if 'sampleGalleryIndex' in l]
+
+        # 找到是否有任一 sg-thumb-active 行在某個 sampleGalleryIndex 行 5 行內
+        found_proximity = False
+        for ta_line in thumb_active_lines:
+            for gi_line in gallery_index_lines:
+                if abs(ta_line - gi_line) <= 5:
+                    found_proximity = True
+                    break
+            if found_proximity:
+                break
+
+        assert found_proximity, (
+            "T7 守衛 6 違規：sg-thumb-active 和 sampleGalleryIndex 未在同一區域（5 行內）— "
+            "縮圖 active 的 :class 綁定必須引用 sampleGalleryIndex"
+        )
+
+    def test_playSampleGallerySwitch_in_animations_js(self):
+        """守衛 7：animations.js 必須包含 playSampleGallerySwitch 及 C18/C21 完整實作"""
+        content = self.ANIMATIONS_JS.read_text(encoding='utf-8')
+
+        assert 'playSampleGallerySwitch' in content, (
+            "T7 守衛 7 違規：animations.js 缺少 playSampleGallerySwitch — "
+            "必須新增 playSampleGallerySwitch 方法"
+        )
+
+        assert 'killTweensOf' in content, (
+            "T7 守衛 7 違規：animations.js 缺少 killTweensOf（C18）— "
+            "playSampleGallerySwitch 必須呼叫 gsap.killTweensOf 打斷舊動畫"
+        )
+
+        assert 'gsap-animating' in content, (
+            "T7 守衛 7 違規：animations.js 缺少 gsap-animating（C21）— "
+            "playSampleGallerySwitch 必須在動畫期間加/移除 gsap-animating class"
+        )
+
+        assert 'clearProps' in content, (
+            "T7 守衛 7 違規：animations.js 缺少 clearProps — "
+            "playSampleGallerySwitch 的 fromTo 必須在結束後清除 transform/opacity"
+        )
+
+    def test_lb_meta_extra_removed_from_showcase_html(self):
+        """37b-layout 守衛：showcase.html 不應殘留 lb-meta-extra class"""
+        content = self.SHOWCASE_HTML.read_text(encoding='utf-8')
+        assert 'lb-meta-extra' not in content, (
+            "37b-layout 違規：showcase.html 仍含 lb-meta-extra — "
+            "合併後應改用 .lb-details，lb-meta-extra 已廢棄"
+        )
+
+    def test_lb_header_in_showcase_html(self):
+        """37b-layout 守衛：showcase.html 應含 lb-header class"""
+        content = self.SHOWCASE_HTML.read_text(encoding='utf-8')
+        assert 'lb-header' in content, (
+            "37b-layout 違規：showcase.html 缺少 lb-header — "
+            "標題行容器（標題 + 樣品圖按鈕）必須存在"
+        )
+
+    def test_sg_open_btn_inside_lb_header_in_showcase_html(self):
+        """37b-layout 守衛：showcase.html 的 sg-open-btn 必須在 lb-header 開始與結束之間"""
+        content = self.SHOWCASE_HTML.read_text(encoding='utf-8')
+        lines = content.split('\n')
+
+        # 找到 lb-header 開始行號
+        lb_header_line = None
+        for i, line in enumerate(lines):
+            if 'lb-header' in line:
+                lb_header_line = i
+                break
+
+        assert lb_header_line is not None, (
+            "37b-layout 違規：showcase.html 找不到 lb-header — "
+            "標題行容器必須存在"
+        )
+
+        # 找到 lb-header 容器的閉合 </div>（用深度計數器追蹤巢狀）
+        lb_header_close_line = None
+        depth = 0
+        for i in range(lb_header_line, len(lines)):
+            ln = lines[i]
+            depth += ln.count('<div') - ln.count('</div>')
+            if i > lb_header_line and depth <= 0:
+                lb_header_close_line = i
+                break
+
+        assert lb_header_close_line is not None, (
+            "37b-layout 違規：showcase.html lb-header 找不到對應的 </div> — "
+            "lb-header 容器必須正確閉合"
+        )
+
+        # 找到 sg-open-btn 行號
+        sg_open_btn_line = None
+        for i, line in enumerate(lines):
+            if 'sg-open-btn' in line:
+                sg_open_btn_line = i
+                break
+
+        assert sg_open_btn_line is not None, (
+            "37b-layout 違規：showcase.html 找不到 sg-open-btn — "
+            "入口按鈕必須有 sg-open-btn class"
+        )
+
+        assert lb_header_line < sg_open_btn_line < lb_header_close_line, (
+            f"37b-layout 違規：sg-open-btn（L{sg_open_btn_line + 1}）不在 "
+            f"lb-header（L{lb_header_line + 1}～L{lb_header_close_line + 1}）內 — "
+            "入口按鈕必須在 .lb-header 開始與結束之間"
+        )
+
+
+class TestHelpPageGuard:
+    """37d T4 守衛 — help.html 包含 Phase 36/37 新功能說明"""
+
+    def test_help_has_primary_source(self):
+        html = (PROJECT_ROOT / 'web/templates/help.html').read_text(encoding='utf-8')
+        assert '預設搜尋來源' in html or '主要搜尋來源' in html
+
+    def test_help_has_dmm_fuzzy_search(self):
+        html = (PROJECT_ROOT / 'web/templates/help.html').read_text(encoding='utf-8')
+        assert '模糊搜尋' in html
+
+    def test_help_has_direct_mode(self):
+        html = (PROJECT_ROOT / 'web/templates/help.html').read_text(encoding='utf-8')
+        assert 'direct' in html.lower()
+
+    def test_help_has_lightbox_director(self):
+        html = (PROJECT_ROOT / 'web/templates/help.html').read_text(encoding='utf-8')
+        assert '導演' in html
+
+    def test_help_has_sample_gallery(self):
+        html = (PROJECT_ROOT / 'web/templates/help.html').read_text(encoding='utf-8')
+        assert '劇照' in html
+
+    def test_help_has_table_duration(self):
+        html = (PROJECT_ROOT / 'web/templates/help.html').read_text(encoding='utf-8')
+        assert '片長' in html
+
+    def test_help_has_subtitle_move(self):
+        html = (PROJECT_ROOT / 'web/templates/help.html').read_text(encoding='utf-8')
+        assert '字幕' in html
+
+    def test_troubleshoot_direct(self):
+        html = (PROJECT_ROOT / 'web/templates/help.html').read_text(encoding='utf-8')
+        # direct 至少在 Scraper 來源說明和疑難排解各出現一次
+        assert html.lower().count('direct') >= 2

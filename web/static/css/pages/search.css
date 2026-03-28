@@ -854,49 +854,16 @@
     transition: none;   /* 覆蓋 theme.css 的 transform transition */
 }
 
-/* ==================== T7: Sample Lightbox ==================== */
-.sample-lightbox {
-    position: fixed;
-    inset: 0;
-    z-index: 1050;   /* 高於 Grid Lightbox (1000)，確保 Sample LB 在最上層 */
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(0, 0, 0, 0.85);
-    opacity: 0;
-    visibility: hidden;
-    pointer-events: none;
-    transition: opacity 0.2s ease, visibility 0s linear 0.2s;
+/* ==================== T8: Sample Gallery ==================== */
+/* Note: base rules (.sample-gallery, .sg-open-btn, etc.) are defined in showcase.css
+   which is also loaded on /search. Only search-specific overrides needed here. */
+
+/* z-index: 1500 — 高於 Grid Lightbox (1000) 和舊 sample-lightbox (1050) */
+.sample-gallery {
+    z-index: 1500;
 }
 
-.sample-lightbox.show {
-    opacity: 1;
-    visibility: visible;
-    pointer-events: auto;
-    transition: opacity 0.2s ease, visibility 0s linear 0s;
-}
-
-.sample-lightbox-img-wrap {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    max-width: 90vw;
-    max-height: 85vh;
-}
-
-.sample-lightbox-img {
-    max-width: 100%;
-    max-height: 85vh;
-    object-fit: contain;
-}
-
-.sample-lightbox-counter {
-    position: absolute;
-    bottom: 1.5rem;
-    right: 2rem;
-    background: rgba(0, 0, 0, 0.6);
-    color: var(--text-inverse);
-    padding: 0.2rem 0.75rem;
-    border-radius: 999px;
-    font-size: 0.85rem;
+/* C21 guard：GSAP 動畫期間禁用 sg-main-img 的 CSS transition */
+.sample-gallery .sg-main-img.gsap-animating {
+    transition: none !important;
 }

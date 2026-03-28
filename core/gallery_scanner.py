@@ -12,34 +12,17 @@ import os
 import re
 import time
 import xml.etree.ElementTree as ET
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields as dataclass_fields
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from core.logger import get_logger
+from core.maker_mapping import load_name_mapping, load_prefix_mapping
 from core.nfo_utils import sanitize_nfo_bytes
 from core.path_utils import to_file_uri
 from core.video_extensions import DEFAULT_VIDEO_EXTENSIONS, ZERO_SIZE_EXTENSIONS
 
 logger = get_logger(__name__)
-
-
-def load_maker_mapping() -> Dict[str, str]:
-    """載入片商映射檔（番號前綴 -> 片商名稱）"""
-    # 嘗試多個路徑
-    possible_paths = [
-        Path(__file__).parent.parent / "maker_mapping.json",  # ../maker_mapping.json
-        Path(__file__).parent / "maker_mapping.json",          # ./maker_mapping.json
-    ]
-
-    for mapping_path in possible_paths:
-        if mapping_path.exists():
-            try:
-                with open(mapping_path, 'r', encoding='utf-8') as f:
-                    return json.load(f)
-            except (json.JSONDecodeError, IOError):
-                pass
-    return {}
 
 
 @dataclass
@@ -56,6 +39,11 @@ class VideoInfo:
     size: int = 0
     mtime: int = 0
     img: str = ""
+    director: str = ""
+    duration: Optional[int] = None
+    series: str = ""
+    label: str = ""
+    sample_images: List[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
@@ -70,11 +58,17 @@ class VideoInfo:
             "size": self.size,
             "mtime": self.mtime,
             "img": self.img,
+            "director": self.director,
+            "duration": self.duration,
+            "series": self.series,
+            "label": self.label,
+            "sample_images": self.sample_images,
         }
 
     @classmethod
     def from_dict(cls, d: dict) -> 'VideoInfo':
-        return cls(**d)
+        known = {f.name for f in dataclass_fields(cls)}
+        return cls(**{k: v for k, v in d.items() if k in known})
 
 
 # 支援的影片副檔名（from core.video_extensions Single Source of Truth）
@@ -209,14 +203,21 @@ class VideoScanner:
         self.naming_formats = naming_formats or self.DEFAULT_NAMING_FORMATS
         self._compiled_formats = self._compile_naming_formats()
         self.path_mappings = path_mappings or {}
-        self.maker_mapping = load_maker_mapping()
+        self.prefix_mapping = load_prefix_mapping()
+        self.name_mapping = load_name_mapping()
 
     def normalize_maker(self, num: str, maker: str) -> str:
-        """根據番號前綴正規化片商名稱
+        """根據 name mapping 和番號前綴正規化片商名稱
 
-        優先使用 maker_mapping.json 中的映射（番號前綴 -> 標準片商名）
+        Step 1: name mapping（直接對照片商名，不依賴 num）
+        Step 2: prefix mapping（從番號前綴查詢，作為 fallback）
         """
-        if not num or not self.maker_mapping:
+        # Step 1: name mapping（不依賴 num）
+        if maker and maker in self.name_mapping:
+            return self.name_mapping[maker]
+
+        # Step 2: prefix mapping（fallback）
+        if not num or not self.prefix_mapping:
             return maker
 
         # 提取番號前綴（移除數字部分）
@@ -224,8 +225,8 @@ class VideoScanner:
         prefix_match = re.match(r'^([A-Za-z]+)', num)
         if prefix_match:
             prefix = prefix_match.group(1).upper()
-            if prefix in self.maker_mapping:
-                return self.maker_mapping[prefix]
+            if prefix in self.prefix_mapping:
+                return self.prefix_mapping[prefix]
 
         return maker
 
@@ -342,6 +343,29 @@ class VideoScanner:
                     genres.append(tag_elem.text.strip())
             info.genre = ','.join(genres)
 
+            # 時長 (runtime)
+            runtime_elem = root.find('runtime')
+            if runtime_elem is not None and runtime_elem.text:
+                try:
+                    info.duration = int(runtime_elem.text.strip())
+                except ValueError:
+                    info.duration = None
+
+            # 導演
+            director_elem = root.find('director')
+            if director_elem is not None and director_elem.text:
+                info.director = director_elem.text.strip()
+
+            # 系列 (set/name)
+            set_name_elem = root.find('set/name')
+            if set_name_elem is not None and set_name_elem.text:
+                info.series = set_name_elem.text.strip()
+
+            # 廠牌/標籤 (label)
+            label_elem = root.find('label')
+            if label_elem is not None and label_elem.text:
+                info.label = label_elem.text.strip()
+
             return info
 
         except Exception as e:
@@ -420,6 +444,10 @@ class VideoScanner:
                 info.maker = nfo_info.maker or info.maker
                 info.date = nfo_info.date or info.date
                 info.genre = nfo_info.genre or info.genre
+                info.director = nfo_info.director or info.director
+                info.duration = nfo_info.duration if nfo_info.duration is not None else info.duration
+                info.series = nfo_info.series or info.series
+                info.label = nfo_info.label or info.label
 
         # 如果 NFO 沒有資料，從檔名解析
         if not info.title or not info.num:
@@ -445,6 +473,22 @@ class VideoScanner:
                     info.img = img_path.replace('\\', '/')
             else:
                 info.img = to_file_uri(img_path, self.path_mappings)
+
+        # 掃描 extrafanart/ 目錄（sample images）
+        extrafanart_dir = video_path.parent / 'extrafanart'
+        if extrafanart_dir.is_dir():
+            try:
+                for img_path in sorted(extrafanart_dir.glob('fanart*.jpg')):
+                    if base_path:
+                        try:
+                            rel_img = img_path.relative_to(base_path)
+                            info.sample_images.append(str(rel_img).replace('\\', '/'))
+                        except ValueError:
+                            info.sample_images.append(str(img_path).replace('\\', '/'))
+                    else:
+                        info.sample_images.append(to_file_uri(str(img_path), self.path_mappings))
+            except OSError as e:
+                logger.warning(f"  [!] extrafanart 掃描失敗: {extrafanart_dir} - {e}")
 
         t_end = time.time()
         logger.debug(f"[Scan] {video_name} 完成 ({t_end - t_start:.2f}s)")
