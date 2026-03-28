@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.4] - 2026-03-28
+
+### Added
+
+#### 🏭 Maker 名稱對照表重建 (Phase 37c)
+- `maker_mapping.json` 改為雙層格式（name_mapping + prefix_mapping），合併 DMM 72 筆名稱對照
+- 新增 `core/maker_mapping.py` shared loader 模組，統一供 search / showcase / scraper 共用
+- `/search` 路徑：`Video.to_legacy_dict()` 自動套用 name normalize（片假名/英文長名 → 短名）
+- `/showcase` 路徑：`normalize_maker()` 改為兩步查詢（name mapping 優先 → prefix fallback）
+- gfriends lookup 補齊 SCOOP → x-KMP 對應
+
+### Changed
+- 測試總數 1280 → 1324（+44）
+
 ## [0.5.3] - 2026-03-28
 
 ### Added
