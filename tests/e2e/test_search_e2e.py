@@ -83,15 +83,15 @@ def test_detail_new_fields(page: Page, base_url: str) -> None:
         assert value_text, f"欄位「{label}」的值不應為空，實際：{value_text!r}"
 
 
-# ── E2E-2: Sample Lightbox 互動 ───────────────────────────────────────────────
+# ── E2E-2: Sample Gallery 互動 ────────────────────────────────────────────────
 
 def test_sample_lightbox(page: Page, base_url: str) -> None:
     """
-    E2E-2：搜尋 JUR-688，驗證 Sample Images 縮圖列 + Lightbox 互動：
+    E2E-2：搜尋 JUR-688，驗證 Sample Images 縮圖列 + Gallery 互動：
     1. .sample-strip 可見
-    2. 點擊第 3 張縮圖 → Lightbox 計數器顯示「3 / N」
+    2. 點擊第 3 張縮圖 → Gallery 計數器顯示「3 / N」
     3. ArrowRight → 計數器變「4 / N」
-    4. ESC → Lightbox 關閉
+    4. ESC → Gallery 關閉
     5. Detail 模式（.av-card-full）仍然可見
     """
     _do_search(page, base_url, "JUR-688")
@@ -112,14 +112,14 @@ def test_sample_lightbox(page: Page, base_url: str) -> None:
     # 點擊第 3 張縮圖（index 2）
     page.locator(".sample-thumb-btn").nth(2).click()
 
-    # 等待 Lightbox 出現（.sample-lightbox.show）
+    # 等待 Gallery 出現（.sample-gallery.show）
     try:
-        page.wait_for_selector(".sample-lightbox.show", state="visible", timeout=5_000)
+        page.wait_for_selector(".sample-gallery.show", state="visible", timeout=5_000)
     except PlaywrightTimeoutError:
-        pytest.skip("Sample Lightbox 未開啟")
+        pytest.skip("Sample Gallery 未開啟")
 
     # 驗證計數器：應顯示「3 / N」（第 3 張，1-based）
-    counter_text = page.locator(".sample-lightbox-counter").inner_text().strip()
+    counter_text = page.locator(".sg-counter").inner_text().strip()
     total = counter_text.split("/")[-1].strip()
     assert counter_text == f"3 / {total}", (
         f"點擊第 3 張縮圖後計數器應為「3 / {total}」，實際：{counter_text!r}"
@@ -128,19 +128,19 @@ def test_sample_lightbox(page: Page, base_url: str) -> None:
     # 按 ArrowRight → 進到第 4 張
     page.keyboard.press("ArrowRight")
     page.wait_for_timeout(300)
-    counter_text = page.locator(".sample-lightbox-counter").inner_text().strip()
+    counter_text = page.locator(".sg-counter").inner_text().strip()
     assert counter_text == f"4 / {total}", (
         f"按 ArrowRight 後計數器應為「4 / {total}」，實際：{counter_text!r}"
     )
 
-    # 按 ESC → Lightbox 關閉
+    # 按 ESC → Gallery 關閉
     page.keyboard.press("Escape")
     page.wait_for_timeout(300)
 
-    # Lightbox 應不再有 .show class（或 hidden）
-    lightbox = page.locator(".sample-lightbox")
+    # Gallery 應不再有 .show class（或 hidden）
+    lightbox = page.locator(".sample-gallery")
     assert not lightbox.evaluate("el => el.classList.contains('show')"), (
-        "ESC 後 .sample-lightbox 不應有 .show class"
+        "ESC 後 .sample-gallery 不應有 .show class"
     )
 
     # Detail 模式應仍可見
@@ -153,16 +153,16 @@ def test_sample_lightbox(page: Page, base_url: str) -> None:
 
 def test_arrow_key_navigation(page: Page, base_url: str) -> None:
     """
-    E2E-3：搜尋多筆結果（SSIS），驗證 Sample Lightbox 關閉時方向鍵觸發
+    E2E-3：搜尋多筆結果（SSIS），驗證 Sample Gallery 關閉時方向鍵觸發
     navigate()（切換影片）而非 prevSample()/nextSample()（翻 sample 圖）。
 
     流程：
     1. 搜尋 SSIS，確認 >= 2 筆結果
-    2. 確認 Sample Lightbox 未開啟
+    2. 確認 Sample Gallery 未開啟
     3. 記錄當前番號（currentIndex = 0）
     4. ArrowRight → currentIndex = 1，番號應改變
     5. ArrowLeft → currentIndex = 0，番號應還原
-    6. 全程 .sample-lightbox 不應出現 .show class
+    6. 全程 .sample-gallery 不應出現 .show class
     """
     _do_search(page, base_url, "SSIS")
     _wait_for_result(page)
@@ -189,10 +189,10 @@ def test_arrow_key_navigation(page: Page, base_url: str) -> None:
         if total_count < 2:
             pytest.skip(f"搜尋結果不足 2 筆（實際 {total_count} 筆），無法驗證方向鍵導航")
 
-    # 確認 Sample Lightbox 未開啟
-    lightbox = page.locator(".sample-lightbox")
-    assert not lightbox.evaluate("el => el.classList.contains('show')"), (
-        "測試開始時 Sample Lightbox 不應為開啟狀態"
+    # 確認 Sample Gallery 未開啟
+    gallery = page.locator(".sample-gallery")
+    assert not gallery.evaluate("el => el.classList.contains('show')"), (
+        "測試開始時 Sample Gallery 不應為開啟狀態"
     )
 
     # 記錄當前番號（index 0）
@@ -207,9 +207,9 @@ def test_arrow_key_navigation(page: Page, base_url: str) -> None:
         f"ArrowRight 應切換到下一部影片，但番號未改變：{initial_number!r} → {next_number!r}"
     )
 
-    # 確認 Sample Lightbox 仍未開啟（navigate 不應開啟 Lightbox）
-    assert not lightbox.evaluate("el => el.classList.contains('show')"), (
-        "ArrowRight 導航後 Sample Lightbox 不應出現"
+    # 確認 Sample Gallery 仍未開啟（navigate 不應開啟 Gallery）
+    assert not gallery.evaluate("el => el.classList.contains('show')"), (
+        "ArrowRight 導航後 Sample Gallery 不應出現"
     )
 
     # 按 ArrowLeft → 應回到原始番號（navigate(-1)）
@@ -221,7 +221,7 @@ def test_arrow_key_navigation(page: Page, base_url: str) -> None:
         f"ArrowLeft 應回到原始番號 {initial_number!r}，實際：{restored_number!r}"
     )
 
-    # 最終確認 Sample Lightbox 仍未開啟
-    assert not lightbox.evaluate("el => el.classList.contains('show')"), (
-        "ArrowLeft 導航後 Sample Lightbox 不應出現"
+    # 最終確認 Sample Gallery 仍未開啟
+    assert not gallery.evaluate("el => el.classList.contains('show')"), (
+        "ArrowLeft 導航後 Sample Gallery 不應出現"
     )

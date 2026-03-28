@@ -121,26 +121,7 @@ window.SearchStateMixin_Navigation = {
         const queryInput = this.$refs.searchQuery;
         if (document.activeElement === queryInput) return;
 
-        // T2a: Lightbox 鍵盤導航（優先）
-        if (this.lightboxOpen) {
-            if (event.key === 'Escape') {
-                event.preventDefault();
-                this.closeLightbox();  // closeLightbox handles kill + cleanup + generation++
-                return;
-            }
-            if (event.key === 'ArrowLeft') {
-                event.preventDefault();
-                this.prevLightboxVideo();
-                return;
-            }
-            if (event.key === 'ArrowRight') {
-                event.preventDefault();
-                this.nextLightboxVideo();
-                return;
-            }
-        }
-
-        // T8: Sample Gallery 鍵盤導航（Grid Lightbox 已排除後處理，sampleGalleryOpen 疊在 lightboxOpen 之上）
+        // T8: Sample Gallery 鍵盤導航（最高優先：gallery 疊在 lightbox 之上，ESC 先關 gallery）
         if (this.sampleGalleryOpen) {
             if (event.key === 'Escape') {
                 event.preventDefault();
@@ -158,6 +139,25 @@ window.SearchStateMixin_Navigation = {
                 return;
             }
             return;
+        }
+
+        // T2a: Lightbox 鍵盤導航（sampleGalleryOpen 已排除後處理）
+        if (this.lightboxOpen) {
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                this.closeLightbox();  // closeLightbox handles kill + cleanup + generation++
+                return;
+            }
+            if (event.key === 'ArrowLeft') {
+                event.preventDefault();
+                this.prevLightboxVideo();
+                return;
+            }
+            if (event.key === 'ArrowRight') {
+                event.preventDefault();
+                this.nextLightboxVideo();
+                return;
+            }
         }
 
         // Detail 模式導航（Grid 模式不觸發）

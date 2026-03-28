@@ -3533,15 +3533,33 @@ class TestLightboxAnimationGuard:
             )
 
     def test_esc_calls_closeLightbox_search(self):
-        """search/navigation.js ESC 分支呼叫 closeLightbox（closeLightbox 內部處理 getById kill）"""
+        """search/navigation.js handleKeydown：sampleGalleryOpen 在 lightboxOpen 之前，兩者 ESC 分支各自正確"""
         content = self._read_file(self.SEARCH_NAVIGATION)
         body = self._extract_function(content, 'handleKeydown')
         assert body, "handleKeydown 函數未找到 in navigation.js"
-        esc_idx = body.find('Escape')
-        assert esc_idx >= 0, "handleKeydown 中未找到 Escape 分支"
-        esc_section = body[esc_idx:esc_idx + 300]
-        assert 'closeLightbox' in esc_section, (
-            "C18 守衛違規：search navigation.js ESC 分支未呼叫 closeLightbox\n"
+
+        # P1 修正守衛：sampleGalleryOpen block 必須在 lightboxOpen block 之前（行號更小）
+        sg_idx = body.find('this.sampleGalleryOpen')
+        lb_idx = body.find('this.lightboxOpen')
+        assert sg_idx >= 0, "handleKeydown 中未找到 this.sampleGalleryOpen 分支"
+        assert lb_idx >= 0, "handleKeydown 中未找到 this.lightboxOpen 分支"
+        assert sg_idx < lb_idx, (
+            "P1 守衛違規：search navigation.js handleKeydown 的 sampleGalleryOpen block 應在 "
+            "lightboxOpen block 之前（sampleGalleryOpen 優先攔截鍵盤事件）\n"
+            "修正：將 sampleGalleryOpen 判斷移到 lightboxOpen 判斷之前"
+        )
+
+        # sampleGalleryOpen block：ESC 分支應呼叫 closeSampleGallery
+        sg_section = body[sg_idx:lb_idx]
+        assert 'closeSampleGallery' in sg_section, (
+            "P1 守衛違規：search navigation.js sampleGalleryOpen ESC 分支缺少 closeSampleGallery 呼叫\n"
+            "修正：sampleGalleryOpen block 的 ESC 應呼叫 closeSampleGallery()"
+        )
+
+        # lightboxOpen block：ESC 分支應呼叫 closeLightbox
+        lb_section = body[lb_idx:lb_idx + 500]
+        assert 'closeLightbox' in lb_section, (
+            "C18 守衛違規：search navigation.js lightboxOpen ESC 分支未呼叫 closeLightbox\n"
             "修正：ESC 應呼叫 closeLightbox() 統一處理 kill + cleanup"
         )
 

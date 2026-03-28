@@ -118,6 +118,9 @@ window.SearchStateMixin_GridMode = {
             this.lightboxCloseTimer = null;
         }
 
+        // T8: 若 gallery 開啟中一併關閉（外部直接關 lightbox 時 gallery 不應殘留）
+        if (this.sampleGalleryOpen) this.closeSampleGallery();
+
         this._lightboxGeneration++;  // B19: invalidate pending $nextTick lightbox callbacks
         // Instant close — kill any in-progress lightbox animations, then sync close
         if (typeof gsap !== 'undefined') {
