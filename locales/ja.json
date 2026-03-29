@@ -246,6 +246,74 @@
       "save": "変更を保存"
     }
   },
+  "scanner": {
+    "page_title": "リスト生成",
+    "drag_overlay": {
+      "hint": "フォルダを追加するにはドロップ"
+    },
+    "folder": {
+      "section_title": "スキャンフォルダ",
+      "select_title": "フォルダを選択",
+      "manual_title": "手動入力",
+      "placeholder": "フォルダパスを入力...",
+      "empty_line1": "フォルダが追加されていません",
+      "empty_line2": "上のボタンをクリックするかフォルダをドラッグ",
+      "remove_title": "削除",
+      "output_prefix": "出力:",
+      "settings_link": "設定",
+      "copy_path": "パスをコピー"
+    },
+    "terminal": {
+      "filter_all": "すべて",
+      "filter_all_title": "すべて表示",
+      "filter_error": "エラー",
+      "filter_error_title": "エラーのみ表示",
+      "filter_warn": "警告",
+      "filter_warn_title": "警告のみ表示",
+      "copy_title": "ログをコピー",
+      "clear_display_title": "画面をクリア（リロード後に復元）",
+      "clear_all_title": "すべてクリア（履歴含む）"
+    },
+    "stats": {
+      "cached_prefix": "キャッシュ動画:",
+      "cached_suffix": "本",
+      "clear_cache_title": "キャッシュをクリア",
+      "nfo_prefix": "補完が必要:",
+      "nfo_suffix": "本",
+      "nfo_update_title": "NFO情報を補完",
+      "jellyfin_prefix": "画像補完が必要:",
+      "jellyfin_suffix": "本",
+      "jellyfin_update_title": "Jellyfin poster + fanart を補完",
+      "last_run_prefix": "最終実行: ",
+      "last_added": "({count}本追加)"
+    },
+    "alias": {
+      "section_title": "女優名管理",
+      "collapse_title": "展開/折りたたむ",
+      "label_old": "旧名前",
+      "placeholder_old": "例: miru",
+      "label_new": "新名前",
+      "placeholder_new": "例: 坂道みる",
+      "loading": "読み込み中...",
+      "empty": "エイリアスがありません",
+      "applied": "({count}件適用済み)",
+      "delete_title": "削除"
+    },
+    "dirty_modal": {
+      "title": "未保存の変更",
+      "body": "フォルダリストを変更しましたが、ページを生成していません。どうしますか？",
+      "cancel": "キャンセル",
+      "discard": "変更を破棄",
+      "save": "保存して離開"
+    },
+    "clear_cache_modal": {
+      "title": "動画キャッシュをクリア",
+      "body_prefix": "この操作はキャッシュされた全動画メタデータ（計",
+      "body_suffix": "本）を削除します。次回は再スキャンが必要です。よろしいですか？",
+      "cancel": "キャンセル",
+      "confirm": "削除する"
+    }
+  },
   "showcase": {
     "page_title": "動画ブラウズ",
     "placeholder": {

@@ -246,6 +246,74 @@
       "save": "Save Changes"
     }
   },
+  "scanner": {
+    "page_title": "Scanner",
+    "drag_overlay": {
+      "hint": "Drop to add folder"
+    },
+    "folder": {
+      "section_title": "Scan Folders",
+      "select_title": "Select Folder",
+      "manual_title": "Manual Input",
+      "placeholder": "Enter folder path...",
+      "empty_line1": "No folders added yet",
+      "empty_line2": "Click the button above or drag a folder here",
+      "remove_title": "Remove",
+      "output_prefix": "Output:",
+      "settings_link": "Settings",
+      "copy_path": "Copy Path"
+    },
+    "terminal": {
+      "filter_all": "All",
+      "filter_all_title": "Show all",
+      "filter_error": "Errors",
+      "filter_error_title": "Show errors only",
+      "filter_warn": "Warnings",
+      "filter_warn_title": "Show warnings only",
+      "copy_title": "Copy logs",
+      "clear_display_title": "Clear display (restored on reload)",
+      "clear_all_title": "Clear all (including history)"
+    },
+    "stats": {
+      "cached_prefix": "Cached videos:",
+      "cached_suffix": "",
+      "clear_cache_title": "Clear cache",
+      "nfo_prefix": "Need update:",
+      "nfo_suffix": "",
+      "nfo_update_title": "Complete NFO info",
+      "jellyfin_prefix": "Missing images:",
+      "jellyfin_suffix": "",
+      "jellyfin_update_title": "Fill Jellyfin poster + fanart",
+      "last_run_prefix": "Last run: ",
+      "last_added": "({count} added)"
+    },
+    "alias": {
+      "section_title": "Actress Name Aliases",
+      "collapse_title": "Expand/Collapse",
+      "label_old": "Old Name",
+      "placeholder_old": "e.g. miru",
+      "label_new": "New Name",
+      "placeholder_new": "e.g. 坂道みる",
+      "loading": "Loading...",
+      "empty": "No aliases defined",
+      "applied": "({count} applied)",
+      "delete_title": "Delete"
+    },
+    "dirty_modal": {
+      "title": "Unsaved Changes",
+      "body": "You have modified the folder list but haven't generated the page yet. What would you like to do?",
+      "cancel": "Cancel",
+      "discard": "Discard Changes",
+      "save": "Save and Leave"
+    },
+    "clear_cache_modal": {
+      "title": "Clear Video Cache",
+      "body_prefix": "This will delete all cached video metadata (",
+      "body_suffix": " videos). You will need to re-scan next time. Are you sure?",
+      "cancel": "Cancel",
+      "confirm": "Delete"
+    }
+  },
   "showcase": {
     "page_title": "Browse",
     "placeholder": {

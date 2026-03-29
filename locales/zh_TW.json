@@ -246,6 +246,74 @@
       "save": "儲存更改"
     }
   },
+  "scanner": {
+    "page_title": "列表生成",
+    "drag_overlay": {
+      "hint": "放開以加入資料夾"
+    },
+    "folder": {
+      "section_title": "掃描資料夾",
+      "select_title": "選擇資料夾",
+      "manual_title": "手動輸入",
+      "placeholder": "輸入資料夾路徑...",
+      "empty_line1": "尚未加入任何資料夾",
+      "empty_line2": "點擊上方按鈕或拖曳資料夾至此",
+      "remove_title": "移除",
+      "output_prefix": "輸出:",
+      "settings_link": "設定",
+      "copy_path": "複製路徑"
+    },
+    "terminal": {
+      "filter_all": "全部",
+      "filter_all_title": "顯示全部",
+      "filter_error": "錯誤",
+      "filter_error_title": "僅顯示錯誤",
+      "filter_warn": "警告",
+      "filter_warn_title": "僅顯示警告",
+      "copy_title": "複製日誌",
+      "clear_display_title": "清除畫面（重整後恢復）",
+      "clear_all_title": "清除全部（包含歷史）"
+    },
+    "stats": {
+      "cached_prefix": "快取影片:",
+      "cached_suffix": "部",
+      "clear_cache_title": "清除快取",
+      "nfo_prefix": "需補全:",
+      "nfo_suffix": "部",
+      "nfo_update_title": "補全 NFO 資訊",
+      "jellyfin_prefix": "需補齊圖片:",
+      "jellyfin_suffix": "部",
+      "jellyfin_update_title": "補齊 Jellyfin poster + fanart",
+      "last_run_prefix": "上次執行: ",
+      "last_added": "(新增 {count} 部)"
+    },
+    "alias": {
+      "section_title": "女優名稱管理",
+      "collapse_title": "展開/收起",
+      "label_old": "舊名稱",
+      "placeholder_old": "例：miru",
+      "label_new": "新名稱",
+      "placeholder_new": "例：坂道みる",
+      "loading": "載入中...",
+      "empty": "尚無別名對照",
+      "applied": "(已套用 {count})",
+      "delete_title": "刪除"
+    },
+    "dirty_modal": {
+      "title": "尚未儲存的變更",
+      "body": "您有修改資料夾清單但未產生網頁，要如何處理？",
+      "cancel": "取消",
+      "discard": "放棄變更",
+      "save": "儲存並離開"
+    },
+    "clear_cache_modal": {
+      "title": "清除影片快取",
+      "body_prefix": "此操作將刪除所有已快取的影片元數據（共",
+      "body_suffix": "部），下次需重新掃描才能恢復。確定要清除嗎？",
+      "cancel": "取消",
+      "confirm": "確認刪除"
+    }
+  },
   "showcase": {
     "page_title": "影片瀏覽",
     "placeholder": {
