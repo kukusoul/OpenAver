@@ -1,0 +1,19 @@
+{
+  "nav": {
+    "search": "Search",
+    "scanner": "Scanner",
+    "showcase": "Showcase",
+    "help": "Help",
+    "help_title": "Help Guide",
+    "settings": "Settings",
+    "toggle_sidebar": "Toggle Sidebar"
+  },
+  "common": {
+    "locale": {
+      "zh-TW": "繁",
+      "zh-CN": "简",
+      "ja": "あ",
+      "en": "EN"
+    }
+  }
+}

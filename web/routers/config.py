@@ -115,7 +115,7 @@ class GeneralFieldRequest(BaseModel):
 @router.put("/config/general/{field}")
 async def update_general_field(field: str, request: GeneralFieldRequest) -> dict:
     """更新 general 區塊單一欄位（輕量端點，供 UI toggle 即時同步）"""
-    allowed = {"sidebar_collapsed", "theme", "font_size"}
+    allowed = {"sidebar_collapsed", "theme", "font_size", "locale"}
     if field not in allowed:
         return {"success": False, "error": f"不允許更新欄位: {field}"}
     try:

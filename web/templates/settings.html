@@ -35,6 +35,15 @@
                     <i class="bi" :class="theme === 'light' ? 'bi-moon-stars' : 'bi-sun'"></i>
                 </button>
             </div>
+            <!-- Locale Toggle -->
+            <div class="settings-locale-toggle">
+                <button class="locale-toggle-btn"
+                        type="button"
+                        x-text="{'zh-TW':'繁','zh-CN':'简','ja':'あ','en':'EN'}[locale] || '繁'"
+                        @click="cycleLocale()"
+                        :title="'語系: ' + locale">
+                </button>
+            </div>
         </div>
     </div>
 

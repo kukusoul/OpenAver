@@ -1,0 +1,19 @@
+{
+  "nav": {
+    "search": "搜尋",
+    "scanner": "列表生成",
+    "showcase": "瀏覽",
+    "help": "說明",
+    "help_title": "使用說明",
+    "settings": "設定",
+    "toggle_sidebar": "展開/收合"
+  },
+  "common": {
+    "locale": {
+      "zh-TW": "繁",
+      "zh-CN": "简",
+      "ja": "あ",
+      "en": "EN"
+    }
+  }
+}

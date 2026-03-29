@@ -46,6 +46,9 @@ function settingsPage() {
             defaultPage: 'search'
         },
 
+        // ===== i18n State =====
+        locale: (window.__locale || 'zh-TW'),
+
         // ===== UI State =====
         newSuffixInput: '',
         showPathHelp: false,
@@ -231,6 +234,27 @@ function settingsPage() {
         },
 
         // ===== Methods =====
+        async cycleLocale() {
+            const order = ['zh-TW', 'zh-CN', 'ja', 'en'];
+            const idx = order.indexOf(this.locale);
+            const next = order[(idx + 1) % order.length];
+            try {
+                const resp = await fetch('/api/config/general/locale', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ value: next })
+                });
+                const result = await resp.json();
+                if (result.success) {
+                    location.reload();
+                } else {
+                    console.warn('[i18n] cycleLocale failed:', result.error);
+                }
+            } catch (e) {
+                console.error('[i18n] cycleLocale error:', e);
+            }
+        },
+
         async loadConfig() {
             // 鎖定表單（載入期間不可操作）
             this._configLoading = true;
