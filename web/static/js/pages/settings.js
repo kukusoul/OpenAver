@@ -239,6 +239,9 @@ function settingsPage() {
 
         // ===== Methods =====
         async cycleLocale() {
+            if (this.isDirty) {
+                if (!confirm('您有未儲存的變更，切換語系後將遺失。確定繼續？')) return;
+            }
             const order = ['zh-TW', 'zh-CN', 'ja', 'en'];
             const idx = order.indexOf(this.locale);
             const next = order[(idx + 1) % order.length];

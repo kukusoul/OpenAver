@@ -48,8 +48,9 @@ def _get_javbus_lang() -> str:
         config = load_config()
         locale = config.get('general', {}).get('locale', 'zh-TW')
         return _LOCALE_TO_JAVBUS.get(locale, "zh-tw")
-    except Exception:
-        return "zh-tw"  # 安全 fallback，不能讓 lang 讀取失敗影響搜尋
+    except Exception as e:
+        logger.warning("[i18n] 讀取 locale config 失敗，使用預設語系: %s", e)
+        return "zh-tw"
 
 
 # ============ 輔助函數 (與舊版相容) ============
