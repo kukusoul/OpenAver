@@ -123,7 +123,8 @@ async def update_general_field(field: str, request: GeneralFieldRequest) -> dict
         if "general" not in config:
             config["general"] = {}
         if field == "locale" and request.value not in ("zh-TW", "zh-CN", "ja", "en"):
-            return {"success": False, "error": f"不支援的語系: {request.value}"}
+            logger.warning("嘗試設定不支援的語系: %s", request.value)
+            return {"success": False, "error": "不支援的語系"}
         config["general"][field] = request.value
         save_config(config)
         return {"success": True}
