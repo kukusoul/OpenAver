@@ -125,5 +125,102 @@
       "acknowledge": "了解",
       "go_settings": "前往設定"
     }
+  },
+  "showcase": {
+    "page_title": "影片瀏覽",
+    "placeholder": {
+      "search": "搜尋番號、女優、標題..."
+    },
+    "action": {
+      "clear_search": "清除搜尋",
+      "search": "搜尋",
+      "toggle_order": "切換排序方向",
+      "toggle_info": "顯示/隱藏資訊 (S)",
+      "play_video": "開啟影片",
+      "play": "播放"
+    },
+    "toolbar": {
+      "sort_prefix": "排序",
+      "mode_prefix": "模式",
+      "per_page_prefix": "每頁"
+    },
+    "sort": {
+      "date": "日期",
+      "num": "番號",
+      "title": "標題",
+      "actor": "女優",
+      "maker": "片商",
+      "size": "大小",
+      "mdate": "修改時間",
+      "random": "隨機"
+    },
+    "mode": {
+      "grid": "圖片",
+      "table": "詳細",
+      "list": "文字"
+    },
+    "unit": {
+      "videos": "部",
+      "minutes": "分鐘",
+      "minutes_abbr": "分"
+    },
+    "per_page": {
+      "all": "全部"
+    },
+    "status": {
+      "total_prefix": "共",
+      "total_suffix": "部影片",
+      "search_prefix": "搜尋 \"",
+      "search_middle": "\" — 找到",
+      "search_suffix": "部"
+    },
+    "nav": {
+      "prev_page": "上一頁",
+      "next_page": "下一頁"
+    },
+    "grid": {
+      "unknown_actor": "未知",
+      "unknown_title": "未知標題",
+      "unknown_size": "未知"
+    },
+    "label": {
+      "actor": "演員",
+      "maker": "片商",
+      "date": "日期",
+      "series": "系列",
+      "duration": "片長",
+      "director": "導演",
+      "label": "發行"
+    },
+    "table": {
+      "col_number": "番號",
+      "col_title": "標題",
+      "col_actor": "女優",
+      "col_maker": "片商",
+      "col_director": "導演",
+      "col_duration": "片長",
+      "col_date": "日期",
+      "col_tags": "標籤",
+      "col_size": "大小"
+    },
+    "lightbox": {
+      "close": "關閉 (ESC)",
+      "prev": "上一部 (←)",
+      "next": "下一部 (→)",
+      "unknown_number": "未知"
+    },
+    "gallery": {
+      "prev": "上一張 (←)",
+      "next": "下一張 (→)",
+      "sample_prefix": "劇照",
+      "sample_alt": "樣品圖",
+      "thumb_alt": "縮圖"
+    },
+    "shortcut": {
+      "switch_mode": "切換模式",
+      "toggle_info": "顯示資訊",
+      "pagination": "翻頁",
+      "close": "關閉"
+    }
   }
 }

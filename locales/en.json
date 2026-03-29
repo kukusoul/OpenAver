@@ -125,5 +125,102 @@
       "acknowledge": "Got it",
       "go_settings": "Go to Settings"
     }
+  },
+  "showcase": {
+    "page_title": "Browse",
+    "placeholder": {
+      "search": "Search ID, actress, title..."
+    },
+    "action": {
+      "clear_search": "Clear Search",
+      "search": "Search",
+      "toggle_order": "Toggle Sort Order",
+      "toggle_info": "Show/Hide Info (S)",
+      "play_video": "Open Video",
+      "play": "Play"
+    },
+    "toolbar": {
+      "sort_prefix": "Sort",
+      "mode_prefix": "Mode",
+      "per_page_prefix": "Per page"
+    },
+    "sort": {
+      "date": "Date",
+      "num": "ID",
+      "title": "Title",
+      "actor": "Actress",
+      "maker": "Maker",
+      "size": "Size",
+      "mdate": "Modified",
+      "random": "Random"
+    },
+    "mode": {
+      "grid": "Grid",
+      "table": "Table",
+      "list": "List"
+    },
+    "unit": {
+      "videos": "",
+      "minutes": "min",
+      "minutes_abbr": "min"
+    },
+    "per_page": {
+      "all": "All"
+    },
+    "status": {
+      "total_prefix": "",
+      "total_suffix": "videos",
+      "search_prefix": "Search \"",
+      "search_middle": "\" — Found",
+      "search_suffix": ""
+    },
+    "nav": {
+      "prev_page": "Previous",
+      "next_page": "Next"
+    },
+    "grid": {
+      "unknown_actor": "Unknown",
+      "unknown_title": "Unknown Title",
+      "unknown_size": "Unknown"
+    },
+    "label": {
+      "actor": "Actress",
+      "maker": "Maker",
+      "date": "Date",
+      "series": "Series",
+      "duration": "Duration",
+      "director": "Director",
+      "label": "Label"
+    },
+    "table": {
+      "col_number": "ID",
+      "col_title": "Title",
+      "col_actor": "Actress",
+      "col_maker": "Maker",
+      "col_director": "Director",
+      "col_duration": "Duration",
+      "col_date": "Date",
+      "col_tags": "Tags",
+      "col_size": "Size"
+    },
+    "lightbox": {
+      "close": "Close (ESC)",
+      "prev": "Previous (←)",
+      "next": "Next (→)",
+      "unknown_number": "Unknown"
+    },
+    "gallery": {
+      "prev": "Previous (←)",
+      "next": "Next (→)",
+      "sample_prefix": "Sample",
+      "sample_alt": "Sample Image",
+      "thumb_alt": "Thumbnail"
+    },
+    "shortcut": {
+      "switch_mode": "Switch Mode",
+      "toggle_info": "Toggle Info",
+      "pagination": "Pagination",
+      "close": "Close"
+    }
   }
 }

@@ -3958,7 +3958,8 @@ class TestShowcaseReactiveScopeGuard:
             cleaned = line
             for allowed in ['paginatedVideos', 'currentLightboxVideo', 'videoCount', 'filteredCount',
                             'fetchVideos', 'prevLightboxVideo', 'nextLightboxVideo',
-                            'openLightbox', 'closeLightbox', 'playVideo']:
+                            'openLightbox', 'closeLightbox', 'playVideo',
+                            'showcase.unit.videos']:
                 cleaned = cleaned.replace(allowed, '')
             # Now check for bare 'videos' (word boundary)
             if re.search(r'\bvideos\b', cleaned):
