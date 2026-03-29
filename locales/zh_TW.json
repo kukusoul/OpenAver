@@ -620,5 +620,21 @@
       "check_update_failed": "檢查失敗，請稍後再試",
       "check_update_network_error": "無法連線，請稍後再試"
     }
+  },
+  "tutorial": {
+    "close": "關閉",
+    "skip": "跳過",
+    "next": "下一步 →",
+    "done": "完成 🎉",
+    "step1_title": "💡 搜尋功能",
+    "step1_content": "輸入番號（如 SONE-001）或女優名稱<br>也可拖入檔案，自動提取番號並搜尋",
+    "step2_title": "📁 批次處理",
+    "step2_content": "加入多個檔案，一次搜尋 20 個<br>支援我的最愛資料夾快速載入",
+    "step3_title": "📝 列表生成",
+    "step3_content": "掃描本地資料夾，生成精美的 HTML 展示頁<br>自動補全 NFO 檔案",
+    "step4_title": "⚙️ 個人化設定",
+    "step4_content": "切換 Dark Mode、設定我的最愛資料夾<br>調整介面與功能偏好",
+    "step5_title": "🎬 立即體驗！",
+    "step5_content": "拖放 <code>教學檔案</code> 資料夾<br>或其中任一 <code>.mp4</code> 檔案到此視窗<br><br><small class=\"text-muted\">內含 11 個真實可搜尋的範例</small>"
   }
 }
