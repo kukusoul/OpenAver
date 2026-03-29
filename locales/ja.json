@@ -197,7 +197,7 @@
       "select_folder_title": "フォルダを選択",
       "output_filename_label": "出力ファイル名",
       "default_mode_label": "デフォルト表示モード",
-      "mode_image": "グリッドモード",
+      "mode_image": "画像モード",
       "mode_detail": "詳細モード",
       "mode_text": "テキストモード",
       "default_sort_label": "デフォルト並び替え",
@@ -304,7 +304,7 @@
       "body": "フォルダリストを変更しましたが、ページを生成していません。どうしますか？",
       "cancel": "キャンセル",
       "discard": "変更を破棄",
-      "save": "保存して離開"
+      "save": "保存して終了"
     },
     "clear_cache_modal": {
       "title": "動画キャッシュをクリア",
@@ -439,7 +439,7 @@
       "grid_switch": "検索後にカバーウォール表示に切り替え可能、カバーをクリックして Lightbox を開く",
       "grid_lightbox": "<strong>Lightbox</strong>：全画面カバー表示。<kbd class=\"kbd kbd-sm\">←</kbd> <kbd class=\"kbd kbd-sm\">→</kbd> でナビゲート、<kbd class=\"kbd kbd-sm\">Esc</kbd> で閉じる",
       "grid_detail": "Lightbox には監督・再生時間・シリーズ・レーベルなどの詳細情報を表示（データがある場合のみ）",
-      "grid_gallery": "「スチール」ボタンでサンプル画像ギャラリーを開く。キーボード <kbd class=\"kbd kbd-sm\">←</kbd> <kbd class=\"kbd kbd-sm\">→</kbd> とスワイプに対応",
+      "grid_gallery": "「サンプル」ボタンでサンプル画像ギャラリーを開く。キーボード <kbd class=\"kbd kbd-sm\">←</kbd> <kbd class=\"kbd kbd-sm\">→</kbd> とスワイプに対応",
       "badge_keywords": "ファイル名に <code>-4k</code> や <code>-uc</code> などのキーワードが含まれると、結果カードにカラーバッジが表示される"
     },
     "batch": {
@@ -498,7 +498,7 @@
       "trigger_setting": "設定でギャラリーモードを有効化",
       "feat_hero": "<strong>ヒーローカード</strong>：女優プロフィールを表示（カップ、身長、スリーサイズ、誕生日）",
       "feat_browse": "<strong>ギャラリーブラウズ</strong>：カバー画像で作品一覧を表示",
-      "feat_back": "<strong>クイック戻り</strong>：「← 詳細に戻る」をクリックして通常モードに戻る",
+      "feat_back": "<strong>すばやく戻る</strong>：「← 詳細に戻る」をクリックして通常モードに戻る",
       "diff_gallery": "<strong>ギャラリーモード</strong>（自動）：結果が 10 以上かつ女優が一致する場合に自動切替",
       "diff_grid": "<strong>グリッドモード</strong>（手動）：どの検索結果もカバーウォール表示に手動切替可能",
       "diff_grid_nav": "グリッドモードは Lightbox ナビゲーションに対応（<kbd class=\"kbd kbd-sm\">←</kbd> <kbd class=\"kbd kbd-sm\">→</kbd> で切替）"
@@ -536,7 +536,7 @@
       "other_lightbox": "Lightbox 全画面カバー表示（<kbd class=\"kbd kbd-sm\">←</kbd> <kbd class=\"kbd kbd-sm\">→</kbd> でナビゲート）",
       "other_lightbox_detail": "Lightbox には監督・再生時間・シリーズ・レーベルなどの詳細情報を表示",
       "other_table_cols": "テーブルモードに「監督」と「再生時間」列を追加",
-      "other_gallery": "Lightbox からサンプル画像ギャラリーを開く（「スチール」ボタンをクリック）",
+      "other_gallery": "Lightbox からサンプル画像ギャラリーを開く（「サンプル」ボタンをクリック）",
       "other_per_page": "1 ページの表示数は<strong>設定ページ</strong>で調整可能"
     },
     "shortcuts": {
@@ -560,8 +560,8 @@
     },
     "scraper": {
       "title": "スクレイパーのソース",
-      "h6_censored": "有碼ソース",
-      "h6_uncensored": "無碼ソース",
+      "h6_censored": "有修正ソース",
+      "h6_uncensored": "無修正ソース",
       "h6_default_source": "デフォルト検索ソース",
       "h6_dmm_fuzzy": "DMM あいまい検索",
       "h6_proxy_direct": "Proxy ダイレクトモード",
@@ -572,14 +572,14 @@
       "uncensored_d2pass": "<strong>D2Pass</strong>：1Pondo / Caribbeancom / 10musume の 3 サイトをカバー",
       "uncensored_heyzo": "<strong>HEYZO</strong>：独立ソース",
       "uncensored_fc2": "<strong>FC2</strong>：FC2-PPV 専用",
-      "uncensored_avsox": "<strong>AVSOX</strong>：汎用無碼ソース",
+      "uncensored_avsox": "<strong>AVSOX</strong>：汎用無修正ソース",
       "default_source_set": "設定ページで <strong>JavBus</strong> または <strong>DMM</strong> をメイン検索ソースに設定可能",
       "default_source_effect": "メインソースに設定すると、完全一致検索でそのソースのデータが優先される",
       "dmm_fuzzy_trigger": "検索ボックスに日本語の女優名やメーカー名を入力すると DMM あいまい検索も同時にトリガーされる",
       "dmm_fuzzy_prereq": "前提：DMM が有効になっていること（Proxy または <code>direct</code> モードが必要）",
       "proxy_direct_vpn": "日本の VPN に接続中、または日本にいる場合、別途 Proxy を設定する必要はありません",
       "proxy_direct_how": "設定ページの Proxy フィールドに <code>direct</code> と入力するだけで DMM を直接有効化できます",
-      "toggle_uncensored": "<strong>設定ページ</strong>で「無碼モード」トグルを有効にすると、検索時に無碼ソースが優先される",
+      "toggle_uncensored": "<strong>設定ページ</strong>で「無修正モード」トグルを有効にすると、検索時に無修正ソースが優先される",
       "col_source": "ソース",
       "col_format": "フォーマット",
       "col_example": "例"

@@ -158,7 +158,7 @@
       "ollama_local": "（本地）",
       "gemini_cloud": "（Google 云端）",
       "model_label": "模型",
-      "test_connection_placeholder": "请先测试连线",
+      "test_connection_placeholder": "请先测试连接",
       "test_model_title": "测试模型",
       "test_translation_title": "测试翻译功能",
       "test_apikey_placeholder": "请先测试 API Key",
@@ -280,7 +280,7 @@
       "clear_cache_title": "清除缓存",
       "nfo_prefix": "需补全:",
       "nfo_suffix": "部",
-      "nfo_update_title": "补全 NFO 资讯",
+      "nfo_update_title": "补全 NFO 信息",
       "jellyfin_prefix": "需补齐图片:",
       "jellyfin_suffix": "部",
       "jellyfin_update_title": "补齐 Jellyfin poster + fanart",
@@ -535,7 +535,7 @@
       "sort_search": "<strong>搜索</strong>：支持番号、女优、标题等关键字筛选",
       "other_lightbox": "Lightbox 全屏封面检视（<kbd class=\"kbd kbd-sm\">←</kbd> <kbd class=\"kbd kbd-sm\">→</kbd> 导航）",
       "other_lightbox_detail": "Lightbox 显示导演、片长、系列、Label 等详细信息",
-      "other_table_cols": "Table 模式新增「导演」和「片长」栏位",
+      "other_table_cols": "Table 模式新增「导演」和「片长」栏",
       "other_gallery": "Lightbox 可开启剧照浏览（点击「剧照」按钮）",
       "other_per_page": "每页显示数量可在<strong>设置页</strong>调整"
     },
@@ -567,7 +567,7 @@
       "h6_proxy_direct": "Proxy direct 模式",
       "h6_toggle": "切换模式",
       "h6_format": "番号格式范例",
-      "censored_dmm": "<strong>DMM</strong>：需设置日本 IP Proxy（<strong>设置页</strong> → Proxy 栏位）",
+      "censored_dmm": "<strong>DMM</strong>：需设置日本 IP Proxy（<strong>设置页</strong> → Proxy 栏）",
       "censored_others": "<strong>JavBus</strong>、<strong>Jav321</strong>、<strong>JavDB</strong>：直接可用",
       "uncensored_d2pass": "<strong>D2Pass</strong>：涵盖 1Pondo / Caribbeancom / 10musume 三站",
       "uncensored_heyzo": "<strong>HEYZO</strong>：独立来源",
@@ -578,7 +578,7 @@
       "dmm_fuzzy_trigger": "在搜索框输入日文女优名或片商名时，会同时触发 DMM 模糊搜索",
       "dmm_fuzzy_prereq": "前提：DMM 已启用（需设置 Proxy 或使用 <code>direct</code> 模式）",
       "proxy_direct_vpn": "如果您已连接日本 VPN 或本身位于日本，不需要另外设置 Proxy",
-      "proxy_direct_how": "只要在设置页的 Proxy 栏位输入 <code>direct</code>，即可直接启用 DMM 功能",
+      "proxy_direct_how": "只要在设置页的 Proxy 栏输入 <code>direct</code>，即可直接启用 DMM 功能",
       "toggle_uncensored": "在<strong>设置页</strong>开启「无码模式」toggle，搜索时将优先使用无码来源",
       "col_source": "来源",
       "col_format": "格式",
@@ -603,15 +603,15 @@
       "report_debug_1": "执行 <code>OpenAver_Debug.bat</code>",
       "report_debug_2": "重现问题",
       "report_debug_3": "将日志文件与错误信息回报到 <a href=\"https://github.com/slive777/OpenAver/issues\" target=\"_blank\" rel=\"noopener noreferrer\">GitHub Issues</a>",
-      "dmm_proxy": "DMM 需要日本 IP，请在<strong>设置页</strong> → Proxy 栏位填入日本 IP 代理",
-      "dmm_direct": "若已连接 VPN 或日本网络，也可以在 Proxy 栏位输入 <code>direct</code> 直接启用，不需要填写 Proxy 地址。",
+      "dmm_proxy": "DMM 需要日本 IP，请在<strong>设置页</strong> → Proxy 栏填入日本 IP 代理",
+      "dmm_direct": "若已连接 VPN 或日本网络，也可以在 Proxy 栏输入 <code>direct</code> 直接启用，不需要填写 Proxy 地址。",
       "translate_ollama": "<strong>Ollama</strong>：确认 Ollama 应用程序已启动（Windows 需手动开启）",
       "translate_gemini": "<strong>Gemini</strong>：确认 API Key 已在<strong>设置页</strong>正确设置"
     },
     "js": {
       "version_load_failed": "无法载入",
       "check_update_failed": "检查失败，请稍后再试",
-      "check_update_network_error": "无法连线，请稍后再试"
+      "check_update_network_error": "无法连接，请稍后再试"
     }
   }
 }
