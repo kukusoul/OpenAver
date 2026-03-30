@@ -105,6 +105,24 @@
       "has_local": "Available locally (click to open folder)",
       "has_local_count": "{count} local versions available (click to open folder)"
     },
+    "button": {
+      "search_all": "Search All",
+      "continue": "Continue",
+      "pause": "Pause",
+      "retry_failed": "Retry Failed ({count})",
+      "search_range": "Search {start}-{end} / {total}",
+      "translating_progress": "Translating ({processed}/{total})",
+      "translate_all_count": "Translate All ({count})",
+      "searching": "Searching..."
+    },
+    "mode": {
+      "exact": "Exact ID Search",
+      "partial": "Partial ID Search",
+      "prefix": "Series Search",
+      "actress": "Fuzzy Search",
+      "keyword": "Full-text Search",
+      "uncensored": "Uncensored Search"
+    },
     "filelist": {
       "search_all_title": "Search all unsearched files",
       "translate_all_title": "Translate all Japanese titles",
@@ -115,7 +133,13 @@
       "scrape_nfo": "Generate NFO + Cover",
       "failed": "Failed",
       "retry": "Retry",
-      "enter_number": "Enter ID manually"
+      "enter_number": "Enter ID manually",
+      "file_count": "File {current}/{total}",
+      "result_count": "Results ({count})",
+      "unrecognized": "Cannot identify ID: {filename}",
+      "not_found": "No data found for {number}",
+      "search_failed": "Search Failed",
+      "connection_error": "Connection error, please try again later"
     },
     "duplicate": {
       "title": "Duplicate File",

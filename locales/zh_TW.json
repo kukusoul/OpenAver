@@ -105,6 +105,24 @@
       "has_local": "本地已有（點擊開啟資料夾）",
       "has_local_count": "本地已有 {count} 個版本（點擊開啟資料夾）"
     },
+    "button": {
+      "search_all": "搜尋全部",
+      "continue": "繼續",
+      "pause": "暫停",
+      "retry_failed": "重試失敗 ({count})",
+      "search_range": "搜尋 {start}-{end} / {total}",
+      "translating_progress": "翻譯中 ({processed}/{total})",
+      "translate_all_count": "翻譯全部 ({count})",
+      "searching": "搜尋中..."
+    },
+    "mode": {
+      "exact": "完整番號搜尋",
+      "partial": "部分番號搜尋",
+      "prefix": "系列搜尋",
+      "actress": "模糊搜尋",
+      "keyword": "全文搜尋",
+      "uncensored": "無碼搜尋"
+    },
     "filelist": {
       "search_all_title": "搜尋所有未搜尋的檔案",
       "translate_all_title": "翻譯所有日文標題",
@@ -115,7 +133,13 @@
       "scrape_nfo": "產生 NFO + 封面",
       "failed": "失敗",
       "retry": "重試",
-      "enter_number": "手動輸入番號"
+      "enter_number": "手動輸入番號",
+      "file_count": "檔案 {current}/{total}",
+      "result_count": "搜尋結果 ({count})",
+      "unrecognized": "無法識別番號: {filename}",
+      "not_found": "找不到 {number} 的資料",
+      "search_failed": "搜尋失敗",
+      "connection_error": "連線錯誤，請稍後再試"
     },
     "duplicate": {
       "title": "檔案重複",

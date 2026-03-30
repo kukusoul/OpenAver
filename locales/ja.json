@@ -105,6 +105,24 @@
       "has_local": "ローカルに存在（クリックしてフォルダを開く）",
       "has_local_count": "ローカルに {count} バージョン存在（クリックしてフォルダを開く）"
     },
+    "button": {
+      "search_all": "すべて検索",
+      "continue": "続行",
+      "pause": "一時停止",
+      "retry_failed": "失敗を再試行 ({count})",
+      "search_range": "検索 {start}-{end} / {total}",
+      "translating_progress": "翻訳中 ({processed}/{total})",
+      "translate_all_count": "すべて翻訳 ({count})",
+      "searching": "検索中..."
+    },
+    "mode": {
+      "exact": "完全品番検索",
+      "partial": "部分品番検索",
+      "prefix": "シリーズ検索",
+      "actress": "あいまい検索",
+      "keyword": "全文検索",
+      "uncensored": "無修正検索"
+    },
     "filelist": {
       "search_all_title": "未検索のファイルをすべて検索",
       "translate_all_title": "すべての日本語タイトルを翻訳",
@@ -115,7 +133,13 @@
       "scrape_nfo": "NFO + カバーを生成",
       "failed": "失敗",
       "retry": "再試行",
-      "enter_number": "番号を手動入力"
+      "enter_number": "番号を手動入力",
+      "file_count": "ファイル {current}/{total}",
+      "result_count": "検索結果 ({count})",
+      "unrecognized": "品番を識別できません: {filename}",
+      "not_found": "{number} のデータが見つかりません",
+      "search_failed": "検索失敗",
+      "connection_error": "接続エラー、後でもう一度お試しください"
     },
     "duplicate": {
       "title": "ファイルが重複しています",
