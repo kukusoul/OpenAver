@@ -22,12 +22,13 @@ Scanner API 路由 - 影片列表生成
 
 import json
 import os
+from datetime import datetime
 from urllib.parse import unquote, quote
 from pathlib import Path
-from typing import Generator
+from typing import Generator, List, Optional
 
 from fastapi import APIRouter, Query, Request
-from fastapi.responses import StreamingResponse, HTMLResponse, Response, FileResponse
+from fastapi.responses import StreamingResponse, HTMLResponse, Response, FileResponse, JSONResponse
 
 from core.gallery_scanner import VideoScanner, fast_scan_directory, VideoInfo
 from core.video_extensions import get_proxy_extensions, get_video_extensions
@@ -37,6 +38,7 @@ from core.nfo_updater import check_cache_needs_update, update_videos_generator, 
 from core.database import VideoRepository, Video, init_db, get_db_path, migrate_json_to_sqlite, ActressAliasRepository
 from core.organizer import generate_jellyfin_images
 from core.config import load_config
+from core.scraper import smart_search
 from pydantic import BaseModel
 from core.logger import get_logger
 
@@ -1004,3 +1006,145 @@ async def jellyfin_image_update():
             "Connection": "keep-alive",
         }
     )
+
+
+class GenerateFromIdsRequest(BaseModel):
+    numbers: List[str]
+    title: str = "Custom Gallery"
+    mode: str = "image"
+    sort: str = "date"
+
+
+_VALID_MODES = {"image", "detail", "text"}
+_VALID_SORTS = {"date", "num", "title"}
+
+
+@router.post("/generate-from-ids", summary="番號列表產生自訂 Gallery HTML")
+def generate_from_ids(body: GenerateFromIdsRequest):
+    """
+    根據番號列表產生自訂 Gallery HTML 頁面。
+
+    - DB 有資料的番號直接組裝；DB 沒有的即時 scrape。
+    - 輸出路徑：output/gallery_custom_{timestamp}.html
+
+    回傳：
+    ```json
+    {
+      "success": true,
+      "html_path": "/abs/path/to/gallery_custom_20260331_120000.html",
+      "video_count": 12,
+      "missing": ["FAKE-999"]
+    }
+    ```
+    """
+    numbers = [n.strip() for n in body.numbers if isinstance(n, str) and n.strip()]
+
+    if not numbers:
+        return JSONResponse(status_code=400, content={"success": False, "error": "numbers 不可為空"})
+
+    if len(numbers) > 100:
+        return JSONResponse(status_code=422, content={"success": False, "error": "最多支援 100 筆"})
+
+    if body.mode not in _VALID_MODES:
+        return JSONResponse(status_code=422, content={
+            "success": False,
+            "error": f"mode 必須是 {sorted(_VALID_MODES)} 之一"
+        })
+
+    if body.sort not in _VALID_SORTS:
+        return JSONResponse(status_code=422, content={
+            "success": False,
+            "error": f"sort 必須是 {sorted(_VALID_SORTS)} 之一"
+        })
+
+    config = load_config()
+    gallery_config = config.get('gallery', {})
+    output_dir = gallery_config.get('output_dir', 'output')
+    theme = config.get('general', {}).get('theme', 'light')
+
+    # 查 DB
+    try:
+        db_path = get_db_path()
+        repo = VideoRepository(db_path)
+        db_results = repo.get_by_numbers(numbers)
+    except Exception as e:
+        logger.error('generate_from_ids: DB 查詢失敗: %s', e)
+        return JSONResponse(status_code=500, content={"success": False, "error": "資料庫查詢失敗"})
+
+    all_videos: List[VideoInfo] = []
+    missing: List[str] = []
+
+    for num in numbers:
+        db_videos = db_results.get(num)
+        if db_videos:
+            v = db_videos[0]
+            info = VideoInfo(
+                path=v.path,
+                title=v.title or '',
+                originaltitle=v.original_title or '',
+                actor=','.join(v.actresses) if v.actresses else '',
+                num=v.number or num,
+                maker=v.maker or '',
+                date=v.release_date or '',
+                genre=','.join(v.tags) if v.tags else '',
+                size=v.size_bytes or 0,
+                mtime=int(v.mtime * 10000000 + 116444736000000000) if v.mtime else 0,
+                img=v.cover_path or ''
+            )
+            all_videos.append(info)
+        else:
+            # DB miss → 即時 scrape
+            try:
+                scrape_results = smart_search(num, limit=1)
+            except Exception as e:
+                logger.error('generate_from_ids: scrape %s failed: %s', num, e)
+                scrape_results = []
+
+            if scrape_results:
+                r = scrape_results[0]
+                info = VideoInfo(
+                    path='',
+                    title=r.get('title', ''),
+                    originaltitle=r.get('original_title', ''),
+                    actor=','.join(r.get('actors', [])) if isinstance(r.get('actors'), list) else r.get('actors', ''),
+                    num=r.get('number', num),
+                    maker=r.get('maker', ''),
+                    date=r.get('date', ''),
+                    genre=','.join(r.get('genres', [])) if isinstance(r.get('genres'), list) else r.get('genre', ''),
+                    size=0,
+                    mtime=0,
+                    img=r.get('cover_url', '')
+                )
+                all_videos.append(info)
+            else:
+                missing.append(num)
+
+    # 確保輸出目錄存在
+    project_root = Path(__file__).parent.parent.parent
+    output_path = project_root / output_dir
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    html_filename = f'gallery_custom_{timestamp}.html'
+    html_path = output_path / html_filename
+
+    try:
+        generator = HTMLGenerator()
+        generator.generate(
+            all_videos,
+            str(html_path),
+            title=body.title,
+            mode=body.mode,
+            sort=body.sort,
+            theme=theme,
+        )
+    except Exception as e:
+        logger.error('generate_from_ids: HTML 產生失敗: %s', e)
+        return JSONResponse(status_code=500, content={"success": False, "error": "HTML 產生失敗"})
+
+    return {
+        "success": True,
+        "html_path": str(html_path),
+        "video_count": len(all_videos),
+        "missing": missing
+    }
