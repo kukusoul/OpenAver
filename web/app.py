@@ -3,6 +3,7 @@ OpenAver Web GUI - FastAPI Application
 """
 from pathlib import Path
 import re
+import socket
 
 from fastapi import FastAPI, Request
 from fastapi.responses import RedirectResponse
@@ -17,6 +18,19 @@ from core.logger import setup_logging, get_logger
 setup_logging()
 
 logger = get_logger(__name__)
+
+
+def _get_lan_ip() -> str:
+    """取得區域網路 IP，失敗時 fallback 127.0.0.1"""
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        return "127.0.0.1"
+
 
 # 路徑設定
 BASE_DIR = Path(__file__).parent
@@ -186,6 +200,8 @@ async def help_page(request: Request):
     """使用說明頁面"""
     context = get_common_context(request)
     context["page"] = "help"
+    context["lan_ip"] = _get_lan_ip()
+    context["port"] = request.url.port or 38741
     return templates.TemplateResponse(request, "help.html", context)
 
 
