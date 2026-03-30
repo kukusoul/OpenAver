@@ -997,6 +997,37 @@ class TestSearchDiscovery:
         assert data.get('discovery') is True
         assert data['success'] is False
 
+    def test_discovery_auto_mode_with_number_format_ignores_discovery(self, client, mocker):
+        """discovery=true + auto mode + 番號格式 → smart_search 走 exact 路徑，回傳完整結果"""
+        mock_result = {'number': 'SONE-100', 'title': 'Full Title', '_mode': 'exact'}
+
+        received = {}
+
+        def mock_smart_search(q, limit=20, offset=0, discovery_only=False, **kwargs):
+            received['discovery_only'] = discovery_only
+            received['q'] = q
+            return [mock_result]
+
+        mocker.patch('web.routers.search.smart_search', side_effect=mock_smart_search)
+
+        # auto mode（不帶 mode 參數）+ 番號格式 + discovery=true
+        response = client.get('/api/search', params={'q': 'SONE-100', 'discovery': 'true'})
+        assert response.status_code == 200
+        data = response.json()
+
+        # smart_search 被呼叫（auto 路徑，非直接走 search_jav）
+        assert received.get('q') == 'SONE-100', \
+            "smart_search should be called with the query"
+
+        # 回傳完整搜尋結果（success: true，data 含完整番號資料）
+        assert data['success'] is True
+        assert data['total'] >= 1
+        assert data['data'][0]['number'] == 'SONE-100'
+
+        # auto mode 偵測到番號格式，detected_mode 應為 exact
+        assert data.get('mode') == 'exact', \
+            f"Auto mode with number format should detect as exact, got {data.get('mode')}"
+
 
 # ============ POST /api/batch-search ============
 
@@ -1094,3 +1125,28 @@ class TestBatchSearch:
         assert 'total' in data['summary']
         assert 'found' in data['summary']
         assert 'not_found' in data['summary']
+
+    def test_batch_search_dedup_numbers(self, client, mocker):
+        """重複番號去重：["SONE-100", "SONE-100", "SONE-101"] 只呼叫 smart_search 兩次"""
+        def mock_smart_search(q, limit=1, **kwargs):
+            return [{'number': q, 'title': f'Title for {q}', 'found': True}]
+
+        mock = mocker.patch('web.routers.search.smart_search', side_effect=mock_smart_search)
+
+        response = client.post('/api/batch-search', json={
+            'numbers': ['SONE-100', 'SONE-100', 'SONE-101']
+        })
+        assert response.status_code == 200
+        data = response.json()
+
+        # smart_search 只被呼叫 2 次（去重後）
+        assert mock.call_count == 2, \
+            f"Expected 2 calls (deduped), got {mock.call_count}"
+
+        # results 有 2 個 key（SONE-100 和 SONE-101）
+        assert set(data['results'].keys()) == {'SONE-100', 'SONE-101'}, \
+            f"Expected keys {{SONE-100, SONE-101}}, got {set(data['results'].keys())}"
+
+        # summary.total 是去重後的數量（2），不是原始輸入數量（3）
+        assert data['summary']['total'] == 2, \
+            f"Expected summary.total == 2 (deduped), got {data['summary']['total']}"
