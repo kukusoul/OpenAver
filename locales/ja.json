@@ -268,6 +268,25 @@
       "body": "保存されていない変更があります。どうしますか？",
       "discard": "保存しない",
       "save": "変更を保存"
+    },
+    "status": {
+      "loading_models": "モデル読込中...",
+      "connecting": "接続中...",
+      "testing": "テスト中...",
+      "connection_failed": "接続失敗",
+      "no_models": "利用可能なモデルなし",
+      "n_models": "{count} モデル",
+      "enter_url": "URLを入力してください",
+      "enter_api_key": "API Keyを入力してください",
+      "select_model": "モデルを選択してください",
+      "network_error": "✗ ネットワークエラー",
+      "connect_failed": "接続失敗",
+      "connected_n_models": "接続済み、{count} モデル",
+      "enter_api_key_first": "API Keyを入力してください",
+      "gemini_n_flash_models": "{count} 個の Flash モデル",
+      "test_failed": "テスト失敗: {msg}",
+      "testing_translation": "翻訳テスト中...",
+      "translation_success": "翻訳テスト成功！ ({translation})"
     }
   },
   "scanner": {
@@ -644,5 +663,21 @@
       "check_update_failed": "確認に失敗しました。後でもう一度お試しください",
       "check_update_network_error": "ネットワークエラー。後でもう一度お試しください"
     }
+  },
+  "tutorial": {
+    "close": "閉じる",
+    "skip": "スキップ",
+    "next": "次へ →",
+    "done": "完了 🎉",
+    "step1_title": "💡 検索機能",
+    "step1_content": "品番（例: SONE-001）または女優名を入力<br>ファイルをドロップすると品番を自動抽出して検索",
+    "step2_title": "📁 一括処理",
+    "step2_content": "複数ファイルを追加し、一度に20件検索<br>お気に入りフォルダからの読み込みに対応",
+    "step3_title": "📝 リスト生成",
+    "step3_content": "ローカルフォルダをスキャンし、HTML展示ページを生成<br>NFOファイルを自動補完",
+    "step4_title": "⚙️ カスタマイズ",
+    "step4_content": "Dark Modeの切替、お気に入りフォルダの設定<br>UIと機能の設定を調整",
+    "step5_title": "🎬 さっそく体験！",
+    "step5_content": "<code>チュートリアル</code>フォルダ<br>または任意の<code>.mp4</code>ファイルをこのウィンドウにドロップ<br><br><small class=\"text-muted\">検索可能な11個の実例を収録</small>"
   }
 }

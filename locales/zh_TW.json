@@ -268,6 +268,25 @@
       "body": "您有修改尚未儲存，要如何處理？",
       "discard": "不儲存",
       "save": "儲存更改"
+    },
+    "status": {
+      "loading_models": "載入模型中...",
+      "connecting": "連線中...",
+      "testing": "測試中...",
+      "testing_translation": "測試翻譯中...",
+      "connection_failed": "無法連線",
+      "connect_failed": "連接失敗",
+      "no_models": "無可用模型",
+      "n_models": "{count} 個模型",
+      "connected_n_models": "已連線，{count} 個模型",
+      "gemini_n_flash_models": "找到 {count} 個 Flash 模型",
+      "enter_url": "請輸入 URL",
+      "enter_api_key": "請輸入 API Key",
+      "enter_api_key_first": "請先輸入 API Key",
+      "select_model": "請先選擇模型",
+      "network_error": "✗ 網路錯誤，請稍後再試",
+      "translation_success": "翻譯測試成功！ ({translation})",
+      "test_failed": "測試失敗: {msg}"
     }
   },
   "scanner": {
