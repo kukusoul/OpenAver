@@ -33,6 +33,8 @@ EXPECTED_TOOL_NAMES = {
     "generate_gallery",
     "local_status",
     "parse_filename",
+    "enrich_single",
+    "collection_sql",
 }
 
 REQUIRED_TOOL_FIELDS = [
@@ -79,9 +81,9 @@ class TestCapabilitiesEndpoint:
         data = client.get("/api/capabilities").json()
         assert "retry_hint" in data["error_format"]
 
-    def test_tools_count_is_6(self, client):
+    def test_tools_count_is_8(self, client):
         data = client.get("/api/capabilities").json()
-        assert len(data["tools"]) == 6
+        assert len(data["tools"]) == 8
 
     def test_all_tool_names_present(self, client):
         data = client.get("/api/capabilities").json()
@@ -160,17 +162,47 @@ class TestCapabilitiesEndpoint:
         data = client.get("/api/capabilities").json()
         assert data["name"] == "OpenAver"
 
-    def test_enrich_single_not_in_tools(self, client):
-        """38b-1 不含 enrich_single"""
+    def test_enrich_single_has_side_effect_flags(self, client):
+        """enrich_single 有正確的 side_effect 旗標"""
         data = client.get("/api/capabilities").json()
-        names = {t["name"] for t in data["tools"]}
-        assert "enrich_single" not in names
+        tool = next(t for t in data["tools"] if t["name"] == "enrich_single")
+        assert tool.get("side_effect") is True
+        assert tool.get("idempotent") is True
+        assert tool.get("retry_safe") is True
+        assert tool.get("confirmation_required") is False
 
-    def test_collection_sql_not_in_tools(self, client):
-        """38b-1 不含 collection_sql"""
+    def test_enrich_single_input_schema(self, client):
+        """enrich_single input_schema 含必要欄位"""
         data = client.get("/api/capabilities").json()
-        names = {t["name"] for t in data["tools"]}
-        assert "collection_sql" not in names
+        tool = next(t for t in data["tools"] if t["name"] == "enrich_single")
+        props = tool["input_schema"]["properties"]
+        for key in ["file_path", "number", "mode", "write_nfo", "write_cover",
+                    "write_extrafanart", "overwrite_existing"]:
+            assert key in props, f"enrich_single missing input property: {key}"
+        assert "file_path" in tool["input_schema"]["required"]
+
+    def test_collection_sql_has_database_schema(self, client):
+        """collection_sql 含 database_schema 且有 videos 表"""
+        data = client.get("/api/capabilities").json()
+        tool = next(t for t in data["tools"] if t["name"] == "collection_sql")
+        assert "database_schema" in tool, "collection_sql 缺少 database_schema"
+        assert "videos" in tool["database_schema"], "database_schema 缺少 videos 表"
+
+    def test_collection_sql_has_sql_examples(self, client):
+        """collection_sql 含 sql_examples 且至少 4 個"""
+        data = client.get("/api/capabilities").json()
+        tool = next(t for t in data["tools"] if t["name"] == "collection_sql")
+        assert "sql_examples" in tool, "collection_sql 缺少 sql_examples"
+        assert len(tool["sql_examples"]) >= 4, (
+            f"sql_examples 至少需要 4 個，目前只有 {len(tool['sql_examples'])} 個"
+        )
+
+    def test_examples_count_at_least_8(self, client):
+        """examples 陣列至少 8 個 scenario"""
+        data = client.get("/api/capabilities").json()
+        assert len(data["examples"]) >= 8, (
+            f"examples 至少需要 8 個，目前只有 {len(data['examples'])} 個"
+        )
 
     def test_translate_not_in_tools(self, client):
         """translate 不揭露"""
