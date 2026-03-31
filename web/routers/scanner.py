@@ -20,8 +20,10 @@ Scanner API 路由 - 影片列表生成
 - GET  /api/gallery/jellyfin-update       — 批次產生 Jellyfin poster + fanart（SSE 串流）
 """
 
+import base64
 import json
 import os
+import requests
 from datetime import datetime
 from urllib.parse import unquote, quote
 from pathlib import Path
@@ -36,7 +38,7 @@ from core.gallery_generator import HTMLGenerator
 from core.path_utils import normalize_path, to_file_uri, is_path_under_dir, uri_to_fs_path
 from core.nfo_updater import check_cache_needs_update, update_videos_generator, apply_actress_aliases_generator
 from core.database import VideoRepository, Video, init_db, get_db_path, migrate_json_to_sqlite, ActressAliasRepository
-from core.organizer import generate_jellyfin_images
+from core.organizer import generate_jellyfin_images, HEADERS as _EMBED_HEADERS
 from core.config import load_config
 from core.scraper import smart_search
 from pydantic import BaseModel
@@ -1008,11 +1010,73 @@ async def jellyfin_image_update():
     )
 
 
+_MIME_MAP = {
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.png': 'image/png',
+    '.webp': 'image/webp',
+}
+
+
+_REFERER_MAP = {
+    'javbus.com': 'https://www.javbus.com/',
+    'dmm.co.jp': 'https://www.dmm.co.jp/',
+    'jav321.com': 'https://www.jav321.com/',
+}
+
+_MIN_IMAGE_SIZE = 1000  # bytes — 小於此視為無效（防空白/錯誤頁）
+
+
+def _embed_cover(img_ref: str) -> str:
+    """將圖片 URL/路徑轉為 data URI。失敗時回傳原值。"""
+    if not img_ref or img_ref.startswith('data:'):
+        return img_ref
+
+    try:
+        if img_ref.startswith('file:///'):
+            local_path = uri_to_fs_path(img_ref)
+            data = Path(local_path).read_bytes()
+        elif img_ref.startswith(('http://', 'https://')):
+            headers = _EMBED_HEADERS.copy()
+            for domain, referer in _REFERER_MAP.items():
+                if domain in img_ref:
+                    headers['Referer'] = referer
+                    break
+
+            resp = requests.get(img_ref, headers=headers, timeout=15)
+            if resp.status_code != 200:
+                logger.warning('封面嵌入失敗 [HTTP %s] %s', resp.status_code, img_ref[:100])
+                return img_ref
+            if len(resp.content) < _MIN_IMAGE_SIZE:
+                logger.warning('封面嵌入失敗 [內容過小 %d bytes] %s', len(resp.content), img_ref[:100])
+                return img_ref
+            data = resp.content
+        else:
+            return img_ref
+
+        # MIME: HTTP 時優先用 Content-Type，其他 fallback 副檔名
+        mime = 'image/jpeg'
+        if img_ref.startswith(('http://', 'https://')):
+            ct = resp.headers.get('Content-Type', '')
+            if ct.startswith('image/'):
+                mime = ct.split(';')[0].strip()
+        if mime == 'image/jpeg':
+            ext = Path(img_ref.split('?')[0]).suffix.lower()
+            mime = _MIME_MAP.get(ext, 'image/jpeg')
+
+        b64 = base64.b64encode(data).decode('ascii')
+        return f'data:{mime};base64,{b64}'
+    except Exception as e:
+        logger.warning('封面嵌入失敗 [%s] %s', type(e).__name__, img_ref[:100])
+        return img_ref
+
+
 class GenerateFromIdsRequest(BaseModel):
     numbers: List[str]
     title: str = "Custom Gallery"
     mode: str = "image"
     sort: str = "date"
+    embed_covers: bool = True
 
 
 _VALID_MODES = {"image", "detail", "text"}
@@ -1113,11 +1177,24 @@ def generate_from_ids(body: GenerateFromIdsRequest):
                     genre=','.join(r.get('genres', [])) if isinstance(r.get('genres'), list) else r.get('genre', ''),
                     size=0,
                     mtime=0,
-                    img=r.get('cover_url', '')
+                    img=r.get('cover', '') or r.get('cover_url', '')
                 )
                 all_videos.append(info)
             else:
                 missing.append(num)
+
+    # 封面嵌入（embed_covers=True 時將 img 轉為 data URI）
+    embedded_count = 0
+    embed_failed_count = 0
+    if body.embed_covers:
+        for info in all_videos:
+            if info.img:
+                original = info.img
+                info.img = _embed_cover(info.img)
+                if info.img.startswith('data:'):
+                    embedded_count += 1
+                elif original:  # 有原圖但 embed 失敗
+                    embed_failed_count += 1
 
     # 確保輸出目錄存在
     project_root = Path(__file__).parent.parent.parent
@@ -1142,9 +1219,13 @@ def generate_from_ids(body: GenerateFromIdsRequest):
         logger.error('generate_from_ids: HTML 產生失敗: %s', e)
         return JSONResponse(status_code=500, content={"success": False, "error": "HTML 產生失敗"})
 
-    return {
+    result = {
         "success": True,
         "html_path": str(html_path),
         "video_count": len(all_videos),
-        "missing": missing
+        "missing": missing,
     }
+    if body.embed_covers:
+        result["embedded_count"] = embedded_count
+        result["embed_failed_count"] = embed_failed_count
+    return result
