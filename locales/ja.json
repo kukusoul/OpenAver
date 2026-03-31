@@ -471,7 +471,9 @@
       "btn_check_update_idle": "アップデートを確認",
       "update_available_prefix": "新バージョン",
       "update_available_suffix": "利用可能",
-      "up_to_date": "最新バージョンです"
+      "up_to_date": "最新バージョンです",
+      "ai_instruction": "AIエージェントに貼り付けるだけでOpenAverを操作できます",
+      "ai_hint_unsupported": "ウェブ版チャットには非対応"
     },
     "search": {
       "title": "検索機能",

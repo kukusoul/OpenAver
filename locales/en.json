@@ -471,7 +471,9 @@
       "btn_check_update_idle": "Check for Updates",
       "update_available_prefix": "New version",
       "update_available_suffix": "available",
-      "up_to_date": "You are up to date"
+      "up_to_date": "You are up to date",
+      "ai_instruction": "Paste to AI agent to control OpenAver",
+      "ai_hint_unsupported": "Not supported in web chat"
     },
     "search": {
       "title": "Search",

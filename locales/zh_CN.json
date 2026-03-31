@@ -471,7 +471,9 @@
       "btn_check_update_idle": "检查更新",
       "update_available_prefix": "新版本",
       "update_available_suffix": "可用",
-      "up_to_date": "已是最新版本"
+      "up_to_date": "已是最新版本",
+      "ai_instruction": "粘贴给 AI 智能体即可操作 OpenAver",
+      "ai_hint_unsupported": "不适用网页版聊天"
     },
     "search": {
       "title": "搜索功能",
