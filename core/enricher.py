@@ -11,8 +11,8 @@ from typing import List, Optional
 from core.database import Video, VideoRepository
 from core.logger import get_logger
 from core.nfo_updater import parse_nfo
-from core.organizer import download_image, generate_nfo
-from core.path_utils import uri_to_fs_path
+from core.organizer import download_image, find_subtitle_files, generate_nfo
+from core.path_utils import to_file_uri, uri_to_fs_path
 from core.scraper import search_jav
 
 logger = get_logger(__name__)
@@ -116,7 +116,7 @@ def _missing_fields(meta: dict) -> List[str]:
         missing.append("maker")
     if not meta.get("director"):
         missing.append("director")
-    if meta.get("series") is None:
+    if not meta.get("series"):
         missing.append("series")
     if not meta.get("label"):
         missing.append("label")
@@ -271,7 +271,6 @@ def enrich_single(
             return _empty
         meta = _scraper_to_meta(scraper_data)
         source_used = scraper_data.get("source", "scraper") or "scraper"
-        _db_upsert(repo, number, file_path, meta)
 
     elif mode == "db_to_sidecar":
         db_hits = repo.get_by_numbers([number])
@@ -306,9 +305,8 @@ def enrich_single(
             supplement = _scraper_to_meta(scraper_data)
             meta, fields_filled = _merge_meta(meta, supplement)
             source_used = scraper_data.get("source", "scraper") or "scraper"
-            _db_upsert(repo, number, file_path, meta)
 
-    has_subtitle = False
+    has_subtitle = bool(find_subtitle_files(fs_path))
 
     nfo_written = False
     try:
@@ -338,6 +336,12 @@ def enrich_single(
         write_extrafanart=write_extrafanart,
     )
 
+    # DB upsert 在寫檔後執行，才能知道本地封面路徑
+    # db_to_sidecar 不打 scraper 也不更新 DB
+    if mode in ("refresh_full", "fill_missing") and source_used not in ("db", "nfo", ""):
+        local_cover = str(Path(fs_path).with_suffix(".jpg")) if cover_written else ""
+        _db_upsert(repo, number, fs_path, meta, local_cover_path=local_cover)
+
     return EnrichResult(
         success=True,
         nfo_written=nfo_written,
@@ -349,10 +353,27 @@ def enrich_single(
     )
 
 
-def _db_upsert(repo: VideoRepository, number: str, file_path: str, meta: dict) -> None:
+def _db_upsert(
+    repo: VideoRepository, number: str, fs_path: str, meta: dict,
+    local_cover_path: str = "",
+) -> None:
+    """更新 DB 記錄。fs_path 必須是已解析的 FS 路徑（非 file:/// URI）。"""
     try:
+        path_uri = to_file_uri(fs_path)
+
+        # cover_path 只存本地 file:/// URI
+        # 若有本地封面路徑則轉 URI；否則保留 DB 既有值（透過傳空字串讓 upsert 不覆蓋）
+        cover_uri = ""
+        if local_cover_path and os.path.exists(local_cover_path):
+            cover_uri = to_file_uri(local_cover_path)
+        else:
+            # 保留 DB 既有 cover_path — 用 path_uri 精確匹配同一筆紀錄
+            existing = repo.get_by_path(path_uri)
+            if existing and existing.cover_path:
+                cover_uri = existing.cover_path
+
         video = Video(
-            path=file_path,
+            path=path_uri,
             number=number,
             title=meta.get("title", ""),
             original_title=meta.get("original_title", ""),
@@ -364,7 +385,7 @@ def _db_upsert(repo: VideoRepository, number: str, file_path: str, meta: dict) -
             tags=meta.get("tags", []),
             sample_images=meta.get("sample_images", []),
             duration=meta.get("duration"),
-            cover_path=meta.get("cover_url", ""),
+            cover_path=cover_uri,
             release_date=meta.get("release_date", ""),
         )
         repo.upsert(video)

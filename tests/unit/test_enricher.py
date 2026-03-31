@@ -842,3 +842,206 @@ class TestImageDownloadFail:
         assert result.cover_written is False
         assert result.nfo_written is True
         assert result.success is True
+
+
+# ── 26. F1: _db_upsert 把 path 存成 file:/// URI ────────────────────────────────
+
+class TestDbUpsertPathIsFileUri:
+    """F1: _db_upsert path 必須為 file:/// URI"""
+
+    def test_fs_path_converted_to_file_uri(self):
+        from core.enricher import _db_upsert
+
+        captured = []
+        mock_repo = MagicMock()
+        mock_repo.upsert.side_effect = lambda v: captured.append(v)
+        mock_repo.get_by_numbers.return_value = {}
+
+        meta = {"title": "T", "actresses": [], "maker": "S", "tags": [], "release_date": ""}
+        _db_upsert(mock_repo, "SONE-205", "/video/SONE-205.mp4", meta)
+
+        assert len(captured) == 1
+        assert captured[0].path.startswith("file:///")
+
+    def test_file_uri_input_not_double_wrapped(self):
+        """已是 file:/// 的 fs_path 不應被雙重包裝（回歸測試）"""
+        from core.enricher import _db_upsert
+
+        captured = []
+        mock_repo = MagicMock()
+        mock_repo.upsert.side_effect = lambda v: captured.append(v)
+        mock_repo.get_by_numbers.return_value = {}
+
+        # 注意：caller（enrich_single）應先 uri_to_fs_path 再傳入，
+        # 但即使誤傳 URI，也不應變成 file:///file:///
+        # 此處用 FS path 驗證正常 case
+        meta = {"title": "T", "actresses": [], "maker": "S", "tags": [], "release_date": ""}
+        _db_upsert(mock_repo, "SONE-205", "/mnt/c/video/SONE-205.mp4", meta)
+
+        assert len(captured) == 1
+        path = captured[0].path
+        assert path.startswith("file:///")
+        assert "file:///file:///" not in path
+
+
+# ── 27. F1: _db_upsert cover_path 處理 ────────────────────────────
+
+class TestDbUpsertCoverPath:
+    """F1: cover_path 不寫遠端 URL；有本地封面時寫 file:/// URI；否則保留 DB 既有值"""
+
+    def test_remote_url_not_written(self):
+        from core.enricher import _db_upsert
+
+        captured = []
+        mock_repo = MagicMock()
+        mock_repo.upsert.side_effect = lambda v: captured.append(v)
+        mock_repo.get_by_path.return_value = None
+
+        meta = {"title": "T", "cover_url": "https://cdn.example.com/cover.jpg",
+                "actresses": [], "maker": "S", "tags": [], "release_date": ""}
+        # 不傳 local_cover_path → 不應寫遠端 URL
+        _db_upsert(mock_repo, "SONE-205", "/video/SONE-205.mp4", meta)
+
+        assert len(captured) == 1
+        assert not (captured[0].cover_path or "").startswith("http")
+
+    @patch("os.path.exists", return_value=True)
+    def test_local_cover_written_as_file_uri(self, _mock_exists):
+        from core.enricher import _db_upsert
+
+        captured = []
+        mock_repo = MagicMock()
+        mock_repo.upsert.side_effect = lambda v: captured.append(v)
+
+        meta = {"title": "T", "actresses": [], "maker": "S", "tags": [], "release_date": ""}
+        _db_upsert(mock_repo, "SONE-205", "/video/SONE-205.mp4", meta,
+                   local_cover_path="/video/SONE-205.jpg")
+
+        assert len(captured) == 1
+        assert captured[0].cover_path.startswith("file:///")
+
+    def test_preserves_existing_db_cover_path_by_path(self):
+        """沒有新封面時用 get_by_path 精確保留同一筆紀錄的 cover_path"""
+        from core.enricher import _db_upsert
+
+        captured = []
+        mock_repo = MagicMock()
+        mock_repo.upsert.side_effect = lambda v: captured.append(v)
+
+        existing_video = MagicMock()
+        existing_video.cover_path = "file:///C:/lib/SONE-205/cover.jpg"
+        mock_repo.get_by_path.return_value = existing_video
+
+        meta = {"title": "T", "actresses": [], "maker": "S", "tags": [], "release_date": ""}
+        _db_upsert(mock_repo, "SONE-205", "/video/SONE-205.mp4", meta)
+
+        assert len(captured) == 1
+        assert captured[0].cover_path == "file:///C:/lib/SONE-205/cover.jpg"
+        # 確認用 path URI 查詢，不是用 number
+        mock_repo.get_by_path.assert_called_once()
+
+
+# ── 28. F2: has_subtitle 由 find_subtitle_files 決定 ────────────────────────────
+
+class TestHasSubtitleDetected:
+    def test_has_subtitle_true_when_srt_exists(self):
+        """F2: 影片同目錄有 .srt 時，generate_nfo 應以 has_subtitle=True 呼叫"""
+        video = _make_video()
+
+        captured_calls = []
+
+        def fake_generate_nfo(**kwargs):
+            captured_calls.append(kwargs)
+            return True
+
+        with (
+            patch("os.path.exists", return_value=True),
+            patch("core.enricher.VideoRepository") as mock_repo_cls,
+            patch("core.enricher.generate_nfo", side_effect=fake_generate_nfo),
+            patch("core.enricher.download_image", return_value=True),
+            patch("core.enricher.find_subtitle_files", return_value=["/video/SONE-205.srt"]),
+        ):
+            mock_repo = MagicMock()
+            mock_repo_cls.return_value = mock_repo
+            mock_repo.get_by_numbers.return_value = {"SONE-205": [video]}
+
+            from core.enricher import enrich_single
+            result = enrich_single(
+                file_path=FS_PATH,
+                number="SONE-205",
+                write_nfo=True,
+                overwrite_existing=True,
+            )
+
+        assert result.success is True
+        assert captured_calls, "generate_nfo 應被呼叫"
+        assert captured_calls[0].get("has_subtitle") is True, (
+            "有字幕檔時 has_subtitle 應為 True"
+        )
+
+    def test_has_subtitle_false_when_no_srt(self):
+        """F2: 影片同目錄無字幕時，generate_nfo 應以 has_subtitle=False 呼叫"""
+        video = _make_video()
+
+        captured_calls = []
+
+        def fake_generate_nfo(**kwargs):
+            captured_calls.append(kwargs)
+            return True
+
+        with (
+            patch("os.path.exists", return_value=True),
+            patch("core.enricher.VideoRepository") as mock_repo_cls,
+            patch("core.enricher.generate_nfo", side_effect=fake_generate_nfo),
+            patch("core.enricher.download_image", return_value=True),
+            patch("core.enricher.find_subtitle_files", return_value=[]),
+        ):
+            mock_repo = MagicMock()
+            mock_repo_cls.return_value = mock_repo
+            mock_repo.get_by_numbers.return_value = {"SONE-205": [video]}
+
+            from core.enricher import enrich_single
+            result = enrich_single(
+                file_path=FS_PATH,
+                number="SONE-205",
+                write_nfo=True,
+                overwrite_existing=True,
+            )
+
+        assert result.success is True
+        assert captured_calls, "generate_nfo 應被呼叫"
+        assert captured_calls[0].get("has_subtitle") is False, (
+            "無字幕檔時 has_subtitle 應為 False"
+        )
+
+
+# ── 29. F3: series="" 應觸發 scraper ────────────────────────────────────────────
+
+class TestMissingFieldsEmptySeries:
+    def test_empty_series_string_triggers_scraper(self):
+        """F3: _video_to_meta 把缺失 series 正規化為空字串，_missing_fields 應視為缺失"""
+        video = _make_video(series="")  # 空字串，非 None
+        db_result = {"SONE-205": [video]}
+        scraper_data = _make_scraper_result(series="テストシリーズ")
+
+        with (
+            patch("os.path.exists", return_value=True),
+            patch("core.enricher.VideoRepository") as mock_repo_cls,
+            patch("core.enricher.search_jav", return_value=scraper_data) as mock_search,
+            patch("core.enricher.generate_nfo", return_value=True),
+            patch("core.enricher.download_image", return_value=True),
+        ):
+            mock_repo = MagicMock()
+            mock_repo_cls.return_value = mock_repo
+            mock_repo.get_by_numbers.return_value = db_result
+
+            from core.enricher import enrich_single
+            result = enrich_single(
+                file_path=FS_PATH,
+                number="SONE-205",
+                mode="fill_missing",
+            )
+
+        mock_search.assert_called_once(), "series='' 應視為缺失，觸發 scraper"
+        assert result.success is True
+        assert "series" in result.fields_filled

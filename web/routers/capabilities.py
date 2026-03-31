@@ -205,7 +205,7 @@ _TOOLS: list[dict] = [
         "idempotent": True,
         "retry_safe": True,
         "cost_hint": "fill_missing/refresh_full 會打外部網站；db_to_sidecar 純本地",
-        "_example_template": "curl -X POST -H 'Content-Type: application/json' -d '{{\"file_path\":\"/library/SONE-205/SONE-205.mp4\",\"mode\":\"fill_missing\"}}' {base}/api/enrich-single",
+        "_example_template": "curl -X POST -H 'Content-Type: application/json' -d '{{\"file_path\":\"/library/SONE-205/SONE-205.mp4\",\"number\":\"SONE-205\",\"mode\":\"fill_missing\"}}' {base}/api/enrich-single",
     },
     {
         "name": "collection_sql",

@@ -110,9 +110,9 @@ class EnrichRequest(BaseModel):
 @router.post("/enrich-single")
 def enrich_single_endpoint(request: EnrichRequest) -> dict:
     config = load_config()
-    scraper_cfg = config.get("scraper", {})
-    proxy_url = scraper_cfg.get("proxy_url", "")
-    primary_source = scraper_cfg.get("primary_source", "javbus")
+    search_cfg = config.get("search", {})
+    proxy_url = search_cfg.get("proxy_url", "")
+    primary_source = search_cfg.get("primary_source", "javbus")
 
     try:
         result = enrich_single(

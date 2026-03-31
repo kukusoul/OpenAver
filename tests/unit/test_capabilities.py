@@ -209,3 +209,12 @@ class TestCapabilitiesEndpoint:
         data = client.get("/api/capabilities").json()
         names = {t["name"] for t in data["tools"]}
         assert "translate" not in names
+
+    def test_enrich_single_example_contains_number(self, client):
+        """F5: enrich_single example curl body 必須含 number 欄位（required 欄位）"""
+        data = client.get("/api/capabilities").json()
+        tool = next(t for t in data["tools"] if t["name"] == "enrich_single")
+        example = tool.get("example", "")
+        assert "number" in example, (
+            f"enrich_single example 缺少 'number' 欄位（required），example: {example}"
+        )
