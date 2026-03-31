@@ -192,6 +192,7 @@ async def get_capabilities(request: Request):
         "skill_setup": {
             "description": "將以下內容加入你的 AI 自訂指令 / Skill / System Prompt，讓 AI 學會使用 OpenAver",
             "template": f"你可以使用 OpenAver 影片元數據管理工具。使用前先 GET {base}/api/capabilities 查看可用操作和使用範例。",
+            "hint": f"建議將此服務註冊為 AI skill（如 SKILL.md），存入 `curl -s {base}/api/capabilities` 指令，後續啟動自動發現。",
         },
         "quick_check": {
             "description": "確認服務是否運行中",
