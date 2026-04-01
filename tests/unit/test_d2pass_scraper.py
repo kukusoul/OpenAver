@@ -9,6 +9,7 @@ test_d2pass_scraper.py - D2Pass 爬蟲單元測試（TASK-36-T9）
 
 import json
 import pytest
+import requests
 from unittest.mock import patch, MagicMock
 
 
@@ -354,3 +355,172 @@ class TestCaribbeancomHtmlFallback:
         scraper._session.get = MagicMock(side_effect=[json_404, html_resp, json_404, json_404])
         video = scraper.search("070116-197")
         assert video is None
+
+
+# ============================================================
+# Mock Data (from test_new_scrapers.py)
+# ============================================================
+
+SAMPLE_1PONDO_JSON = {
+    "Status": True,
+    "Title": "目覚ましフェラ",
+    "TitleEn": "Morning Blowjob",
+    "ActressesJa": ["一ノ瀬アメリ"],
+    "Release": "2014-12-04",
+    "ThumbHigh": "https://www.1pondo.tv/assets/sample/120415_201/str.jpg",
+    "UCNAME": ["美尻", "69"],
+    "AvgRating": 4.5,
+}
+
+
+def _make_mock_resp(status_code=200, json_data=None, content=None):
+    """Build a MagicMock that mimics requests.Response."""
+    mock_resp = MagicMock()
+    mock_resp.status_code = status_code
+    if json_data is not None:
+        mock_resp.json = lambda: json_data
+    if content is not None:
+        mock_resp.content = content
+    return mock_resp
+
+
+# ============================================================
+# Tests merged from integration/test_new_scrapers.py TestD2PassScraper
+# ============================================================
+
+class TestD2PassIntegration:
+    """D2Pass scraper tests (merged from test_new_scrapers.py)"""
+
+    @pytest.fixture
+    def scraper(self):
+        from core.scrapers.d2pass import D2PassScraper
+        return D2PassScraper()
+
+    def test_d2pass_1pondo_success(self, scraper):
+        """1Pondo 番號搜尋成功"""
+        mock_resp = _make_mock_resp(status_code=200, json_data=SAMPLE_1PONDO_JSON)
+
+        with patch.object(scraper._session, 'get', return_value=mock_resp):
+            with patch('core.scrapers.d2pass.rate_limit'):
+                video = scraper.search("120415_201")
+
+        assert video is not None
+        assert video.number == "120415_201"
+        assert video.title == "目覚ましフェラ"
+        assert video.source == "d2pass"
+        assert len(video.actresses) == 1
+        assert video.actresses[0].name == "一ノ瀬アメリ"
+        assert video.date == "2014-12-04"
+        assert "美尻" in video.tags
+
+    def test_d2pass_caribbeancom_success(self, scraper):
+        """Caribbeancom 番號（hyphen 格式）搜尋成功"""
+        carib_json = {
+            "Status": True,
+            "Title": "キャットウォーク ...",
+            "ActressesJa": ["鈴木さとみ"],
+            "Release": "2009-07-14",
+            "UCNAME": [],
+        }
+        mock_resp = _make_mock_resp(status_code=200, json_data=carib_json)
+
+        with patch.object(scraper._session, 'get', return_value=mock_resp) as mock_get:
+            with patch('core.scrapers.d2pass.rate_limit'):
+                video = scraper.search("071409-113")
+
+        assert video is not None
+        assert video.source == "d2pass"
+        assert video.title == "キャットウォーク ..."
+        assert len(video.actresses) == 1
+        assert video.actresses[0].name == "鈴木さとみ"
+        # 驗證第一次呼叫的 URL 包含 caribbeancom
+        first_call_url = mock_get.call_args_list[0][0][0]
+        assert "caribbeancom" in first_call_url
+
+    def test_d2pass_10musume_success(self, scraper):
+        """10musume 番號（底線 2-digit suffix）搜尋成功"""
+        musume_json = {
+            "Status": True,
+            "Title": "素人AV面接 ...",
+            "ActressesJa": ["堀川麻紀"],
+            "Release": "2012-09-28",
+            "UCNAME": [],
+        }
+        mock_resp = _make_mock_resp(status_code=200, json_data=musume_json)
+
+        with patch.object(scraper._session, 'get', return_value=mock_resp) as mock_get:
+            with patch('core.scrapers.d2pass.rate_limit'):
+                video = scraper.search("082912_01")
+
+        assert video is not None
+        assert video.source == "d2pass"
+        assert video.title == "素人AV面接 ..."
+        assert len(video.actresses) == 1
+        assert video.actresses[0].name == "堀川麻紀"
+        # 驗證第一次呼叫的 URL 包含 10musume
+        first_call_url = mock_get.call_args_list[0][0][0]
+        assert "10musume" in first_call_url
+
+    def test_d2pass_site_detection(self, scraper):
+        """_detect_site_order 根據番號格式回傳正確順序（純邏輯，不需 mock）"""
+        assert scraper._detect_site_order("071409-113")[0] == "caribbeancom"
+        assert scraper._detect_site_order("120415_201")[0] == "1pondo"
+        assert scraper._detect_site_order("082912_01")[0] == "10musume"
+
+    def test_d2pass_not_found(self, scraper):
+        """全部 site 皆 404 時 search 回傳 None"""
+        mock_resp = _make_mock_resp(status_code=404)
+
+        with patch.object(scraper._session, 'get', return_value=mock_resp):
+            video = scraper.search("999999_999")
+
+        assert video is None
+
+    def test_d2pass_timeout(self, scraper):
+        """_session.get raise Timeout → _fetch_json catches it → search returns None"""
+        with patch.object(scraper._session, 'get', side_effect=requests.Timeout):
+            video = scraper.search("120415_201")
+
+        assert video is None
+
+    def test_d2pass_caribbeancom_cover_fallback(self, scraper):
+        """Caribbeancom ThumbHigh=null 時，自動構造封面 URL"""
+        carib_json = {
+            "Status": True,
+            "Title": "テスト動画",
+            "ActressesJa": ["テスト"],
+            "Release": "2024-02-09",
+            "UCNAME": [],
+        }
+        mock_resp = _make_mock_resp(status_code=200, json_data=carib_json)
+
+        with patch.object(scraper._session, 'get', return_value=mock_resp):
+            with patch('core.scrapers.d2pass.rate_limit'):
+                video = scraper.search("020924-001")
+
+        assert video is not None
+        assert video.title == "テスト動画"
+        assert len(video.actresses) == 1
+        assert video.actresses[0].name == "テスト"
+        assert video.cover_url == "https://www.caribbeancom.com/moviepages/020924-001/images/l_l.jpg"
+
+    def test_d2pass_1pondo_cover_fallback(self, scraper):
+        """1Pondo ThumbHigh=null 時，自動構造封面 URL"""
+        pondo_json = {
+            "Status": True,
+            "Title": "テスト動画",
+            "ActressesJa": ["テスト"],
+            "Release": "2024-04-23",
+            "UCNAME": [],
+        }
+        mock_resp = _make_mock_resp(status_code=200, json_data=pondo_json)
+
+        with patch.object(scraper._session, 'get', return_value=mock_resp):
+            with patch('core.scrapers.d2pass.rate_limit'):
+                video = scraper.search("042324_001")
+
+        assert video is not None
+        assert video.title == "テスト動画"
+        assert len(video.actresses) == 1
+        assert video.actresses[0].name == "テスト"
+        assert video.cover_url == "https://www.1pondo.tv/assets/sample/042324_001/str.jpg"
