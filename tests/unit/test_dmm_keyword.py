@@ -12,6 +12,12 @@ from core.scrapers.dmm import DMMScraper
 from core.scrapers.models import Video, ScraperConfig
 
 
+@pytest.fixture(autouse=True)
+def _no_rate_limit(monkeypatch):
+    """跳過 rate_limit sleep，加速測試"""
+    monkeypatch.setattr("core.scrapers.dmm.rate_limit", lambda *a, **kw: None)
+
+
 # ============================================================
 # Mock Data
 # ============================================================
@@ -86,7 +92,7 @@ class TestDMMSearchByKeyword:
 
         with patch.object(dmm_scraper._session, 'post', return_value=mock_resp), \
              patch.object(dmm_scraper, '_fetch_by_id', return_value=None), \
-             patch('core.scrapers.utils.rate_limit'):
+             patch('core.scrapers.dmm.rate_limit'):
             results = dmm_scraper.search_by_keyword("未歩なな")
 
         assert len(results) == 2
@@ -98,7 +104,7 @@ class TestDMMSearchByKeyword:
 
         with patch.object(dmm_scraper._session, 'post', return_value=mock_resp), \
              patch.object(dmm_scraper, '_fetch_by_id', return_value=None), \
-             patch('core.scrapers.utils.rate_limit'):
+             patch('core.scrapers.dmm.rate_limit'):
             results = dmm_scraper.search_by_keyword("未歩なな")
 
         v0 = results[0]
@@ -123,7 +129,7 @@ class TestDMMSearchByKeyword:
         mock_resp = _make_mock_resp(status_code=200, json_data=DMM_SEARCH_LIST_RESPONSE)
         with patch.object(dmm_scraper._session, 'post', return_value=mock_resp), \
              patch.object(dmm_scraper, '_fetch_by_id', return_value=None), \
-             patch('core.scrapers.utils.rate_limit'):
+             patch('core.scrapers.dmm.rate_limit'):
             results = dmm_scraper.search_by_keyword("未歩なな")
         # sone00205 → SONE-205 (not SONE-00205)
         assert results[0].number == "SONE-205"
@@ -213,7 +219,7 @@ class TestDMMSearchByKeyword:
 
         with patch.object(dmm_scraper._session, 'post', return_value=mock_resp), \
              patch.object(dmm_scraper, '_fetch_by_id', return_value=None), \
-             patch('core.scrapers.utils.rate_limit'):
+             patch('core.scrapers.dmm.rate_limit'):
             results = dmm_scraper.search_by_keyword("テスト")
 
         assert len(results) == 1
@@ -241,7 +247,7 @@ class TestDMMSearchByKeyword:
 
         with patch.object(dmm_scraper._session, 'post', return_value=mock_resp), \
              patch.object(dmm_scraper, '_fetch_by_id', return_value=None), \
-             patch('core.scrapers.utils.rate_limit'):
+             patch('core.scrapers.dmm.rate_limit'):
             results = dmm_scraper.search_by_keyword("テスト")
 
         assert len(results) == 1
@@ -254,7 +260,7 @@ class TestDMMSearchByKeyword:
 
         with patch.object(dmm_scraper._session, 'post', return_value=mock_resp) as mock_post, \
              patch.object(dmm_scraper, '_fetch_by_id', return_value=None), \
-             patch('core.scrapers.utils.rate_limit'):
+             patch('core.scrapers.dmm.rate_limit'):
             dmm_scraper.search_by_keyword("未歩なな", limit=5)
 
         # First call is the list query; check its variables
@@ -274,7 +280,7 @@ class TestDMMSearchByKeyword:
 
         with patch.object(dmm_scraper._session, 'post', return_value=list_resp), \
              patch.object(dmm_scraper, '_fetch_by_id', side_effect=[enriched_video1, enriched_video2]) as mock_fetch, \
-             patch('core.scrapers.utils.rate_limit'):
+             patch('core.scrapers.dmm.rate_limit'):
             results = dmm_scraper.search_by_keyword("test")
 
         assert mock_fetch.call_count == 2
@@ -291,7 +297,7 @@ class TestDMMSearchByKeyword:
 
         with patch.object(dmm_scraper._session, 'post', return_value=list_resp), \
              patch.object(dmm_scraper, '_fetch_by_id', return_value=None), \
-             patch('core.scrapers.utils.rate_limit'):
+             patch('core.scrapers.dmm.rate_limit'):
             results = dmm_scraper.search_by_keyword("test")
 
         assert len(results) == 2
@@ -306,7 +312,7 @@ class TestDMMSearchByKeyword:
 
         with patch.object(dmm_scraper._session, 'post', return_value=list_resp), \
              patch.object(dmm_scraper, '_fetch_by_id', side_effect=TimeoutError('boom')), \
-             patch('core.scrapers.utils.rate_limit'):
+             patch('core.scrapers.dmm.rate_limit'):
             results = dmm_scraper.search_by_keyword("test")
 
         # Should still get 2 shallow fallback results (not [])
@@ -336,7 +342,7 @@ class TestDMMSearchByKeyword:
         """search_by_keyword_with_ids 回傳 (content_id, Video) tuples"""
         list_resp = _make_mock_resp(status_code=200, json_data=DMM_SEARCH_LIST_RESPONSE)
         with patch.object(dmm_scraper._session, 'post', return_value=list_resp), \
-             patch('core.scrapers.utils.rate_limit'):
+             patch('core.scrapers.dmm.rate_limit'):
             pairs = dmm_scraper.search_by_keyword_with_ids("test")
 
         assert len(pairs) == 2
@@ -349,6 +355,6 @@ class TestDMMSearchByKeyword:
         list_resp = _make_mock_resp(status_code=200, json_data=DMM_SEARCH_LIST_RESPONSE)
         with patch.object(dmm_scraper._session, 'post', return_value=list_resp), \
              patch.object(dmm_scraper, '_fetch_by_id') as mock_fetch, \
-             patch('core.scrapers.utils.rate_limit'):
+             patch('core.scrapers.dmm.rate_limit'):
             dmm_scraper.search_by_keyword_with_ids("test")
         mock_fetch.assert_not_called()

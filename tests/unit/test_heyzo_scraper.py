@@ -263,7 +263,7 @@ class TestHEYZOIntegration:
         mock_resp = _make_mock_resp(status_code=200, content=HEYZO_EN_HTML)
 
         with patch.object(scraper._session, 'get', return_value=mock_resp):
-            with patch('core.scrapers.utils.rate_limit'):
+            with patch('core.scrapers.heyzo.rate_limit'):
                 video = scraper.search("HEYZO-0783")
 
         assert video is not None

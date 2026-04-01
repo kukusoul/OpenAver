@@ -11,6 +11,12 @@ from core.scrapers.dmm import DMMScraper
 from core.scrapers.models import ScraperConfig
 
 
+@pytest.fixture(autouse=True)
+def _no_rate_limit(monkeypatch):
+    """跳過 rate_limit sleep，加速測試"""
+    monkeypatch.setattr("core.scrapers.dmm.rate_limit", lambda *a, **kw: None)
+
+
 # ============================================================
 # Mock Data
 # ============================================================
@@ -71,7 +77,8 @@ class TestDMMScraperNewFields:
         with patch.object(dmm_scraper._session, 'post', return_value=detail_resp), \
              patch.object(dmm_scraper, '_probe_genres', return_value=probe_return), \
              patch.object(dmm_scraper, '_probe_sample_images', return_value=sample_images_return), \
-             patch('core.scrapers.utils.rate_limit'):
+             patch.object(dmm_scraper, '_fetch_tags_from_html', return_value=[]), \
+             patch('core.scrapers.dmm.rate_limit'):
             return dmm_scraper.search("SONE-205")
 
     # ------------------------------------------------------------------

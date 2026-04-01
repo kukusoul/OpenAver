@@ -143,7 +143,7 @@ class TestDMMTags:
              patch.object(dmm_scraper, '_fetch_tags_from_html', return_value=[]), \
              patch.object(dmm_scraper, '_probe_sample_images', return_value=[]), \
              patch.object(dmm_scraper._session, 'post', return_value=detail_resp), \
-             patch('core.scrapers.utils.rate_limit'):
+             patch('core.scrapers.dmm.rate_limit'):
             video = dmm_scraper.search("SONE-205")
 
         assert video is not None

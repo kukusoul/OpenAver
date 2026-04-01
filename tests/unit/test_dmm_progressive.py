@@ -53,7 +53,7 @@ class TestDMMProgressiveFacade:
 
         with patch.object(DMMScraper, 'search_by_keyword_with_ids', return_value=mock_pairs), \
              patch.object(DMMScraper, '_fetch_by_id', return_value=mock_video), \
-             patch('core.scrapers.utils.rate_limit'):
+             patch('core.scrapers.dmm.rate_limit'):
             results = search_actress(
                 "三上悠亜",
                 primary_source="dmm",
@@ -81,7 +81,7 @@ class TestDMMProgressiveFacade:
 
         with patch.object(DMMScraper, 'search_by_keyword_with_ids', return_value=mock_pairs), \
              patch.object(DMMScraper, '_fetch_by_id', side_effect=[enriched1, enriched2]), \
-             patch('core.scrapers.utils.rate_limit'):
+             patch('core.scrapers.dmm.rate_limit'):
             results = search_actress(
                 "三上悠亜",
                 primary_source="dmm",
@@ -103,7 +103,7 @@ class TestDMMProgressiveFacade:
             with patch.object(HEYZOScraper, 'search', return_value=mock_video) as mock_heyzo:
                 with patch.object(FC2Scraper, 'search', return_value=None):
                     with patch.object(AVSOXScraper, 'search', return_value=None):
-                        with patch('core.scrapers.utils.rate_limit'):
+                        with patch('core.scrapers.dmm.rate_limit'):
                             results = smart_search("HEYZO-0783", uncensored_mode=True)
 
         assert len(results) == 1

@@ -401,7 +401,7 @@ class TestD2PassIntegration:
         mock_resp = _make_mock_resp(status_code=200, json_data=SAMPLE_1PONDO_JSON)
 
         with patch.object(scraper._session, 'get', return_value=mock_resp):
-            with patch('core.scrapers.utils.rate_limit'):
+            with patch('core.scrapers.d2pass.rate_limit'):
                 video = scraper.search("120415_201")
 
         assert video is not None
@@ -425,7 +425,7 @@ class TestD2PassIntegration:
         mock_resp = _make_mock_resp(status_code=200, json_data=carib_json)
 
         with patch.object(scraper._session, 'get', return_value=mock_resp) as mock_get:
-            with patch('core.scrapers.utils.rate_limit'):
+            with patch('core.scrapers.d2pass.rate_limit'):
                 video = scraper.search("071409-113")
 
         assert video is not None
@@ -449,7 +449,7 @@ class TestD2PassIntegration:
         mock_resp = _make_mock_resp(status_code=200, json_data=musume_json)
 
         with patch.object(scraper._session, 'get', return_value=mock_resp) as mock_get:
-            with patch('core.scrapers.utils.rate_limit'):
+            with patch('core.scrapers.d2pass.rate_limit'):
                 video = scraper.search("082912_01")
 
         assert video is not None
@@ -495,7 +495,7 @@ class TestD2PassIntegration:
         mock_resp = _make_mock_resp(status_code=200, json_data=carib_json)
 
         with patch.object(scraper._session, 'get', return_value=mock_resp):
-            with patch('core.scrapers.utils.rate_limit'):
+            with patch('core.scrapers.d2pass.rate_limit'):
                 video = scraper.search("020924-001")
 
         assert video is not None
@@ -516,7 +516,7 @@ class TestD2PassIntegration:
         mock_resp = _make_mock_resp(status_code=200, json_data=pondo_json)
 
         with patch.object(scraper._session, 'get', return_value=mock_resp):
-            with patch('core.scrapers.utils.rate_limit'):
+            with patch('core.scrapers.d2pass.rate_limit'):
                 video = scraper.search("042324_001")
 
         assert video is not None

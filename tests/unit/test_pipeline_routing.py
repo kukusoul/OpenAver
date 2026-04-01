@@ -15,6 +15,13 @@ from core.scrapers.models import Video
 from core.scraper import search_jav, smart_search
 
 
+@pytest.fixture(autouse=True)
+def _no_rate_limit(monkeypatch):
+    """跳過 rate_limit / REQUEST_DELAY sleep，加速測試"""
+    monkeypatch.setattr("core.scrapers.dmm.rate_limit", lambda *a, **kw: None)
+    monkeypatch.setattr("core.scraper.time.sleep", lambda *a: None)
+
+
 # ============================================================
 # Helper
 # ============================================================
@@ -45,7 +52,7 @@ class TestPipeline:
         mock_video = _make_video("d2pass", "120415_201")
 
         with patch.object(D2PassScraper, 'search', return_value=mock_video) as mock_d2:
-            with patch('core.scrapers.utils.rate_limit'):
+            with patch('core.scrapers.dmm.rate_limit'):
                 results = smart_search("120415_201")
 
         assert len(results) == 1
@@ -58,7 +65,7 @@ class TestPipeline:
 
         with patch.object(D2PassScraper, 'search', return_value=None):
             with patch.object(HEYZOScraper, 'search', return_value=mock_video) as mock_heyzo:
-                with patch('core.scrapers.utils.rate_limit'):
+                with patch('core.scrapers.dmm.rate_limit'):
                     results = smart_search("HEYZO-0783")
 
         assert len(results) == 1
@@ -70,7 +77,7 @@ class TestPipeline:
         with patch.object(D2PassScraper, 'search', return_value=None) as mock_d2:
             with patch.object(HEYZOScraper, 'search', return_value=None) as mock_heyzo:
                 with patch.object(DMMScraper, 'search', return_value=None):
-                    with patch('core.scrapers.utils.rate_limit'):
+                    with patch('core.scrapers.dmm.rate_limit'):
                         # FC2 / AVSOX 也需要 mock 避免真實網路請求
                         from core.scrapers.fc2 import FC2Scraper
                         from core.scrapers.avsox import AVSOXScraper
@@ -86,7 +93,7 @@ class TestPipeline:
         mock_video = _make_video("dmm", "SONE-205")
 
         with patch.object(DMMScraper, 'search', return_value=mock_video) as mock_dmm:
-            with patch('core.scrapers.utils.rate_limit'):
+            with patch('core.scrapers.dmm.rate_limit'):
                 results = smart_search("SONE-205", proxy_url="http://proxy:8080", primary_source="dmm")
 
         mock_dmm.assert_called()
@@ -104,7 +111,7 @@ class TestPipeline:
             with patch.object(HEYZOScraper, 'search', return_value=None):
                 with patch.object(FC2Scraper, 'search', return_value=mock_video):
                     with patch.object(AVSOXScraper, 'search', return_value=None):
-                        with patch('core.scrapers.utils.rate_limit'):
+                        with patch('core.scrapers.dmm.rate_limit'):
                             results = smart_search("FC2-PPV-1234567", uncensored_mode=True)
 
         assert len(results) == 1
@@ -126,7 +133,7 @@ class TestPipeline:
         """primary_source='dmm' + proxy → DMM Top-1 shortcut"""
         mock_video = _make_video("dmm", "SONE-205")
         with patch.object(DMMScraper, 'search', return_value=mock_video) as mock_dmm:
-            with patch('core.scrapers.utils.rate_limit'):
+            with patch('core.scrapers.dmm.rate_limit'):
                 results = smart_search("SONE-205", proxy_url="http://proxy:8080", primary_source="dmm")
         mock_dmm.assert_called()
         assert len(results) >= 1
@@ -156,7 +163,7 @@ class TestPipeline:
              patch.object(JavDBScraper, 'search', return_value=None), \
              patch.object(FC2Scraper, 'search', return_value=None), \
              patch.object(AVSOXScraper, 'search', return_value=None), \
-             patch('core.scrapers.utils.rate_limit'):
+             patch('core.scrapers.dmm.rate_limit'):
             result = search_jav("SONE-205", proxy_url="http://proxy:8080", primary_source="dmm")
 
         assert result['_source'] == 'dmm'
@@ -176,7 +183,7 @@ class TestPipeline:
              patch.object(JavDBScraper, 'search', return_value=None), \
              patch.object(FC2Scraper, 'search', return_value=None), \
              patch.object(AVSOXScraper, 'search', return_value=None), \
-             patch('core.scrapers.utils.rate_limit'):
+             patch('core.scrapers.dmm.rate_limit'):
             result = search_jav("SONE-205", proxy_url="http://proxy:8080", primary_source="javbus")
 
         assert result['_source'] == 'javbus'
@@ -200,7 +207,7 @@ class TestPipeline:
         with patch.object(DMMScraper, 'search_by_keyword_with_ids', return_value=mock_pairs) as mock_dmm_kw, \
              patch.object(DMMScraper, '_fetch_by_id', return_value=mock_video), \
              patch.object(JavBusScraper, 'get_ids_from_search', return_value=[]) as mock_jb, \
-             patch('core.scrapers.utils.rate_limit'):
+             patch('core.scrapers.dmm.rate_limit'):
             results = search_actress(
                 "未歩なな",
                 limit=10,

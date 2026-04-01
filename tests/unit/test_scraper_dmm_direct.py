@@ -179,6 +179,11 @@ def _make_mock_resp(status_code=200, json_data=None, content=None):
 class TestDMMScraperIntegration:
     """DMM scraper tests (merged from test_new_scrapers.py)"""
 
+    @pytest.fixture(autouse=True)
+    def _no_rate_limit(self, monkeypatch):
+        """跳過 rate_limit sleep，加速測試"""
+        monkeypatch.setattr("core.scrapers.dmm.rate_limit", lambda *a, **kw: None)
+
     @pytest.fixture
     def dmm_scraper(self, tmp_path, monkeypatch):
         """DMM scraper with isolated cache files"""
@@ -202,9 +207,10 @@ class TestDMMScraperIntegration:
 
         detail_resp = _make_mock_resp(status_code=200, json_data=DMM_DETAIL_RESPONSE)
 
-        with patch.object(dmm_scraper._session, 'post', return_value=detail_resp) as mock_post:
-            with patch('core.scrapers.utils.rate_limit'):
-                video = dmm_scraper.search("SONE-205")
+        with patch.object(dmm_scraper._session, 'post', return_value=detail_resp) as mock_post, \
+             patch.object(dmm_scraper, '_fetch_tags_from_html', return_value=[]), \
+             patch('core.scrapers.dmm.rate_limit'):
+            video = dmm_scraper.search("SONE-205")
 
         assert video is not None
         assert video.title == "成人への卒業"
@@ -223,9 +229,10 @@ class TestDMMScraperIntegration:
             _make_mock_resp(status_code=404),  # _convert_with_hints → _fetch_by_id → 404
             search_resp,                        # _search_content_id
             detail_resp,                        # _fetch_by_id(discovered_cid)
-        ]):
-            with patch('core.scrapers.utils.rate_limit'):
-                video = dmm_scraper.search("SONE-205")
+        ]), \
+             patch.object(dmm_scraper, '_fetch_tags_from_html', return_value=[]), \
+             patch('core.scrapers.dmm.rate_limit'):
+            video = dmm_scraper.search("SONE-205")
 
         assert video is not None
         assert video.number == "SONE-205"
@@ -241,9 +248,10 @@ class TestDMMScraperIntegration:
         """搜尋成功後 cache 寫入 tmp_path，不污染 project root"""
         detail_resp = _make_mock_resp(status_code=200, json_data=DMM_DETAIL_RESPONSE)
 
-        with patch.object(dmm_scraper._session, 'post', return_value=detail_resp):
-            with patch('core.scrapers.utils.rate_limit'):
-                video = dmm_scraper.search("SONE-205")
+        with patch.object(dmm_scraper._session, 'post', return_value=detail_resp), \
+             patch.object(dmm_scraper, '_fetch_tags_from_html', return_value=[]), \
+             patch('core.scrapers.dmm.rate_limit'):
+            video = dmm_scraper.search("SONE-205")
 
         # cache 應寫入 tmp_path 而非 project root
         assert (tmp_path / "dmm_content_ids.json").exists()
