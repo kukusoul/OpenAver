@@ -205,3 +205,95 @@ class TestNoSeries:
         video = scraper.search("HEYZO-0783")
         assert video is not None
         assert video.series == ""
+
+
+# ============================================================
+# Mock Data (from test_new_scrapers.py)
+# ============================================================
+
+HEYZO_EN_HTML = b"""
+<html>
+<head>
+<script type="application/ld+json">
+{
+    "@type": "Movie",
+    "name": "Slim Beauty's Seduction",
+    "actor": {"@type": "Person", "name": "Airi Mashiro"},
+    "dateCreated": "2015-01-17T00:00:00+09:00",
+    "image": "//en.heyzo.com/contents/3000/0783/images/player_thumbnail_450.jpg",
+    "aggregateRating": {"ratingValue": "4.22", "reviewCount": "56"}
+}
+</script>
+</head>
+<body>
+<table class="movieInfo">
+<tr><td>Series</td><td>Premium Collection</td></tr>
+<tr><td>Type</td><td><a>Cute</a> <a>Slender</a></td></tr>
+</table>
+</body>
+</html>
+"""
+
+
+def _make_mock_resp(status_code=200, json_data=None, content=None):
+    """Build a MagicMock that mimics requests.Response."""
+    mock_resp = MagicMock()
+    mock_resp.status_code = status_code
+    if json_data is not None:
+        mock_resp.json = lambda: json_data
+    if content is not None:
+        mock_resp.content = content
+    return mock_resp
+
+
+# ============================================================
+# Tests merged from integration/test_new_scrapers.py TestHEYZOScraper
+# ============================================================
+
+class TestHEYZOIntegration:
+    """HEYZO scraper tests (merged from test_new_scrapers.py)"""
+
+    @pytest.fixture
+    def scraper(self):
+        from core.scrapers.heyzo import HEYZOScraper
+        return HEYZOScraper()
+
+    def test_heyzo_success(self, scraper):
+        """HEYZO-0783 搜尋成功，解析 JSON-LD 所有欄位"""
+        mock_resp = _make_mock_resp(status_code=200, content=HEYZO_EN_HTML)
+
+        with patch.object(scraper._session, 'get', return_value=mock_resp):
+            with patch('core.scrapers.utils.rate_limit'):
+                video = scraper.search("HEYZO-0783")
+
+        assert video is not None
+        assert video.number == "HEYZO-0783"
+        assert video.title == "Slim Beauty's Seduction"
+        assert len(video.actresses) == 1
+        assert video.actresses[0].name == "Airi Mashiro"
+        assert video.date == "2015-01-17"
+        assert video.source == "heyzo"
+        assert video.maker == "HEYZO"
+        assert video.rating == 4.22
+
+    def test_heyzo_strip_prefix(self, scraper):
+        """_extract_heyzo_num 正確提取數字 ID（純邏輯，不需 mock）"""
+        assert scraper._extract_heyzo_num("HEYZO-0783") == "0783"
+        assert scraper._extract_heyzo_num("heyzo-1031") == "1031"
+        assert scraper._extract_heyzo_num("0783") == "0783"
+        assert scraper._extract_heyzo_num("INVALID") is None
+
+    def test_heyzo_table_tags(self, scraper):
+        """_extract_table_data 從 HTML table 提取 series 和 tags"""
+        result = scraper._extract_table_data(HEYZO_EN_HTML)
+        assert result['series'] == "Premium Collection"
+        assert result['tags'] == ["Cute", "Slender"]
+
+    def test_heyzo_not_found(self, scraper):
+        """404 回應時 search 回傳 None"""
+        mock_resp = _make_mock_resp(status_code=404)
+
+        with patch.object(scraper._session, 'get', return_value=mock_resp):
+            video = scraper.search("HEYZO-9999")
+
+        assert video is None
