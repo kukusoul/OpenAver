@@ -262,6 +262,7 @@ class TestInlineStyleCleanup:
 BATCH_JS = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "search" / "state" / "batch.js"
 SEARCH_FLOW_JS = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "search" / "state" / "search-flow.js"
 BASE_JS = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "search" / "state" / "base.js"
+SETTINGS_JS = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "settings.js"
 
 
 class TestBatchIntervalGuard:
@@ -384,3 +385,28 @@ class TestTimerListenerGuard:
         js = self._base()
         assert "_resizeHandler" in js, \
             "base.js 應在初始 state 宣告 _resizeHandler: null"
+
+
+class TestSettingsCleanupBypassGuard:
+    """T3(40b): 確保 dirtyCheckDiscard() 使用 __leavePage 而非直接跳轉"""
+
+    def _js(self):
+        return SETTINGS_JS.read_text(encoding="utf-8")
+
+    def test_dirty_check_discard_uses_leave_page(self):
+        """dirtyCheckDiscard() 呼叫 window.__leavePage"""
+        js = self._js()
+        assert "window.__leavePage" in js, \
+            "settings.js dirtyCheckDiscard() 應使用 window.__leavePage 而非直接設定 window.location.href"
+
+    def test_dirty_check_discard_has_location_fallback(self):
+        """dirtyCheckDiscard() 保留 window.location.href fallback"""
+        js = self._js()
+        assert "window.location.href" in js, \
+            "settings.js dirtyCheckDiscard() 應保留 window.location.href 作為 fallback"
+
+    def test_dirty_check_discard_calls_leave_page_with_url(self):
+        """dirtyCheckDiscard() 以 pendingNavigationUrl 呼叫 __leavePage"""
+        js = self._js()
+        assert "window.__leavePage(this.pendingNavigationUrl)" in js, \
+            "settings.js dirtyCheckDiscard() 應以 this.pendingNavigationUrl 呼叫 window.__leavePage"

@@ -772,6 +772,10 @@ function settingsPage() {
         // Dirty check modal — 不儲存直接離開
         dirtyCheckDiscard() {
             this.savedState = null;  // 防止殘留
+            // T3(40b): 透過 lifecycle API 執行 cleanup 再跳轉
+            if (window.__leavePage) {
+                window.__leavePage(this.pendingNavigationUrl);
+            }
             window.location.href = this.pendingNavigationUrl;
         },
 
