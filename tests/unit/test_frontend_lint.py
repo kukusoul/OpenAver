@@ -1,4 +1,5 @@
 """前端靜態守衛 — 確保 template 包含必要的 Alpine 綁定"""
+import json
 from pathlib import Path
 
 SHOWCASE_HTML = Path(__file__).parent.parent.parent / "web" / "templates" / "showcase.html"
@@ -435,3 +436,119 @@ class TestSettingsCleanupBypassGuard:
         assert count >= 2, \
             (f"settings.js dirtyCheckSave() 也應在 __leavePage 回傳 false 時 return，"
              f"目前只有 {count} 處")
+
+
+LOCALES_ROOT = Path(__file__).parent.parent.parent / "locales"
+
+
+class TestJellyfinCheckManualGuard:
+    """40c-T2: 守衛 Jellyfin check 改為手動觸發的所有前端不變式"""
+
+    def _html(self):
+        return SCANNER_HTML.read_text(encoding="utf-8")
+
+    def test_no_auto_trigger_in_init(self):
+        """init() 後的 loadStats 呼叫後，不應緊接 checkJellyfinImages()"""
+        # 確認 checkJellyfinImages() 只透過 @click 觸發，不在 init() 或 loadStats 後出現
+        html = self._html()
+        assert "this.loadStats();\n        this.checkJellyfinImages();" not in html, \
+            "scanner.html init() 仍含自動觸發 checkJellyfinImages()"
+
+    def test_jellyfin_check_state_declared(self):
+        """Alpine data 宣告 jellyfinCheckState 欄位"""
+        html = self._html()
+        assert "jellyfinCheckState: 'idle'" in html, \
+            "scanner.html 缺少 jellyfinCheckState: 'idle' 初始化宣告"
+
+    def test_jellyfin_check_controller_declared(self):
+        """Alpine data 宣告 _jellyfinCheckController 欄位"""
+        html = self._html()
+        assert "_jellyfinCheckController: null" in html, \
+            "scanner.html 缺少 _jellyfinCheckController: null 初始化宣告"
+
+    def test_abort_controller_used_in_check(self):
+        """checkJellyfinImages() 建立 AbortController"""
+        html = self._html()
+        assert "new AbortController()" in html, \
+            "scanner.html checkJellyfinImages() 缺少 new AbortController()"
+
+    def test_abort_called_in_cleanup(self):
+        """cleanup 回呼內含 _jellyfinCheckController.abort()"""
+        html = self._html()
+        assert "_jellyfinCheckController.abort()" in html, \
+            "scanner.html cleanup 缺少 _jellyfinCheckController.abort()"
+
+    def test_jellyfin_check_state_reset_in_cleanup(self):
+        """cleanup 回呼補上 jellyfinCheckState = 'idle' 重設"""
+        html = self._html()
+        assert "jellyfinCheckState = 'idle'" in html, \
+            "scanner.html cleanup 缺少 jellyfinCheckState = 'idle' 重設"
+
+    def test_should_warn_checks_jellyfin_checking(self):
+        """shouldWarnBeforeLeave() 含 jellyfinCheckState === 'checking' 判斷"""
+        html = self._html()
+        assert "jellyfinCheckState === 'checking'" in html, \
+            "scanner.html shouldWarnBeforeLeave() 缺少 jellyfinCheckState === 'checking' 判斷"
+
+    def test_trigger_button_click_handler(self):
+        """觸發按鈕 @click 呼叫 checkJellyfinImages()"""
+        html = self._html()
+        assert '@click="checkJellyfinImages()"' in html, \
+            "scanner.html 缺少 @click=\"checkJellyfinImages()\" 觸發按鈕"
+
+    def test_no_auto_trigger_after_generate(self):
+        """generate SSE done 事件後無自動呼叫 checkJellyfinImages()"""
+        html = self._html()
+        # loadStats 後面不應接 checkJellyfinImages（generate 路徑）
+        assert "this.loadStats();\n                    this.checkJellyfinImages();" not in html, \
+            "scanner.html generate done 路徑仍自動呼叫 checkJellyfinImages()"
+
+    def test_clear_cache_resets_jellyfin_state(self):
+        """clearCache 成功後含 jellyfinCheckState = 'idle' 重設"""
+        html = self._html()
+        # jellyfinImageVisible = false 後緊接 jellyfinCheckState = 'idle'
+        assert "jellyfinImageVisible = false" in html, \
+            "scanner.html clearCache 缺少 jellyfinImageVisible = false"
+        # jellyfinCheckState = 'idle' 在 clearCache 函數中也必須出現
+        # （在 shouldWarnBeforeLeave 和 beforeLeave 都有，此守衛確認 clearCache 路徑有）
+        # 用計數確認至少 2 處（cleanup + clearCache，shouldWarnBeforeLeave 判斷不算 assignment）
+        count = html.count("jellyfinCheckState = 'idle'")
+        assert count >= 2, \
+            f"scanner.html jellyfinCheckState = 'idle' 出現 {count} 次，期望 >= 2（cleanup + clearCache）"
+
+
+class TestJellyfinCheckI18nKeys:
+    """40c-T2: 確認新增 i18n key 存在於 zh_TW.json"""
+
+    REQUIRED_KEYS = [
+        "scanner.stats.jellyfin_check_btn",
+        "scanner.stats.jellyfin_check_idle_label",
+        "scanner.stats.jellyfin_checking",
+    ]
+
+    def _zh_tw(self):
+        return json.loads((LOCALES_ROOT / "zh_TW.json").read_text(encoding="utf-8"))
+
+    def _get_nested(self, d, dotted_key):
+        keys = dotted_key.split(".")
+        cur = d
+        for k in keys:
+            if not isinstance(cur, dict) or k not in cur:
+                return None
+            cur = cur[k]
+        return cur
+
+    def test_jellyfin_check_btn_key_exists(self):
+        zh_tw = self._zh_tw()
+        val = self._get_nested(zh_tw, "scanner.stats.jellyfin_check_btn")
+        assert val, "zh_TW.json 缺少 scanner.stats.jellyfin_check_btn"
+
+    def test_jellyfin_check_idle_label_key_exists(self):
+        zh_tw = self._zh_tw()
+        val = self._get_nested(zh_tw, "scanner.stats.jellyfin_check_idle_label")
+        assert val, "zh_TW.json 缺少 scanner.stats.jellyfin_check_idle_label"
+
+    def test_jellyfin_checking_key_exists(self):
+        zh_tw = self._zh_tw()
+        val = self._get_nested(zh_tw, "scanner.stats.jellyfin_checking")
+        assert val, "zh_TW.json 缺少 scanner.stats.jellyfin_checking"
