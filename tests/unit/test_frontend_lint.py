@@ -323,3 +323,64 @@ class TestBatchIntervalGuard:
         js = self._base()
         assert "_translateCheckInterval" in js, \
             "base.js 應在初始 state 宣告 _translateCheckInterval: null"
+
+
+INDEX_JS = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "search" / "state" / "index.js"
+
+
+class TestTimerListenerGuard:
+    """T2(40b): 守衛 index.js window listener 具名 ref + cleanup removeEventListener"""
+
+    def _index(self):
+        return INDEX_JS.read_text(encoding="utf-8")
+
+    def _base(self):
+        return BASE_JS.read_text(encoding="utf-8")
+
+    def test_index_uses_set_timer_for_cover_height(self):
+        """index.js $watch('searchResults') 使用 _setTimer('updateCoverHeight'"""
+        js = self._index()
+        assert "_setTimer('updateCoverHeight'" in js, \
+            "index.js $watch('searchResults') 應改用 _setTimer('updateCoverHeight', ...) 取代裸 setTimeout"
+
+    def test_index_no_bare_settimeout_for_cover_height(self):
+        """index.js 不含裸 setTimeout(() => this._updateCoverHeight()"""
+        js = self._index()
+        assert "setTimeout(() => this._updateCoverHeight()" not in js, \
+            "index.js 仍含裸 setTimeout(() => this._updateCoverHeight()，應改為 _setTimer"
+
+    def test_index_pywebview_handler_assigned(self):
+        """index.js pywebview-files listener 賦值給 this._pywebviewFilesHandler"""
+        js = self._index()
+        assert "this._pywebviewFilesHandler =" in js, \
+            "index.js 應將 pywebview-files handler 賦值給 this._pywebviewFilesHandler（具名 ref）"
+
+    def test_index_resize_handler_assigned(self):
+        """index.js resize listener 賦值給 this._resizeHandler"""
+        js = self._index()
+        assert "this._resizeHandler =" in js, \
+            "index.js 應將 resize handler 賦值給 this._resizeHandler（具名 ref）"
+
+    def test_index_cleanup_removes_pywebview_listener(self):
+        """index.js cleanup() 含 removeEventListener('pywebview-files', this._pywebviewFilesHandler)"""
+        js = self._index()
+        assert "removeEventListener('pywebview-files', this._pywebviewFilesHandler)" in js, \
+            "index.js cleanup() 應 removeEventListener('pywebview-files', this._pywebviewFilesHandler)"
+
+    def test_index_cleanup_removes_resize_listener(self):
+        """index.js cleanup() 含 removeEventListener('resize', this._resizeHandler)"""
+        js = self._index()
+        assert "removeEventListener('resize', this._resizeHandler)" in js, \
+            "index.js cleanup() 應 removeEventListener('resize', this._resizeHandler)"
+
+    def test_base_declares_pywebview_handler(self):
+        """base.js state 初始化包含 _pywebviewFilesHandler 欄位"""
+        js = self._base()
+        assert "_pywebviewFilesHandler" in js, \
+            "base.js 應在初始 state 宣告 _pywebviewFilesHandler: null"
+
+    def test_base_declares_resize_handler(self):
+        """base.js state 初始化包含 _resizeHandler 欄位"""
+        js = self._base()
+        assert "_resizeHandler" in js, \
+            "base.js 應在初始 state 宣告 _resizeHandler: null"
