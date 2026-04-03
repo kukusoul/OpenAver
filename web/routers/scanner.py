@@ -20,6 +20,7 @@ Scanner API 路由 - 影片列表生成
 - GET  /api/gallery/jellyfin-update       — 批次產生 Jellyfin poster + fanart（SSE 串流）
 """
 
+import asyncio
 import base64
 import json
 import os
@@ -990,7 +991,7 @@ async def jellyfin_image_check():
         if not db_path.exists():
             return {"success": True, "data": {"need_update": 0}}
         repo = VideoRepository(db_path)
-        result = check_jellyfin_images_needed(repo)
+        result = await asyncio.to_thread(check_jellyfin_images_needed, repo)
         return {"success": True, "data": {"need_update": result['need_update']}}
     except Exception as e:
         logger.error("檢查 Jellyfin 圖片狀態失敗: %s", e)

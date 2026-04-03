@@ -268,3 +268,94 @@ class TestGenerateFromIds:
         assert 'html_path' in data
         assert 'video_count' in data
         assert 'missing' in data
+
+
+# ============ GET /api/gallery/jellyfin-check ============
+
+class TestJellyfinCheck:
+    """測試 GET /api/gallery/jellyfin-check"""
+
+    def test_jellyfin_check_no_db(self, client, monkeypatch):
+        """DB 不存在時，回傳 need_update: 0，不呼叫 check_jellyfin_images_needed"""
+        from unittest.mock import MagicMock, patch
+
+        mock_db_path = MagicMock()
+        mock_db_path.exists.return_value = False
+
+        mock_check = MagicMock()
+
+        with patch('web.routers.scanner.get_db_path', return_value=mock_db_path), \
+             patch('web.routers.scanner.check_jellyfin_images_needed', mock_check):
+            response = client.get('/api/gallery/jellyfin-check')
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data['success'] is True
+        assert data['data']['need_update'] == 0
+        mock_check.assert_not_called()
+
+    def test_jellyfin_check_has_updates(self, client, monkeypatch):
+        """DB 存在，check_jellyfin_images_needed 回傳 need_update: 5"""
+        from unittest.mock import MagicMock, patch
+
+        mock_db_path = MagicMock()
+        mock_db_path.exists.return_value = True
+
+        mock_repo = MagicMock()
+        check_result = {'need_update': 5, 'items': [{'cover_path': f'/a/{i}.jpg', 'base_stem': f'/a/{i}', 'number': f'SONE-{i:03d}'} for i in range(5)]}
+
+        with patch('web.routers.scanner.get_db_path', return_value=mock_db_path), \
+             patch('web.routers.scanner.VideoRepository', return_value=mock_repo), \
+             patch('web.routers.scanner.check_jellyfin_images_needed', return_value=check_result):
+            response = client.get('/api/gallery/jellyfin-check')
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data['success'] is True
+        assert data['data']['need_update'] == 5
+
+    def test_jellyfin_check_no_updates(self, client, monkeypatch):
+        """DB 存在，check_jellyfin_images_needed 回傳 need_update: 0"""
+        from unittest.mock import MagicMock, patch
+
+        mock_db_path = MagicMock()
+        mock_db_path.exists.return_value = True
+
+        mock_repo = MagicMock()
+        check_result = {'need_update': 0, 'items': []}
+
+        with patch('web.routers.scanner.get_db_path', return_value=mock_db_path), \
+             patch('web.routers.scanner.VideoRepository', return_value=mock_repo), \
+             patch('web.routers.scanner.check_jellyfin_images_needed', return_value=check_result):
+            response = client.get('/api/gallery/jellyfin-check')
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data['success'] is True
+        assert data['data']['need_update'] == 0
+
+    def test_jellyfin_check_exception(self, client, monkeypatch):
+        """check_jellyfin_images_needed 拋出例外時，回傳 success: false，HTTP 200"""
+        from unittest.mock import MagicMock, patch
+
+        mock_db_path = MagicMock()
+        mock_db_path.exists.return_value = True
+
+        mock_repo = MagicMock()
+
+        with patch('web.routers.scanner.get_db_path', return_value=mock_db_path), \
+             patch('web.routers.scanner.VideoRepository', return_value=mock_repo), \
+             patch('web.routers.scanner.check_jellyfin_images_needed', side_effect=RuntimeError('IO error')):
+            response = client.get('/api/gallery/jellyfin-check')
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data['success'] is False
+        assert 'error' in data
+        assert data['error'] == '檢查 Jellyfin 圖片狀態失敗'
+
+    def test_jellyfin_check_uses_to_thread(self):
+        """靜態掃描確認 scanner.py 使用 asyncio.to_thread 包裝同步呼叫"""
+        import pathlib
+        scanner_src = (pathlib.Path(__file__).parents[2] / 'web' / 'routers' / 'scanner.py').read_text(encoding='utf-8')
+        assert 'asyncio.to_thread(check_jellyfin_images_needed' in scanner_src
