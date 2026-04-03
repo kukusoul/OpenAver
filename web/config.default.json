@@ -21,7 +21,8 @@
       ".m4v",
       ".ts"
     ],
-    "jellyfin_mode": false
+    "jellyfin_mode": false,
+    "download_sample_images": false
   },
   "search": {
     "search_filter": "",

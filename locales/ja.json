@@ -214,7 +214,9 @@
       "video_extensions_label": "動画拡張子",
       "video_extensions_hint": "カンマ区切り",
       "jellyfin_mode_label": "Jellyfin 画像モード",
-      "jellyfin_mode_hint": "{stem}-poster.jpg + {stem}-fanart.jpg + extrafanart/ サンプル画像を自動生成"
+      "jellyfin_mode_hint": "{stem}-poster.jpg + {stem}-fanart.jpg を自動生成（Jellyfin ライブラリ用）",
+      "download_sample_images_label": "サンプル画像をダウンロード（extrafanart）",
+      "download_sample_images_hint": "整理時にスクリーンショットを extrafanart/ にダウンロード（「フォルダー作成」が必要）"
     },
     "gallery": {
       "output_dir_label": "出力ディレクトリ",
@@ -324,7 +326,7 @@
       "nfo_prefix": "補完が必要:",
       "nfo_suffix": "本",
       "nfo_update_title": "NFO情報を補完",
-      "jellyfin_prefix": "画像補完が必要:",
+      "jellyfin_prefix": "Jellyfin 専用カバー形式が不足:",
       "jellyfin_suffix": "本",
       "jellyfin_update_title": "Jellyfin poster + fanart を補完",
       "last_run_prefix": "最終実行: ",
@@ -333,6 +335,10 @@
       "generate_loading": "生成中...",
       "nfo_idle": "NFO補完",
       "nfo_loading": "補完中...",
+      "jellyfin_help_line1": "Jellyfin / Emby などのメディアサーバーには追加のカバー形式が必要です：",
+      "jellyfin_help_line2": "<code>{stem}-poster.jpg</code> — カバー画像の<strong>右側を切り取り</strong>生成（縦型ポスター）",
+      "jellyfin_help_line3": "<code>{stem}-fanart.jpg</code> — カバー画像をそのままコピー（横型背景）",
+      "jellyfin_help_line4": "「補完」をクリックすると既存のカバーから自動生成します。ネットワーク不要。",
       "jellyfin_idle": "画像補完",
       "jellyfin_loading": "補完中...",
       "btn_done": "完了"

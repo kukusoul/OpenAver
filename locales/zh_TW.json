@@ -214,7 +214,9 @@
       "video_extensions_label": "影片副檔名",
       "video_extensions_hint": "以逗號分隔",
       "jellyfin_mode_label": "Jellyfin 圖片模式",
-      "jellyfin_mode_hint": "自動產生 {stem}-poster.jpg + {stem}-fanart.jpg + extrafanart/ 樣品圖像"
+      "jellyfin_mode_hint": "自動產生 {stem}-poster.jpg + {stem}-fanart.jpg（Jellyfin 圖庫用）",
+      "download_sample_images_label": "下載劇照（extrafanart）",
+      "download_sample_images_hint": "整理時自動下載劇照至 extrafanart/ 子目錄（需啟用「建立資料夾」）"
     },
     "gallery": {
       "output_dir_label": "輸出目錄",
@@ -324,7 +326,7 @@
       "nfo_prefix": "需補全:",
       "nfo_suffix": "部",
       "nfo_update_title": "補全 NFO 資訊",
-      "jellyfin_prefix": "需補齊圖片:",
+      "jellyfin_prefix": "Jellyfin 專用封面格式缺失:",
       "jellyfin_suffix": "部",
       "jellyfin_update_title": "補齊 Jellyfin poster + fanart",
       "last_run_prefix": "上次執行: ",
@@ -333,6 +335,10 @@
       "generate_loading": "產生中...",
       "nfo_idle": "補全 NFO",
       "nfo_loading": "補全中...",
+      "jellyfin_help_line1": "Jellyfin / Emby 等媒體伺服器需要額外封面格式：",
+      "jellyfin_help_line2": "<code>{stem}-poster.jpg</code> — 從封面圖<strong>右側裁切</strong>產生（直式海報）",
+      "jellyfin_help_line3": "<code>{stem}-fanart.jpg</code> — 封面圖原尺寸複製（橫式背景）",
+      "jellyfin_help_line4": "點擊「補齊」自動從已有封面產生，純本地處理不連網。",
       "jellyfin_idle": "補齊圖片",
       "jellyfin_loading": "補齊中...",
       "btn_done": "已完成"

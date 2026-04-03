@@ -655,9 +655,9 @@ def organize_file(
             if crop_to_poster(cover_jpg, poster_path):
                 result['poster_path'] = poster_path
 
-        # extrafanart 下載（jellyfin_mode 專屬，需 create_folder=True 才有 per-video 目錄）
+        # extrafanart 下載（download_sample_images 控制，需 create_folder=True 才有 per-video 目錄）
         # create_folder=False 時多片共用同一資料夾，fanart1.jpg 會互相覆蓋，故禁用
-        if config.get('jellyfin_mode') and config.get('create_folder'):
+        if config.get('download_sample_images') and config.get('create_folder'):
             sample_images = metadata.get('sample_images', [])
             if sample_images:
                 extrafanart_dir = os.path.join(target_dir, 'extrafanart')

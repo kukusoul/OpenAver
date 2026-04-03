@@ -29,6 +29,7 @@ function settingsPage() {
             videoExtensions: '.mp4, .avi, .mkv, .wmv, .rmvb, .flv, .mov, .m4v, .ts',
             suffixKeywords: [],
             jellyfinMode: false,
+            downloadSampleImages: false,
 
             // Gallery
             avlistMode: 'image',
@@ -52,6 +53,7 @@ function settingsPage() {
         // ===== UI State =====
         newSuffixInput: '',
         showPathHelp: false,
+        showSampleImagesHelp: false,
         ollamaStatus: '',
         modelStatus: '',
         geminiStatus: '',
@@ -319,6 +321,7 @@ function settingsPage() {
                     this.form.videoExtensions = config.scraper.video_extensions.join(', ');
                     this.form.suffixKeywords = config.scraper?.suffix_keywords || ['-cd1', '-cd2', '-4k', '-uc'];
                     this.form.jellyfinMode = config.scraper?.jellyfin_mode || false;
+                    this.form.downloadSampleImages = config.scraper?.download_sample_images || false;
 
                     // Gallery
                     this.form.avlistMode = config.gallery?.default_mode || 'image';
@@ -387,6 +390,7 @@ function settingsPage() {
                         .split(',').map(s => s.trim()).filter(s => s),
                     suffix_keywords: this.form.suffixKeywords,
                     jellyfin_mode: this.form.jellyfinMode,
+                    download_sample_images: this.form.downloadSampleImages,
                 };
 
                 // 更新 search

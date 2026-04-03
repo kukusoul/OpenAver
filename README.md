@@ -16,6 +16,8 @@ OpenAver 是一個基於 Web 技術的桌面應用程式，旨在幫助您輕鬆
 ![Tests](https://github.com/slive777/OpenAver/actions/workflows/test.yml/badge.svg)
 ![GitHub Release](https://img.shields.io/github/v/release/slive777/OpenAver)
 
+**🌐 [English](README_EN.md)** | 繁體中文
+
 ## 📸 截圖預覽
 
 ![Home](docs/screenshots/home.jpg)
@@ -54,6 +56,23 @@ OpenAver 是純本地應用程式：
 
 ## ✨ 核心功能
 
+### 🤖 AI-Ready API
+
+你的 AI 助手現在能直接操作你的片庫：
+
+- 「幫我搜 STARS-123, ABP-456, SSIS-789 的完整資訊」— 多來源聚合搜尋
+- 「把這 10 部舊片的 NFO 補齊」— 原地補完，不搬移不改名
+- 「我今年抓最多的系列作品是哪個？」— SQL 查詢收藏資料庫
+- 「幫我把這篇文章提到的番號做成圖文並茂的網頁」— 封面自動嵌入 HTML
+
+不需要 SDK，不需要讀文件。一行 curl，AI 自學所有端點：
+
+```bash
+curl http://localhost:38741/api/capabilities
+```
+
+支援任何 MCP / function-calling 相容的 AI 工具。
+
 ### 🔍 Spotlight Search (搜尋)
 - **多來源聚合**: 同時搜尋 JavBus, Jav321, JavDB, DMM, D2Pass, HEYZO 等多個來源。
 - **Gallery Style**: 現代化的 Hero Detail 介面，以大圖和毛玻璃特效呈現影片資訊。
@@ -80,6 +99,7 @@ OpenAver 是純本地應用程式：
 - **路徑管理**: 靈活設定輸出路徑與檔案命名規則，支援 `{suffix}` 格式變數。
 - **我的最愛資料夾**: 設定常用資料夾，一鍵載入並自動搜尋。
 - **檔案過濾**: 設定最小影片尺寸 (MB)，自動排除過小檔案。
+- **多語系 UI**: 四語系支援（繁中 / 简中 / 日文 / 英文），語系切換按鈕即時切換所有介面文字。
 
 ### 🌐 翻譯功能
 
@@ -90,11 +110,31 @@ OpenAver 支援兩種翻譯提供商：
 | **Ollama（本地）** | 免費、無 API 限制、需本地 GPU | ~0.5 秒/片 |
 | **Gemini（Google）** | 雲端 API、免費額度 15 RPM | ~0.1 秒/片 |
 
+**翻譯語系跟隨 UI 語系（38c）：**
+- UI 切換至繁中 → 翻譯輸出繁體中文
+- UI 切換至简中 → 翻譯輸出簡體中文
+- UI 切換至英文 → 翻譯輸出英文
+- UI 切換至日文 → 跳過翻譯（原始標題本身即日文，不呼叫 API）
+
 **⚠️ Gemini API Key 安全提示**
 
 - API Key 以明文存儲在 `web/config.json`
 - **請勿將 config.json 分享給他人或上傳至公開位置**
 - 如需撤銷：前往 [Google AI Studio](https://aistudio.google.com/apikey) 重新生成
+
+### 🤖 Agentic AI 支援
+
+OpenAver 的 self-describing API 相容於所有主流 AI 工具：
+
+| 使用方式 | 工具 | 說明 |
+|----------|------|------|
+| **CLI** | Claude Code, Codex CLI, Gemini CLI, Aider 等 | 終端機直接 `curl`，所有 CLI agent 皆支援 |
+| **IDE** | Cursor, GitHub Copilot in VS Code, Windsurf, Trae, Google Antigravity 等 | Agent 模式 / MCP 呼叫本地 API |
+| **桌面 App** | Codex App, Claude Cowork, OpenClaw | ⭐ 回覆內直接顯示封面圖片，體驗最佳 |
+
+> 💡 **推薦**：**Codex App**（免費帳號可用）— 回覆中直接嵌入封面圖片，搜尋結果一目瞭然。
+
+> ⚡ **小模型友善**：capabilities manifest 已針對輕量模型優化，Gemini Flash / GPT-4o mini / Claude Haiku 皆可正確操作所有端點。
 
 ## 🛠️ 技術架構
 
@@ -103,7 +143,7 @@ OpenAver 支援兩種翻譯提供商：
 - **Animation**: GSAP (Showcase/Search pages) + Motion Adapter (reduced-motion support)
 - **Desktop**: PyWebView (Windows/macOS)
 - **Database**: SQLite (WAL mode)
-- **Testing**: Pytest (803+ tests)
+- **Testing**: Pytest (1600+ tests)
 
 ## 📥 安裝
 
@@ -304,7 +344,7 @@ pytest
 ```
 OpenAver/
 ├── web/                # Web GUI (FastAPI)
-│   ├── routers/        # API Endpoints (Search, Config, Scraper, Scanner)
+│   ├── routers/        # API Endpoints (Search, Config, Scraper, Scanner, Capabilities)
 │   ├── templates/      # HTML Templates (DaisyUI + Fluent Design 2)
 │   └── static/         # CSS/JS Assets (Modular JS, Theme CSS)
 ├── core/               # 核心邏輯
@@ -312,7 +352,9 @@ OpenAver/
 │   ├── database.py             # SQLite 資料層 (WAL mode)
 │   ├── organizer.py            # 檔案整理 + fallback 空值防護
 │   ├── path_utils.py           # 跨平台路徑處理 (file:// URI)
+│   ├── i18n.py                 # 多語系翻譯核心 (t() / fallback chain)
 │   └── translate_service.py    # AI 翻譯 (Ollama/Gemini)
+├── locales/            # 四語系 JSON (zh_TW/zh_CN/ja/en)
 ├── tests/              # 測試代碼 (Pytest)
 └── windows/            # Windows 啟動器 (PyWebView)
 ```

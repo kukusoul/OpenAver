@@ -42,6 +42,7 @@ COPY_ITEMS = [
     "web",
     "core",
     "windows",  # 包含 standalone.py
+    "locales",
     "maker_mapping.json",
 ]
 

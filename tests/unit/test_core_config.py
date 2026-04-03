@@ -297,6 +297,35 @@ class TestMigrationJellyfinMode:
         assert result["scraper"]["jellyfin_mode"] is False
 
 
+# ============ test_migration_download_sample_images ============
+
+class TestMigrationDownloadSampleImages:
+    """download_sample_images 補齊（Task 38e）"""
+
+    def test_download_sample_images_added_when_missing(self, tmp_path, monkeypatch):
+        """舊 config 沒有 download_sample_images → migration 自動補 False"""
+        config_path = tmp_path / "config.json"
+        _write_config(config_path, {"scraper": {"create_folder": True, "jellyfin_mode": False}})
+        monkeypatch.setattr(core_config, "CONFIG_PATH", config_path)
+        monkeypatch.setattr(core_config, "CONFIG_DEFAULT_PATH", tmp_path / "config.default.json")
+
+        result = load_config()
+
+        assert "download_sample_images" in result["scraper"]
+        assert result["scraper"]["download_sample_images"] is False
+
+    def test_download_sample_images_not_overwrite_existing(self, tmp_path, monkeypatch):
+        """已存在的 download_sample_images=True 不被覆蓋"""
+        config_path = tmp_path / "config.json"
+        _write_config(config_path, {"scraper": {"download_sample_images": True}})
+        monkeypatch.setattr(core_config, "CONFIG_PATH", config_path)
+        monkeypatch.setattr(core_config, "CONFIG_DEFAULT_PATH", tmp_path / "config.default.json")
+
+        result = load_config()
+
+        assert result["scraper"]["download_sample_images"] is True
+
+
 # ============ test_save_config_roundtrip ============
 
 class TestSaveConfigRoundtrip:

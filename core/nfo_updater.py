@@ -48,10 +48,8 @@ def needs_update(info: dict, has_nfo: bool = True) -> Tuple[bool, List[str]]:
         missing.append('director')
     if info.get('duration') is None:   # 0 是有效值，不能用 not
         missing.append('duration')
-    if not info.get('series'):
-        missing.append('series')
-    if not info.get('label'):
-        missing.append('label')
+    # series / label 不檢查：許多影片本身就沒有系列或廠牌，無法區分「未抓」vs「來源沒有」
+    # 需要時可用 AI agent 逐片 enrich-single 補齊
 
     return len(missing) > 0, missing
 

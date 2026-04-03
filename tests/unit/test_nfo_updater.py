@@ -71,25 +71,23 @@ class TestNeedsUpdateNewFields:
         need, missing = needs_update(info, has_nfo=True)
         assert 'duration' not in missing
 
-    # 4. 缺 series → missing 含 'series'
-    def test_missing_series_in_missing_list(self):
+    # 4. 缺 series → 不再檢查（來源不一定有）
+    def test_missing_series_not_checked(self):
         info = make_base_info(series='')
         need, missing = needs_update(info, has_nfo=True)
-        assert need is True
-        assert 'series' in missing
+        assert 'series' not in missing
 
-    # 5. 缺 label → missing 含 'label'
-    def test_missing_label_in_missing_list(self):
+    # 5. 缺 label → 不再檢查（來源不一定有）
+    def test_missing_label_not_checked(self):
         info = make_base_info(label='')
         need, missing = needs_update(info, has_nfo=True)
-        assert need is True
-        assert 'label' in missing
+        assert 'label' not in missing
 
     # 6. 所有新欄位都有值 → missing 不含新欄位
     def test_all_new_fields_present_not_missing(self):
         info = make_base_info()  # 預設全部有值
         need, missing = needs_update(info, has_nfo=True)
-        for field in ('director', 'duration', 'series', 'label'):
+        for field in ('director', 'duration'):
             assert field not in missing
 
     # 7. 既有欄位（title/date/actor/genre/maker）檢查不受影響
@@ -103,7 +101,7 @@ class TestNeedsUpdateNewFields:
         for field in ('title', 'date', 'actor', 'genre', 'maker'):
             assert field in missing
         # 新欄位不應出現在 missing（全有值）
-        for field in ('director', 'duration', 'series', 'label'):
+        for field in ('director', 'duration'):
             assert field not in missing
 
     # 補充：has_nfo=False → early return，不管欄位
@@ -154,7 +152,7 @@ class TestScannerInfoDictNewFields:
             assert field not in missing, f"新欄位 '{field}' 不應在 missing 中"
 
     def test_old_style_info_dict_missing_new_fields(self):
-        """舊格式 info dict（缺新欄位）→ needs_update 回報新欄位缺失（驗證修正前的問題）"""
+        """舊格式 info dict（缺新欄位）→ needs_update 回報 director/duration 缺失（series/label 不再檢查）"""
         old_style = {
             'title': 'テストタイトル',
             'date': '2024-01-01',
@@ -166,17 +164,19 @@ class TestScannerInfoDictNewFields:
         }
         need, missing = needs_update(old_style, has_nfo=True)
         assert need is True
-        for field in ('director', 'series', 'label'):
-            assert field in missing, f"舊格式 dict 應缺少 '{field}'"
+        assert 'director' in missing, "舊格式 dict 應缺少 'director'"
         assert 'duration' in missing, "舊格式 dict 應缺少 'duration'"
+        # series/label 不再檢查
+        assert 'series' not in missing
+        assert 'label' not in missing
 
     def test_new_fields_with_empty_string_still_missing(self):
-        """scanner 傳入空字串的新欄位 → 仍被列為缺失"""
+        """scanner 傳入空字串的新欄位 → director 仍被列為缺失，series/label 不再檢查"""
         info = self._make_scanner_info(director='', series='', label='')
         need, missing = needs_update(info, has_nfo=True)
         assert 'director' in missing
-        assert 'series' in missing
-        assert 'label' in missing
+        assert 'series' not in missing
+        assert 'label' not in missing
 
     def test_duration_none_from_db_still_missing(self):
         """DB 中 duration=None（未抓到）→ needs_update 列為缺失"""
