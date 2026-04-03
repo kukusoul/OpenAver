@@ -714,8 +714,8 @@ function showcaseState() {
             this.$nextTick(() => {
                 if (self._sgGeneration !== gen) return; // stale check
                 var imgEl = document.querySelector('.sg-main-img');
-                if (imgEl && window.ShowcaseAnimations) {
-                    window.ShowcaseAnimations.playSampleGallerySwitch(imgEl, 'prev', {});
+                if (imgEl) {
+                    window.ShowcaseAnimations?.playSampleGallerySwitch?.(imgEl, 'prev', {});
                 }
             });
         },
@@ -731,8 +731,8 @@ function showcaseState() {
             this.$nextTick(() => {
                 if (self._sgGeneration !== gen) return; // stale check
                 var imgEl = document.querySelector('.sg-main-img');
-                if (imgEl && window.ShowcaseAnimations) {
-                    window.ShowcaseAnimations.playSampleGallerySwitch(imgEl, 'next', {});
+                if (imgEl) {
+                    window.ShowcaseAnimations?.playSampleGallerySwitch?.(imgEl, 'next', {});
                 }
             });
         },
@@ -748,8 +748,8 @@ function showcaseState() {
             this.$nextTick(() => {
                 if (self._sgGeneration !== gen) return; // stale check
                 var imgEl = document.querySelector('.sg-main-img');
-                if (imgEl && window.ShowcaseAnimations) {
-                    window.ShowcaseAnimations.playSampleGallerySwitch(imgEl, direction, {});
+                if (imgEl) {
+                    window.ShowcaseAnimations?.playSampleGallerySwitch?.(imgEl, direction, {});
                 }
             });
         },
@@ -997,10 +997,13 @@ function showcaseState() {
             // 4. Sample Gallery 開啟時的快捷鍵（最高優先，在 lightbox 之前攔截）(T7)
             if (this.sampleGalleryOpen) {
                 if (key === 'ESCAPE') {
+                    e.preventDefault();
                     this.closeSampleGallery();
                 } else if (key === 'ARROWLEFT') {
+                    e.preventDefault();
                     this.prevSampleGallery();
                 } else if (key === 'ARROWRIGHT') {
+                    e.preventDefault();
                     this.nextSampleGallery();
                 }
                 return; // Sample Gallery 開啟時阻止其他快捷鍵（包括 lightbox 導航）
@@ -1009,10 +1012,13 @@ function showcaseState() {
             // 5. Lightbox 開啟時的快捷鍵（優先處理）
             if (this.lightboxOpen) {
                 if (key === 'ESCAPE') {
+                    e.preventDefault();
                     this.closeLightbox();  // closeLightbox handles kill + cleanup + generation++
                 } else if (key === 'ARROWLEFT') {
+                    e.preventDefault();
                     this.prevLightboxVideo();
                 } else if (key === 'ARROWRIGHT') {
+                    e.preventDefault();
                     this.nextLightboxVideo();
                 }
                 return; // Lightbox 開啟時阻止其他快捷鍵

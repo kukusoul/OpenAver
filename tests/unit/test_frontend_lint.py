@@ -608,3 +608,34 @@ class TestSmartCloseRemovedGuard:
         """core.js 不應包含 lightboxMoveTimer（Smart Close timer 已移除）"""
         content = self.CORE_JS.read_text(encoding='utf-8')
         assert 'lightboxMoveTimer' not in content
+
+
+class TestShowcaseKeyboardGuard:
+    """Phase 40d-T2: Showcase 鍵盤 preventDefault 守衛"""
+
+    CORE_JS = Path(__file__).parents[2] / 'web' / 'static' / 'js' / 'pages' / 'showcase' / 'core.js'
+
+    def _extract_block(self, content, anchor, end_marker='return;'):
+        """提取從 anchor 到 end_marker 的區塊"""
+        start = content.find(anchor)
+        if start == -1:
+            return ''
+        end = content.find(end_marker, start)
+        if end == -1:
+            return content[start:]
+        return content[start:end + len(end_marker)]
+
+    def test_sample_gallery_keyboard_has_prevent_default(self):
+        """sample gallery keyboard 分支應有 e.preventDefault()"""
+        content = self.CORE_JS.read_text(encoding='utf-8')
+        block = self._extract_block(content, 'if (this.sampleGalleryOpen)')
+        assert 'e.preventDefault()' in block, \
+            "sample gallery keyboard 分支缺少 e.preventDefault()"
+
+    def test_lightbox_keyboard_has_prevent_default(self):
+        """lightbox keyboard 分支應有 e.preventDefault()"""
+        content = self.CORE_JS.read_text(encoding='utf-8')
+        # 使用鍵盤 handler 特有的注釋行作為錨，避免誤中 cleanup 裡的 if (this.lightboxOpen)
+        block = self._extract_block(content, '// 5. Lightbox 開啟時的快捷鍵')
+        assert 'e.preventDefault()' in block, \
+            "lightbox keyboard 分支缺少 e.preventDefault()"
