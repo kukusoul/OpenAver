@@ -482,6 +482,14 @@
                             <small class="settings-hint">{{ t('settings.scraper.jellyfin_mode_hint') }}</small>
                         </label>
                     </div>
+                    <div class="settings-form-row">
+                        <label class="row-label">
+                            <input type="checkbox" class="toggle toggle-sm toggle-primary"
+                                   x-model="form.downloadSampleImages">
+                            {{ t('settings.scraper.download_sample_images_label') }}
+                            <small class="settings-hint">{{ t('settings.scraper.download_sample_images_hint') }}</small>
+                        </label>
+                    </div>
                     </div>
                 </div>
             </div>

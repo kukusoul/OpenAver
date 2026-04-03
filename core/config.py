@@ -40,6 +40,7 @@ class ScraperConfig(BaseModel):
     video_extensions: List[str] = list(DEFAULT_VIDEO_EXTENSIONS)
     suffix_keywords: List[str] = ["-cd1", "-cd2", "-4k", "-uc"]
     jellyfin_mode: bool = False
+    download_sample_images: bool = False
 
 
 class SearchConfig(BaseModel):
@@ -232,6 +233,12 @@ def load_config() -> dict:
         s = raw_config.get('scraper', {})
         if 'jellyfin_mode' not in s:
             s['jellyfin_mode'] = False
+            need_save = True
+
+        # 確保 scraper.download_sample_images 存在（Task 38e 拆分 extrafanart 下載）
+        s = raw_config.get('scraper', {})
+        if 'download_sample_images' not in s:
+            s['download_sample_images'] = False
             need_save = True
 
         # Migration: source_links 區段新增 + 深層合併保證（T18b-pre）

@@ -214,7 +214,9 @@
       "video_extensions_label": "影片副檔名",
       "video_extensions_hint": "以逗號分隔",
       "jellyfin_mode_label": "Jellyfin 圖片模式",
-      "jellyfin_mode_hint": "自動產生 {stem}-poster.jpg + {stem}-fanart.jpg + extrafanart/ 樣品圖像"
+      "jellyfin_mode_hint": "自動產生 {stem}-poster.jpg + {stem}-fanart.jpg（Jellyfin 圖庫用）",
+      "download_sample_images_label": "下載劇照（extrafanart）",
+      "download_sample_images_hint": "整理時自動下載劇照至 extrafanart/ 子目錄（需啟用「建立資料夾」）"
     },
     "gallery": {
       "output_dir_label": "輸出目錄",

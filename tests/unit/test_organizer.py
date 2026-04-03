@@ -1045,9 +1045,13 @@ class TestGenerateNfoNewFields:
 # ============ organize_file() extrafanart 測試 (T5b) ============
 
 class TestOrganizeExtrafanart:
-    """organize_file() jellyfin_mode 下 extrafanart/ 目錄建立與下載測試"""
+    """organize_file() extrafanart/ 目錄建立與下載測試（由 download_sample_images 控制）"""
 
-    def _make_jellyfin_config_with_nfo(self, jellyfin_mode: bool, create_folder: bool = True) -> dict:
+    def _make_jellyfin_config_with_nfo(self, jellyfin_mode: bool, create_folder: bool = True,
+                                       download_sample_images: bool = None) -> dict:
+        # 向後相容：若未指定 download_sample_images，沿用 jellyfin_mode 的值（舊行為）
+        if download_sample_images is None:
+            download_sample_images = jellyfin_mode
         return {
             "create_folder": create_folder,
             "filename_format": "[{num}] {title}",
@@ -1058,6 +1062,7 @@ class TestOrganizeExtrafanart:
             "max_filename_length": 60,
             "suffix_keywords": [],
             "jellyfin_mode": jellyfin_mode,
+            "download_sample_images": download_sample_images,
         }
 
     def _make_metadata_with_samples(self, sample_images=None) -> dict:
@@ -1077,11 +1082,12 @@ class TestOrganizeExtrafanart:
         }
 
     def test_extrafanart_created_in_jellyfin_mode(self, tmp_path):
-        """jellyfin_mode=True + create_folder=True + sample_images → extrafanart/ 建立 + fanart1.jpg 存在"""
+        """jellyfin_mode=True + download_sample_images=True + create_folder=True + sample_images → extrafanart/ 建立 + fanart1.jpg 存在"""
         src = tmp_path / "SNOS-143.mp4"
         src.write_bytes(b"fake mp4")
 
-        config = self._make_jellyfin_config_with_nfo(jellyfin_mode=True, create_folder=True)
+        config = self._make_jellyfin_config_with_nfo(jellyfin_mode=True, create_folder=True,
+                                                     download_sample_images=True)
         metadata = self._make_metadata_with_samples(["http://fake/s1.jpg", "http://fake/s2.jpg"])
 
         with patch("core.organizer.download_image", side_effect=_mock_download_image_write_jpeg):
@@ -1130,7 +1136,8 @@ class TestOrganizeExtrafanart:
         src = tmp_path / "SNOS-143.mp4"
         src.write_bytes(b"fake mp4")
 
-        config = self._make_jellyfin_config_with_nfo(jellyfin_mode=True, create_folder=True)
+        config = self._make_jellyfin_config_with_nfo(jellyfin_mode=True, create_folder=True,
+                                                     download_sample_images=True)
         metadata = self._make_metadata_with_samples([
             "http://fake/s1.jpg",
             "http://fake/s2_fail.jpg",
@@ -1162,7 +1169,8 @@ class TestOrganizeExtrafanart:
         src = tmp_path / "SNOS-143.mp4"
         src.write_bytes(b"fake mp4")
 
-        config = self._make_jellyfin_config_with_nfo(jellyfin_mode=True, create_folder=True)
+        config = self._make_jellyfin_config_with_nfo(jellyfin_mode=True, create_folder=True,
+                                                     download_sample_images=True)
         metadata = self._make_metadata_with_samples(["http://fake/s1.jpg"])
 
         def mock_download_cover_fail(url, save_path, referer=''):
@@ -1183,11 +1191,12 @@ class TestOrganizeExtrafanart:
         assert (extrafanart_dir / "fanart1.jpg").exists(), "cover 失敗不影響 sample image 下載"
 
     def test_extrafanart_skipped_without_create_folder(self, tmp_path):
-        """jellyfin_mode=True + create_folder=False → 不建立 extrafanart/（防止多片互蓋）"""
+        """download_sample_images=True + create_folder=False → 不建立 extrafanart/（防止多片互蓋）"""
         src = tmp_path / "SNOS-143.mp4"
         src.write_bytes(b"fake mp4")
 
-        config = self._make_jellyfin_config_with_nfo(jellyfin_mode=True, create_folder=False)
+        config = self._make_jellyfin_config_with_nfo(jellyfin_mode=True, create_folder=False,
+                                                     download_sample_images=True)
         metadata = self._make_metadata_with_samples(["http://fake/s1.jpg", "http://fake/s2.jpg"])
 
         with patch("core.organizer.download_image", side_effect=_mock_download_image_write_jpeg):
@@ -1198,6 +1207,48 @@ class TestOrganizeExtrafanart:
         assert not extrafanart_dir.exists(), (
             "create_folder=False 時不應建立 extrafanart/（多片共用目錄會互相覆蓋 fanart1.jpg）"
         )
+
+    def test_extrafanart_with_sample_dl_without_jellyfin(self, tmp_path):
+        """jellyfin_mode=False, download_sample_images=True, create_folder=True → extrafanart 建立（解耦驗證）"""
+        src = tmp_path / "SNOS-143.mp4"
+        src.write_bytes(b"fake mp4")
+
+        config = self._make_jellyfin_config_with_nfo(jellyfin_mode=False, create_folder=True,
+                                                     download_sample_images=True)
+        metadata = self._make_metadata_with_samples(["http://fake/s1.jpg", "http://fake/s2.jpg"])
+
+        with patch("core.organizer.download_image", side_effect=_mock_download_image_write_jpeg):
+            result = organize_file(str(src), metadata, config)
+
+        assert result["success"] is True, f"organize 失敗: {result.get('error')}"
+        video_dir = Path(result["new_folder"])
+        extrafanart_dir = video_dir / "extrafanart"
+        assert extrafanart_dir.exists(), "download_sample_images=True 時應建立 extrafanart/ 目錄"
+        assert (extrafanart_dir / "fanart1.jpg").exists(), "fanart1.jpg 應被下載"
+        assert (extrafanart_dir / "fanart2.jpg").exists(), "fanart2.jpg 應被下載"
+        # jellyfin_mode=False → 不產生 poster/fanart
+        assert result.get("poster_path") is None, "jellyfin_mode=False 時不應產生 poster"
+        assert result.get("fanart_path") is None, "jellyfin_mode=False 時不應產生 fanart"
+
+    def test_extrafanart_skipped_when_sample_dl_off(self, tmp_path):
+        """jellyfin_mode=True, download_sample_images=False, create_folder=True → 無 extrafanart，但 poster/fanart 存在"""
+        src = tmp_path / "SNOS-143.mp4"
+        src.write_bytes(b"fake mp4")
+
+        config = self._make_jellyfin_config_with_nfo(jellyfin_mode=True, create_folder=True,
+                                                     download_sample_images=False)
+        metadata = self._make_metadata_with_samples(["http://fake/s1.jpg", "http://fake/s2.jpg"])
+
+        with patch("core.organizer.download_image", side_effect=_mock_download_image_write_jpeg):
+            result = organize_file(str(src), metadata, config)
+
+        assert result["success"] is True, f"organize 失敗: {result.get('error')}"
+        video_dir = Path(result["new_folder"])
+        extrafanart_dir = video_dir / "extrafanart"
+        assert not extrafanart_dir.exists(), "download_sample_images=False 時不應建立 extrafanart/ 目錄"
+        # jellyfin_mode=True → 應產生 poster/fanart
+        assert result.get("poster_path") is not None, "jellyfin_mode=True 時應產生 poster"
+        assert result.get("fanart_path") is not None, "jellyfin_mode=True 時應產生 fanart"
 
 
 # ============ find_subtitle_files() 測試 (T37d-1) ============
