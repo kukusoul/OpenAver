@@ -82,6 +82,21 @@ OpenAver 是純本地應用程式：
 - **路徑管理**: 靈活設定輸出路徑與檔案命名規則，支援 `{suffix}` 格式變數。
 - **我的最愛資料夾**: 設定常用資料夾，一鍵載入並自動搜尋。
 - **檔案過濾**: 設定最小影片尺寸 (MB)，自動排除過小檔案。
+- **多語系 UI**: 四語系支援（繁中 / 简中 / 日文 / 英文），語系切換按鈕即時切換所有介面文字。
+
+### 🤖 AI 整合
+
+OpenAver 內建 Agentic AI API，任何 AI agent 一個 curl 即可學會使用：
+
+- `GET /api/capabilities` — Self-describing manifest，回傳所有可用端點說明
+- `POST /api/batch-search` — 批量番號搜尋，結構化回傳
+- `POST /api/enrich-single` — 舊片原地補完（不搬移不改名）
+- `POST /api/collection/sql` — Read-only SQL 查詢收藏資料庫
+
+**快速上手（一行 curl）：**
+```bash
+curl http://localhost:38741/api/capabilities
+```
 
 ### 🌐 翻譯功能
 
@@ -91,6 +106,12 @@ OpenAver 支援兩種翻譯提供商：
 |--------|------|------|
 | **Ollama（本地）** | 免費、無 API 限制、需本地 GPU | ~0.5 秒/片 |
 | **Gemini（Google）** | 雲端 API、免費額度 15 RPM | ~0.1 秒/片 |
+
+**翻譯語系跟隨 UI 語系（38c）：**
+- UI 切換至繁中 → 翻譯輸出繁體中文
+- UI 切換至简中 → 翻譯輸出簡體中文
+- UI 切換至英文 → 翻譯輸出英文
+- UI 切換至日文 → 跳過翻譯（原始標題本身即日文，不呼叫 API）
 
 **⚠️ Gemini API Key 安全提示**
 
@@ -105,7 +126,7 @@ OpenAver 支援兩種翻譯提供商：
 - **Animation**: GSAP (Showcase/Search pages) + Motion Adapter (reduced-motion support)
 - **Desktop**: PyWebView (Windows/macOS)
 - **Database**: SQLite (WAL mode)
-- **Testing**: Pytest (803+ tests)
+- **Testing**: Pytest (1600+ tests)
 
 ## 📥 安裝
 
@@ -306,7 +327,7 @@ pytest
 ```
 OpenAver/
 ├── web/                # Web GUI (FastAPI)
-│   ├── routers/        # API Endpoints (Search, Config, Scraper, Scanner)
+│   ├── routers/        # API Endpoints (Search, Config, Scraper, Scanner, Capabilities)
 │   ├── templates/      # HTML Templates (DaisyUI + Fluent Design 2)
 │   └── static/         # CSS/JS Assets (Modular JS, Theme CSS)
 ├── core/               # 核心邏輯
@@ -314,7 +335,9 @@ OpenAver/
 │   ├── database.py             # SQLite 資料層 (WAL mode)
 │   ├── organizer.py            # 檔案整理 + fallback 空值防護
 │   ├── path_utils.py           # 跨平台路徑處理 (file:// URI)
+│   ├── i18n.py                 # 多語系翻譯核心 (t() / fallback chain)
 │   └── translate_service.py    # AI 翻譯 (Ollama/Gemini)
+├── locales/            # 四語系 JSON (zh_TW/zh_CN/ja/en)
 ├── tests/              # 測試代碼 (Pytest)
 └── windows/            # Windows 啟動器 (PyWebView)
 ```
