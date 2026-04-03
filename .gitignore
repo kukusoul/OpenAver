@@ -62,6 +62,9 @@ CLAUDE.md
 tools/tailwindcss-extra
 web/static/css/tailwind.css
 
+# Playwright MCP
+.playwright-mcp/
+
 # Node (package install artifacts)
 node_modules/
 package-lock.json

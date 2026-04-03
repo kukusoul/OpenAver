@@ -36,6 +36,7 @@ COPY_ITEMS = [
     "web",
     "core",
     "windows",
+    "locales",
     "maker_mapping.json",
 ]
 
