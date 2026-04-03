@@ -1180,7 +1180,7 @@
 
 /* 主圖 */
 .sample-gallery .sg-main-img {
-    max-width: min(100%, 88vw);
+    max-width: 100%;
     max-height: calc(100vh - 160px);
     object-fit: contain;
     display: block;
