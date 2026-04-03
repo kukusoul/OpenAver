@@ -105,10 +105,19 @@ scrapers/
 - `_parse_graphis_profile(html)` — 解析 `model.php` 詳情頁 HTML，提取結構化 profile 欄位。
 
 ### `nfo_updater.py`
-**NFO 批次更新器**
-- 檢查現有影片的 NFO 檔案是否缺少關鍵欄位（如片商、演員）。
-- 自動調用 `scraper` 補全缺失的元數據並回寫 NFO。
+**NFO 批次更新器**（Scanner 頁面「補全」按鈕）
+- 檢查現有影片的 NFO 檔案是否缺少關鍵欄位（如片商、演員、日期、系列等）。
+- 自動調用 `scraper` 補全缺失的元數據並回寫 NFO（XML patch，僅填空欄位不覆蓋）。
 - 支援 SSE (Server-Sent Events) 進度串流回報。
+- `parse_nfo()` 也被 `enricher.py` 共用。
+- 不寫封面、不寫 extrafanart、不更新 DB。
+
+### `enricher.py`
+**單一影片原地補完**（`POST /api/enrich-single`，Agentic AI 用）
+- 三種模式：`fill_missing`（DB→NFO→scraper 逐層補齊）、`db_to_sidecar`（僅從 DB 寫出）、`refresh_full`（強制重抓覆蓋）。
+- 可寫 NFO（full rewrite via `organizer.generate_nfo()`）、封面、extrafanart。
+- `fill_missing` / `refresh_full` 模式會同步更新 SQLite DB。
+- 依賴 `nfo_updater.parse_nfo()` 讀取既有 NFO、`organizer.py` 寫出檔案。
 
 ## 工具函式
 
