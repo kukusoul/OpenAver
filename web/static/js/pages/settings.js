@@ -761,8 +761,11 @@ function settingsPage() {
             await this.saveConfig();
             // saveConfig 成功會更新 savedState，isDirty 變 false
             if (!this.isDirty) {
-                // 儲存成功，跳轉
+                // 儲存成功，透過 lifecycle API 執行 cleanup 再跳轉
                 this.dirtyCheckModalOpen = false;
+                if (window.__leavePage) {
+                    if (!window.__leavePage(this.pendingNavigationUrl)) return;
+                }
                 window.location.href = this.pendingNavigationUrl;
             }
             // 儲存失敗：modal 保持開啟，toast 已顯示錯誤
@@ -773,8 +776,9 @@ function settingsPage() {
         dirtyCheckDiscard() {
             this.savedState = null;  // 防止殘留
             // T3(40b): 透過 lifecycle API 執行 cleanup 再跳轉
+            // __leavePage 回傳 false 表示 cleanup 阻止導航（例如仍有進行中請求）
             if (window.__leavePage) {
-                window.__leavePage(this.pendingNavigationUrl);
+                if (!window.__leavePage(this.pendingNavigationUrl)) return;
             }
             window.location.href = this.pendingNavigationUrl;
         },

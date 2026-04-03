@@ -410,3 +410,28 @@ class TestSettingsCleanupBypassGuard:
         js = self._js()
         assert "window.__leavePage(this.pendingNavigationUrl)" in js, \
             "settings.js dirtyCheckDiscard() 應以 this.pendingNavigationUrl 呼叫 window.__leavePage"
+
+    def test_dirty_check_discard_gates_on_leave_page_return(self):
+        """dirtyCheckDiscard() 使用 !window.__leavePage(...) gate（回傳 false 時阻止導航）"""
+        js = self._js()
+        assert "if (!window.__leavePage(this.pendingNavigationUrl)) return;" in js, \
+            "settings.js dirtyCheckDiscard() 應在 __leavePage 回傳 false 時 return（阻止導航）"
+
+    def test_dirty_check_save_calls_leave_page_with_url(self):
+        """dirtyCheckSave() 儲存成功後也透過 __leavePage gate 再跳轉"""
+        js = self._js()
+        # dirtyCheckSave 在 isDirty 為 false 後跳轉，需同樣呼叫 __leavePage
+        # 至少出現兩次（dirtyCheckDiscard 一次 + dirtyCheckSave 一次）
+        count = js.count("window.__leavePage(this.pendingNavigationUrl)")
+        assert count >= 2, \
+            (f"settings.js dirtyCheckSave() 也應使用 window.__leavePage(this.pendingNavigationUrl) gate，"
+             f"目前只有 {count} 處")
+
+    def test_dirty_check_save_gates_on_leave_page_return(self):
+        """dirtyCheckSave() 使用 !window.__leavePage(...) gate（回傳 false 時阻止導航）"""
+        js = self._js()
+        # 同一個 gate pattern 在檔案中出現至少兩次
+        count = js.count("if (!window.__leavePage(this.pendingNavigationUrl)) return;")
+        assert count >= 2, \
+            (f"settings.js dirtyCheckSave() 也應在 __leavePage 回傳 false 時 return，"
+             f"目前只有 {count} 處")
