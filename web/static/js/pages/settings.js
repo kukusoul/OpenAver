@@ -53,6 +53,7 @@ function settingsPage() {
         // ===== UI State =====
         newSuffixInput: '',
         showPathHelp: false,
+        showSampleImagesHelp: false,
         ollamaStatus: '',
         modelStatus: '',
         geminiStatus: '',
