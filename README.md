@@ -16,6 +16,8 @@ OpenAver 是一個基於 Web 技術的桌面應用程式，旨在幫助您輕鬆
 ![Tests](https://github.com/slive777/OpenAver/actions/workflows/test.yml/badge.svg)
 ![GitHub Release](https://img.shields.io/github/v/release/slive777/OpenAver)
 
+**🌐 [English](README_EN.md)** | 繁體中文
+
 ## 📸 截圖預覽
 
 ![Home](docs/screenshots/home.jpg)
