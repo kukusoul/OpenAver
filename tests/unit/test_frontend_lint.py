@@ -145,6 +145,10 @@ class TestShowcaseCoreJsSearchableFields:
 
 SETTINGS_HTML = Path(__file__).parent.parent.parent / "web" / "templates" / "settings.html"
 SCANNER_HTML = Path(__file__).parent.parent.parent / "web" / "templates" / "scanner.html"
+MOTION_LAB_HTML = Path(__file__).parent.parent.parent / "web" / "templates" / "motion_lab.html"
+DESIGN_SYSTEM_HTML = Path(__file__).parent.parent.parent / "web" / "templates" / "design-system.html"
+THEME_CSS = Path(__file__).parent.parent.parent / "web" / "static" / "css" / "theme.css"
+TAILWIND_CSS = Path(__file__).parent.parent.parent / "web" / "static" / "css" / "tailwind.css"
 
 
 class TestHelpPopoverGuard:
@@ -195,3 +199,61 @@ class TestHelpPopoverGuard:
         html = self._scanner()
         assert "box-shadow: var(--shadow-4)" not in html, \
             "scanner.html 含殘留 box-shadow: var(--shadow-4)（應改為 --fluent-shadow-4）"
+
+
+class TestInlineStyleCleanup:
+    """T4 守衛：確認 inline style 已清理為 CSS class"""
+
+    def _settings(self):
+        return SETTINGS_HTML.read_text(encoding="utf-8")
+
+    def _theme_css(self):
+        return THEME_CSS.read_text(encoding="utf-8")
+
+    def _tailwind_css(self):
+        return TAILWIND_CSS.read_text(encoding="utf-8")
+
+    def _motion_lab(self):
+        return MOTION_LAB_HTML.read_text(encoding="utf-8")
+
+    def _design_system(self):
+        return DESIGN_SYSTEM_HTML.read_text(encoding="utf-8")
+
+    def test_settings_no_inline_position_relative_for_popover(self):
+        """settings.html 不應有 style="position: relative;" 用於 popover 錨點"""
+        html = self._settings()
+        assert 'style="position: relative;"' not in html, \
+            'settings.html 仍含 style="position: relative;"，應改用 class="... popover-anchor"'
+
+    def test_theme_css_no_scoped_manual_input(self):
+        """theme.css 與 tailwind.css 的 .manual-input 不應有 :is() scope guard"""
+        for label, css in [("theme.css", self._theme_css()), ("tailwind.css", self._tailwind_css())]:
+            lines = css.splitlines()
+            for line in lines:
+                if ":is(" in line and "manual-input" in line:
+                    raise AssertionError(
+                        f"{label} 仍有 :is() scope 限制 manual-input：{line.strip()}"
+                    )
+
+    def test_motion_lab_no_inline_object_fit(self):
+        """motion_lab.html 不應有 inline object-fit:cover"""
+        html = self._motion_lab()
+        # 在 style= 屬性中尋找 object-fit:cover 或 object-fit: cover
+        import re
+        pattern = re.compile(r'style=["\'][^"\']*object-fit\s*:\s*cover[^"\']*["\']')
+        matches = pattern.findall(html)
+        assert len(matches) == 0, \
+            f"motion_lab.html 仍有 {len(matches)} 處 inline object-fit:cover，應改用 class=\"img-cover-fill\""
+
+    def test_design_system_no_inline_bg_card_pattern(self):
+        """design-system.html 不應有 inline padding + background: var(--bg-card) + border-radius 三合一 pattern"""
+        html = self._design_system()
+        import re
+        # 找 style= 屬性中同時含 padding（1rem 或 1.5rem 2rem）+ background: var(--bg-card) + border-radius: var(--radius-md) 的
+        # 這 7 處的 padding 值為 "1rem 1.5rem" 或 "1.5rem 2rem"，且只有這 3 個屬性（無 max-width、box-shadow 等額外屬性）
+        pattern = re.compile(
+            r'style=["\']padding:\s*(?:1(?:\.5)?rem\s+(?:1\.5rem|2rem)|1rem\s+1\.5rem);\s*background:\s*var\(--bg-card\);\s*border-radius:\s*var\(--radius-md\);["\']'
+        )
+        matches = pattern.findall(html)
+        assert len(matches) == 0, \
+            f"design-system.html 仍有 {len(matches)} 處 padding+bg-card+border-radius inline pattern，應改用 class=\"... ds-demo-panel\""

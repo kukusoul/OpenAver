@@ -2094,7 +2094,7 @@
                             <img :src="video.cover_url"
                                  :alt="video.number"
                                  loading="lazy"
-                                 style="width:100%; height:100%; object-fit:cover; display:block;">
+                                 class="img-cover-fill">
                         </template>
                         <template x-if="!video.cover_url">
                             <div class="av-card-no-cover">
@@ -2125,7 +2125,7 @@
                         <!-- 填入狀態：有封面 -->
                         <template x-if="card !== null && card.cover_url">
                             <img :src="card.cover_url" :alt="card.number" loading="lazy"
-                                 style="width:100%; height:100%; object-fit:cover; display:block;">
+                                 class="img-cover-fill">
                         </template>
                         <!-- 填入狀態：無封面 -->
                         <template x-if="card !== null && !card.cover_url">
@@ -2155,7 +2155,7 @@
                     <img x-ref="stagingImg"
                          :src="stagingCurrentCover || ''"
                          x-show="stagingCurrentCover"
-                         style="width:100%; height:100%; object-fit:cover; display:block;">
+                         class="img-cover-fill">
                     <div class="av-card-no-cover" x-show="!stagingCurrentCover && stagingFilled === 0">
                         <i class="bi bi-hourglass-split"></i>
                         <span>等待中</span>
@@ -2189,7 +2189,7 @@
                         <!-- 填入狀態：有封面 -->
                         <template x-if="card !== null && card.cover_url">
                             <img :src="card.cover_url" :alt="card.number" loading="lazy"
-                                 style="width:100%; height:100%; object-fit:cover; display:block;">
+                                 class="img-cover-fill">
                         </template>
                         <!-- 填入狀態：無封面 -->
                         <template x-if="card !== null && !card.cover_url">
@@ -2220,7 +2220,7 @@
                             <img :src="video.cover_url"
                                  :alt="video.number"
                                  loading="lazy"
-                                 style="width:100%; height:100%; object-fit:cover; display:block;">
+                                 class="img-cover-fill">
                         </template>
                         <template x-if="!video.cover_url">
                             <div class="av-card-no-cover">
@@ -2255,7 +2255,7 @@
                     <!-- 填充態：模擬 actressProfile 圖片 -->
                     <img :src="heroActressProfile?.cover_url || ''"
                          x-show="_heroFilled && heroActressProfile?.cover_url"
-                         style="width:100%; height:100%; object-fit:cover; display:block;">
+                         class="img-cover-fill">
                     <!-- 填充態：無封面 -->
                     <div class="av-card-no-cover"
                          x-show="_heroFilled && heroActressProfile && !heroActressProfile.cover_url">
@@ -2280,7 +2280,7 @@
                         <!-- 填入狀態：有封面 -->
                         <template x-if="card !== null && card.cover_url">
                             <img :src="card.cover_url" :alt="card.number" loading="lazy"
-                                 style="width:100%; height:100%; object-fit:cover; display:block;">
+                                 class="img-cover-fill">
                         </template>
                         <!-- 填入狀態：無封面 -->
                         <template x-if="card !== null && !card.cover_url">
@@ -2309,7 +2309,7 @@
                     <img src="/static/img/showcase/sc-1.jpg"
                          alt="Showcase 1"
                          loading="lazy"
-                         style="width:100%; height:100%; object-fit:cover; display:block;">
+                         class="img-cover-fill">
                 </div>
                 <div class="av-card-preview-footer">
                     <span class="av-num">fanart11 #14</span>
@@ -2320,7 +2320,7 @@
                     <img src="/static/img/showcase/sc-2.jpg"
                          alt="Showcase 2"
                          loading="lazy"
-                         style="width:100%; height:100%; object-fit:cover; display:block;">
+                         class="img-cover-fill">
                 </div>
                 <div class="av-card-preview-footer">
                     <span class="av-num">fanart12 #7</span>
@@ -2331,7 +2331,7 @@
                     <img src="/static/img/showcase/sc-3.jpg"
                          alt="Showcase 3"
                          loading="lazy"
-                         style="width:100%; height:100%; object-fit:cover; display:block;">
+                         class="img-cover-fill">
                 </div>
                 <div class="av-card-preview-footer">
                     <span class="av-num">fanart13 #19</span>
@@ -2342,7 +2342,7 @@
                     <img src="/static/img/showcase/sc-4.jpg"
                          alt="Showcase 4"
                          loading="lazy"
-                         style="width:100%; height:100%; object-fit:cover; display:block;">
+                         class="img-cover-fill">
                 </div>
                 <div class="av-card-preview-footer">
                     <span class="av-num">miru SONE-830 #3</span>
@@ -2353,7 +2353,7 @@
                     <img src="/static/img/showcase/sc-5.jpg"
                          alt="Showcase 5"
                          loading="lazy"
-                         style="width:100%; height:100%; object-fit:cover; display:block;">
+                         class="img-cover-fill">
                 </div>
                 <div class="av-card-preview-footer">
                     <span class="av-num">miru SONE-920 #11</span>
@@ -2364,7 +2364,7 @@
                     <img src="/static/img/showcase/sc-6.jpg"
                          alt="Showcase 6"
                          loading="lazy"
-                         style="width:100%; height:100%; object-fit:cover; display:block;">
+                         class="img-cover-fill">
                 </div>
                 <div class="av-card-preview-footer">
                     <span class="av-num">七ツ森りり SONE-917 #16</span>
@@ -2375,7 +2375,7 @@
                     <img src="/static/img/showcase/sc-7.jpg"
                          alt="Showcase 7"
                          loading="lazy"
-                         style="width:100%; height:100%; object-fit:cover; display:block;">
+                         class="img-cover-fill">
                 </div>
                 <div class="av-card-preview-footer">
                     <span class="av-num">三田真鈴 SONE-671 #1</span>
@@ -2386,7 +2386,7 @@
                     <img src="/static/img/showcase/sc-8.jpg"
                          alt="Showcase 8"
                          loading="lazy"
-                         style="width:100%; height:100%; object-fit:cover; display:block;">
+                         class="img-cover-fill">
                 </div>
                 <div class="av-card-preview-footer">
                     <span class="av-num">五日市芽依 WAAA-557 #20</span>
@@ -2397,7 +2397,7 @@
                     <img src="/static/img/showcase/sc-9.jpg"
                          alt="Showcase 9"
                          loading="lazy"
-                         style="width:100%; height:100%; object-fit:cover; display:block;">
+                         class="img-cover-fill">
                 </div>
                 <div class="av-card-preview-footer">
                     <span class="av-num">五芭 FOCS-257 #8</span>
@@ -2408,7 +2408,7 @@
                     <img src="/static/img/showcase/sc-10.jpg"
                          alt="Showcase 10"
                          loading="lazy"
-                         style="width:100%; height:100%; object-fit:cover; display:block;">
+                         class="img-cover-fill">
                 </div>
                 <div class="av-card-preview-footer">
                     <span class="av-num">佐々木さき IPZZ-709 #5</span>
@@ -2419,7 +2419,7 @@
                     <img src="/static/img/showcase/sc-11.jpg"
                          alt="Showcase 11"
                          loading="lazy"
-                         style="width:100%; height:100%; object-fit:cover; display:block;">
+                         class="img-cover-fill">
                 </div>
                 <div class="av-card-preview-footer">
                     <span class="av-num">倉本すみれ HMN-713 #18</span>
@@ -2430,7 +2430,7 @@
                     <img src="/static/img/showcase/sc-12.jpg"
                          alt="Showcase 12"
                          loading="lazy"
-                         style="width:100%; height:100%; object-fit:cover; display:block;">
+                         class="img-cover-fill">
                 </div>
                 <div class="av-card-preview-footer">
                     <span class="av-num">吉高寧々 FNS-089 #12</span>
@@ -2441,7 +2441,7 @@
                     <img src="/static/img/showcase/sc-13.jpg"
                          alt="Showcase 13"
                          loading="lazy"
-                         style="width:100%; height:100%; object-fit:cover; display:block;">
+                         class="img-cover-fill">
                 </div>
                 <div class="av-card-preview-footer">
                     <span class="av-num">天馬ゆい LULU-198 #6</span>
@@ -2452,7 +2452,7 @@
                     <img src="/static/img/showcase/sc-14.jpg"
                          alt="Showcase 14"
                          loading="lazy"
-                         style="width:100%; height:100%; object-fit:cover; display:block;">
+                         class="img-cover-fill">
                 </div>
                 <div class="av-card-preview-footer">
                     <span class="av-num">宮下玲奈 MIDA-241 #9</span>
@@ -2463,7 +2463,7 @@
                     <img src="/static/img/showcase/sc-15.jpg"
                          alt="Showcase 15"
                          loading="lazy"
-                         style="width:100%; height:100%; object-fit:cover; display:block;">
+                         class="img-cover-fill">
                 </div>
                 <div class="av-card-preview-footer">
                     <span class="av-num">小倉由菜 START-344 #15</span>
@@ -2474,7 +2474,7 @@
                     <img src="/static/img/showcase/sc-16.jpg"
                          alt="Showcase 16"
                          loading="lazy"
-                         style="width:100%; height:100%; object-fit:cover; display:block;">
+                         class="img-cover-fill">
                 </div>
                 <div class="av-card-preview-footer">
                     <span class="av-num">小倉由菜 START-370 #2</span>
@@ -2485,7 +2485,7 @@
                     <img src="/static/img/showcase/sc-17.jpg"
                          alt="Showcase 17"
                          loading="lazy"
-                         style="width:100%; height:100%; object-fit:cover; display:block;">
+                         class="img-cover-fill">
                 </div>
                 <div class="av-card-preview-footer">
                     <span class="av-num">小倉由菜 START-453 #10</span>
@@ -2496,7 +2496,7 @@
                     <img src="/static/img/showcase/sc-18.jpg"
                          alt="Showcase 18"
                          loading="lazy"
-                         style="width:100%; height:100%; object-fit:cover; display:block;">
+                         class="img-cover-fill">
                 </div>
                 <div class="av-card-preview-footer">
                     <span class="av-num">小倉由菜 唯井まひろ START-368 #17</span>
@@ -2507,7 +2507,7 @@
                     <img src="/static/img/showcase/sc-19.jpg"
                          alt="Showcase 19"
                          loading="lazy"
-                         style="width:100%; height:100%; object-fit:cover; display:block;">
+                         class="img-cover-fill">
                 </div>
                 <div class="av-card-preview-footer">
                     <span class="av-num">小坂七香 SONE-238 #4</span>
@@ -2518,7 +2518,7 @@
                     <img src="/static/img/showcase/sc-20.jpg"
                          alt="Showcase 20"
                          loading="lazy"
-                         style="width:100%; height:100%; object-fit:cover; display:block;">
+                         class="img-cover-fill">
                 </div>
                 <div class="av-card-preview-footer">
                     <span class="av-num">小島みなみ JUR-002 #13</span>
