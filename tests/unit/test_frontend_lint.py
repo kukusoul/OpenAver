@@ -725,3 +725,43 @@ class TestLoadMoreButton:
             data = self._locale(locale_file)
             val = self._get_nested(data, "search.button.load_more")
             assert val, f"{locale_file} 缺少 search.button.load_more key"
+
+
+NAVIGATION_JS = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "search" / "state" / "navigation.js"
+
+
+class TestCodexFixes:
+    """39a Codex review 修正守衛"""
+
+    def _navigation_js(self):
+        return NAVIGATION_JS.read_text(encoding="utf-8")
+
+    def _settings_js(self):
+        return SETTINGS_JS.read_text(encoding="utf-8")
+
+    def test_loadmore_no_currentindex_assignment(self):
+        """F1：loadMore() 成功分支不含 this.currentIndex = 賦值"""
+        js = self._navigation_js()
+        # 找到 loadMore 函數體，截取到 finally 區塊結束
+        start = js.find("async loadMore()")
+        assert start != -1, "navigation.js 找不到 async loadMore() 函數"
+        # 截取 loadMore 函數體（到函數結尾）
+        func_body = js[start:]
+        # 找到 finally { ... } 後的第一個右大括號（函數結束）
+        finally_pos = func_body.find("finally {")
+        if finally_pos != -1:
+            # 截取 loadMore 函數範圍：從函數開始到 finally 區塊後的 } 結尾
+            end_pos = func_body.find("}", finally_pos + len("finally {"))
+            # 再找外層函數的 }
+            end_pos = func_body.find("},", end_pos + 1)
+            func_body = func_body[:end_pos] if end_pos != -1 else func_body
+        # 確認函數體內不含 this.currentIndex = 賦值（有空格的賦值語句）
+        assert "this.currentIndex =" not in func_body, \
+            "navigation.js loadMore() 成功分支不應含 this.currentIndex = 賦值（破壞 shared state contract）"
+
+    def test_gemini_model_fallback_includes_check(self):
+        """F2：testGeminiConnection() 成功後包含 includes() 檢查舊 model 是否在 allowlist"""
+        js = self._settings_js()
+        assert "modelNames.includes(this.form.geminiModel)" in js or \
+               "includes(this.form.geminiModel)" in js, \
+            "settings.js testGeminiConnection() 成功後應含 includes(this.form.geminiModel) allowlist 檢查"

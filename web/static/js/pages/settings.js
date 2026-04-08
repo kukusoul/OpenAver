@@ -642,8 +642,9 @@ function settingsPage() {
                     this.geminiStatus = `<span class="text-success"><i class="bi bi-check-circle"></i> ${window.t('settings.status.connected_n_models', {count: data.count})}</span>`;
                     this.geminiModels = data.models;
 
-                    // Set first model as default if none selected
-                    if (!this.form.geminiModel && data.models.length > 0) {
+                    // 如果當前 model 不在 allowlist，自動選第一個
+                    const modelNames = data.models.map(m => m.name);
+                    if (data.models.length > 0 && !modelNames.includes(this.form.geminiModel)) {
                         this.form.geminiModel = data.models[0].name;
                     }
                 } else {
