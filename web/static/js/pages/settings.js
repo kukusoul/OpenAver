@@ -720,9 +720,9 @@ function settingsPage() {
                     this.openaiModels = data.models;
                     this.openaiStatus = `<span class="text-success"><i class="bi bi-check-circle"></i> ${window.t('settings.status.connected_n_models', {count: data.models.length})}</span>`;
 
-                    // 如果目前模型不在列表中，設為第一個
+                    // 如果目前模型不在列表中，清空讓用戶從 datalist 選
                     if (!this.openaiModels.includes(this.form.openaiModel)) {
-                        this.form.openaiModel = this.openaiModels[0];
+                        this.form.openaiModel = '';
                     }
                 } else {
                     this.openaiModels = [];
