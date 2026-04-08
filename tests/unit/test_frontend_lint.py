@@ -819,3 +819,74 @@ class TestAutoFetchDirtyStateGuard:
         js = self._js()
         assert "this.savedState.openaiModel" in js, \
             "settings.js fetchOpenAIModels() auto-assign 後應同步 this.savedState.openaiModel，否則 isDirty 誤判"
+
+
+MOTION_LAB_STATE_JS = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "motion-lab-state.js"
+
+
+class TestMotionLabStateGuard:
+    """39b-T1: 守衛 motion_lab.html inline x-data 已抽離至 motion-lab-state.js"""
+
+    def _html(self):
+        return MOTION_LAB_HTML.read_text(encoding="utf-8")
+
+    def _js(self):
+        return MOTION_LAB_STATE_JS.read_text(encoding="utf-8")
+
+    def test_motion_lab_html_uses_factory(self):
+        """motion_lab.html 含 x-data="motionLabPage()" """
+        html = self._html()
+        assert 'x-data="motionLabPage()"' in html, \
+            'motion_lab.html 應含 x-data="motionLabPage()"（inline x-data 已移除）'
+
+    def test_motion_lab_html_no_inline_xdata_block(self):
+        """motion_lab.html 的 x-data 屬性值不超過 100 字元（確保 inline 已移除）"""
+        import re
+        html = self._html()
+        # 找所有 x-data 屬性值，確認無超過 100 字元的 inline 物件
+        pattern = re.compile(r'x-data="([^"]{100,})"')
+        matches = pattern.findall(html)
+        assert len(matches) == 0, \
+            f"motion_lab.html 仍有 {len(matches)} 處超過 100 字元的 x-data 屬性值（inline 物件未完整移除）"
+
+    def test_motion_lab_state_js_exists(self):
+        """web/static/js/pages/motion-lab-state.js 檔案存在"""
+        assert MOTION_LAB_STATE_JS.exists(), \
+            f"motion-lab-state.js 不存在：{MOTION_LAB_STATE_JS}"
+
+    def test_motion_lab_state_js_has_factory_function(self):
+        """motion-lab-state.js 含 function motionLabPage()"""
+        js = self._js()
+        assert "function motionLabPage()" in js, \
+            "motion-lab-state.js 缺少 function motionLabPage()（factory function 宣告）"
+
+    def test_motion_lab_state_js_has_init_method(self):
+        """motion-lab-state.js 含 init()"""
+        js = self._js()
+        assert "init()" in js, \
+            "motion-lab-state.js 缺少 init() method（Alpine 自動呼叫）"
+
+    def test_motion_lab_state_js_has_destroy_method(self):
+        """motion-lab-state.js 含 destroy()"""
+        js = self._js()
+        assert "destroy()" in js, \
+            "motion-lab-state.js 缺少 destroy() method（清除 keydown 監聽）"
+
+    def test_motion_lab_extra_js_loads_state(self):
+        """motion_lab.html 的 extra_js block 含 motion-lab-state.js 引用"""
+        html = self._html()
+        assert "motion-lab-state.js" in html, \
+            "motion_lab.html {% block extra_js %} 缺少 motion-lab-state.js script 引用"
+
+    def test_motion_lab_state_js_no_defer(self):
+        """載入 motion-lab-state.js 的 script tag 不含 defer 屬性"""
+        import re
+        html = self._html()
+        # 找含 motion-lab-state.js 的 script tag
+        pattern = re.compile(r'<script[^>]*motion-lab-state\.js[^>]*>')
+        matches = pattern.findall(html)
+        assert len(matches) > 0, \
+            "motion_lab.html 找不到載入 motion-lab-state.js 的 script tag"
+        for tag in matches:
+            assert "defer" not in tag, \
+                f"motion_lab.html 載入 motion-lab-state.js 的 script tag 不應含 defer 屬性：{tag}"

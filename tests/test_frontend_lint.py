@@ -307,6 +307,7 @@ class TestMotionInfra:
         allowed_files = {
             Path('components') / 'motion-adapter.js',   # components/motion-adapter.js
             Path('pages') / 'motion-lab.js',            # pages/motion-lab.js（T1 新增）
+            Path('pages') / 'motion-lab-state.js',      # pages/motion-lab-state.js（39b-T1 Alpine state 含 GSAP 委派呼叫）
             Path('pages') / 'search' / 'animations.js', # pages/search/animations.js（T6 預先加入）
             Path('pages') / 'showcase' / 'animations.js', # pages/showcase/animations.js（B6 動畫模組）
         }
