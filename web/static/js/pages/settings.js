@@ -646,6 +646,8 @@ function settingsPage() {
                     const modelNames = data.models.map(m => m.name);
                     if (data.models.length > 0 && !modelNames.includes(this.form.geminiModel)) {
                         this.form.geminiModel = data.models[0].name;
+                        // auto-fallback 不算用戶修改，同步快照避免 isDirty 誤判
+                        if (this.savedState) this.savedState.geminiModel = this.form.geminiModel;
                     }
                 } else {
                     this.geminiStatus = `<span class="text-error"><i class="bi bi-x-circle"></i> ${data.error || window.t('settings.status.connect_failed')}</span>`;
@@ -733,6 +735,8 @@ function settingsPage() {
                             this.openaiUseCustomModel = true;
                         } else {
                             this.form.openaiModel = this.openaiModels[0];
+                            // auto-assign 不算用戶修改，同步快照避免 isDirty 誤判
+                            if (this.savedState) this.savedState.openaiModel = this.form.openaiModel;
                         }
                     }
                 } else {

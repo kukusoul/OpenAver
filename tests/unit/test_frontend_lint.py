@@ -765,3 +765,57 @@ class TestCodexFixes:
         assert "modelNames.includes(this.form.geminiModel)" in js or \
                "includes(this.form.geminiModel)" in js, \
             "settings.js testGeminiConnection() 成功後應含 includes(this.form.geminiModel) allowlist 檢查"
+
+
+class TestOpenAIErrorI18nGuard:
+    """39a-PR-fix P1: 守衛 fetchOpenAIModels/testOpenAITranslation error 使用 window.t(errorKey) 翻譯"""
+
+    def _js(self):
+        return SETTINGS_JS.read_text(encoding="utf-8")
+
+    def test_fetch_models_error_uses_i18n(self):
+        """fetchOpenAIModels() error 分支使用 settings.status.openai_ 動態 errorKey 拼接"""
+        js = self._js()
+        # 截取 fetchOpenAIModels 函數體
+        start = js.find("async fetchOpenAIModels()")
+        assert start != -1, "settings.js 找不到 async fetchOpenAIModels() 函數"
+        # 截取到下一個 async 函數起點（保守估計）
+        next_async = js.find("async ", start + 1)
+        func_body = js[start:next_async] if next_async != -1 else js[start:]
+        assert "settings.status.openai_" in func_body, \
+            "settings.js fetchOpenAIModels() error 分支應包含 settings.status.openai_ 動態 key 拼接"
+
+    def test_translate_error_uses_i18n(self):
+        """testOpenAITranslation() error 分支使用 settings.status.openai_ 動態 errorKey 拼接"""
+        js = self._js()
+        start = js.find("async testOpenAITranslation()")
+        assert start != -1, "settings.js 找不到 async testOpenAITranslation() 函數"
+        next_async = js.find("async ", start + 1)
+        func_body = js[start:next_async] if next_async != -1 else js[start:]
+        assert "settings.status.openai_" in func_body, \
+            "settings.js testOpenAITranslation() error 分支應包含 settings.status.openai_ 動態 key 拼接"
+
+    def test_fetch_catch_uses_i18n(self):
+        """fetchOpenAIModels() catch 分支使用 window.t('settings.status.openai_connection_failed')"""
+        js = self._js()
+        assert "window.t('settings.status.openai_connection_failed')" in js, \
+            "settings.js fetchOpenAIModels() catch 分支應使用 window.t('settings.status.openai_connection_failed')，不顯示裸 error.message"
+
+
+class TestAutoFetchDirtyStateGuard:
+    """39a-PR-fix P2: 守衛 auto-fallback 後同步 savedState，防止誤觸 dirty state"""
+
+    def _js(self):
+        return SETTINGS_JS.read_text(encoding="utf-8")
+
+    def test_gemini_fallback_syncs_saved_state(self):
+        """testGeminiConnection() auto-fallback 後同步 savedState.geminiModel"""
+        js = self._js()
+        assert "this.savedState.geminiModel" in js, \
+            "settings.js testGeminiConnection() auto-fallback 後應同步 this.savedState.geminiModel，否則 isDirty 誤判"
+
+    def test_openai_fallback_syncs_saved_state(self):
+        """fetchOpenAIModels() auto-assign 後同步 savedState.openaiModel"""
+        js = self._js()
+        assert "this.savedState.openaiModel" in js, \
+            "settings.js fetchOpenAIModels() auto-assign 後應同步 this.savedState.openaiModel，否則 isDirty 誤判"
