@@ -89,10 +89,10 @@
     "gallery": {
       "prev": "Previous (←)",
       "next": "Next (→)",
-      "sample_prefix": "Sample"
+      "sample_prefix": "Stills"
     },
     "grid": {
-      "sample_prefix": "Sample Image",
+      "sample_prefix": "Stills",
       "thumb_prefix": "Thumbnail",
       "detail_title": "View Detail",
       "unknown_actor": "Unknown",
@@ -215,8 +215,8 @@
       "video_extensions_hint": "Comma-separated",
       "jellyfin_mode_label": "Jellyfin Image Mode",
       "jellyfin_mode_hint": "Auto-generate {stem}-poster.jpg + {stem}-fanart.jpg (for Jellyfin library)",
-      "download_sample_images_label": "Download Sample Images (extrafanart)",
-      "download_sample_images_hint": "Download screenshots to extrafanart/ during organize (requires Create Folder enabled)"
+      "download_sample_images_label": "Download Stills (extrafanart)",
+      "download_sample_images_hint": "Download stills to extrafanart/ during organize (requires Create Folder enabled)"
     },
     "gallery": {
       "output_dir_label": "Output Directory",
@@ -460,8 +460,8 @@
     "gallery": {
       "prev": "Previous (←)",
       "next": "Next (→)",
-      "sample_prefix": "Sample",
-      "sample_alt": "Sample Image",
+      "sample_prefix": "Stills",
+      "sample_alt": "Stills",
       "thumb_alt": "Thumbnail"
     },
     "shortcut": {

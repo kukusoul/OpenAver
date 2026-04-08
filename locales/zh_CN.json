@@ -92,7 +92,7 @@
       "sample_prefix": "剧照"
     },
     "grid": {
-      "sample_prefix": "样品图",
+      "sample_prefix": "剧照",
       "thumb_prefix": "缩图",
       "detail_title": "查看详情",
       "unknown_actor": "未知",
@@ -461,7 +461,7 @@
       "prev": "上一张 (←)",
       "next": "下一张 (→)",
       "sample_prefix": "剧照",
-      "sample_alt": "样品图",
+      "sample_alt": "剧照",
       "thumb_alt": "缩图"
     },
     "shortcut": {
