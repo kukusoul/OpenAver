@@ -726,9 +726,13 @@ function settingsPage() {
                     this.openaiModels = data.models;
                     this.openaiStatus = `<span class="text-success"><i class="bi bi-check-circle"></i> ${window.t('settings.status.connected_n_models', {count: data.models.length})}</span>`;
 
-                    // 若目前是自訂模式，保持不動；否則若 model 不在清單中，選第一個
-                    if (!this.openaiUseCustomModel && !this.openaiModels.includes(this.form.openaiModel)) {
-                        this.form.openaiModel = this.openaiModels[0];
+                    // model 不在清單中 → 切換到自訂模式（保留用戶的 custom model）
+                    if (!this.openaiModels.includes(this.form.openaiModel)) {
+                        if (this.form.openaiModel) {
+                            this.openaiUseCustomModel = true;
+                        } else {
+                            this.form.openaiModel = this.openaiModels[0];
+                        }
                     }
                 } else {
                     // 不清空 openaiModels — 保留舊清單
