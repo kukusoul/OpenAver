@@ -639,7 +639,7 @@ function settingsPage() {
                 const data = await response.json();
 
                 if (data.success) {
-                    this.geminiStatus = `<span class="text-success"><i class="bi bi-check-circle"></i> ${window.t('settings.status.gemini_n_flash_models', {count: data.count})}</span>`;
+                    this.geminiStatus = `<span class="text-success"><i class="bi bi-check-circle"></i> ${window.t('settings.status.connected_n_models', {count: data.count})}</span>`;
                     this.geminiModels = data.models;
 
                     // Set first model as default if none selected

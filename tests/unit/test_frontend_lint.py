@@ -639,3 +639,16 @@ class TestShowcaseKeyboardGuard:
         block = self._extract_block(content, '// 5. Lightbox 開啟時的快捷鍵')
         assert 'e.preventDefault()' in block, \
             "lightbox keyboard 分支缺少 e.preventDefault()"
+
+
+class TestGeminiLocaleKeyGuard:
+    """39a-T3: 守衛 settings.js 不再使用 gemini_n_flash_models locale key"""
+
+    def _js(self):
+        return SETTINGS_JS.read_text(encoding="utf-8")
+
+    def test_settings_js_no_gemini_n_flash_models(self):
+        """settings.js 不應出現 gemini_n_flash_models（已替換為 connected_n_models）"""
+        js = self._js()
+        assert "gemini_n_flash_models" not in js, \
+            "settings.js 仍含 gemini_n_flash_models，應改為 connected_n_models"
