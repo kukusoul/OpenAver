@@ -1,21 +1,26 @@
 """
-collection.py — POST /api/collection/sql read-only SQL 查詢端點
+collection.py — POST /api/collection/sql read-only SQL 查詢端點 + /api/user-tags CRUD
 
 提供 AI agent 對本地收藏資料庫執行任意 read-only SQL 查詢。
 12 層安全防護確保查詢不可能修改資料或探測 DB 結構。
+
+同時提供 user_tags_router（prefix=/api）實作 POST/GET /api/user-tags。
 """
 
 import json
 import re
 import sqlite3
+from pathlib import Path
 from typing import Any, List, Literal, Optional
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from core.database import get_connection, get_db_path
+from core.database import VideoRepository, get_connection, get_db_path
 from core.logger import get_logger
+from core.organizer import generate_nfo
+from core.path_utils import uri_to_fs_path
 from core.scraper import is_number_format
 
 logger = get_logger(__name__)
@@ -648,3 +653,98 @@ def fix_numbers_apply(request: FixNumbersApplyRequest) -> dict:
     finally:
         if conn:
             conn.close()
+
+
+# ── /api/user-tags router ─────────────────────────────────────────────────────
+
+user_tags_router = APIRouter(prefix="/api", tags=["user-tags"])
+
+
+class UserTagsRequest(BaseModel):
+    file_path: str                # file:/// URI 格式（DB key）
+    add: List[str] = Field(default_factory=list)
+    remove: List[str] = Field(default_factory=list)
+
+
+@user_tags_router.post("/user-tags")
+def post_user_tags(request: UserTagsRequest) -> dict:
+    """
+    新增 / 移除 user tags。
+
+    資料流：
+    1. get_by_path(file_path) 查 DB
+    2. 不存在 → {success: false, error: "..."}
+    3. 合併 add / 移除 remove（去重，remove 優先）
+    4. update_user_tags(file_path, merged) 更新 DB
+    5. 重寫 NFO（失敗不阻擋回傳）
+    6. 回傳 {success: true, user_tags: [...], nfo_updated: bool}
+    """
+    db_path = get_db_path()
+    repo = VideoRepository(db_path)
+
+    # 1. 查 DB
+    video = repo.get_by_path(request.file_path)
+    if video is None:
+        return {"success": False, "error": "影片不存在"}
+
+    # 2. 去重合併（remove 優先）
+    existing = list(video.user_tags)
+    # add：先加不重複的，同時對 add 本身去重
+    seen_add = set()
+    unique_add = []
+    for t in request.add:
+        if t not in seen_add:
+            seen_add.add(t)
+            unique_add.append(t)
+    after_add = existing + [t for t in unique_add if t not in existing]
+    # remove：移除指定 tags
+    merged_tags = [t for t in after_add if t not in request.remove]
+
+    # 3. 更新 DB
+    updated = repo.update_user_tags(request.file_path, merged_tags)
+    if not updated:
+        return {"success": False, "error": "DB 更新失敗"}
+
+    # 4. 重寫 NFO（失敗不阻擋回傳）
+    nfo_updated = False
+    try:
+        fs_path = uri_to_fs_path(request.file_path)
+        nfo_path = str(Path(fs_path).with_suffix(".nfo"))
+        nfo_updated = generate_nfo(
+            number=video.number or "",
+            title=video.title,
+            original_title=video.original_title or "",
+            actors=video.actresses,
+            tags=video.tags,
+            date=video.release_date or "",
+            maker=video.maker or "",
+            url="",
+            has_subtitle=False,
+            output_path=nfo_path,
+            director=video.director or "",
+            duration=video.duration,
+            series=video.series or "",
+            label=video.label or "",
+            user_tags=merged_tags,
+        )
+    except Exception as e:
+        logger.warning("[user-tags] NFO 寫入失敗（忽略）: %s", e)
+
+    return {"success": True, "user_tags": merged_tags, "nfo_updated": nfo_updated}
+
+
+@user_tags_router.get("/user-tags")
+def get_user_tags(file_path: str = Query(...)) -> dict:
+    """
+    查詢指定 file_path 的現有 user_tags。
+
+    不存在時回傳 {user_tags: [], file_path: "..."}（HTTP 200）。
+    """
+    db_path = get_db_path()
+    repo = VideoRepository(db_path)
+
+    video = repo.get_by_path(file_path)
+    if video is None:
+        return {"user_tags": [], "file_path": file_path}
+
+    return {"user_tags": video.user_tags, "file_path": file_path}

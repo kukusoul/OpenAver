@@ -62,6 +62,7 @@ app.include_router(showcase_router.router)
 app.include_router(motion_lab_router.router)
 app.include_router(capabilities_router.router)
 app.include_router(collection_router.router)
+app.include_router(collection_router.user_tags_router)
 
 
 # ============ 輔助函數 ============
