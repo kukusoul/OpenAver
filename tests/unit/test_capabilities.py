@@ -43,6 +43,7 @@ EXPECTED_TOOL_NAMES = {
     "fix_numbers_apply",
     "proxy_image",
     "jellyfin_check",
+    "user_tags",
 }
 
 REQUIRED_TOOL_FIELDS = [
@@ -89,9 +90,9 @@ class TestCapabilitiesEndpoint:
         data = client.get("/api/capabilities").json()
         assert "retry_hint" in data["error_format"]
 
-    def test_tools_count_is_15(self, client):
+    def test_tools_count_is_16(self, client):
         data = client.get("/api/capabilities").json()
-        assert len(data["tools"]) == 15
+        assert len(data["tools"]) == 16
 
     def test_all_tool_names_present(self, client):
         data = client.get("/api/capabilities").json()
@@ -226,3 +227,12 @@ class TestCapabilitiesEndpoint:
         assert "number" in example, (
             f"enrich_single example 缺少 'number' 欄位（required），example: {example}"
         )
+
+    def test_user_tags_tool(self, client):
+        """user_tags tool 有正確的 side_effect 旗標"""
+        data = client.get("/api/capabilities").json()
+        tool = next((t for t in data["tools"] if t["name"] == "user_tags"), None)
+        assert tool is not None, "user_tags tool 不存在"
+        assert tool.get("side_effect") is True
+        assert tool.get("confirmation_required") is False
+        assert tool.get("retry_safe") is True
