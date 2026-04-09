@@ -87,6 +87,7 @@ function settingsPage() {
 
         // ===== Dirty Check State =====
         savedState: null,
+        savedOpenaiUseCustomModel: false,
         pendingNavigationUrl: '',
         _configLoading: true,  // 初始 true，loadConfig 完成後 false
 
@@ -143,7 +144,8 @@ function settingsPage() {
         get isDirty() {
             if (this._configLoading) return false;
             if (!this.savedState) return false;
-            return JSON.stringify(this.form) !== JSON.stringify(this.savedState);
+            return JSON.stringify(this.form) !== JSON.stringify(this.savedState)
+                || this.openaiUseCustomModel !== this.savedOpenaiUseCustomModel;
         },
 
         /**
@@ -309,6 +311,7 @@ function settingsPage() {
                     this.form.openaiBaseUrl = config.translate.openai?.base_url || '';
                     this.form.openaiApiKey = config.translate.openai?.api_key || '';
                     this.form.openaiModel = config.translate.openai?.model || 'gpt-4o-mini';
+                    this.openaiUseCustomModel = config.translate.openai?.use_custom_model || false;
 
                     // 自動測試 Gemini（如果有 API Key 且是 gemini provider）
                     if (config.translate.gemini?.api_key && config.translate.provider === 'gemini') {
@@ -317,7 +320,7 @@ function settingsPage() {
 
                     // 自動 fetch OpenAI models（如果有 base_url 且是 openai provider）
                     if (config.translate.openai?.base_url && config.translate.provider === 'openai') {
-                        setTimeout(() => this.fetchOpenAIModels(), 100);
+                        setTimeout(() => this.fetchOpenAIModels({ source: 'auto' }), 100);
                     }
 
                     // Scraper
@@ -362,6 +365,7 @@ function settingsPage() {
 
                     // 建立初始快照（dirty check 基準）— 必須在解鎖前建立
                     this.savedState = JSON.parse(JSON.stringify(this.form));
+                    this.savedOpenaiUseCustomModel = this.openaiUseCustomModel;
                     // 解鎖表單（config hydrate 完成）
                     this._configLoading = false;
 
@@ -438,7 +442,8 @@ function settingsPage() {
                     openai: {
                         base_url: this.form.openaiBaseUrl.trim(),
                         api_key: this.form.openaiApiKey,
-                        model: this.form.openaiModel.trim() || 'gpt-4o-mini'
+                        model: this.form.openaiModel.trim() || 'gpt-4o-mini',
+                        use_custom_model: this.openaiUseCustomModel
                     }
                 };
 
@@ -478,6 +483,7 @@ function settingsPage() {
                     this.showToast('設定已儲存', 'success');
                     // 更新快照（避免儲存後仍為 dirty）
                     this.savedState = JSON.parse(JSON.stringify(this.form));
+                    this.savedOpenaiUseCustomModel = this.openaiUseCustomModel;
                 } else {
                     this.showToast('儲存失敗: ' + result.error, 'error');
                 }
@@ -702,7 +708,7 @@ function settingsPage() {
             }
         },
 
-        async fetchOpenAIModels() {
+        async fetchOpenAIModels({ source = 'manual' } = {}) {
             const baseUrl = this.form.openaiBaseUrl.trim();
 
             if (!baseUrl) {
@@ -732,7 +738,11 @@ function settingsPage() {
                     // model 不在清單中 → 切換到自訂模式（保留用戶的 custom model）
                     if (!this.openaiModels.includes(this.form.openaiModel)) {
                         if (this.form.openaiModel) {
-                            this.openaiUseCustomModel = true;
+                            if (source === 'manual') {
+                                // 手動 Fetch：model 不在清單 → 切換 custom 模式（維持現有行為）
+                                this.openaiUseCustomModel = true;
+                            }
+                            // source === 'auto'：不動 openaiUseCustomModel，保持 loadConfig 從 config 設的值
                         } else {
                             this.form.openaiModel = this.openaiModels[0];
                             // auto-assign 不算用戶修改，同步快照避免 isDirty 誤判

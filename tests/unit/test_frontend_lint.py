@@ -781,8 +781,8 @@ class TestOpenAIErrorI18nGuard:
         """fetchOpenAIModels() error 分支使用 settings.status.openai_ 動態 errorKey 拼接"""
         js = self._js()
         # 截取 fetchOpenAIModels 函數體
-        start = js.find("async fetchOpenAIModels()")
-        assert start != -1, "settings.js 找不到 async fetchOpenAIModels() 函數"
+        start = js.find("async fetchOpenAIModels(")
+        assert start != -1, "settings.js 找不到 async fetchOpenAIModels( 函數"
         # 截取到下一個 async 函數起點（保守估計）
         next_async = js.find("async ", start + 1)
         func_body = js[start:next_async] if next_async != -1 else js[start:]
@@ -823,6 +823,24 @@ class TestAutoFetchDirtyStateGuard:
         js = self._js()
         assert "this.savedState.openaiModel" in js, \
             "settings.js fetchOpenAIModels() auto-assign 後應同步 this.savedState.openaiModel，否則 isDirty 誤判"
+
+    def test_openai_config_saves_use_custom_model(self):
+        """saveConfig() openai 區段應含 use_custom_model，以便重載後還原 custom/select 模式"""
+        js = self._js()
+        assert "use_custom_model: this.openaiUseCustomModel" in js, \
+            "settings.js saveConfig() 的 openai 物件應含 use_custom_model: this.openaiUseCustomModel，否則重載後 custom 模式丟失"
+
+    def test_openai_config_loads_use_custom_model(self):
+        """loadConfig() 應從 config 還原 openaiUseCustomModel，而非固定從 false 重設"""
+        js = self._js()
+        assert "config.translate.openai?.use_custom_model" in js, \
+            "settings.js loadConfig() 應含 config.translate.openai?.use_custom_model 讀取，否則重載後 custom 模式無法還原"
+
+    def test_fetch_openai_models_has_source_param(self):
+        """fetchOpenAIModels() 應接受 source 參數，區分 auto-fetch 與手動 Fetch"""
+        js = self._js()
+        assert "source = 'manual'" in js, \
+            "settings.js fetchOpenAIModels() 應含 source = 'manual' 預設參數，避免共享 boolean 競態"
 
 
 MOTION_LAB_STATE_JS = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "motion-lab-state.js"

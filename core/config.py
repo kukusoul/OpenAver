@@ -81,6 +81,7 @@ class OpenAIConfig(BaseModel):
     base_url: str = ""   # e.g. "https://api.openai.com/v1"
     api_key: str = ""    # 可為空（本地 LLM 不需要）
     model: str = "gpt-4o-mini"
+    use_custom_model: bool = False
 
 
 class TranslateConfig(BaseModel):

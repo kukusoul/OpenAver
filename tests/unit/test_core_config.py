@@ -536,3 +536,36 @@ class TestMigrationOpenAI:
         assert openai["base_url"] == "https://api.openai.com/v1"
         assert openai["api_key"] == "sk-test"
         assert openai["model"] == "gpt-4o"
+
+    def test_openai_config_has_use_custom_model_field(self):
+        """OpenAIConfig 應有 use_custom_model 欄位，預設為 False，重載後能還原 custom/select 模式"""
+        from core.config import OpenAIConfig
+        config = OpenAIConfig()
+        assert hasattr(config, "use_custom_model"), \
+            "OpenAIConfig 應有 use_custom_model 欄位，否則重載後無法還原 custom 模式"
+        assert config.use_custom_model is False, \
+            "OpenAIConfig.use_custom_model 預設值應為 False"
+
+    def test_openai_use_custom_model_roundtrip(self, tmp_path, monkeypatch):
+        """use_custom_model=True 存入 config → load_config 後能正確讀回"""
+        config_path = tmp_path / "config.json"
+        _write_config(config_path, {
+            "translate": {
+                "enabled": True,
+                "provider": "openai",
+                "openai": {
+                    "base_url": "https://api.example.com/v1",
+                    "api_key": "",
+                    "model": "my-private-model",
+                    "use_custom_model": True
+                }
+            }
+        })
+        monkeypatch.setattr(core_config, "CONFIG_PATH", config_path)
+        monkeypatch.setattr(core_config, "CONFIG_DEFAULT_PATH", tmp_path / "config.default.json")
+
+        result = load_config()
+
+        openai = result["translate"]["openai"]
+        assert openai["use_custom_model"] is True, \
+            "use_custom_model=True 應能從 config 正確讀回，否則重載後 custom 模式丟失"
