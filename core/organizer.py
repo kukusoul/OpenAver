@@ -312,6 +312,7 @@ def generate_nfo(
     duration: Optional[int] = None,
     series: str = '',
     label: str = '',
+    user_tags: List[str] = None,
 ) -> bool:
     """
     生成 NFO 檔案
@@ -333,6 +334,7 @@ def generate_nfo(
 
     actors = actors or []
     tags = tags or []
+    user_tags = user_tags or []
     year = date[:4] if date else ''
 
     # 封面檔名（不含副檔名）
@@ -382,6 +384,10 @@ def generate_nfo(
 
     if has_subtitle:
         nfo_content += '  <tag>中文字幕</tag>\n'
+
+    # 用戶自訂標籤（獨立於 scraper tags，其他平台忽略）
+    for ut in user_tags:
+        nfo_content += f'  <user_tag>{html.escape(ut)}</user_tag>\n'
 
     # Genre
     for tag in tags:

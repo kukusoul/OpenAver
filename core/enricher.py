@@ -151,15 +151,22 @@ def _write_nfo(
     write_nfo: bool,
     overwrite_existing: bool,
     has_subtitle: bool,
+    user_tags: List[str] = None,
 ) -> bool:
     if not write_nfo:
         return False
 
     nfo_path = str(Path(fs_path).with_suffix(".nfo"))
-    nfo_p = Path(nfo_path)
 
     if os.path.exists(nfo_path) and not overwrite_existing:
         return False
+
+    # 若未傳入 user_tags，從 DB 讀取現有值（確保不被覆蓋）
+    if user_tags is None:
+        repo = VideoRepository()
+        path_uri = to_file_uri(fs_path)
+        existing = repo.get_by_path(path_uri)
+        user_tags = existing.user_tags if existing else []
 
     generate_nfo(
         number=number,
@@ -176,6 +183,7 @@ def _write_nfo(
         duration=meta.get("duration"),
         series=meta.get("series", ""),
         label=meta.get("label", ""),
+        user_tags=user_tags,
     )
     return True
 
@@ -315,6 +323,11 @@ def enrich_single(
 
     has_subtitle = bool(find_subtitle_files(fs_path))
 
+    # 讀取 DB 現有 user_tags，在 NFO 寫出和 DB upsert 時保留
+    path_uri = to_file_uri(fs_path)
+    existing_record = repo.get_by_path(path_uri)
+    preserved_user_tags = existing_record.user_tags if existing_record else []
+
     nfo_written = False
     try:
         nfo_written = _write_nfo(
@@ -324,6 +337,7 @@ def enrich_single(
             write_nfo=write_nfo,
             overwrite_existing=overwrite_existing,
             has_subtitle=has_subtitle,
+            user_tags=preserved_user_tags,
         )
     except PermissionError:
         _empty.error = "NFO 寫入失敗，請確認目錄寫入權限"
@@ -392,16 +406,19 @@ def _db_upsert(
     try:
         path_uri = to_file_uri(fs_path)
 
+        # 讀取現有記錄以保留 cover_path 和 user_tags
+        existing = repo.get_by_path(path_uri)
+
         # cover_path 只存本地 file:/// URI
         # 若有本地封面路徑則轉 URI；否則保留 DB 既有值（透過傳空字串讓 upsert 不覆蓋）
         cover_uri = ""
         if local_cover_path and os.path.exists(local_cover_path):
             cover_uri = to_file_uri(local_cover_path)
-        else:
-            # 保留 DB 既有 cover_path — 用 path_uri 精確匹配同一筆紀錄
-            existing = repo.get_by_path(path_uri)
-            if existing and existing.cover_path:
-                cover_uri = existing.cover_path
+        elif existing and existing.cover_path:
+            cover_uri = existing.cover_path
+
+        # 保留 DB 既有 user_tags（不被 scraper 覆蓋）
+        preserved_user_tags = existing.user_tags if existing else []
 
         video = Video(
             path=path_uri,
@@ -414,6 +431,7 @@ def _db_upsert(
             series=meta.get("series") or None,
             label=meta.get("label", ""),
             tags=meta.get("tags", []),
+            user_tags=preserved_user_tags,
             sample_images=meta.get("sample_images", []),
             duration=meta.get("duration"),
             cover_path=cover_uri,

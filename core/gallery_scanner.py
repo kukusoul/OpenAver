@@ -44,6 +44,7 @@ class VideoInfo:
     series: str = ""
     label: str = ""
     sample_images: List[str] = field(default_factory=list)
+    user_tags: List[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
@@ -63,6 +64,7 @@ class VideoInfo:
             "series": self.series,
             "label": self.label,
             "sample_images": self.sample_images,
+            "user_tags": self.user_tags,
         }
 
     @classmethod
@@ -343,6 +345,13 @@ class VideoScanner:
                     genres.append(tag_elem.text.strip())
             info.genre = ','.join(genres)
 
+            # 用戶自訂標籤
+            user_tags = []
+            for ut_elem in root.findall('user_tag'):
+                if ut_elem.text:
+                    user_tags.append(ut_elem.text.strip())
+            info.user_tags = user_tags
+
             # 時長 (runtime)
             runtime_elem = root.find('runtime')
             if runtime_elem is not None and runtime_elem.text:
@@ -448,6 +457,7 @@ class VideoScanner:
                 info.duration = nfo_info.duration if nfo_info.duration is not None else info.duration
                 info.series = nfo_info.series or info.series
                 info.label = nfo_info.label or info.label
+                info.user_tags = nfo_info.user_tags or []
 
         # 如果 NFO 沒有資料，從檔名解析
         if not info.title or not info.num:
