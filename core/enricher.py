@@ -233,6 +233,7 @@ def enrich_single(
     primary_source: str = "javbus",
     source: Optional[str] = None,
     javbus_lang: Optional[str] = None,
+    scraper_data: Optional[dict] = None,
 ) -> EnrichResult:
     _empty = EnrichResult(
         success=False,
@@ -267,8 +268,9 @@ def enrich_single(
     fields_filled: List[str] = []
 
     if mode == "refresh_full":
-        scraper_data = search_jav(number, proxy_url=proxy_url, primary_source=primary_source,
-                                  source=source or 'auto', javbus_lang=javbus_lang)
+        if scraper_data is None:
+            scraper_data = search_jav(number, proxy_url=proxy_url, primary_source=primary_source,
+                                      source=source or 'auto', javbus_lang=javbus_lang)
         if not scraper_data:
             _empty.error = f"找不到 {number} 的資料"
             return _empty
@@ -301,8 +303,9 @@ def enrich_single(
 
         missing = _missing_fields(meta)
         if missing:
-            scraper_data = search_jav(number, proxy_url=proxy_url, primary_source=primary_source,
-                                      source=source or 'auto', javbus_lang=javbus_lang)
+            if scraper_data is None:
+                scraper_data = search_jav(number, proxy_url=proxy_url, primary_source=primary_source,
+                                          source=source or 'auto', javbus_lang=javbus_lang)
             if not scraper_data:
                 _empty.error = f"找不到 {number} 的資料"
                 return _empty

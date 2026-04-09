@@ -338,3 +338,16 @@ class TestSourceJavbusLangParams:
         })
         call_kwargs = mock_fn.call_args.kwargs
         assert call_kwargs.get("source") is None
+
+
+# ── P2: mode Literal 驗證 ─────────────────────────────────────────────────────
+
+class TestEnrichSingleModeValidation:
+    def test_enrich_single_invalid_mode_returns_422(self, client):
+        """mode='bad_mode' → HTTP 422（Pydantic Literal 驗證）"""
+        response = client.post("/api/enrich-single", json={
+            "file_path": "/video/SONE-205.mp4",
+            "number": "SONE-205",
+            "mode": "bad_mode",
+        })
+        assert response.status_code == 422

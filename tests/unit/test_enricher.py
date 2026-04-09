@@ -1106,3 +1106,30 @@ class TestSourceParam:
             )
         assert result.success is False
         assert result.error is not None
+
+
+# ── P1: scraper_data 參數傳入時跳過 search_jav ────────────────────────────────
+
+class TestScraperDataSkipsSearchJav:
+    def test_scraper_data_skips_search_jav(self):
+        """P1: 傳入 scraper_data → search_jav 不應被呼叫（refresh_full mode）"""
+        provided_data = _make_scraper_result()
+
+        with (
+            patch("os.path.exists", return_value=True),
+            patch("core.enricher.search_jav") as mock_search,
+            patch("core.enricher.generate_nfo", return_value=True),
+            patch("core.enricher.download_image", return_value=True),
+            patch("core.enricher.find_subtitle_files", return_value=[]),
+            patch("core.enricher.VideoRepository"),
+        ):
+            from core.enricher import enrich_single
+            result = enrich_single(
+                file_path=FS_PATH,
+                number="SONE-205",
+                mode="refresh_full",
+                scraper_data=provided_data,
+            )
+
+        mock_search.assert_not_called()
+        assert result.success is True

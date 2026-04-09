@@ -239,3 +239,84 @@ class TestBatchEnrich:
         })
 
         assert "text/event-stream" in response.headers.get("content-type", "")
+
+    def test_batch_same_number_only_searches_once(self, client, mocker):
+        """同番號不同 file_path → search_jav 只呼叫 1 次（scraper cache 命中）"""
+        scraper_result = {"title": "テスト", "source": "javbus"}
+
+        mock_search = mocker.patch(
+            "web.routers.scraper.search_jav",
+            return_value=scraper_result,
+        )
+        mocker.patch(
+            "web.routers.scraper.enrich_single",
+            return_value=_ok_result(),
+        )
+
+        response = client.post("/api/batch-enrich", json={
+            "items": [
+                {"file_path": "/video/IPZ-154a.mp4", "number": "IPZ-154"},
+                {"file_path": "/video/IPZ-154b.mp4", "number": "IPZ-154"},
+            ],
+            "mode": "refresh_full",
+        })
+
+        assert response.status_code == 200
+        # search_jav 只應被呼叫 1 次，第 2 筆命中 cache
+        assert mock_search.call_count == 1
+
+    def test_batch_fill_missing_does_not_prefetch(self, client, mocker):
+        """fill_missing mode → search_jav 不被 router 層 pre-fetch，由 enrich_single 內部決定"""
+        mock_search = mocker.patch(
+            "web.routers.scraper.search_jav",
+        )
+        mocker.patch(
+            "web.routers.scraper.enrich_single",
+            return_value=_ok_result(),
+        )
+
+        response = client.post("/api/batch-enrich", json={
+            "items": [{"file_path": "/video/IPZ-154.mp4", "number": "IPZ-154"}],
+            "mode": "fill_missing",
+        })
+
+        assert response.status_code == 200
+        # router 層不應呼叫 search_jav（fill_missing 由 enrich_single 內部處理）
+        mock_search.assert_not_called()
+
+    def test_batch_negative_cache_no_repeat_search(self, client, mocker):
+        """search_jav 回 None → 負向 cache 生效，同番號第 2 筆不再打外站"""
+        mock_search = mocker.patch(
+            "web.routers.scraper.search_jav",
+            return_value=None,  # 找不到資料
+        )
+        mocker.patch(
+            "web.routers.scraper.enrich_single",
+            return_value=_ok_result(success=False),
+        )
+
+        response = client.post("/api/batch-enrich", json={
+            "items": [
+                {"file_path": "/video/IPZ-154a.mp4", "number": "IPZ-154"},
+                {"file_path": "/video/IPZ-154b.mp4", "number": "IPZ-154"},
+            ],
+            "mode": "refresh_full",
+        })
+
+        assert response.status_code == 200
+        # search_jav 只應被呼叫 1 次，第 2 筆命中負向 cache
+        assert mock_search.call_count == 1
+
+    def test_batch_invalid_mode_returns_422(self, client, mocker):
+        """mode='bad_mode' → HTTP 422"""
+        mocker.patch(
+            "web.routers.scraper.enrich_single",
+            return_value=_ok_result(),
+        )
+
+        response = client.post("/api/batch-enrich", json={
+            "items": [{"file_path": "/video/IPZ-154.mp4", "number": "IPZ-154"}],
+            "mode": "bad_mode",
+        })
+
+        assert response.status_code == 422

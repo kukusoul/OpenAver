@@ -12,7 +12,7 @@ import json
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from core.enricher import enrich_single
 from core.organizer import organize_file
@@ -105,7 +105,7 @@ def scrape_single(request: ScrapeRequest) -> dict:
 class EnrichRequest(BaseModel):
     file_path: str
     number: str
-    mode: str = "fill_missing"
+    mode: Literal["refresh_full", "fill_missing", "db_to_sidecar"] = "fill_missing"
     write_nfo: bool = True
     write_cover: bool = True
     write_extrafanart: bool = False
@@ -123,7 +123,7 @@ class BatchEnrichItem(BaseModel):
 
 class BatchEnrichRequest(BaseModel):
     items: List[BatchEnrichItem]       # max 20，超過返回 422
-    mode: str = "refresh_full"
+    mode: Literal["refresh_full", "fill_missing", "db_to_sidecar"] = "refresh_full"
     source: Optional[str] = None       # batch default（item 未指定時用此值）
     javbus_lang: Optional[str] = None  # batch default
     write_nfo: bool = True
@@ -184,6 +184,10 @@ async def batch_enrich_endpoint(request: BatchEnrichRequest):
     async def event_generator():
         success_count = 0
         failed_count = 0
+        # scraper cache：只對 refresh_full 生效（100% 需要 scraper data）
+        # fill_missing 由 enrich_single 內部判斷是否需要打外站，不 pre-fetch
+        # value 為 dict（成功）或 {}（search_jav 回 None，負向 cache）
+        scraper_cache: dict = {}
 
         for idx, item in enumerate(deduped_items, start=1):
             effective_source = item.source or request.source or "auto"
@@ -194,9 +198,31 @@ async def batch_enrich_endpoint(request: BatchEnrichRequest):
 
             try:
                 loop = asyncio.get_running_loop()
+
+                # scraper cache（只對 refresh_full pre-fetch）
+                cached_data = None
+                if request.mode == "refresh_full":
+                    cache_key = (item.number.upper(), effective_source, effective_lang)
+                    if cache_key not in scraper_cache:
+                        fetched = await loop.run_in_executor(
+                            None,
+                            lambda n=item.number, es=effective_source, el=effective_lang: search_jav(
+                                n,
+                                source=es,
+                                proxy_url=proxy_url,
+                                primary_source=primary_source,
+                                javbus_lang=el,
+                            ),
+                        )
+                        # 負向 cache：search_jav 回 None → 存 {}（空 dict falsy）
+                        # enrich_single 收到 {} 時 `is None` 為 False（不再搜），
+                        # `not scraper_data` 為 True（回錯誤）
+                        scraper_cache[cache_key] = fetched if fetched else {}
+                    cached_data = scraper_cache[cache_key]
+
                 result = await loop.run_in_executor(
                     None,
-                    lambda i=item: enrich_single(
+                    lambda i=item, sd=cached_data: enrich_single(
                         file_path=i.file_path,
                         number=i.number,
                         mode=request.mode,
@@ -208,6 +234,7 @@ async def batch_enrich_endpoint(request: BatchEnrichRequest):
                         primary_source=primary_source,
                         source=effective_source if effective_source != "auto" else None,
                         javbus_lang=effective_lang,
+                        scraper_data=sd,
                     ),
                 )
                 from dataclasses import asdict
