@@ -632,9 +632,11 @@
             </div>
             <!-- Load More 按鈕 -->
             <div class="text-center py-4"
-                 x-show="hasMoreResults && !isLoadingMore && displayMode === 'grid'"
+                 x-show="hasMoreResults && displayMode === 'grid'"
                  x-cloak>
-                <button class="btn btn-outline btn-sm" @click="gridLoadMore()">
+                <button class="btn btn-outline btn-sm" @click="gridLoadMore()"
+                        :disabled="isLoadingMore">
+                    <span x-show="isLoadingMore" class="loading loading-spinner loading-xs mr-1"></span>
                     <span x-text="t('search.button.load_more')"></span>
                 </button>
             </div>

@@ -702,10 +702,10 @@ class TestLoadMoreButton:
             "search.html 缺少 t('search.button.load_more') i18n 引用"
 
     def test_html_load_more_xshow_condition(self):
-        """search.html Load More 按鈕 x-show 含 hasMoreResults && !isLoadingMore && displayMode === 'grid'"""
+        """search.html Load More 按鈕 x-show 含 hasMoreResults && displayMode === 'grid'（loading 狀態由 :disabled 處理）"""
         html = self._html()
-        assert "hasMoreResults && !isLoadingMore && displayMode === 'grid'" in html, \
-            "search.html Load More 按鈕缺少正確的 x-show 條件（hasMoreResults && !isLoadingMore && displayMode === 'grid'）"
+        assert "hasMoreResults && displayMode === 'grid'" in html, \
+            "search.html Load More 按鈕缺少正確的 x-show 條件（hasMoreResults && displayMode === 'grid'）"
 
     # --- base.js ---
 
