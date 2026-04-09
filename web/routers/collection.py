@@ -5,9 +5,10 @@ collection.py — POST /api/collection/sql read-only SQL 查詢端點
 12 層安全防護確保查詢不可能修改資料或探測 DB 結構。
 """
 
+import json
 import re
 import sqlite3
-from typing import Any, List, Optional
+from typing import Any, List, Literal, Optional
 
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
@@ -15,6 +16,7 @@ from pydantic import BaseModel, Field
 
 from core.database import get_db_path
 from core.logger import get_logger
+from core.scraper import is_number_format
 
 logger = get_logger(__name__)
 
@@ -23,12 +25,69 @@ router = APIRouter(prefix="/api/collection", tags=["collection"])
 # 允許的表名白名單
 ALLOWED_TABLES = {"videos", "actress_aliases"}
 
+# ── Analysis 常數 ─────────────────────────────────────────────────────────────
+
+CORRUPTION_RULES = [
+    {"name": "digit_prefix", "pattern": r"^(\d+)([A-Z]{2,}-\d+)$",  "fix_group": 2},
+    {"name": "TK_prefix",    "pattern": r"^TK([A-Z]{2,}-\d+)$",     "fix_group": 1},
+    {"name": "K9_prefix",    "pattern": r"^K9([A-Z]{2,}-\d+)$",     "fix_group": 1},
+    {"name": "R_prefix",     "pattern": r"^R-([A-Z]{2,}-\d+)$",     "fix_group": 1},
+]
+
+WESTERN_PATH_PATTERNS = ["西洋", "《03》", "《05》"]
+
+_AVAILABLE_GROUPS = [
+    "no_nfo", "corrupted_numbers", "japanese_tags",
+    "missing_core", "missing_secondary",
+]
+
+
+# ── Analysis 輔助函數 ─────────────────────────────────────────────────────────
+
+def _is_western(path: str) -> bool:
+    """依路徑中的關鍵字判斷是否為西洋片"""
+    return any(p in path for p in WESTERN_PATH_PATTERNS)
+
+
+def _is_corrupted_number(number) -> bool:
+    """判斷番號是否符合任一 corruption pattern（None-safe）"""
+    if number is None:
+        return False
+    upper = number.upper()
+    return any(re.match(rule["pattern"], upper) for rule in CORRUPTION_RULES)
+
+
+def _has_japanese_tags(tags_json) -> bool:
+    """判斷 tags JSON 字串中是否含有假名字元（None-safe，非法 JSON 返回 False）"""
+    if not tags_json:
+        return False
+    try:
+        tags = json.loads(tags_json)
+    except (json.JSONDecodeError, TypeError):
+        return False
+    if not isinstance(tags, list):
+        return False
+    return any(
+        bool(re.search(r"[\u3040-\u30ff]", tag))
+        for tag in tags
+        if isinstance(tag, str)
+    )
+
 
 # ── Request / Response Model ──────────────────────────────────────────────────
 
 class SqlRequest(BaseModel):
     sql: str = Field(..., min_length=1)
     limit: int = Field(default=500, ge=1, le=500)
+
+
+class AnalysisGroupRequest(BaseModel):
+    group: Literal[
+        "no_nfo", "corrupted_numbers", "japanese_tags",
+        "missing_core", "missing_secondary"
+    ]
+    limit: int = Field(default=50, ge=1, le=200)
+    exclude_western: bool = True
 
 
 # ── SQL 驗證邏輯（可獨立測試）────────────────────────────────────────────────
@@ -179,6 +238,246 @@ def collection_sql(request: SqlRequest) -> dict:
     except Exception as e:
         logger.error("[collection/sql] 非預期錯誤: %s", e)
         return _err("內部錯誤，請稍後再試")
+
+    finally:
+        if conn:
+            conn.close()
+
+
+# ── GET /api/collection/analysis ─────────────────────────────────────────────
+
+@router.get("/analysis")
+def collection_analysis() -> dict:
+    """
+    收藏庫 metadata 健康度診斷。
+
+    回傳各欄位缺失數、空陣列數、異常番號、日文 tag 統計、NFO 狀態以及可用的 group 名稱。
+    """
+    db_path = get_db_path()
+    if not db_path.exists():
+        return {"success": False, "error": "資料庫尚未初始化"}
+
+    conn = None
+    try:
+        conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+        conn.execute("PRAGMA query_only = ON")
+        conn.execute("PRAGMA busy_timeout = 5000")
+        cur = conn.cursor()
+
+        # 總筆數
+        total_videos = cur.execute("SELECT COUNT(*) FROM videos").fetchone()[0]
+
+        # missing_fields（NULL 或空字串）
+        def _count_missing(col: str) -> int:
+            return cur.execute(
+                f"SELECT COUNT(*) FROM videos WHERE {col} IS NULL OR {col} = ''"
+            ).fetchone()[0]
+
+        missing_fields = {
+            "title":          _count_missing("title"),
+            "actresses":      _count_missing("actresses"),   # 只計 NULL/''，不含 '[]'
+            "maker":          _count_missing("maker"),
+            "tags":           _count_missing("tags"),
+            "release_date":   _count_missing("release_date"),
+            "cover_path":     _count_missing("cover_path"),
+            "director":       _count_missing("director"),
+            "label":          _count_missing("label"),
+            "original_title": _count_missing("original_title"),
+        }
+
+        # empty_array_fields：LENGTH < 3（'[]' 長度為 2）
+        def _count_empty_array(col: str) -> int:
+            return cur.execute(
+                f"SELECT COUNT(*) FROM videos WHERE COALESCE(LENGTH({col}), 0) < 3"
+            ).fetchone()[0]
+
+        empty_array_fields = {
+            "actresses": _count_empty_array("actresses"),
+            "tags":      _count_empty_array("tags"),
+        }
+
+        # corrupted_numbers：從 DB 全取 number，Python 端比對
+        all_numbers = [
+            row[0] for row in cur.execute("SELECT number FROM videos").fetchall()
+        ]
+        pattern_counts = {rule["name"]: 0 for rule in CORRUPTION_RULES}
+        for num in all_numbers:
+            if num is None:
+                continue
+            upper = num.upper()
+            for rule in CORRUPTION_RULES:
+                if re.match(rule["pattern"], upper):
+                    pattern_counts[rule["name"]] += 1
+        corrupted_total = sum(pattern_counts.values())
+        corrupted_numbers = {
+            "total": corrupted_total,
+            "patterns": [
+                {"name": rule["name"], "count": pattern_counts[rule["name"]]}
+                for rule in CORRUPTION_RULES
+            ],
+        }
+
+        # japanese_tags：從 DB 全取 tags，Python 端比對
+        all_tags = [
+            row[0] for row in cur.execute("SELECT tags FROM videos").fetchall()
+        ]
+        japanese_total = sum(1 for t in all_tags if _has_japanese_tags(t))
+        japanese_tags = {"total": japanese_total}
+
+        # nfo_status
+        has_nfo = cur.execute(
+            "SELECT COUNT(*) FROM videos WHERE nfo_mtime IS NOT NULL AND nfo_mtime > 0"
+        ).fetchone()[0]
+        missing_nfo = cur.execute(
+            "SELECT COUNT(*) FROM videos WHERE nfo_mtime IS NULL OR nfo_mtime = 0"
+        ).fetchone()[0]
+        nfo_status = {"has_nfo": has_nfo, "missing_nfo": missing_nfo}
+
+        return {
+            "total_videos":      total_videos,
+            "missing_fields":    missing_fields,
+            "empty_array_fields": empty_array_fields,
+            "corrupted_numbers": corrupted_numbers,
+            "japanese_tags":     japanese_tags,
+            "nfo_status":        nfo_status,
+            "available_groups":  _AVAILABLE_GROUPS,
+        }
+
+    except Exception as e:
+        logger.error("[collection/analysis] 非預期錯誤: %s", e)
+        return {"success": False, "error": "內部錯誤，請稍後再試"}
+
+    finally:
+        if conn:
+            conn.close()
+
+
+# ── POST /api/collection/analysis/groups ─────────────────────────────────────
+
+@router.post("/analysis/groups")
+def collection_analysis_groups(request: AnalysisGroupRequest) -> dict:
+    """
+    依問題類型取得待修復影片清單（drill-down）。
+
+    永遠從頭取 limit 筆，批次修復後再呼叫取下一批，直到 items 為空。
+    """
+    db_path = get_db_path()
+    if not db_path.exists():
+        return {"success": False, "error": "資料庫尚未初始化"}
+
+    group = request.group
+    limit = request.limit
+    exclude_western = request.exclude_western
+
+    conn = None
+    try:
+        conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+        conn.execute("PRAGMA query_only = ON")
+        conn.execute("PRAGMA busy_timeout = 5000")
+        cur = conn.cursor()
+
+        def _row_to_item(row) -> dict:
+            id_, number, file_path, title, maker = row
+            return {
+                "id":        id_,
+                "number":    number,
+                "file_path": file_path,
+                "title":     title,
+                "maker":     maker,
+            }
+
+        items: List[dict] = []
+        total = 0
+
+        if group == "no_nfo":
+            # SQL: nfo_mtime IS NULL OR nfo_mtime = 0
+            # Python: is_number_format(number) 為 True
+            rows = cur.execute(
+                """SELECT id, number, path, title, maker FROM videos
+                   WHERE nfo_mtime IS NULL OR nfo_mtime = 0""",
+            ).fetchall()
+            for row in rows:
+                item = _row_to_item(row)
+                if item["number"] and is_number_format(item["number"]):
+                    if exclude_western and _is_western(item["file_path"] or ""):
+                        continue
+                    total += 1
+                    if len(items) < limit:
+                        items.append(item)
+
+        elif group == "corrupted_numbers":
+            rows = cur.execute(
+                "SELECT id, number, path, title, maker FROM videos",
+            ).fetchall()
+            for row in rows:
+                item = _row_to_item(row)
+                if _is_corrupted_number(item["number"]):
+                    if exclude_western and _is_western(item["file_path"] or ""):
+                        continue
+                    total += 1
+                    if len(items) < limit:
+                        items.append(item)
+
+        elif group == "japanese_tags":
+            rows = cur.execute(
+                "SELECT id, number, path, title, maker, tags FROM videos",
+            ).fetchall()
+            for row in rows:
+                id_, number, file_path, title, maker, tags = row
+                if _has_japanese_tags(tags):
+                    if exclude_western and _is_western(file_path or ""):
+                        continue
+                    total += 1
+                    if len(items) < limit:
+                        items.append({
+                            "id":        id_,
+                            "number":    number,
+                            "file_path": file_path,
+                            "title":     title,
+                            "maker":     maker,
+                        })
+
+        elif group == "missing_core":
+            rows = cur.execute(
+                """SELECT id, number, path, title, maker FROM videos
+                   WHERE (actresses IS NULL OR actresses = '' OR LENGTH(actresses) < 3)
+                      OR (tags IS NULL OR tags = '' OR LENGTH(tags) < 3)
+                      OR (release_date IS NULL OR release_date = '')""",
+            ).fetchall()
+            for row in rows:
+                item = _row_to_item(row)
+                if exclude_western and _is_western(item["file_path"] or ""):
+                    continue
+                total += 1
+                if len(items) < limit:
+                    items.append(item)
+
+        elif group == "missing_secondary":
+            rows = cur.execute(
+                """SELECT id, number, path, title, maker FROM videos
+                   WHERE (director IS NULL OR director = '')
+                      OR (label IS NULL OR label = '')
+                      OR (original_title IS NULL OR original_title = '')""",
+            ).fetchall()
+            for row in rows:
+                item = _row_to_item(row)
+                if exclude_western and _is_western(item["file_path"] or ""):
+                    continue
+                total += 1
+                if len(items) < limit:
+                    items.append(item)
+
+        return {
+            "group":           group,
+            "total":           total,
+            "limit":           limit,
+            "exclude_western": exclude_western,
+            "items":           items,
+        }
+
+    except Exception as e:
+        logger.error("[collection/analysis/groups] 非預期錯誤: %s", e)
+        return {"success": False, "error": "內部錯誤，請稍後再試"}
 
     finally:
         if conn:

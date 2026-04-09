@@ -282,6 +282,72 @@ _TOOLS: list[dict] = [
         "_example_template": "curl -X POST -H 'Content-Type: application/json' -d '{{\"sql\":\"SELECT COUNT(*) as total FROM videos\"}}' {base}/api/collection/sql",
     },
     {
+        "name": "collection_analysis",
+        "description": "收藏庫 metadata 健康度診斷 — 統計各欄位缺失數、空陣列、異常番號、日文 tag、NFO 狀態。AI agent 批次補完前先呼叫此端點了解規模",
+        "method": "GET",
+        "path": "/api/collection/analysis",
+        "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+        },
+        "output_schema": {
+            "total_videos": "integer — 收藏總筆數",
+            "missing_fields": "{title, actresses, maker, tags, release_date, cover_path, director, label, original_title} — 各欄位 NULL/空字串筆數",
+            "empty_array_fields": "{actresses, tags} — JSON 空陣列（'[]'）筆數",
+            "corrupted_numbers": "{total: integer, patterns: [{name, count}]} — 異常番號統計（digit_prefix/TK_prefix/K9_prefix/R_prefix）",
+            "japanese_tags": "{total: integer} — tags 含假名字元的筆數",
+            "nfo_status": "{has_nfo: integer, missing_nfo: integer} — NFO 狀態統計",
+            "available_groups": "[string] — 可用的 group 名稱（傳給 /api/collection/analysis/groups）",
+        },
+        "side_effect": False,
+        "confirmation_required": False,
+        "retry_safe": True,
+        "_example_template": "curl '{base}/api/collection/analysis'",
+    },
+    {
+        "name": "collection_analysis_groups",
+        "description": "依問題類型取得待修復影片清單（drill-down）。group 可選：no_nfo / corrupted_numbers / japanese_tags / missing_core / missing_secondary。永遠從頭取 limit 筆，批次修復後再呼叫取下一批，直到 items 為空",
+        "method": "POST",
+        "path": "/api/collection/analysis/groups",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "group": {
+                    "type": "string",
+                    "enum": [
+                        "no_nfo", "corrupted_numbers", "japanese_tags",
+                        "missing_core", "missing_secondary"
+                    ],
+                    "description": "問題類型群組",
+                },
+                "limit": {
+                    "type": "integer",
+                    "default": 50,
+                    "maximum": 200,
+                    "description": "回傳筆數上限（1–200）",
+                },
+                "exclude_western": {
+                    "type": "boolean",
+                    "default": True,
+                    "description": "是否過濾掉西洋片（路徑含「西洋」/「《03》」/「《05》」）",
+                },
+            },
+            "required": ["group"],
+        },
+        "output_schema": {
+            "group": "string — 請求的 group 名稱",
+            "total": "integer — 符合條件的總筆數（含 exclude_western 過濾後）",
+            "limit": "integer — 請求的 limit",
+            "exclude_western": "boolean — 是否已過濾西洋片",
+            "items": "[{id, number, file_path, title, maker}] — 待修復影片清單",
+        },
+        "side_effect": False,
+        "confirmation_required": False,
+        "retry_safe": True,
+        "_example_template": "curl -X POST -H 'Content-Type: application/json' -d '{{\"group\":\"no_nfo\",\"limit\":50}}' {base}/api/collection/analysis/groups",
+    },
+    {
         "name": "proxy_image",
         "description": "代理下載遠端圖片 — 解決 Cloudflare / 防盜鏈問題。搜尋結果的 cover 和 sample_images URL 是遠端直連，AI agent 直接 curl 會被擋。必須透過此端點下載。",
         "method": "GET",
