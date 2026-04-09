@@ -962,3 +962,83 @@ class TestScannerStateGuard:
             line_count = script_tag.count('\n') + 1
             assert line_count <= 10, \
                 f"scanner.html extra_js 含超過 10 行 inline script（{line_count} 行）"
+
+
+class TestCtaI18nGuard:
+    """39c-T1: 守衛 CTA 文案重構 — 四語系 5 個核心 key 的新值"""
+
+    # 5 個核心 CTA key 的預期新值（各語系）
+    EXPECTED = {
+        "zh_TW.json": {
+            "search.button.search_all": "批次搜尋",
+            "search.filelist.scrape_all": "批次整理",
+            "search.filelist.scrape_nfo": "整理此片",
+            "help.batch.h6_generate_all": "批次整理",
+            "search.filelist.scrape_all_title": "整理所有已搜尋的檔案（重命名 + 建資料夾 + NFO）",
+        },
+        "zh_CN.json": {
+            "search.button.search_all": "批量搜索",
+            "search.filelist.scrape_all": "批量整理",
+            "search.filelist.scrape_nfo": "整理此片",
+            "help.batch.h6_generate_all": "批量整理",
+            "search.filelist.scrape_all_title": "整理所有已搜索的文件（重命名 + 建文件夹 + NFO）",
+        },
+        "en.json": {
+            "search.button.search_all": "Batch Search",
+            "search.filelist.scrape_all": "Batch Organize",
+            "search.filelist.scrape_nfo": "Organize",
+            "help.batch.h6_generate_all": "Batch Organize",
+            "search.filelist.scrape_all_title": "Organize all searched files (rename + folder + NFO)",
+        },
+        "ja.json": {
+            "search.button.search_all": "一括検索",
+            "search.filelist.scrape_all": "一括整理",
+            "search.filelist.scrape_nfo": "この作品を整理",
+            "help.batch.h6_generate_all": "一括整理",
+            "search.filelist.scrape_all_title": "検索済みのファイルをすべて整理（リネーム + フォルダ作成 + NFO）",
+        },
+    }
+
+    def _locale(self, name):
+        return json.loads((LOCALES_ROOT / name).read_text(encoding="utf-8"))
+
+    def _get_nested(self, d, dotted_key):
+        keys = dotted_key.split(".")
+        cur = d
+        for k in keys:
+            if not isinstance(cur, dict) or k not in cur:
+                return None
+            cur = cur[k]
+        return cur
+
+    def test_zh_tw_cta_keys(self):
+        """zh_TW.json 5 個 CTA key 新值正確"""
+        data = self._locale("zh_TW.json")
+        for key, expected in self.EXPECTED["zh_TW.json"].items():
+            actual = self._get_nested(data, key)
+            assert actual == expected, \
+                f"zh_TW.json {key} 期望 {expected!r}，實際 {actual!r}"
+
+    def test_zh_cn_cta_keys(self):
+        """zh_CN.json 5 個 CTA key 新值正確"""
+        data = self._locale("zh_CN.json")
+        for key, expected in self.EXPECTED["zh_CN.json"].items():
+            actual = self._get_nested(data, key)
+            assert actual == expected, \
+                f"zh_CN.json {key} 期望 {expected!r}，實際 {actual!r}"
+
+    def test_en_cta_keys(self):
+        """en.json 5 個 CTA key 新值正確"""
+        data = self._locale("en.json")
+        for key, expected in self.EXPECTED["en.json"].items():
+            actual = self._get_nested(data, key)
+            assert actual == expected, \
+                f"en.json {key} 期望 {expected!r}，實際 {actual!r}"
+
+    def test_ja_cta_keys(self):
+        """ja.json 5 個 CTA key 新值正確"""
+        data = self._locale("ja.json")
+        for key, expected in self.EXPECTED["ja.json"].items():
+            actual = self._get_nested(data, key)
+            assert actual == expected, \
+                f"ja.json {key} 期望 {expected!r}，實際 {actual!r}"
