@@ -131,6 +131,7 @@
       "scrape_all_title": "Organize all searched files (rename + folder + NFO)",
       "scrape_all": "Batch Organize",
       "processing_prefix": "Processing",
+      "organizing_prefix": "Organizing",
       "remove_file": "Remove this file",
       "scrape_nfo": "Organize",
       "failed": "Failed",

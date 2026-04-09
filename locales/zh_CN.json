@@ -131,6 +131,7 @@
       "scrape_all_title": "整理所有已搜索的文件（重命名 + 建文件夹 + NFO）",
       "scrape_all": "批量整理",
       "processing_prefix": "处理中",
+      "organizing_prefix": "整理中",
       "remove_file": "移除此文件",
       "scrape_nfo": "整理此片",
       "failed": "失败",

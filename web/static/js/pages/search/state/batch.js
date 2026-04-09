@@ -277,6 +277,11 @@ window.SearchStateMixin_Batch = {
 
         this.isScrapeAllProcessing = true;
 
+        // T2b: 初始化 scrape progress
+        this.scrapeProgress.total = scrapableFiles.length;
+        this.scrapeProgress.processed = 0;
+        this.scrapeProgress.isProcessing = true;
+
         let successCount = 0;
         let failCount = 0;
         let duplicateCount = 0;
@@ -308,6 +313,13 @@ window.SearchStateMixin_Batch = {
                     file.scrapeStatus = 'duplicate';
                     file.isScraping = false;  // 必須清除，否則 spinner 永遠轉（L144 的清除被 continue 跳過）
                     duplicateCount++;
+                    // T2b: duplicate 仍算已處理（不播動畫）
+                    this.scrapeProgress.processed++;
+                    const dupePercent = this.scrapePercent();
+                    this.$nextTick(() => {
+                        const barEl = document.getElementById('scrapeProgressBar');
+                        window.SearchAnimations?.playProgressUpdate?.(barEl, dupePercent);
+                    });
                     continue;
                 }
                 if (result.success) {
@@ -329,9 +341,31 @@ window.SearchStateMixin_Batch = {
             }
 
             file.isScraping = false;
+
+            // T2b: 每輪完成後更新進度條 + per-file row 動畫
+            this.scrapeProgress.processed++;
+            const percent = this.scrapePercent();
+            this.$nextTick(() => {
+                const barEl = document.getElementById('scrapeProgressBar');
+                window.SearchAnimations?.playProgressUpdate?.(barEl, percent);
+                // per-file row 動畫（複用 T2a）
+                const rows = document.querySelectorAll('#fileList .file-item');
+                const rowEl = rows[this.fileList.indexOf(file)];
+                if (rowEl) {
+                    const btn = [...rowEl.querySelectorAll('.btn-scrape-single')]
+                        .find(b => b.offsetParent !== null);
+                    if (file.scrapeStatus === 'done') {
+                        window.SearchAnimations?.playOrganizeSuccess?.(btn, rowEl);
+                    } else if (file.scrapeStatus === 'failed') {
+                        window.SearchAnimations?.playOrganizeFail?.(btn);
+                    }
+                    // duplicate：不播動畫（已在 duplicate 路徑處理）
+                }
+            });
         }
 
         this.isScrapeAllProcessing = false;
+        this.scrapeProgress.isProcessing = false;
 
         alert(`批次處理完成！\n成功: ${successCount}\n失敗: ${failCount}` +
             (duplicateCount ? `\n重複: ${duplicateCount}（請到設定 → 版本標記）` : ''));

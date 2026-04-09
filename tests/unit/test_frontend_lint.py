@@ -1042,3 +1042,53 @@ class TestCtaI18nGuard:
             actual = self._get_nested(data, key)
             assert actual == expected, \
                 f"ja.json {key} 期望 {expected!r}，實際 {actual!r}"
+
+
+class TestScrapeProgressI18nGuard:
+    """39c-T2b: 守衛 scrape progress 進度文字 — 四語系 organizing_prefix key"""
+
+    EXPECTED = {
+        "zh_TW.json": {
+            "search.filelist.organizing_prefix": "整理中",
+        },
+        "zh_CN.json": {
+            "search.filelist.organizing_prefix": "整理中",
+        },
+        "en.json": {
+            "search.filelist.organizing_prefix": "Organizing",
+        },
+        "ja.json": {
+            "search.filelist.organizing_prefix": "整理中",
+        },
+    }
+
+    def _locale(self, name):
+        return json.loads((LOCALES_ROOT / name).read_text(encoding="utf-8"))
+
+    def _get_nested(self, d, dotted_key):
+        keys = dotted_key.split(".")
+        cur = d
+        for k in keys:
+            if not isinstance(cur, dict) or k not in cur:
+                return None
+            cur = cur[k]
+        return cur
+
+    def test_all_locales_have_organizing_prefix(self):
+        """四語系 JSON 都有 search.filelist.organizing_prefix key 且值正確"""
+        for locale_file, keys in self.EXPECTED.items():
+            data = self._locale(locale_file)
+            for key, expected in keys.items():
+                actual = self._get_nested(data, key)
+                assert actual is not None, \
+                    f"{locale_file} 缺少 key: {key}"
+                assert actual != "", \
+                    f"{locale_file} {key} 值不可為空字串"
+                assert actual == expected, \
+                    f"{locale_file} {key} 期望 {expected!r}，實際 {actual!r}"
+
+    def test_search_html_uses_organizing_prefix(self):
+        """search.html 包含 organizing_prefix 字串（確認 HTML 已引用此 key）"""
+        search_html = (LOCALES_ROOT.parent / "web" / "templates" / "search.html").read_text(encoding="utf-8")
+        assert "organizing_prefix" in search_html, \
+            "search.html 未引用 search.filelist.organizing_prefix（請確認 scrape progress section 已插入）"

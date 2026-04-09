@@ -131,6 +131,7 @@
       "scrape_all_title": "検索済みのファイルをすべて整理（リネーム + フォルダ作成 + NFO）",
       "scrape_all": "一括整理",
       "processing_prefix": "処理中",
+      "organizing_prefix": "整理中",
       "remove_file": "このファイルを削除",
       "scrape_nfo": "この作品を整理",
       "failed": "失敗",

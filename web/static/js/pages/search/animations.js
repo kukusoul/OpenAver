@@ -981,6 +981,32 @@
                     { x: 4, duration: 0.08, repeat: 3, yoyo: true, ease: 'power1.inOut', clearProps: 'transform' }
                 );
             }
+        },
+
+        /**
+         * T2b: 批次整理進度條更新動畫 — GSAP smooth width
+         *
+         * C4/C18: killTweensOf 先打斷舊動畫
+         * shouldSkip() guard: prefers-reduced-motion 時直接 gsap.set 到位
+         *
+         * @param {Element|null} barEl - #scrapeProgressBar 元素
+         * @param {number} percent - 目標寬度百分比（0-100）
+         * @returns {null|gsap.core.Tween}
+         */
+        playProgressUpdate: function (barEl, percent) {
+            if (typeof gsap === 'undefined') return null;
+            if (!barEl) return null;
+            gsap.killTweensOf(barEl);
+            if (shouldSkip()) {
+                gsap.set(barEl, { width: percent + '%' });
+                return null;
+            }
+            return gsap.to(barEl, {
+                width: percent + '%',
+                duration: 0.3,
+                ease: 'power2.out',
+                overwrite: 'auto'
+            });
         }
     };
 })();
