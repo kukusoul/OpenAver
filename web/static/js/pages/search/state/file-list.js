@@ -36,6 +36,7 @@ window.SearchStateMixin_FileList = {
             this._resetCoverState();
 
             this.pageState = 'result';
+            this.fetchUserTagsForCurrent?.();
             // U7b: slide-in animation (C22: direction from position hint)
             var direction = position === 'first' ? 'next' : 'prev';
             this.$nextTick(() => {
@@ -99,6 +100,7 @@ window.SearchStateMixin_FileList = {
 
                             // T4: File search 後查詢本地狀態
                             this.checkLocalStatus(this.searchResults);
+                            this.fetchUserTagsForCurrent?.();
 
                             this.pageState = 'result';
                             // U7a: detail entry animation (same as cloud search, C17 fire-and-forget)

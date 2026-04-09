@@ -253,34 +253,107 @@ window.SearchStateMixin_ResultCard = {
         });
     },
 
-    confirmAddTag() {
+    async confirmAddTag() {
         const tag = this.newTagValue.trim();
         if (!tag) {
             this.addingTag = false;
             return;
         }
-        const c = this.current();
-        if (!c.user_tags) c.user_tags = [];
-        if (c.user_tags.includes(tag)) {
+
+        const file = this.fileList?.[this.currentFileIndex];
+        const filePath = file?.path ? window.pathToFileUri(file.path) : '';
+        if (!filePath) {
+            this.showToast(window.t('search.error.tag_api_failed'), 'error');
             this.addingTag = false;
             return;
         }
-        c.user_tags.push(tag);
+
+        const c = this.current();
+        if (!c.user_tags) c.user_tags = [];
+        // E5: 前端去重，避免無謂 API call
+        if (c.user_tags.includes(tag)) {
+            this.addingTag = false;
+            this.newTagValue = '';
+            return;
+        }
+
+        try {
+            const resp = await fetch('/api/user-tags', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ file_path: filePath, add: [tag] }),
+            });
+            const data = await resp.json();
+            if (data.success) {
+                c.user_tags = data.user_tags;
+                this.saveState();
+            } else {
+                this.showToast(window.t('search.error.tag_api_failed'), 'error');
+            }
+        } catch {
+            this.showToast(window.t('search.error.tag_api_failed'), 'error');
+        }
+
         this.addingTag = false;
-        this.saveState();
+        this.newTagValue = '';
     },
 
     cancelAddTag() {
         this.addingTag = false;
     },
 
-    removeUserTag(tag) {
+    async removeUserTag(tag) {
         const c = this.current();
         if (!c.user_tags) return;
-        const idx = c.user_tags.indexOf(tag);
-        if (idx > -1) {
-            c.user_tags.splice(idx, 1);
-            this.saveState();
+
+        const file = this.fileList?.[this.currentFileIndex];
+        const filePath = file?.path ? window.pathToFileUri(file.path) : '';
+        if (!filePath) {
+            this.showToast(window.t('search.error.tag_api_failed'), 'error');
+            return;
+        }
+
+        try {
+            const resp = await fetch('/api/user-tags', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ file_path: filePath, remove: [tag] }),
+            });
+            const data = await resp.json();
+            if (data.success) {
+                c.user_tags = data.user_tags;
+                this.saveState();
+            } else {
+                this.showToast(window.t('search.error.tag_api_failed'), 'error');
+            }
+        } catch {
+            this.showToast(window.t('search.error.tag_api_failed'), 'error');
+        }
+    },
+
+    /**
+     * 補查當前結果的 user_tags（策略二：前端 lazy fetch）(41b-T3)
+     * 只在 listMode === 'file' 且有 file.path 時補查；靜默忽略失敗。
+     * 觸發時機：切換 file 索引、頁面載入時。
+     * 注意：不要在每次 current() 呼叫時觸發（避免大量 API 請求）。
+     */
+    async fetchUserTagsForCurrent() {
+        if (this.listMode !== 'file') return;
+        const file = this.fileList?.[this.currentFileIndex];
+        if (!file?.path) return;
+
+        const uri = window.pathToFileUri(file.path);
+        if (!uri) return;
+
+        try {
+            const resp = await fetch(`/api/user-tags?file_path=${encodeURIComponent(uri)}`);
+            const data = await resp.json();
+            const c = this.current();
+            if (c && Array.isArray(data.user_tags)) {
+                c.user_tags = data.user_tags;
+            }
+        } catch {
+            // E9: 靜默忽略，不阻擋搜尋結果顯示
         }
     },
 

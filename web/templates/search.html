@@ -430,8 +430,8 @@
                                     <span class="tag-remove" @click="removeUserTag(tag)">&times;</span>
                                 </span>
                             </template>
-                            <!-- 新增標籤按鈕 -->
-                            <button x-show="!addingTag" @click="showAddTagInput()" class="btn btn-sm tag-add-btn" title="{{ t('search.action.add_tag') }}">+</button>
+                            <!-- 新增標籤按鈕：僅 file 模式且有路徑才顯示 -->
+                            <button x-show="!addingTag && listMode === 'file' && !!fileList[currentFileIndex]?.path" @click="showAddTagInput()" class="btn btn-sm tag-add-btn" title="{{ t('search.action.add_tag') }}">+</button>
                             <!-- 新增標籤輸入框 -->
                             <span x-show="addingTag" class="tag-input-wrapper">
                                 <input type="text" x-ref="tagInput" x-model="newTagValue"

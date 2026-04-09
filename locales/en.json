@@ -57,7 +57,8 @@
       "drag_hint": "You can also drag and drop files or folders"
     },
     "error": {
-      "hint": "Please check the ID format or try again later"
+      "hint": "Please check the ID format or try again later",
+      "tag_api_failed": "Failed to save tag, please try again later"
     },
     "nav": {
       "prev": "Previous (←)",
