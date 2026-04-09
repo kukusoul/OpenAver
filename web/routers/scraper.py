@@ -105,6 +105,8 @@ class EnrichRequest(BaseModel):
     write_cover: bool = True
     write_extrafanart: bool = False
     overwrite_existing: bool = False
+    source: Optional[str] = None
+    javbus_lang: Optional[str] = None
 
 
 @router.post("/enrich-single")
@@ -125,6 +127,8 @@ def enrich_single_endpoint(request: EnrichRequest) -> dict:
             overwrite_existing=request.overwrite_existing,
             proxy_url=proxy_url,
             primary_source=primary_source,
+            source=request.source,
+            javbus_lang=request.javbus_lang,
         )
         from dataclasses import asdict
         return asdict(result)

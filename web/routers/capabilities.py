@@ -171,7 +171,7 @@ _TOOLS: list[dict] = [
     },
     {
         "name": "enrich_single",
-        "description": "舊片原地補完：補齊 NFO/封面/劇照，不搬移不改名。overwrite_existing=true 時必須先讓用戶確認",
+        "description": "舊片原地補完：補齊 NFO/封面/劇照，不搬移不改名。refresh_full 搭配 overwrite_existing=true 才覆蓋既有 NFO/封面；若只想更新 DB 不覆蓋檔案，用 overwrite_existing=false（預設）。overwrite_existing=true 時必須先讓用戶確認",
         "method": "POST",
         "path": "/api/enrich-single",
         "input_schema": {
@@ -183,7 +183,7 @@ _TOOLS: list[dict] = [
                     "type": "string",
                     "enum": ["fill_missing", "db_to_sidecar", "refresh_full"],
                     "default": "fill_missing",
-                    "description": "fill_missing=只補缺的 / db_to_sidecar=從DB重建不打外站 / refresh_full=強制重抓",
+                    "description": "fill_missing=只補缺的 / db_to_sidecar=從DB重建不打外站 / refresh_full=強制重抓（搭配 overwrite_existing=true 才覆蓋既有 NFO/封面）",
                 },
                 "write_nfo": {"type": "boolean", "default": True},
                 "write_cover": {"type": "boolean", "default": True},
@@ -191,7 +191,18 @@ _TOOLS: list[dict] = [
                 "overwrite_existing": {
                     "type": "boolean",
                     "default": False,
-                    "description": "是否覆蓋既有檔案",
+                    "description": "是否覆蓋既有 NFO/封面檔案（refresh_full 時才有意義；預設 false 只補缺欄位不覆蓋）",
+                },
+                "source": {
+                    "type": "string",
+                    "enum": ["auto", "javbus", "dmm", "jav321", "javdb", "fc2", "avsox", "d2pass", "heyzo"],
+                    "default": "auto",
+                    "description": "刮削來源（auto=自動多源合併；指定單一來源時只打該站；dmm 需要 proxy 才能使用）",
+                },
+                "javbus_lang": {
+                    "type": "string",
+                    "enum": ["zh-tw", "ja", "en"],
+                    "description": "JavBus 語系（覆蓋 config 設定；source=auto 或 source=javbus 時生效）",
                 },
             },
             "required": ["file_path", "number"],

@@ -1045,3 +1045,64 @@ class TestMissingFieldsEmptySeries:
         mock_search.assert_called_once(), "series='' 應視為缺失，觸發 scraper"
         assert result.success is True
         assert "series" in result.fields_filled
+
+
+# ── T2: source / javbus_lang 參數路由 ─────────────────────────────────────────
+
+class TestSourceParam:
+    def test_source_passed_to_search_jav_refresh_full(self):
+        """T2: source='javbus' 在 refresh_full mode 正確傳給 search_jav"""
+        with (
+            patch("os.path.exists", return_value=True),
+            patch("core.enricher.search_jav", return_value=_make_scraper_result()) as mock_search,
+            patch("core.enricher.generate_nfo", return_value=True),
+            patch("core.enricher.download_image", return_value=True),
+            patch("core.enricher.find_subtitle_files", return_value=[]),
+            patch("core.enricher.VideoRepository"),
+        ):
+            from core.enricher import enrich_single
+            enrich_single(
+                file_path=FS_PATH,
+                number="SONE-205",
+                mode="refresh_full",
+                source="javbus",
+            )
+        mock_search.assert_called_once()
+        assert mock_search.call_args.kwargs.get("source") == "javbus"
+
+    def test_javbus_lang_passed_to_search_jav(self):
+        """T2: javbus_lang='ja' 正確傳給 search_jav"""
+        with (
+            patch("os.path.exists", return_value=True),
+            patch("core.enricher.search_jav", return_value=_make_scraper_result()) as mock_search,
+            patch("core.enricher.generate_nfo", return_value=True),
+            patch("core.enricher.download_image", return_value=True),
+            patch("core.enricher.find_subtitle_files", return_value=[]),
+            patch("core.enricher.VideoRepository"),
+        ):
+            from core.enricher import enrich_single
+            enrich_single(
+                file_path=FS_PATH,
+                number="SONE-205",
+                mode="refresh_full",
+                javbus_lang="ja",
+            )
+        mock_search.assert_called_once()
+        assert mock_search.call_args.kwargs.get("javbus_lang") == "ja"
+
+    def test_invalid_source_returns_error(self):
+        """T2: 無效 source 經 search_jav 攔截後回傳 None，enrich_single 回 error"""
+        with (
+            patch("os.path.exists", return_value=True),
+            patch("core.enricher.search_jav", return_value=None),
+            patch("core.enricher.VideoRepository"),
+        ):
+            from core.enricher import enrich_single
+            result = enrich_single(
+                file_path=FS_PATH,
+                number="SONE-205",
+                mode="refresh_full",
+                source="invalid_xyz",
+            )
+        assert result.success is False
+        assert result.error is not None

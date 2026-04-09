@@ -143,7 +143,10 @@ def _get_fuzzy_source(primary_source: str, proxy_url: str) -> str:
     return primary_source
 
 
-def search_jav(number: str, source: str = 'auto', proxy_url: str = '', primary_source: str = 'javbus') -> Optional[Dict[str, Any]]:
+VALID_JAVBUS_LANGS = {'zh-tw', 'ja', 'en'}
+
+
+def search_jav(number: str, source: str = 'auto', proxy_url: str = '', primary_source: str = 'javbus', javbus_lang: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """
     搜尋 JAV 資訊（向後相容函數）
     """
@@ -163,7 +166,10 @@ def search_jav(number: str, source: str = 'auto', proxy_url: str = '', primary_s
     # 決定要跑哪些爬蟲
     scrapers = []
     if source == 'auto':
-        lang = _get_javbus_lang()
+        if javbus_lang is not None and javbus_lang not in VALID_JAVBUS_LANGS:
+            logger.warning("[Search] 無效的 javbus_lang: %s，fallback 到 config", javbus_lang)
+            javbus_lang = None
+        lang = javbus_lang if javbus_lang is not None else _get_javbus_lang()
         base = [JavBusScraper(lang=lang) if cls is JavBusScraper else cls() for cls in SCRAPER_CLASSES]
         if dmm_config:
             scrapers = [DMMScraper(dmm_config)] + base
@@ -172,7 +178,11 @@ def search_jav(number: str, source: str = 'auto', proxy_url: str = '', primary_s
     elif source == 'dmm':
         scrapers = [DMMScraper(dmm_config)] if dmm_config else []
     elif source == 'javbus':
-        scrapers = [JavBusScraper(lang=_get_javbus_lang())]
+        if javbus_lang is not None and javbus_lang not in VALID_JAVBUS_LANGS:
+            logger.warning("[Search] 無效的 javbus_lang: %s，fallback 到 config", javbus_lang)
+            javbus_lang = None
+        lang = javbus_lang if javbus_lang is not None else _get_javbus_lang()
+        scrapers = [JavBusScraper(lang=lang)]
     elif source == 'jav321':
         scrapers = [JAV321Scraper()]
     elif source == 'javdb':
