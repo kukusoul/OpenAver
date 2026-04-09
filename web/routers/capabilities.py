@@ -222,6 +222,78 @@ _TOOLS: list[dict] = [
         "_example_template": "curl -X POST -H 'Content-Type: application/json' -d '{{\"file_path\":\"/library/SONE-205/SONE-205.mp4\",\"number\":\"SONE-205\",\"mode\":\"fill_missing\"}}' {base}/api/enrich-single",
     },
     {
+        "name": "batch_enrich",
+        "description": "批次補完：一次提交最多 20 筆舊片，逐筆補齊 NFO/封面/DB。結果以 SSE streaming 逐筆回傳。注意：此操作會覆寫 NFO 和封面檔案，使用 overwrite_existing=true 時不可逆，必須先讓用戶確認。",
+        "method": "POST",
+        "path": "/api/batch-enrich",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "maxItems": 20,
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "file_path": {"type": "string", "description": "影片檔案路徑"},
+                            "number": {"type": "string", "description": "番號"},
+                            "source": {
+                                "type": "string",
+                                "enum": ["auto", "javbus", "dmm", "jav321", "javdb", "fc2", "avsox", "d2pass", "heyzo"],
+                                "description": "per-item 刮削來源覆蓋（優先於 batch 預設）",
+                            },
+                            "javbus_lang": {
+                                "type": "string",
+                                "enum": ["zh-tw", "ja", "en"],
+                                "description": "per-item JavBus 語系覆蓋",
+                            },
+                        },
+                        "required": ["file_path", "number"],
+                    },
+                    "description": "要補完的影片清單（最多 20 筆，按 file_path 去重）",
+                },
+                "mode": {
+                    "type": "string",
+                    "enum": ["fill_missing", "db_to_sidecar", "refresh_full"],
+                    "default": "refresh_full",
+                    "description": "補完模式（套用到全部 items）",
+                },
+                "source": {
+                    "type": "string",
+                    "enum": ["auto", "javbus", "dmm", "jav321", "javdb", "fc2", "avsox", "d2pass", "heyzo"],
+                    "default": "auto",
+                    "description": "batch 預設刮削來源（item.source 未指定時使用）",
+                },
+                "javbus_lang": {
+                    "type": "string",
+                    "enum": ["zh-tw", "ja", "en"],
+                    "description": "batch 預設 JavBus 語系",
+                },
+                "write_nfo": {"type": "boolean", "default": True},
+                "write_cover": {"type": "boolean", "default": True},
+                "write_extrafanart": {"type": "boolean", "default": False},
+                "overwrite_existing": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "是否覆蓋既有 NFO/封面（不可逆，必須先讓用戶確認）",
+                },
+            },
+            "required": ["items"],
+        },
+        "output_schema": {
+            "streaming": "text/event-stream — SSE 格式逐筆推送",
+            "progress": "{type: 'progress', current, total, number}",
+            "result_item": "{type: 'result-item', number, file_path, success, nfo_written, cover_written, source_used, error?}",
+            "done": "{type: 'done', summary: {total, success, failed}}",
+        },
+        "side_effect": True,
+        "confirmation_required": True,
+        "idempotent": False,
+        "retry_safe": False,
+        "cost_hint": "每筆 item 觸發外部網站搜尋",
+        "_example_template": "curl -N -X POST -H 'Content-Type: application/json' -d '{{\"items\":[{{\"file_path\":\"/video/IPZ-154.mp4\",\"number\":\"IPZ-154\"}}],\"mode\":\"refresh_full\"}}' {base}/api/batch-enrich",
+    },
+    {
         "name": "collection_sql",
         "description": "Read-only SQL 查詢收藏資料庫，可自由組合 SELECT/JOIN/GROUP BY/WHERE",
         "method": "POST",

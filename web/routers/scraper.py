@@ -3,11 +3,16 @@ Scraper API 路由 - 單檔刮削
 
 端點：
 - POST /api/scrape-single  — 單一影片刮削（搜尋元數據、建資料夾、重命名、下載封面、產生 NFO）
+- POST /api/batch-enrich   — 批次原地補完（SSE streaming）
 """
 
-from fastapi import APIRouter
+import asyncio
+import json
+
+from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from typing import Optional
+from typing import List, Optional
 
 from core.enricher import enrich_single
 from core.organizer import organize_file
@@ -109,6 +114,24 @@ class EnrichRequest(BaseModel):
     javbus_lang: Optional[str] = None
 
 
+class BatchEnrichItem(BaseModel):
+    file_path: str
+    number: str
+    source: Optional[str] = None       # per-item override（優先於 batch default）
+    javbus_lang: Optional[str] = None  # per-item override
+
+
+class BatchEnrichRequest(BaseModel):
+    items: List[BatchEnrichItem]       # max 20，超過返回 422
+    mode: str = "refresh_full"
+    source: Optional[str] = None       # batch default（item 未指定時用此值）
+    javbus_lang: Optional[str] = None  # batch default
+    write_nfo: bool = True
+    write_cover: bool = True
+    write_extrafanart: bool = False
+    overwrite_existing: bool = False
+
+
 @router.post("/enrich-single")
 def enrich_single_endpoint(request: EnrichRequest) -> dict:
     config = load_config()
@@ -135,3 +158,70 @@ def enrich_single_endpoint(request: EnrichRequest) -> dict:
     except Exception:
         logger.exception("enrich_single_endpoint 失敗")
         return {"success": False, "error": "enrich 處理失敗，請查閱日誌"}
+
+
+@router.post("/batch-enrich")
+async def batch_enrich_endpoint(request: BatchEnrichRequest):
+    """批次 enrich — SSE streaming，最多 20 筆，按 file_path 去重"""
+    if len(request.items) > 20:
+        raise HTTPException(status_code=422, detail="items 上限為 20 筆")
+
+    config = load_config()
+    search_cfg = config.get("search", {})
+    proxy_url = search_cfg.get("proxy_url", "")
+    primary_source = search_cfg.get("primary_source", "javbus")
+
+    # 去重（按 file_path）
+    seen_paths: set = set()
+    deduped_items = []
+    for item in request.items:
+        if item.file_path not in seen_paths:
+            seen_paths.add(item.file_path)
+            deduped_items.append(item)
+
+    total = len(deduped_items)
+
+    async def event_generator():
+        success_count = 0
+        failed_count = 0
+
+        for idx, item in enumerate(deduped_items, start=1):
+            effective_source = item.source or request.source or "auto"
+            effective_lang = item.javbus_lang or request.javbus_lang
+
+            # progress 事件
+            yield f"data: {json.dumps({'type': 'progress', 'current': idx, 'total': total, 'number': item.number})}\n\n"
+
+            try:
+                loop = asyncio.get_running_loop()
+                result = await loop.run_in_executor(
+                    None,
+                    lambda i=item: enrich_single(
+                        file_path=i.file_path,
+                        number=i.number,
+                        mode=request.mode,
+                        write_nfo=request.write_nfo,
+                        write_cover=request.write_cover,
+                        write_extrafanart=request.write_extrafanart,
+                        overwrite_existing=request.overwrite_existing,
+                        proxy_url=proxy_url,
+                        primary_source=primary_source,
+                        source=effective_source if effective_source != "auto" else None,
+                        javbus_lang=effective_lang,
+                    ),
+                )
+                from dataclasses import asdict
+                result_dict = asdict(result)
+                if result.success:
+                    success_count += 1
+                else:
+                    failed_count += 1
+                yield f"data: {json.dumps({'type': 'result-item', 'number': item.number, 'file_path': item.file_path, **result_dict})}\n\n"
+            except Exception:
+                logger.exception("batch_enrich item %s 失敗", item.number)
+                failed_count += 1
+                yield f"data: {json.dumps({'type': 'result-item', 'number': item.number, 'file_path': item.file_path, 'success': False, 'error': 'enrich 處理失敗，請查閱日誌'})}\n\n"
+
+        yield f"data: {json.dumps({'type': 'done', 'summary': {'total': total, 'success': success_count, 'failed': failed_count}})}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
