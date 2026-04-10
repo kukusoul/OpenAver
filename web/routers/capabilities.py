@@ -514,8 +514,83 @@ _TOOLS: list[dict] = [
         "side_effect": True,
         "confirmation_required": False,
         "retry_safe": True,
-        "also_see": "GET /api/user-tags?file_path=... — 查詢現有 user_tags",
+        "also_see": "GET /api/user-tags?file_path=... — 查詢現有 user_tags（見 get_user_tags tool）",
         "_example_template": "curl -X POST -H 'Content-Type: application/json' -d '{{\"file_path\":\"file:///C:/AVtest/SONE-205/SONE-205.mp4\",\"add\":[\"★5\",\"足\"]}}' {base}/api/user-tags",
+    },
+    {
+        "name": "get_user_tags",
+        "description": (
+            "查詢指定影片的現有 user_tags（user_tags POST 的對等讀取端點）。"
+            "接受 file:/// URI 或 native FS 路徑（自動正規化）。影片不存在於 DB 時回 200 + 空清單。"
+        ),
+        "method": "GET",
+        "path": "/api/user-tags",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "file_path": {"type": "string", "description": "影片路徑（file:/// URI 或 native FS path）"},
+            },
+            "required": ["file_path"],
+        },
+        "output_schema": {
+            "user_tags": "[string] — 現有 user_tags 清單（空時回 []）",
+            "file_path": "string — 正規化後的 file:/// URI",
+        },
+        "side_effect": False,
+        "retry_safe": True,
+        "_example_template": "curl '{base}/api/user-tags?file_path=file:///C:/AVtest/SONE-205/SONE-205.mp4'",
+    },
+    {
+        "name": "showcase_videos",
+        "description": (
+            "列出當前 Showcase 設定資料夾下所有影片（含 has_cover/has_nfo enrich 狀態 + 完整 metadata）。"
+            "比 collection_sql 更直接：路徑映射、cover URL、enrich 狀態都已預先計算。"
+            "適合 AI 做收藏概觀、診斷缺資料的影片、批次操作前的探索。"
+        ),
+        "method": "GET",
+        "path": "/api/showcase/videos",
+        "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+        },
+        "output_schema": {
+            "success": "boolean",
+            "videos": (
+                "[VideoCard] — 每筆含 path/title/original_title/number/actresses/maker/release_date/"
+                "tags/size/cover_url/mtime/director/duration/series/label/sample_images/user_tags/"
+                "has_cover/has_nfo（19 欄位）"
+            ),
+            "total": "integer",
+        },
+        "side_effect": False,
+        "retry_safe": True,
+        "_example_template": "curl '{base}/api/showcase/videos'",
+    },
+    {
+        "name": "showcase_video",
+        "description": (
+            "By-path 單筆查詢 Showcase 影片資料。比 collection_sql WHERE path=... 更省 prompt token，"
+            "回傳 schema 已 enrich（cover_url、has_cover、has_nfo、user_tags 等）。"
+            "用於 enrich-single / scrape-single 後刷新單張卡片，或 AI 拿到 SQL 結果後取單筆完整資料。"
+            "影片不在 configured directory 或 DB 內回 404。"
+        ),
+        "method": "GET",
+        "path": "/api/showcase/video",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "影片 file:/// URI（DB key 格式）"},
+            },
+            "required": ["path"],
+        },
+        "output_schema": {
+            "success": "boolean",
+            "video": "VideoCard — 同 showcase_videos 單筆 schema（19 欄位）",
+        },
+        "side_effect": False,
+        "retry_safe": True,
+        "_example_template": "curl '{base}/api/showcase/video?path=file:///C:/AVtest/SONE-205/SONE-205.mp4'",
     },
     {
         "name": "jellyfin_check",

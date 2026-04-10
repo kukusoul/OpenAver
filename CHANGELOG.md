@@ -33,19 +33,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `handleCoverError` 機制：cover 載入失敗時自動 downgrade `has_cover` → enrich icon 出現（self-healing for NAS 搬檔/離線）
 - Lightbox 無封面塌陷修復：`.lightbox-cover` 加 min-width/min-height + placeholder SVG 升級為「無封面」empty state
 
+#### 🔧 41d — PR #22 Codex Review Cleanup
+- **T1+T2** 路徑契約：新增 `path_utils.reverse_path_mapping()` helper + `collection.py _resolve_user_tag_paths()` 改用 helper（消除 inline `replace('\\', '/')` 違規）
+- **T3+T5** Race condition：`result-card.js` 4 處 await 後寫入修正（`confirmAddTag` / `removeUserTag` / `fetchUserTagsForCurrent` / `_translateWithAILogic` Gemini 分支）— 改用 await 前 captured object reference，避免切檔時 user_tags 或 translated_title 寫到錯片
+- **T4** i18n：showcase placeholder SVG 移除 hardcoded 中文「無封面」— `_NO_COVER_PLACEHOLDER` IIFE 在 i18n 載入前執行，改為純圖示 empty state
+- **T6** Codex P1+P2：`reverse_path_mapping()` boundary check（避免 `//NAS/share` 誤命中 `//NAS/share2/...` 導致 NFO 寫到錯目錄）+ trailing slash normalize（避免 `/sharevideo.mp4` 缺斜線或 `/share//video.mp4` 雙斜線）
+- **T7** 對稱修正：`to_file_uri()` mapping branch 同型 P1+P2 修正（forward 方向 canonicalization 一致性）
+- **T8** Capabilities：補揭露 3 個 GET endpoint（`get_user_tags` / `showcase_videos` / `showcase_video`）— POST/GET 對等性 + Showcase 業務層查詢揭露給 AI agent
+
 #### 🧪 Tests
-- 全套 1430 → 2013 tests passed（+583）
+- 全套 1430 → 2045 tests passed（+615）
 - 41a 新增：collection_sql regression、batch-enrich SSE 11 test、fix-numbers 3 test、analysis 5 test
 - 41b 新增：user_tags unit 18 + integration 38
 - 41c 新增：cover_image 33 test、showcase API 12 test
+- 41d 新增：reverse_path_mapping 20 test（10 baseline + 10 boundary/trailing）、to_file_uri 8 test、user_tags integration 4 test、capabilities 3 test、frontend guard 1 test gap fix
 
 ### Fixed
 - SQL API `[]` false positive（單引號字面值內的 `[]` 不再被擋）
 - enrich 後 nfo_mtime 未同步到 DB 導致 analysis missing_nfo 不減
 
 ### Known Issues
-- `GET /api/user-tags` 未獨立揭露於 capabilities（仍可透過 `collection_sql` 查詢）
 - v0.6.5 / v0.6.6 / v0.6.7 git tag 未打（CHANGELOG entry 已存在），release 時補
+- i18n: `showcase.action.enrich` / `showcase.enrich.success` / `showcase.enrich.failed` 三個 key 缺 zh_CN / en / ja（zh_TW 已有），milestone 補齊
 
 ## [0.6.7] - 2026-04-09
 
