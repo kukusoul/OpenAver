@@ -784,3 +784,79 @@ class TestReversePathMapping:
         # POSIX 本機路徑，不應誤命中
         result = reverse_path_mapping("/home/peace/local/video.mp4", mappings)
         assert result is None
+
+    # -------- P1 boundary check (新增 T6) --------
+
+    def test_p1_forward_slash_share_vs_share2(self):
+        """邊界 2：//NAS/share2/video.mp4 不應命中 //NAS/share mapping（P1 主案例）"""
+        from core.path_utils import reverse_path_mapping
+        mappings = {"/local": "//NAS/share"}
+        result = reverse_path_mapping("//NAS/share2/video.mp4", mappings)
+        assert result is None
+
+    def test_p1_backslash_share_vs_share2(self):
+        """邊界 6：\\NAS\\share2\\video.mp4 不應命中 \\NAS\\share mapping（P1 backslash UNC）"""
+        from core.path_utils import reverse_path_mapping
+        mappings = {"/local": "\\\\NAS\\share"}
+        result = reverse_path_mapping("\\\\NAS\\share2\\video.mp4", mappings)
+        assert result is None
+
+    def test_p1_drive_letter_videos_vs_videos2(self):
+        """邊界 8：C:\\Videos2\\movie.mp4 不應命中 C:/Videos mapping（P1 drive letter）"""
+        from core.path_utils import reverse_path_mapping
+        mappings = {"/mnt/c/Videos": "C:/Videos"}
+        result = reverse_path_mapping("C:\\Videos2\\movie.mp4", mappings)
+        assert result is None
+
+    def test_p1_share_vs_sharex_no_separator(self):
+        """邊界 11：//NAS/sharex/video.mp4 不應命中 //NAS/share mapping（無 separator 分隔）"""
+        from core.path_utils import reverse_path_mapping
+        mappings = {"/local": "//NAS/share"}
+        result = reverse_path_mapping("//NAS/sharex/video.mp4", mappings)
+        assert result is None
+
+    # -------- P2 trailing separator normalize (新增 T6) --------
+
+    def test_p2_win_prefix_trailing_forward_slash(self):
+        """邊界 3：win_prefix 含 trailing / 仍可正確命中並拼接（P2 主案例）"""
+        from core.path_utils import reverse_path_mapping
+        mappings = {"/local": "//NAS/share/"}
+        result = reverse_path_mapping("//NAS/share/video.mp4", mappings)
+        assert result == "/local/video.mp4"
+
+    def test_p2_win_prefix_trailing_backslash(self):
+        """邊界 9 變體：win_prefix 含 trailing \\ 仍可正確命中並拼接"""
+        from core.path_utils import reverse_path_mapping
+        mappings = {"/local": "\\\\NAS\\share\\"}
+        result = reverse_path_mapping("\\\\NAS\\share\\video.mp4", mappings)
+        assert result == "/local/video.mp4"
+
+    def test_p2_local_prefix_trailing_slash(self):
+        """邊界 12：local_prefix 含 trailing / 命中後無雙斜線"""
+        from core.path_utils import reverse_path_mapping
+        mappings = {"/local/": "//NAS/share"}
+        result = reverse_path_mapping("//NAS/share/video.mp4", mappings)
+        assert result == "/local/video.mp4"
+
+    def test_p2_both_prefixes_trailing_slash(self):
+        """邊界 3+12：win_prefix 和 local_prefix 都含 trailing /，結果仍正確"""
+        from core.path_utils import reverse_path_mapping
+        mappings = {"/local/": "//NAS/share/"}
+        result = reverse_path_mapping("//NAS/share/video.mp4", mappings)
+        assert result == "/local/video.mp4"
+
+    # -------- P1 edge cases --------
+
+    def test_p1_exact_prefix_match_no_boundary_fail(self):
+        """邊界 4：fs_path 完全等於 win_prefix（NAS 根本身）→ 應命中 → local_prefix"""
+        from core.path_utils import reverse_path_mapping
+        mappings = {"/local": "//NAS/share"}
+        result = reverse_path_mapping("//NAS/share", mappings)
+        assert result == "/local"
+
+    def test_p1_prefix_with_sep_suffix_only_sep(self):
+        """邊界 4 變體：fs_path = prefix + 單獨 / → 應命中 → local_prefix/"""
+        from core.path_utils import reverse_path_mapping
+        mappings = {"/local": "//NAS/share"}
+        result = reverse_path_mapping("//NAS/share/", mappings)
+        assert result == "/local/"

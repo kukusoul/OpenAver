@@ -316,20 +316,39 @@ def reverse_path_mapping(fs_path: str, path_mappings: dict) -> Optional[str]:
         - to_windows_path() 對某些 Unix 路徑（如 /home/...）在某些環境會拋 ValueError，
           此情況以 try/except 捕捉後跳過該 mapping，不中斷整個查找。
         - suffix（prefix 之後的部分）一律轉成 POSIX forward slash 再拼接 local_prefix。
+        - 大小寫敏感（known limitation, T6）：startswith 比對是 case-sensitive。
+          Windows 路徑大小寫不敏感、POSIX 大小寫敏感、UNC server 視 server 而定。
+          目前不做 case folding 以避免誤傷 POSIX path。
+        - 命中 boundary check（T6 P1 fix）：tail（命中後的剩餘部分）必須為空或以
+          separator 開頭，避免 //NAS/share 誤命中 //NAS/share2。
+        - trailing separator normalize（T6 P2 fix）：win_prefix 與 local_prefix 結尾
+          的 / 或 \\ 會被 rstrip('/\\\\') 清掉，避免拼接時缺斜線或雙斜線。
     """
     if not fs_path or not path_mappings:
         return None
 
+    SEPS = ('/', '\\')
+
     for local_prefix, win_prefix in path_mappings.items():
         try:
-            win_bs = to_windows_path(win_prefix)
+            win_bs_raw = to_windows_path(win_prefix)
         except ValueError:
             continue
+
+        # P2 fix: strip trailing separators from both prefixes（charset rstrip）
+        local_clean = local_prefix.rstrip('/\\')
+        win_bs = win_bs_raw.rstrip('/\\')
         win_fwd = win_bs.replace('\\', '/')
+
         for prefix in (win_bs, win_fwd):
-            if fs_path.startswith(prefix):
-                suffix = fs_path[len(prefix):].replace('\\', '/')
-                return local_prefix + suffix
+            if not fs_path.startswith(prefix):
+                continue
+            tail = fs_path[len(prefix):]
+            # P1 fix: boundary check — tail 必須為空或以 separator 開頭
+            if tail and tail[0] not in SEPS:
+                continue  # boundary fail（e.g. share vs share2）
+            suffix = tail.replace('\\', '/')
+            return local_clean + suffix
 
     return None
 
