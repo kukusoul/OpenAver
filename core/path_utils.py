@@ -6,6 +6,7 @@
 """
 import platform
 import re
+from typing import Optional
 from urllib.parse import unquote
 
 
@@ -291,6 +292,46 @@ def to_file_uri(fs_path: str, path_mappings: dict = None) -> str:
 
     # Fallback：直接用原路徑
     return f"file:///{abs_path}"
+
+
+def reverse_path_mapping(fs_path: str, path_mappings: dict) -> Optional[str]:
+    """
+    反向映射：將 Windows/UNC FS 路徑轉回 WSL local FS 路徑。
+
+    `to_file_uri(path, mappings)` 的反向操作：
+    - forward:  /home/user/nas/video.mp4  →（via mappings）→ file:///NAS/share/video.mp4
+    - reverse:  //NAS/share/video.mp4     →（via mappings）→ /home/user/nas/video.mp4
+                \\NAS\\share\\video.mp4                        （同上）
+
+    Args:
+        fs_path:       已 normalize 的 FS 路徑（可能是 UNC forward/backslash 形式）
+        path_mappings: {local_prefix: win_prefix} 映射表（settings.path_mappings）
+
+    Returns:
+        命中映射時回傳 local FS 路徑；未命中或映射為空回傳 None。
+
+    Notes:
+        - 用 to_windows_path() 把 win_prefix 統一轉成 backslash 形式再做 startswith 比對，
+          確保 forward-slash UNC 與 backslash UNC 輸入均可命中。
+        - to_windows_path() 對某些 Unix 路徑（如 /home/...）在某些環境會拋 ValueError，
+          此情況以 try/except 捕捉後跳過該 mapping，不中斷整個查找。
+        - suffix（prefix 之後的部分）一律轉成 POSIX forward slash 再拼接 local_prefix。
+    """
+    if not fs_path or not path_mappings:
+        return None
+
+    for local_prefix, win_prefix in path_mappings.items():
+        try:
+            win_bs = to_windows_path(win_prefix)
+        except ValueError:
+            continue
+        win_fwd = win_bs.replace('\\', '/')
+        for prefix in (win_bs, win_fwd):
+            if fs_path.startswith(prefix):
+                suffix = fs_path[len(prefix):].replace('\\', '/')
+                return local_prefix + suffix
+
+    return None
 
 
 def uri_to_fs_path(uri: str) -> str:

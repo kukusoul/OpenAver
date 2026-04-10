@@ -702,3 +702,85 @@ class TestRegressionGuards:
             f"發現 to_file_uri(normalize_path(...)) 疊加模式，"
             f"請改用 to_file_uri(d, path_mappings)：{violations}"
         )
+
+
+# ============ TestReversePathMapping ============
+
+class TestReversePathMapping:
+    """測試 reverse_path_mapping() - 邊界條件 1-11"""
+
+    def test_empty_fs_path_returns_none(self):
+        """邊界 1：fs_path 為空字串 → None"""
+        from core.path_utils import reverse_path_mapping
+        result = reverse_path_mapping("", {"/mnt/nas": "//NAS/share"})
+        assert result is None
+
+    def test_empty_mappings_returns_none(self):
+        """邊界 2：path_mappings 為空 dict → None"""
+        from core.path_utils import reverse_path_mapping
+        result = reverse_path_mapping("//NAS/share/video.mp4", {})
+        assert result is None
+
+    def test_none_mappings_returns_none(self):
+        """邊界 3：path_mappings 為 None → None"""
+        from core.path_utils import reverse_path_mapping
+        result = reverse_path_mapping("//NAS/share/video.mp4", None)
+        assert result is None
+
+    def test_unc_forward_slash_match(self):
+        """邊界 4：UNC forward slash 輸入命中 mapping"""
+        from core.path_utils import reverse_path_mapping
+        mappings = {"/mnt/nas": "//NAS/share"}
+        result = reverse_path_mapping("//NAS/share/video.mp4", mappings)
+        assert result == "/mnt/nas/video.mp4"
+
+    def test_unc_backslash_match_converts_to_posix(self):
+        """邊界 5：UNC backslash 輸入命中 mapping，suffix 轉 POSIX"""
+        from core.path_utils import reverse_path_mapping
+        mappings = {"/mnt/nas": "//NAS/share"}
+        result = reverse_path_mapping("\\\\NAS\\share\\video.mp4", mappings)
+        assert result == "/mnt/nas/video.mp4"
+
+    def test_multi_mapping_second_wins(self):
+        """邊界 6：多個 mapping，第二個才命中"""
+        from core.path_utils import reverse_path_mapping
+        mappings = {
+            "/mnt/other": "//OTHER/share",
+            "/mnt/nas": "//NAS/share",
+        }
+        result = reverse_path_mapping("//NAS/share/movie.mp4", mappings)
+        assert result == "/mnt/nas/movie.mp4"
+
+    def test_unix_win_prefix_skipped_via_valueerror(self):
+        """邊界 7：win_prefix 是 Unix 路徑，to_windows_path 拋 ValueError，跳過繼續"""
+        from core.path_utils import reverse_path_mapping
+        # 第一個 mapping 的 win_prefix 是 Unix 路徑 → to_windows_path 拋 ValueError → skip
+        # 第二個 mapping 正常命中
+        mappings = {
+            "/home/peace/nas": "/home/peace/source",  # win_prefix 是 Unix → ValueError
+            "/mnt/nas": "//NAS/share",                # 正常 UNC
+        }
+        result = reverse_path_mapping("//NAS/share/video.mp4", mappings)
+        assert result == "/mnt/nas/video.mp4"
+
+    def test_empty_suffix_returns_local_prefix(self):
+        """邊界 8：輸入剛好等於 prefix（NAS 根），suffix 為空 → 回傳 local_prefix"""
+        from core.path_utils import reverse_path_mapping
+        mappings = {"/mnt/nas": "//NAS/share"}
+        result = reverse_path_mapping("//NAS/share", mappings)
+        assert result == "/mnt/nas"
+
+    def test_drive_letter_mapping(self):
+        """邊界 9：Windows drive letter mapping"""
+        from core.path_utils import reverse_path_mapping
+        mappings = {"/mnt/c/Videos": "C:/Videos"}
+        result = reverse_path_mapping("C:\\Videos\\movie.mp4", mappings)
+        assert result == "/mnt/c/Videos/movie.mp4"
+
+    def test_no_match_returns_none(self):
+        """邊界 10/11：POSIX 本機路徑或完全未命中任何 mapping → None"""
+        from core.path_utils import reverse_path_mapping
+        mappings = {"/mnt/nas": "//NAS/share"}
+        # POSIX 本機路徑，不應誤命中
+        result = reverse_path_mapping("/home/peace/local/video.mp4", mappings)
+        assert result is None
