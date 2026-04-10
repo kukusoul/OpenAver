@@ -21,7 +21,7 @@ from core.config import load_config
 from core.database import Video, VideoRepository, get_connection, get_db_path
 from core.logger import get_logger
 from core.nfo_updater import update_nfo_user_tags
-from core.path_utils import CURRENT_ENV, to_file_uri, uri_to_fs_path
+from core.path_utils import CURRENT_ENV, reverse_path_mapping, to_file_uri, uri_to_fs_path
 from core.scraper import extract_number, is_number_format
 
 logger = get_logger(__name__)
@@ -693,16 +693,7 @@ def _resolve_user_tag_paths(input_path: str) -> tuple[str, str]:
     # - 其他 → fs_normalized
     local_fs_path = fs_normalized
     if input_path.startswith("file://") and CURRENT_ENV == "wsl" and path_mappings:
-        # 反向映射：fs_normalized 可能是 //NAS-SERVER/share/... 或 \\NAS-SERVER\share\...
-        for local_prefix, win_prefix in path_mappings.items():
-            win_fwd = win_prefix.replace("\\", "/")
-            win_bs = win_prefix.replace("/", "\\")
-            if fs_normalized.startswith(win_fwd):
-                local_fs_path = local_prefix + fs_normalized[len(win_fwd):]
-                break
-            if fs_normalized.startswith(win_bs):
-                local_fs_path = local_prefix + fs_normalized[len(win_bs):].replace("\\", "/")
-                break
+        local_fs_path = reverse_path_mapping(fs_normalized, path_mappings) or fs_normalized
 
     return (canonical_uri, local_fs_path)
 

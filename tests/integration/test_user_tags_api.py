@@ -575,3 +575,83 @@ class TestE10PathCanonicalization:
         # 無 mapping → fallback 到通用 file:/// 形式
         assert canonical.startswith("file:///")
         assert local_fs == "/test/foo.mp4"
+
+    def test_resolve_user_tag_paths_uri_reverse_backslash_unc(self, monkeypatch):
+        """backslash UNC 形式的 fs_normalized → 反向映射同樣命中，local_fs 為 mount 路徑。
+
+        mock uri_to_fs_path 回傳 backslash UNC，驗證 reverse_path_mapping 能處理 \\ 形式。
+        """
+        from web.routers import collection as collection_mod
+
+        fake_config = {"gallery": {"path_mappings": {"/home/user/nas": "//NAS-SERVER/share"}}}
+        monkeypatch.setattr(collection_mod, "load_config", lambda: fake_config)
+        monkeypatch.setattr("core.path_utils.CURRENT_ENV", "wsl")
+        monkeypatch.setattr(collection_mod, "CURRENT_ENV", "wsl")
+        # 強制 uri_to_fs_path 回傳 backslash UNC（模擬 Windows-style normalize 結果）
+        monkeypatch.setattr(
+            collection_mod, "uri_to_fs_path",
+            lambda _: "\\\\NAS-SERVER\\share\\foo.mp4"
+        )
+
+        canonical, local_fs = collection_mod._resolve_user_tag_paths(
+            "file://///NAS-SERVER/share/foo.mp4"
+        )
+        # canonical 由 to_file_uri 決定（path_mappings forward map）
+        assert canonical == "file://///NAS-SERVER/share/foo.mp4"
+        # local_fs 應由 backslash UNC 反向映射到 mount 路徑
+        assert local_fs == "/home/user/nas/foo.mp4", \
+            f"backslash UNC reverse map 失敗，local_fs={local_fs}"
+
+    def test_resolve_user_tag_paths_uri_no_hit_fallback(self, monkeypatch):
+        """URI 輸入但 mapping 不涵蓋該路徑 → local_fs fallback 為 fs_normalized（無錯誤）"""
+        from web.routers import collection as collection_mod
+
+        # mapping 只涵蓋 NAS-SERVER，不涵蓋 OTHER-NAS
+        fake_config = {"gallery": {"path_mappings": {"/home/user/nas": "//NAS-SERVER/share"}}}
+        monkeypatch.setattr(collection_mod, "load_config", lambda: fake_config)
+        monkeypatch.setattr("core.path_utils.CURRENT_ENV", "wsl")
+        monkeypatch.setattr(collection_mod, "CURRENT_ENV", "wsl")
+
+        canonical, local_fs = collection_mod._resolve_user_tag_paths(
+            "file://///OTHER-NAS/share/video.mp4"
+        )
+        assert canonical.startswith("file:///")
+        # 無命中 → fallback 到 fs_normalized（//OTHER-NAS/share/video.mp4），不為空
+        assert local_fs != ""
+        assert local_fs == "//OTHER-NAS/share/video.mp4", \
+            f"no-hit fallback 不符預期，local_fs={local_fs}"
+
+    def test_resolve_user_tag_paths_empty_mappings_no_error(self, monkeypatch):
+        """path_mappings 為 empty dict → 不報錯，canonical 為 file:/// 形式"""
+        from web.routers import collection as collection_mod
+
+        fake_config = {"gallery": {"path_mappings": {}}}
+        monkeypatch.setattr(collection_mod, "load_config", lambda: fake_config)
+
+        # empty mappings 不需要 WSL patch（if block 的 `path_mappings` 條件為 falsy）
+        canonical, local_fs = collection_mod._resolve_user_tag_paths("file:///C:/Videos/foo.mp4")
+        # 不應拋例外，canonical 應為合法 file:/// URI
+        assert canonical.startswith("file:///")
+        # local_fs 為 fs_normalized（無 reverse map）
+        assert local_fs != ""
+
+    def test_resolve_user_tag_paths_post_api_unc_forward(self, monkeypatch, tmp_db):
+        """POST /api/user-tags 傳 UNC URI → API 層不 500（reverse mapping 路徑不爆炸）"""
+        from web.routers import collection as collection_mod
+        from web.app import app
+        from fastapi.testclient import TestClient
+
+        fake_config = {"gallery": {"path_mappings": {"/home/user/nas": "//NAS-SERVER/share"}}}
+        monkeypatch.setattr(collection_mod, "load_config", lambda: fake_config)
+        monkeypatch.setattr("core.path_utils.CURRENT_ENV", "wsl")
+        monkeypatch.setattr(collection_mod, "CURRENT_ENV", "wsl")
+        monkeypatch.setattr("web.routers.collection.get_db_path", lambda: tmp_db)
+
+        client = TestClient(app)
+        resp = client.post("/api/user-tags", json={
+            "file_path": "file://///NAS-SERVER/share/foo.mp4",
+            "add": ["★5"],
+        })
+        # 檔案不存在 → 可能 4xx（E1 auto-stub or 404），但不應 500（內部錯誤）
+        assert resp.status_code != 500, \
+            f"UNC URI 導致 API 500，response={resp.text}"
