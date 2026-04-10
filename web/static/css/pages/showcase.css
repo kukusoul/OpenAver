@@ -453,6 +453,10 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    /* 給容器最小尺寸 — 無封面時 placeholder SVG 不會讓 lightbox 塌陷成迷你卡片，
+       cover-actions absolute 仍能撐開到 lightbox 應有的氣勢 */
+    min-width: min(60vw, 600px);
+    min-height: min(58vh, 460px);
 }
 
 .lightbox-cover img {

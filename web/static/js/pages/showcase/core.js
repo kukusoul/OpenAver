@@ -7,6 +7,28 @@
 var _videos = [];
 var _filteredVideos = [];
 
+// 41c B-lite: 無封面 placeholder SVG (cover 載入失敗時 handleCoverError 換上)
+// viewBox 800x600 對齊 lightbox 4:3，grid card aspect-ratio:3/2 會 crop 上下少許但不影響 icon/text 居中
+// 設計：暗色漸層背景 + 中央 image-frame icon (邊框+太陽+山形) + 底部「無封面」字樣
+// 文字維持精簡 — 互動 CTA 交給既有的 enrich icon，不在 placeholder 內塞長文案
+var _NO_COVER_PLACEHOLDER = (function () {
+    var svg = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 800 600'>"
+        + "<defs><linearGradient id='bg' x1='0' y1='0' x2='0' y2='1'>"
+        + "<stop offset='0%' stop-color='#1c1c1e'/>"
+        + "<stop offset='100%' stop-color='#0a0a0c'/>"
+        + "</linearGradient></defs>"
+        + "<rect width='800' height='600' fill='url(#bg)'/>"
+        + "<rect x='0.5' y='0.5' width='799' height='599' fill='none' stroke='rgba(255,255,255,0.06)'/>"
+        + "<g transform='translate(280,170)' stroke='rgba(255,255,255,0.22)' stroke-width='6' fill='none' stroke-linejoin='round' stroke-linecap='round'>"
+        + "<rect x='0' y='0' width='240' height='180' rx='14'/>"
+        + "<circle cx='68' cy='56' r='18' fill='rgba(255,255,255,0.18)' stroke='none'/>"
+        + "<path d='M 26 158 L 100 84 L 156 134 L 218 78 L 218 174 L 26 174 Z' fill='rgba(255,255,255,0.10)'/>"
+        + "</g>"
+        + "<text x='400' y='450' text-anchor='middle' font-family='-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif' font-size='32' font-weight='500' fill='rgba(255,255,255,0.42)' letter-spacing='0.12em'>無封面</text>"
+        + "</svg>";
+    return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
+})();
+
 /**
  * T20 fallback helper — Lightbox timeline kill
  *
@@ -1118,7 +1140,7 @@ function showcaseState() {
             if (!video) return;
             video.has_cover = false;  // 觸發 reactive — enrich icon 自動出現 + missing-cover class 套用
             event.target.onerror = null;  // 防止 placeholder 失敗無限迴圈
-            event.target.src = 'data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22400%22 height=%22300%22 fill=%22%23666%22><rect width=%22400%22 height=%22300%22 fill=%22%23222%22/><text x=%2250%%22 y=%2250%%22 text-anchor=%22middle%22 dy=%22.3em%22 font-size=%2216%22>No Image</text></svg>';
+            event.target.src = _NO_COVER_PLACEHOLDER;
         },
 
         // --- Toast 通知 (M3h) ---
