@@ -1412,10 +1412,19 @@ class TestUserTagsApiGuard:
             "result-card.js 缺少 fetchUserTagsForCurrent() 方法（策略二：前端補查 user_tags）"
 
     def test_fetch_user_tags_writes_to_file_level(self):
-        """fetchUserTagsForCurrent 把結果寫入 fileList[currentFileIndex].user_tags（P2）"""
+        """fetchUserTagsForCurrent 把結果寫入 file-level user_tags（P2）
+        實作使用 captured file ref（race-safe pattern）：
+        const file = this.fileList?.[this.currentFileIndex]; ... file.user_tags = ...
+        """
         content = self._result_card()
         start = content.find("async fetchUserTagsForCurrent()")
         assert start != -1, "result-card.js 找不到 fetchUserTagsForCurrent()"
         func_body = content[start:start + 800]
-        assert "fileList[this.currentFileIndex].user_tags" in func_body, \
-            "fetchUserTagsForCurrent 未寫入 fileList[currentFileIndex].user_tags（P2: file-level）"
+        # 接受兩種等效寫法：
+        # 1. 直接索引：fileList[this.currentFileIndex].user_tags
+        # 2. captured ref（race-safe）：const file = ...; file.user_tags = ...
+        has_direct = "fileList[this.currentFileIndex].user_tags" in func_body
+        has_captured_ref = ("file.user_tags" in func_body and
+                            "this.fileList?.[this.currentFileIndex]" in func_body)
+        assert has_direct or has_captured_ref, \
+            "fetchUserTagsForCurrent 未寫入 file-level user_tags（P2: 需有 fileList[idx].user_tags 或 captured ref file.user_tags）"
