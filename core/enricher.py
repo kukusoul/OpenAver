@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional
 
-from core.database import Video, VideoRepository
+from core.database import Video, VideoRepository, get_connection
 from core.logger import get_logger
 from core.nfo_updater import parse_nfo
 from core.organizer import download_image, find_subtitle_files, generate_nfo
@@ -151,15 +151,22 @@ def _write_nfo(
     write_nfo: bool,
     overwrite_existing: bool,
     has_subtitle: bool,
+    user_tags: List[str] = None,
 ) -> bool:
     if not write_nfo:
         return False
 
     nfo_path = str(Path(fs_path).with_suffix(".nfo"))
-    nfo_p = Path(nfo_path)
 
     if os.path.exists(nfo_path) and not overwrite_existing:
         return False
+
+    # 若未傳入 user_tags，從 DB 讀取現有值（確保不被覆蓋）
+    if user_tags is None:
+        repo = VideoRepository()
+        path_uri = to_file_uri(fs_path)
+        existing = repo.get_by_path(path_uri)
+        user_tags = existing.user_tags if existing else []
 
     generate_nfo(
         number=number,
@@ -176,6 +183,7 @@ def _write_nfo(
         duration=meta.get("duration"),
         series=meta.get("series", ""),
         label=meta.get("label", ""),
+        user_tags=user_tags,
     )
     return True
 
@@ -231,6 +239,9 @@ def enrich_single(
     overwrite_existing: bool = False,
     proxy_url: str = "",
     primary_source: str = "javbus",
+    source: Optional[str] = None,
+    javbus_lang: Optional[str] = None,
+    scraper_data: Optional[dict] = None,
 ) -> EnrichResult:
     _empty = EnrichResult(
         success=False,
@@ -265,7 +276,9 @@ def enrich_single(
     fields_filled: List[str] = []
 
     if mode == "refresh_full":
-        scraper_data = search_jav(number, proxy_url=proxy_url, primary_source=primary_source)
+        if scraper_data is None:
+            scraper_data = search_jav(number, proxy_url=proxy_url, primary_source=primary_source,
+                                      source=source or 'auto', javbus_lang=javbus_lang)
         if not scraper_data:
             _empty.error = f"找不到 {number} 的資料"
             return _empty
@@ -298,7 +311,9 @@ def enrich_single(
 
         missing = _missing_fields(meta)
         if missing:
-            scraper_data = search_jav(number, proxy_url=proxy_url, primary_source=primary_source)
+            if scraper_data is None:
+                scraper_data = search_jav(number, proxy_url=proxy_url, primary_source=primary_source,
+                                          source=source or 'auto', javbus_lang=javbus_lang)
             if not scraper_data:
                 _empty.error = f"找不到 {number} 的資料"
                 return _empty
@@ -307,6 +322,11 @@ def enrich_single(
             source_used = scraper_data.get("source", "scraper") or "scraper"
 
     has_subtitle = bool(find_subtitle_files(fs_path))
+
+    # 讀取 DB 現有 user_tags，在 NFO 寫出和 DB upsert 時保留
+    path_uri = to_file_uri(fs_path)
+    existing_record = repo.get_by_path(path_uri)
+    preserved_user_tags = existing_record.user_tags if existing_record else []
 
     nfo_written = False
     try:
@@ -317,6 +337,7 @@ def enrich_single(
             write_nfo=write_nfo,
             overwrite_existing=overwrite_existing,
             has_subtitle=has_subtitle,
+            user_tags=preserved_user_tags,
         )
     except PermissionError:
         _empty.error = "NFO 寫入失敗，請確認目錄寫入權限"
@@ -337,10 +358,33 @@ def enrich_single(
     )
 
     # DB upsert 在寫檔後執行，才能知道本地封面路徑
-    # db_to_sidecar 不打 scraper 也不更新 DB
+    # db_to_sidecar 不打 scraper 也不更新 DB（metadata 不變）
     if mode in ("refresh_full", "fill_missing") and source_used not in ("db", "nfo", ""):
         local_cover = str(Path(fs_path).with_suffix(".jpg")) if cover_written else ""
-        _db_upsert(repo, number, fs_path, meta, local_cover_path=local_cover)
+        nfo_path = Path(fs_path).with_suffix(".nfo")
+        nfo_mtime = nfo_path.stat().st_mtime if nfo_path.exists() else 0.0
+        _db_upsert(repo, number, fs_path, meta, local_cover_path=local_cover,
+                   nfo_mtime=nfo_mtime)
+
+    # nfo_mtime 獨立更新：不論 mode/source，只要 NFO 存在就同步 DB
+    # 避免 analysis 永遠視為 missing_nfo
+    nfo_path = Path(fs_path).with_suffix(".nfo")
+    if nfo_path.exists():
+        conn = None
+        try:
+            path_uri = to_file_uri(fs_path)
+            nfo_mt = nfo_path.stat().st_mtime
+            conn = get_connection(repo.db_path)
+            conn.execute(
+                "UPDATE videos SET nfo_mtime = ? WHERE path = ? AND (nfo_mtime IS NULL OR nfo_mtime = 0)",
+                (nfo_mt, path_uri),
+            )
+            conn.commit()
+        except Exception as e:
+            logger.warning("nfo_mtime 更新失敗 (%s): %s", number, e)
+        finally:
+            if conn:
+                conn.close()
 
     return EnrichResult(
         success=True,
@@ -356,21 +400,25 @@ def enrich_single(
 def _db_upsert(
     repo: VideoRepository, number: str, fs_path: str, meta: dict,
     local_cover_path: str = "",
+    nfo_mtime: float = 0.0,
 ) -> None:
     """更新 DB 記錄。fs_path 必須是已解析的 FS 路徑（非 file:/// URI）。"""
     try:
         path_uri = to_file_uri(fs_path)
+
+        # 讀取現有記錄以保留 cover_path 和 user_tags
+        existing = repo.get_by_path(path_uri)
 
         # cover_path 只存本地 file:/// URI
         # 若有本地封面路徑則轉 URI；否則保留 DB 既有值（透過傳空字串讓 upsert 不覆蓋）
         cover_uri = ""
         if local_cover_path and os.path.exists(local_cover_path):
             cover_uri = to_file_uri(local_cover_path)
-        else:
-            # 保留 DB 既有 cover_path — 用 path_uri 精確匹配同一筆紀錄
-            existing = repo.get_by_path(path_uri)
-            if existing and existing.cover_path:
-                cover_uri = existing.cover_path
+        elif existing and existing.cover_path:
+            cover_uri = existing.cover_path
+
+        # 保留 DB 既有 user_tags（不被 scraper 覆蓋）
+        preserved_user_tags = existing.user_tags if existing else []
 
         video = Video(
             path=path_uri,
@@ -383,10 +431,12 @@ def _db_upsert(
             series=meta.get("series") or None,
             label=meta.get("label", ""),
             tags=meta.get("tags", []),
+            user_tags=preserved_user_tags,
             sample_images=meta.get("sample_images", []),
             duration=meta.get("duration"),
             cover_path=cover_uri,
             release_date=meta.get("release_date", ""),
+            nfo_mtime=nfo_mtime,
         )
         repo.upsert(video)
     except Exception as e:

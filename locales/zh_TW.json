@@ -57,7 +57,8 @@
       "drag_hint": "也可直接拖入檔案或資料夾"
     },
     "error": {
-      "hint": "請檢查番號格式或稍後再試"
+      "hint": "請檢查番號格式或稍後再試",
+      "tag_api_failed": "標籤儲存失敗，請稍後再試"
     },
     "nav": {
       "prev": "上一個 (←)",
@@ -415,7 +416,8 @@
       "toggle_order": "切換排序方向",
       "toggle_info": "顯示/隱藏資訊 (S)",
       "play_video": "開啟影片",
-      "play": "播放"
+      "play": "播放",
+      "enrich": "補資料"
     },
     "toolbar": {
       "sort_prefix": "排序",
@@ -485,7 +487,11 @@
       "close": "關閉 (ESC)",
       "prev": "上一部 (←)",
       "next": "下一部 (→)",
-      "unknown_number": "未知"
+      "unknown_number": "未知",
+      "add_tag": "新增標籤",
+      "tag_placeholder": "標籤名稱",
+      "tag_api_failed": "標籤儲存失敗，請稍後再試",
+      "user_tags_label": "自訂標籤"
     },
     "gallery": {
       "prev": "上一張 (←)",
@@ -499,6 +505,10 @@
       "toggle_info": "顯示資訊",
       "pagination": "翻頁",
       "close": "關閉"
+    },
+    "enrich": {
+      "success": "補資料完成",
+      "failed": "補資料失敗，請稍後再試"
     }
   },
   "help": {

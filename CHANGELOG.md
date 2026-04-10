@@ -5,6 +5,57 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-04-10
+
+### Added
+
+#### 🤖 41a — AI Metadata Management API
+- `POST /api/batch-enrich` SSE streaming 批次補資料（path 去重 + scraper cache + 逐筆 durable 寫入）
+- `POST /api/collection/fix-numbers/preview` + `/apply` 異常番號修正（4 種 server-side 規則 + 兩階段安全流程）
+- `GET /api/collection/analysis` + `POST /api/collection/analysis/groups` 收藏診斷端點（5 種 group：no_nfo / corrupted_numbers / japanese_tags / missing_core / missing_secondary）
+- `enrich-single` 加 `source` + `javbus_lang` 參數
+- Capabilities 同步揭露 5 個新 tool（含 side_effect / confirmation_required 安全標記）
+
+#### 🏷️ 41b — User Tags（DB + NFO + API + 雙頁 UI 三層整合）
+- DB 新增 `user_tags` JSON 欄位（`refresh_full` 不覆蓋）
+- NFO 獨立 `<user_tag>` 元素（與 `<tag>` 完全分離，scraper tags 與用戶 tags 不混淆）
+- 新增 `POST /api/user-tags` + `GET /api/user-tags` 端點
+- Search 頁 user_tags UI（新增/刪除）改接 API 持久化
+- Showcase Lightbox user_tags UI（新增/刪除）整合
+- scrape-single 寫出 NFO 時 `<tag>` 與 `<user_tag>` 分離寫出
+- Capabilities 揭露 user_tags tool + database_schema 同步
+
+#### 🖼️ 41c — Cover Image Fix + Showcase 一鍵補資料
+- Scanner `find_cover_image()` 重寫為 4 層 smart fallback：L1 同名圖、L2 標準名、L3 NFO `<thumb>` 跨平台路徑解析（5-case：URL/file:URI/Windows drive/UNC/POSIX）、L4 `len(videos)==1 AND 0<len(images)<=2` 雙條件安全 fallback
+- 修正平鋪資料夾下 MTES-035 跨片污染 bug
+- Showcase API 加 `has_cover` / `has_nfo` 欄位 + 新增 `GET /api/showcase/video?path=...` 單筆查詢端點（serializer helper 共用）
+- Grid + Lightbox 加「補資料」enrich icon：無封面卡片 icon 常駐顯示 + missing-cover overlay；有封面但無 NFO 卡片 hover-only icon；mode 自動選擇（無封面 → refresh_full / 有封面無 NFO → fill_missing）；點擊後 spinner + cache-bust + 原地刷新單張卡片
+- `handleCoverError` 機制：cover 載入失敗時自動 downgrade `has_cover` → enrich icon 出現（self-healing for NAS 搬檔/離線）
+- Lightbox 無封面塌陷修復：`.lightbox-cover` 加 min-width/min-height + placeholder SVG 升級為「無封面」empty state
+
+#### 🔧 41d — PR #22 Codex Review Cleanup
+- **T1+T2** 路徑契約：新增 `path_utils.reverse_path_mapping()` helper + `collection.py _resolve_user_tag_paths()` 改用 helper（消除 inline `replace('\\', '/')` 違規）
+- **T3+T5** Race condition：`result-card.js` 4 處 await 後寫入修正（`confirmAddTag` / `removeUserTag` / `fetchUserTagsForCurrent` / `_translateWithAILogic` Gemini 分支）— 改用 await 前 captured object reference，避免切檔時 user_tags 或 translated_title 寫到錯片
+- **T4** i18n：showcase placeholder SVG 移除 hardcoded 中文「無封面」— `_NO_COVER_PLACEHOLDER` IIFE 在 i18n 載入前執行，改為純圖示 empty state
+- **T6** Codex P1+P2：`reverse_path_mapping()` boundary check（避免 `//NAS/share` 誤命中 `//NAS/share2/...` 導致 NFO 寫到錯目錄）+ trailing slash normalize（避免 `/sharevideo.mp4` 缺斜線或 `/share//video.mp4` 雙斜線）
+- **T7** 對稱修正：`to_file_uri()` mapping branch 同型 P1+P2 修正（forward 方向 canonicalization 一致性）
+- **T8** Capabilities：補揭露 3 個 GET endpoint（`get_user_tags` / `showcase_videos` / `showcase_video`）— POST/GET 對等性 + Showcase 業務層查詢揭露給 AI agent
+
+#### 🧪 Tests
+- 全套 1430 → 2045 tests passed（+615）
+- 41a 新增：collection_sql regression、batch-enrich SSE 11 test、fix-numbers 3 test、analysis 5 test
+- 41b 新增：user_tags unit 18 + integration 38
+- 41c 新增：cover_image 33 test、showcase API 12 test
+- 41d 新增：reverse_path_mapping 20 test（10 baseline + 10 boundary/trailing）、to_file_uri 8 test、user_tags integration 4 test、capabilities 3 test、frontend guard 1 test gap fix
+
+### Fixed
+- SQL API `[]` false positive（單引號字面值內的 `[]` 不再被擋）
+- enrich 後 nfo_mtime 未同步到 DB 導致 analysis missing_nfo 不減
+
+### Known Issues
+- v0.6.5 / v0.6.6 / v0.6.7 git tag 未打（CHANGELOG entry 已存在），release 時補
+- i18n: `showcase.action.enrich` / `showcase.enrich.success` / `showcase.enrich.failed` 三個 key 缺 zh_CN / en / ja（zh_TW 已有），milestone 補齊
+
 ## [0.6.7] - 2026-04-09
 
 ### Added

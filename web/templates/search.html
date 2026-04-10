@@ -424,14 +424,14 @@
                                 <span class="badge tag-badge" x-text="tag"></span>
                             </template>
                             <!-- 用戶標籤 -->
-                            <template x-for="tag in (current().user_tags || [])" :key="'u_' + tag">
+                            <template x-for="tag in currentUserTags()" :key="'u_' + tag">
                                 <span class="badge tag-badge user-tag">
                                     <span x-text="tag"></span>
                                     <span class="tag-remove" @click="removeUserTag(tag)">&times;</span>
                                 </span>
                             </template>
-                            <!-- 新增標籤按鈕 -->
-                            <button x-show="!addingTag" @click="showAddTagInput()" class="btn btn-sm tag-add-btn" title="{{ t('search.action.add_tag') }}">+</button>
+                            <!-- 新增標籤按鈕：僅 file 模式且有路徑才顯示 -->
+                            <button x-show="!addingTag && listMode === 'file' && !!fileList[currentFileIndex]?.path" @click="showAddTagInput()" class="btn btn-sm tag-add-btn" title="{{ t('search.action.add_tag') }}">+</button>
                             <!-- 新增標籤輸入框 -->
                             <span x-show="addingTag" class="tag-input-wrapper">
                                 <input type="text" x-ref="tagInput" x-model="newTagValue"

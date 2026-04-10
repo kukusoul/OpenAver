@@ -7,6 +7,32 @@
 var _videos = [];
 var _filteredVideos = [];
 
+// 41c B-lite: 無封面 placeholder SVG (cover 載入失敗時 handleCoverError 換上)
+// viewBox 800x600 對齊 lightbox 4:3，grid card aspect-ratio:3/2 會 crop 上下少許但不影響 icon 居中
+// 設計：暗色漸層背景 + 中央 image-frame icon (邊框+太陽+山形)
+//
+// 41d-T4: 純圖示 empty state，不含文字。
+// 理由：_NO_COVER_PLACEHOLDER 是 module-level IIFE，JS 載入時 window.t() i18n 函數
+// 尚未就緒，無法呼叫；hardcoded 中文違反 i18n 規則。image-frame icon 是業界通用的
+// no-image pattern，視覺語意已足夠清晰，互動 CTA 交給既有的 enrich icon。
+// 若未來必須加文字說明，需改為 lazy generation function（延遲至 i18n 初始化後呼叫）。
+var _NO_COVER_PLACEHOLDER = (function () {
+    var svg = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 800 600'>"
+        + "<defs><linearGradient id='bg' x1='0' y1='0' x2='0' y2='1'>"
+        + "<stop offset='0%' stop-color='#1c1c1e'/>"
+        + "<stop offset='100%' stop-color='#0a0a0c'/>"
+        + "</linearGradient></defs>"
+        + "<rect width='800' height='600' fill='url(#bg)'/>"
+        + "<rect x='0.5' y='0.5' width='799' height='599' fill='none' stroke='rgba(255,255,255,0.06)'/>"
+        + "<g transform='translate(280,170)' stroke='rgba(255,255,255,0.22)' stroke-width='6' fill='none' stroke-linejoin='round' stroke-linecap='round'>"
+        + "<rect x='0' y='0' width='240' height='180' rx='14'/>"
+        + "<circle cx='68' cy='56' r='18' fill='rgba(255,255,255,0.18)' stroke='none'/>"
+        + "<path d='M 26 158 L 100 84 L 156 134 L 218 78 L 218 174 L 26 174 Z' fill='rgba(255,255,255,0.10)'/>"
+        + "</g>"
+        + "</svg>";
+    return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
+})();
+
 /**
  * T20 fallback helper — Lightbox timeline kill
  *
@@ -79,11 +105,19 @@ function showcaseState() {
 
         currentLightboxVideo: null,
 
+        // User Tags 狀態 (T4)
+        addingLbTag: false,
+        newLbTagValue: '',
+
+        // Enrich 狀態 (T3)
+        _enriching: false,
+
         // F1: helper — 更新 lightboxIndex + currentLightboxVideo 一致性
         _setLightboxIndex(idx) {
             this.lightboxIndex = idx;
             this.currentLightboxVideo = (idx >= 0 && idx < _filteredVideos.length)
                 ? _filteredVideos[idx] : null;
+            this.addingLbTag = false;  // 切換影片時重置輸入框
         },
 
         // --- 生命週期 ---
@@ -666,6 +700,7 @@ function showcaseState() {
                 this.lightboxCloseTimer = null;
             }
 
+            this.addingLbTag = false;    // 關閉 lightbox 時重置 user tag 輸入框
             this._lightboxGeneration++;  // B19: invalidate pending $nextTick lightbox callbacks
             // Instant close — kill any in-progress lightbox animations, then sync cleanup
             _killLightboxTimelines();
@@ -970,6 +1005,146 @@ function showcaseState() {
             }
             const mb = bytes / (1024 * 1024);
             return `${mb.toFixed(2)} MB`;
+        },
+
+        // ==================== User Tags in Lightbox (T4) ====================
+
+        // 展開 inline 輸入框並 focus
+        showAddLbTagInput() {
+            this.addingLbTag = true;
+            this.newLbTagValue = '';
+            this.$nextTick(() => this.$refs.lbTagInput?.focus());
+        },
+
+        // 確認新增 tag — 呼叫 POST /api/user-tags
+        async confirmAddLbTag() {
+            const tag = (this.newLbTagValue || '').trim();
+            if (!tag) {
+                this.addingLbTag = false;
+                return;
+            }
+            if (!this.currentLightboxVideo?.path) {
+                this.addingLbTag = false;
+                return;
+            }
+            const existingTags = this.currentLightboxVideo.user_tags || [];
+            if (existingTags.includes(tag)) {
+                // 重複 tag，靜默忽略
+                this.addingLbTag = false;
+                this.newLbTagValue = '';
+                return;
+            }
+            try {
+                const resp = await fetch('/api/user-tags', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        file_path: this.currentLightboxVideo.path,
+                        add: [tag],
+                    }),
+                });
+                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                const data = await resp.json();
+                if (data.success) {
+                    this.currentLightboxVideo.user_tags = data.user_tags;
+                } else {
+                    throw new Error(data.error || 'API failed');
+                }
+            } catch (e) {
+                this.showToast(window.t('showcase.lightbox.tag_api_failed'), 'error');
+            } finally {
+                this.addingLbTag = false;
+                this.newLbTagValue = '';
+            }
+        },
+
+        // 取消輸入框
+        cancelAddLbTag() {
+            this.addingLbTag = false;
+            this.newLbTagValue = '';
+        },
+
+        // 刪除 user tag — 呼叫 POST /api/user-tags {remove: [tag]}
+        async removeLbUserTag(tag) {
+            if (!this.currentLightboxVideo?.path) return;
+            try {
+                const resp = await fetch('/api/user-tags', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        file_path: this.currentLightboxVideo.path,
+                        remove: [tag],
+                    }),
+                });
+                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                const data = await resp.json();
+                if (data.success) {
+                    this.currentLightboxVideo.user_tags = data.user_tags;
+                } else {
+                    throw new Error(data.error || 'API failed');
+                }
+            } catch (e) {
+                this.showToast(window.t('showcase.lightbox.tag_api_failed'), 'error');
+            }
+        },
+
+        // --- Enrich 補資料 (T3) ---
+        async enrichVideo(video) {
+            if (this._enriching) return;
+            if (!video || !video.path) return;
+            this._enriching = true;
+            try {
+                const mode = !video.has_cover ? 'refresh_full' : 'fill_missing';
+                const resp = await fetch('/api/enrich-single', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        file_path: video.path,
+                        number: video.number,
+                        mode: mode,
+                        write_nfo: true,
+                        write_cover: true,
+                        overwrite_existing: false,
+                    }),
+                });
+                const result = await resp.json();
+                if (result.success) {
+                    await this.refreshVideoData(video);
+                    this.showToast(window.t('showcase.enrich.success'), 'success');
+                } else {
+                    this.showToast(result.error || window.t('showcase.enrich.failed'), 'error');
+                }
+            } catch (e) {
+                this.showToast(window.t('showcase.enrich.failed'), 'error');
+            } finally {
+                this._enriching = false;
+            }
+        },
+
+        async refreshVideoData(video) {
+            try {
+                const resp = await fetch(`/api/showcase/video?path=${encodeURIComponent(video.path)}`);
+                if (!resp.ok) return;
+                const data = await resp.json();
+                if (data.success && data.video) {
+                    if (data.video.cover_url) {
+                        data.video.cover_url = data.video.cover_url + '&t=' + Date.now();
+                    }
+                    Object.assign(video, data.video);
+                }
+            } catch (e) {
+                // refresh 失敗不顯示額外 toast，enrich 成功本體已顯示
+            }
+        },
+
+        // Stale cover handler — 圖片載入失敗時 downgrade has_cover，
+        // 觸發 Alpine reactive：enrich icon 自動出現、missing-cover class 套用、
+        // 點 enrich 後自動走 refresh_full 補封面。
+        handleCoverError(video, event) {
+            if (!video) return;
+            video.has_cover = false;  // 觸發 reactive — enrich icon 自動出現 + missing-cover class 套用
+            event.target.onerror = null;  // 防止 placeholder 失敗無限迴圈
+            event.target.src = _NO_COVER_PLACEHOLDER;
         },
 
         // --- Toast 通知 (M3h) ---

@@ -35,9 +35,18 @@ EXPECTED_TOOL_NAMES = {
     "local_status",
     "parse_filename",
     "enrich_single",
+    "batch_enrich",
     "collection_sql",
+    "collection_analysis",
+    "collection_analysis_groups",
+    "fix_numbers_preview",
+    "fix_numbers_apply",
     "proxy_image",
     "jellyfin_check",
+    "user_tags",
+    "get_user_tags",
+    "showcase_videos",
+    "showcase_video",
 }
 
 REQUIRED_TOOL_FIELDS = [
@@ -84,9 +93,9 @@ class TestCapabilitiesEndpoint:
         data = client.get("/api/capabilities").json()
         assert "retry_hint" in data["error_format"]
 
-    def test_tools_count_is_10(self, client):
+    def test_tools_count_is_19(self, client):
         data = client.get("/api/capabilities").json()
-        assert len(data["tools"]) == 10
+        assert len(data["tools"]) == 19
 
     def test_all_tool_names_present(self, client):
         data = client.get("/api/capabilities").json()
@@ -221,3 +230,12 @@ class TestCapabilitiesEndpoint:
         assert "number" in example, (
             f"enrich_single example 缺少 'number' 欄位（required），example: {example}"
         )
+
+    def test_user_tags_tool(self, client):
+        """user_tags tool 有正確的 side_effect 旗標"""
+        data = client.get("/api/capabilities").json()
+        tool = next((t for t in data["tools"] if t["name"] == "user_tags"), None)
+        assert tool is not None, "user_tags tool 不存在"
+        assert tool.get("side_effect") is True
+        assert tool.get("confirmation_required") is False
+        assert tool.get("retry_safe") is True

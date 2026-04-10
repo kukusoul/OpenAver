@@ -57,7 +57,8 @@
       "drag_hint": "You can also drag and drop files or folders"
     },
     "error": {
-      "hint": "Please check the ID format or try again later"
+      "hint": "Please check the ID format or try again later",
+      "tag_api_failed": "Failed to save tag, please try again later"
     },
     "nav": {
       "prev": "Previous (←)",
@@ -485,7 +486,11 @@
       "close": "Close (ESC)",
       "prev": "Previous (←)",
       "next": "Next (→)",
-      "unknown_number": "Unknown"
+      "unknown_number": "Unknown",
+      "add_tag": "Add Tag",
+      "tag_placeholder": "Tag name",
+      "tag_api_failed": "Failed to save tag, please try again",
+      "user_tags_label": "Custom Tags"
     },
     "gallery": {
       "prev": "Previous (←)",

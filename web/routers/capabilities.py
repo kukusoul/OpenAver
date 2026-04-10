@@ -171,7 +171,7 @@ _TOOLS: list[dict] = [
     },
     {
         "name": "enrich_single",
-        "description": "舊片原地補完：補齊 NFO/封面/劇照，不搬移不改名。overwrite_existing=true 時必須先讓用戶確認",
+        "description": "舊片原地補完：補齊 NFO/封面/劇照，不搬移不改名。refresh_full 搭配 overwrite_existing=true 才覆蓋既有 NFO/封面；若只想更新 DB 不覆蓋檔案，用 overwrite_existing=false（預設）。overwrite_existing=true 時必須先讓用戶確認",
         "method": "POST",
         "path": "/api/enrich-single",
         "input_schema": {
@@ -183,7 +183,7 @@ _TOOLS: list[dict] = [
                     "type": "string",
                     "enum": ["fill_missing", "db_to_sidecar", "refresh_full"],
                     "default": "fill_missing",
-                    "description": "fill_missing=只補缺的 / db_to_sidecar=從DB重建不打外站 / refresh_full=強制重抓",
+                    "description": "fill_missing=只補缺的 / db_to_sidecar=從DB重建不打外站 / refresh_full=強制重抓（搭配 overwrite_existing=true 才覆蓋既有 NFO/封面）",
                 },
                 "write_nfo": {"type": "boolean", "default": True},
                 "write_cover": {"type": "boolean", "default": True},
@@ -191,7 +191,18 @@ _TOOLS: list[dict] = [
                 "overwrite_existing": {
                     "type": "boolean",
                     "default": False,
-                    "description": "是否覆蓋既有檔案",
+                    "description": "是否覆蓋既有 NFO/封面檔案（refresh_full 時才有意義；預設 false 只補缺欄位不覆蓋）",
+                },
+                "source": {
+                    "type": "string",
+                    "enum": ["auto", "javbus", "dmm", "jav321", "javdb", "fc2", "avsox", "d2pass", "heyzo"],
+                    "default": "auto",
+                    "description": "刮削來源（auto=自動多源合併；指定單一來源時只打該站；dmm 需要 proxy 才能使用）",
+                },
+                "javbus_lang": {
+                    "type": "string",
+                    "enum": ["zh-tw", "ja", "en"],
+                    "description": "JavBus 語系（覆蓋 config 設定；source=auto 或 source=javbus 時生效）",
                 },
             },
             "required": ["file_path", "number"],
@@ -209,6 +220,78 @@ _TOOLS: list[dict] = [
         "retry_safe": True,
         "cost_hint": "fill_missing/refresh_full 會打外部網站；db_to_sidecar 純本地",
         "_example_template": "curl -X POST -H 'Content-Type: application/json' -d '{{\"file_path\":\"/library/SONE-205/SONE-205.mp4\",\"number\":\"SONE-205\",\"mode\":\"fill_missing\"}}' {base}/api/enrich-single",
+    },
+    {
+        "name": "batch_enrich",
+        "description": "批次補完：一次提交最多 20 筆舊片，逐筆補齊 NFO/封面/DB。結果以 SSE streaming 逐筆回傳。注意：此操作會覆寫 NFO 和封面檔案，使用 overwrite_existing=true 時不可逆，必須先讓用戶確認。",
+        "method": "POST",
+        "path": "/api/batch-enrich",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "maxItems": 20,
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "file_path": {"type": "string", "description": "影片檔案路徑"},
+                            "number": {"type": "string", "description": "番號"},
+                            "source": {
+                                "type": "string",
+                                "enum": ["auto", "javbus", "dmm", "jav321", "javdb", "fc2", "avsox", "d2pass", "heyzo"],
+                                "description": "per-item 刮削來源覆蓋（優先於 batch 預設）",
+                            },
+                            "javbus_lang": {
+                                "type": "string",
+                                "enum": ["zh-tw", "ja", "en"],
+                                "description": "per-item JavBus 語系覆蓋",
+                            },
+                        },
+                        "required": ["file_path", "number"],
+                    },
+                    "description": "要補完的影片清單（最多 20 筆，按 file_path 去重）",
+                },
+                "mode": {
+                    "type": "string",
+                    "enum": ["fill_missing", "db_to_sidecar", "refresh_full"],
+                    "default": "refresh_full",
+                    "description": "補完模式（套用到全部 items）",
+                },
+                "source": {
+                    "type": "string",
+                    "enum": ["auto", "javbus", "dmm", "jav321", "javdb", "fc2", "avsox", "d2pass", "heyzo"],
+                    "default": "auto",
+                    "description": "batch 預設刮削來源（item.source 未指定時使用）",
+                },
+                "javbus_lang": {
+                    "type": "string",
+                    "enum": ["zh-tw", "ja", "en"],
+                    "description": "batch 預設 JavBus 語系",
+                },
+                "write_nfo": {"type": "boolean", "default": True},
+                "write_cover": {"type": "boolean", "default": True},
+                "write_extrafanart": {"type": "boolean", "default": False},
+                "overwrite_existing": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "是否覆蓋既有 NFO/封面（不可逆，必須先讓用戶確認）",
+                },
+            },
+            "required": ["items"],
+        },
+        "output_schema": {
+            "streaming": "text/event-stream — SSE 格式逐筆推送",
+            "progress": "{type: 'progress', current, total, number}",
+            "result_item": "{type: 'result-item', number, file_path, success, nfo_written, cover_written, source_used, error?}",
+            "done": "{type: 'done', summary: {total, success, failed}}",
+        },
+        "side_effect": True,
+        "confirmation_required": True,
+        "idempotent": False,
+        "retry_safe": False,
+        "cost_hint": "每筆 item 觸發外部網站搜尋",
+        "_example_template": "curl -N -X POST -H 'Content-Type: application/json' -d '{{\"items\":[{{\"file_path\":\"/video/IPZ-154.mp4\",\"number\":\"IPZ-154\"}}],\"mode\":\"refresh_full\"}}' {base}/api/batch-enrich",
     },
     {
         "name": "collection_sql",
@@ -248,6 +331,7 @@ _TOOLS: list[dict] = [
                 "series": "TEXT — 系列",
                 "label": "TEXT — 廠牌",
                 "tags": "TEXT — 標籤 JSON array",
+                "user_tags": "TEXT — 用戶自訂標籤 JSON array",
                 "sample_images": "TEXT — 劇照 JSON array",
                 "duration": "INTEGER — 片長（分鐘）",
                 "size_bytes": "INTEGER — 檔案大小",
@@ -271,6 +355,127 @@ _TOOLS: list[dict] = [
         "_example_template": "curl -X POST -H 'Content-Type: application/json' -d '{{\"sql\":\"SELECT COUNT(*) as total FROM videos\"}}' {base}/api/collection/sql",
     },
     {
+        "name": "collection_analysis",
+        "description": "收藏庫 metadata 健康度診斷 — 統計各欄位缺失數、空陣列、異常番號、日文 tag、NFO 狀態。AI agent 批次補完前先呼叫此端點了解規模",
+        "method": "GET",
+        "path": "/api/collection/analysis",
+        "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+        },
+        "output_schema": {
+            "total_videos": "integer — 收藏總筆數",
+            "missing_fields": "{title, actresses, maker, tags, release_date, cover_path, director, label, original_title} — 各欄位 NULL/空字串筆數",
+            "empty_array_fields": "{actresses, tags} — JSON 空陣列（'[]'）筆數",
+            "corrupted_numbers": "{total: integer, patterns: [{name, count}]} — 異常番號統計（digit_prefix/TK_prefix/K9_prefix/R_prefix）",
+            "japanese_tags": "{total: integer} — tags 含假名字元的筆數",
+            "nfo_status": "{has_nfo: integer, missing_nfo: integer} — NFO 狀態統計",
+            "available_groups": "[string] — 可用的 group 名稱（傳給 /api/collection/analysis/groups）",
+        },
+        "side_effect": False,
+        "confirmation_required": False,
+        "retry_safe": True,
+        "_example_template": "curl '{base}/api/collection/analysis'",
+    },
+    {
+        "name": "collection_analysis_groups",
+        "description": "依問題類型取得待修復影片清單（drill-down）。group 可選：no_nfo / corrupted_numbers / japanese_tags / missing_core / missing_secondary。永遠從頭取 limit 筆，批次修復後再呼叫取下一批，直到 items 為空",
+        "method": "POST",
+        "path": "/api/collection/analysis/groups",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "group": {
+                    "type": "string",
+                    "enum": [
+                        "no_nfo", "corrupted_numbers", "japanese_tags",
+                        "missing_core", "missing_secondary"
+                    ],
+                    "description": "問題類型群組",
+                },
+                "limit": {
+                    "type": "integer",
+                    "default": 50,
+                    "maximum": 200,
+                    "description": "回傳筆數上限（1–200）",
+                },
+                "exclude_western": {
+                    "type": "boolean",
+                    "default": True,
+                    "description": "是否過濾掉西洋片（路徑含「西洋」/「《03》」/「《05》」）",
+                },
+            },
+            "required": ["group"],
+        },
+        "output_schema": {
+            "group": "string — 請求的 group 名稱",
+            "total": "integer — 符合條件的總筆數（含 exclude_western 過濾後）",
+            "limit": "integer — 請求的 limit",
+            "exclude_western": "boolean — 是否已過濾西洋片",
+            "items": "[{id, number, file_path, title, maker}] — 待修復影片清單",
+        },
+        "side_effect": False,
+        "confirmation_required": False,
+        "retry_safe": True,
+        "_example_template": "curl -X POST -H 'Content-Type: application/json' -d '{{\"group\":\"no_nfo\",\"limit\":50}}' {base}/api/collection/analysis/groups",
+    },
+    {
+        "name": "fix_numbers_preview",
+        "description": "預覽收藏庫中符合異常番號修正規則的影片清單。支援 4 種規則：digit_prefix（開頭多餘數字）、TK_prefix、K9_prefix、R_prefix。不修改任何資料，回傳待修正清單供 fix_numbers_apply 使用",
+        "method": "POST",
+        "path": "/api/collection/fix-numbers/preview",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "rules": {
+                    "type": "array",
+                    "items": {
+                        "type": "string",
+                        "enum": ["digit_prefix", "TK_prefix", "K9_prefix", "R_prefix"],
+                    },
+                    "description": "要套用的規則名稱（空陣列或省略 = 全部 4 條規則）",
+                },
+            },
+            "required": [],
+        },
+        "output_schema": {
+            "rules_applied": "[string] — 實際套用的規則名稱",
+            "affected": "[{id, old_number, new_number, rule, path}] — 待修正影片清單",
+            "total": "integer — 符合條件的總筆數",
+        },
+        "side_effect": False,
+        "confirmation_required": False,
+        "retry_safe": True,
+        "_example_template": "curl -X POST -H 'Content-Type: application/json' -d '{{\"rules\":[]}}' {base}/api/collection/fix-numbers/preview",
+    },
+    {
+        "name": "fix_numbers_apply",
+        "description": "執行番號修正：將 fix_numbers_preview 回傳的異常番號永久更新到 DB。**此操作直接修改 DB 的 number 欄位，不可逆。必須先呼叫 preview 確認範圍，並讓用戶確認後再執行。** apply 內部會重新驗證每個 ID，已被其他途徑修正的番號不會被覆蓋",
+        "method": "POST",
+        "path": "/api/collection/fix-numbers/apply",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "ids": {
+                    "type": "array",
+                    "items": {"type": "integer"},
+                    "description": "要修正的影片 ID 清單（從 fix_numbers_preview 的 affected[].id 取得）",
+                },
+            },
+            "required": ["ids"],
+        },
+        "output_schema": {
+            "updated": "integer — 成功更新的筆數",
+            "failed": "integer — 跳過或失敗的筆數（ID 不存在、或番號已不符合規則）",
+        },
+        "side_effect": True,
+        "confirmation_required": True,
+        "idempotent": False,
+        "retry_safe": False,
+        "_example_template": "curl -X POST -H 'Content-Type: application/json' -d '{{\"ids\":[42,55,78]}}' {base}/api/collection/fix-numbers/apply",
+    },
+    {
         "name": "proxy_image",
         "description": "代理下載遠端圖片 — 解決 Cloudflare / 防盜鏈問題。搜尋結果的 cover 和 sample_images URL 是遠端直連，AI agent 直接 curl 會被擋。必須透過此端點下載。",
         "method": "GET",
@@ -286,6 +491,139 @@ _TOOLS: list[dict] = [
         "side_effect": False,
         "retry_safe": True,
         "_example_template": "curl -o cover.jpg '{base}/api/proxy-image?url=https://pics.dmm.co.jp/digital/video/ssis00221/ssis00221pl.jpg'",
+    },
+    {
+        "name": "user_tags",
+        "description": "管理用戶自訂標籤（評分、書籤、分類等）。存入 DB + NFO <user_tag> 元素，不被 scraper refresh 覆蓋",
+        "method": "POST",
+        "path": "/api/user-tags",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "file_path": {"type": "string", "description": "影片路徑（DB key，file:/// URI 格式）"},
+                "add": {"type": "array", "items": {"type": "string"}, "description": "要新增的 tags（可省略）"},
+                "remove": {"type": "array", "items": {"type": "string"}, "description": "要移除的 tags（可省略）"},
+            },
+            "required": ["file_path"],
+        },
+        "output_schema": {
+            "success": "boolean",
+            "user_tags": "[string] — 更新後的完整 user_tags 清單",
+            "nfo_updated": "boolean — NFO 是否同步更新",
+        },
+        "side_effect": True,
+        "confirmation_required": False,
+        "retry_safe": True,
+        "also_see": "GET /api/user-tags?file_path=... — 查詢現有 user_tags（見 get_user_tags tool）",
+        "_example_template": "curl -X POST -H 'Content-Type: application/json' -d '{{\"file_path\":\"file:///C:/AVtest/SONE-205/SONE-205.mp4\",\"add\":[\"★5\",\"足\"]}}' {base}/api/user-tags",
+    },
+    {
+        "name": "get_user_tags",
+        "description": (
+            "查詢指定影片的現有 user_tags（user_tags POST 的對等讀取端點）。"
+            "接受 file:/// URI 或 native FS 路徑（自動正規化）。影片不存在於 DB 時回 200 + 空清單。"
+        ),
+        "method": "GET",
+        "path": "/api/user-tags",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "file_path": {"type": "string", "description": "影片路徑（file:/// URI 或 native FS path）"},
+            },
+            "required": ["file_path"],
+        },
+        "output_schema": {
+            "user_tags": "[string] — 現有 user_tags 清單（空時回 []）",
+            "file_path": "string — 正規化後的 file:/// URI",
+        },
+        "side_effect": False,
+        "retry_safe": True,
+        "_example_template": "curl '{base}/api/user-tags?file_path=file:///C:/AVtest/SONE-205/SONE-205.mp4'",
+    },
+    {
+        "name": "showcase_videos",
+        "description": (
+            "列出當前 Showcase 設定資料夾下「所有」影片，每筆含 19 欄位 enrich 過的完整 metadata。"
+            " ⚠️ 高 token 成本：回整個 configured directory（可能數百到數千筆）一次回完，無分頁。"
+            " Routing 規則（依優先級）："
+            " (1) 已知具體 path → 用 `showcase_video`（單筆，省 token）；"
+            " (2) 只需 ID/path 篩選、統計、條件查詢 → 用 `collection_sql`（自訂 SELECT）"
+            " 或 `collection_analysis`（預設 5 種診斷分組）；"
+            " (3) 僅在「真的需要全庫概觀」時才用本 tool（例如 diagnose 缺資料的影片總覽、"
+            " 批次操作前的全量探索）。"
+        ),
+        "method": "GET",
+        "path": "/api/showcase/videos",
+        "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+        },
+        "output_schema": {
+            "success": "boolean",
+            "total": "integer — videos 陣列長度",
+            "videos": {
+                "type": "array",
+                "description": "影片清單；每筆 item 為 19 欄位 dict",
+                "item_fields": {
+                    "path": "string — file:/// URI（DB key 格式，可作為 showcase_video 查詢輸入）",
+                    "title": "string",
+                    "original_title": "string",
+                    "number": "string — 番號（可能為空字串）",
+                    "actresses": "string — ⚠️ 逗號分隔字串，**不是** array（例：'女優A,女優B'）",
+                    "maker": "string",
+                    "release_date": "string — YYYY-MM-DD（可能為空字串）",
+                    "tags": "string — ⚠️ 逗號分隔字串，**不是** array",
+                    "size": "integer — 檔案 bytes",
+                    "cover_url": "string — 後端代理 URL（/api/gallery/image?path=...），可直接 <img> 顯示",
+                    "mtime": "integer — Unix timestamp（秒）",
+                    "director": "string",
+                    "duration": "integer | null — 秒；null 時前端隱藏",
+                    "series": "string",
+                    "label": "string",
+                    "sample_images": "array[string] — 劇照 gallery image URLs（真正的 array）",
+                    "user_tags": "array[string] — 用戶自訂標籤（真正的 array，可空）",
+                    "has_cover": "boolean — DB 初判 cover_path 非空（不做 IO 檢查）",
+                    "has_nfo": "boolean — nfo_mtime > 0（41a 寫入契約）",
+                },
+            },
+        },
+        "side_effect": False,
+        "retry_safe": True,
+        "_example_template": "curl '{base}/api/showcase/videos'",
+    },
+    {
+        "name": "showcase_video",
+        "description": (
+            "By-path 單筆查詢 Showcase 影片資料（showcase_videos 的單筆版本）。"
+            " 比 `collection_sql WHERE path=...` 更省 prompt token，且回傳 schema 已 enrich"
+            "（cover_url、has_cover、has_nfo 已預先計算）。"
+            " 適合：(a) 前端 enrich-single / scrape-single 後刷新單張卡片；"
+            " (b) AI 從 collection_sql 結果拿到 path 後取單筆完整 metadata。"
+            " 影片不在 configured directory 或 DB 內回 404。"
+        ),
+        "method": "GET",
+        "path": "/api/showcase/video",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "影片 file:/// URI（DB key 格式）"},
+            },
+            "required": ["path"],
+        },
+        "output_schema": {
+            "success": "boolean",
+            "video": (
+                "object — 19 欄位 dict，schema 同 showcase_videos.videos.item_fields"
+                "（path/title/original_title/number/actresses[csv⚠️]/maker/release_date/tags[csv⚠️]/"
+                "size/cover_url/mtime/director/duration/series/label/sample_images[array]/"
+                "user_tags[array]/has_cover/has_nfo）。注意 actresses 和 tags 是逗號分隔字串，"
+                "其餘標記為 array 的欄位才是真正的 array。"
+            ),
+        },
+        "side_effect": False,
+        "retry_safe": True,
+        "_example_template": "curl '{base}/api/showcase/video?path=file:///C:/AVtest/SONE-205/SONE-205.mp4'",
     },
     {
         "name": "jellyfin_check",

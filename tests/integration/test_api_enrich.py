@@ -293,3 +293,61 @@ class TestEnrichEndpointReadsSearchConfig:
         assert call_kwargs.get("primary_source") == "javdb", (
             f"primary_source 應從 config['search'] 取得，實際: {call_kwargs.get('primary_source')}"
         )
+
+
+# ── T2: source / javbus_lang 參數傳遞 ────────────────────────────────────────
+
+class TestSourceJavbusLangParams:
+    def test_source_param_passed_to_enrich_single(self, client, mocker):
+        """T2: source='dmm' 正確傳入 enrich_single"""
+        mock_fn = mocker.patch(
+            "web.routers.scraper.enrich_single",
+            return_value=_ok_result(source_used="dmm"),
+        )
+        client.post("/api/enrich-single", json={
+            "file_path": "/video/SONE-205.mp4",
+            "number": "SONE-205",
+            "source": "dmm",
+        })
+        call_kwargs = mock_fn.call_args.kwargs
+        assert call_kwargs.get("source") == "dmm"
+
+    def test_javbus_lang_param_passed_to_enrich_single(self, client, mocker):
+        """T2: javbus_lang='ja' 正確傳入 enrich_single"""
+        mock_fn = mocker.patch(
+            "web.routers.scraper.enrich_single",
+            return_value=_ok_result(),
+        )
+        client.post("/api/enrich-single", json={
+            "file_path": "/video/SONE-205.mp4",
+            "number": "SONE-205",
+            "javbus_lang": "ja",
+        })
+        call_kwargs = mock_fn.call_args.kwargs
+        assert call_kwargs.get("javbus_lang") == "ja"
+
+    def test_source_none_by_default(self, client, mocker):
+        """T2: source 未提供時，傳入 enrich_single 的值為 None（向後相容）"""
+        mock_fn = mocker.patch(
+            "web.routers.scraper.enrich_single",
+            return_value=_ok_result(),
+        )
+        client.post("/api/enrich-single", json={
+            "file_path": "/video/SONE-205.mp4",
+            "number": "SONE-205",
+        })
+        call_kwargs = mock_fn.call_args.kwargs
+        assert call_kwargs.get("source") is None
+
+
+# ── P2: mode Literal 驗證 ─────────────────────────────────────────────────────
+
+class TestEnrichSingleModeValidation:
+    def test_enrich_single_invalid_mode_returns_422(self, client):
+        """mode='bad_mode' → HTTP 422（Pydantic Literal 驗證）"""
+        response = client.post("/api/enrich-single", json={
+            "file_path": "/video/SONE-205.mp4",
+            "number": "SONE-205",
+            "mode": "bad_mode",
+        })
+        assert response.status_code == 422

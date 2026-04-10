@@ -6,6 +6,7 @@
 """
 import platform
 import re
+from typing import Optional
 from urllib.parse import unquote
 
 
@@ -259,6 +260,15 @@ def to_file_uri(fs_path: str, path_mappings: dict = None) -> str:
 
     Returns:
         file:/// 格式的 URI
+
+    Notes:
+        - mapping branch 只在 CURRENT_ENV == 'wsl' 且有 path_mappings 時生效。
+        - 大小寫敏感（known limitation, T7）：startswith 比對是 case-sensitive，
+          與 T6 reverse_path_mapping 對稱，沿用相同 limitation 標記。
+        - 命中 boundary check（T7 P1 fix）：tail 必須為空或以 separator 開頭，
+          避免 /home/user/share 誤命中 /home/user/share2。
+        - trailing separator normalize（T7 P2 fix）：wsl_prefix 與 win_prefix 結尾的
+          / 或 \\ 會被 rstrip('/\\\\') 清掉，避免拼接時缺斜線或雙斜線。
     """
     # 統一使用正斜線
     abs_path = fs_path.replace(chr(92), '/')
@@ -282,15 +292,85 @@ def to_file_uri(fs_path: str, path_mappings: dict = None) -> str:
 
     # 其他 Unix 路徑：使用 path_mappings 轉換
     if path_mappings and CURRENT_ENV == 'wsl':
+        SEPS = ('/', '\\')
         # 嘗試找到匹配的映射
         for wsl_prefix, win_prefix in path_mappings.items():
-            if abs_path.startswith(wsl_prefix):
-                win_path = win_prefix + abs_path[len(wsl_prefix):]
-                win_path = win_path.replace(chr(92), '/')
-                return f"file:///{win_path}"
+            # T7 P2 fix: strip trailing separators（charset rstrip）
+            wsl_clean = wsl_prefix.rstrip('/\\')
+            win_clean = win_prefix.rstrip('/\\')
+
+            if not abs_path.startswith(wsl_clean):
+                continue
+            tail = abs_path[len(wsl_clean):]
+            # T7 P1 fix: boundary check（tail 必須為空或以 separator 開頭）
+            if tail and tail[0] not in SEPS:
+                continue  # boundary fail（e.g. share vs share2）
+
+            win_path = win_clean + tail
+            win_path = win_path.replace(chr(92), '/')
+            return f"file:///{win_path}"
 
     # Fallback：直接用原路徑
     return f"file:///{abs_path}"
+
+
+def reverse_path_mapping(fs_path: str, path_mappings: dict) -> Optional[str]:
+    """
+    反向映射：將 Windows/UNC FS 路徑轉回 WSL local FS 路徑。
+
+    `to_file_uri(path, mappings)` 的反向操作：
+    - forward:  /home/user/nas/video.mp4  →（via mappings）→ file:///NAS/share/video.mp4
+    - reverse:  //NAS/share/video.mp4     →（via mappings）→ /home/user/nas/video.mp4
+                \\NAS\\share\\video.mp4                        （同上）
+
+    Args:
+        fs_path:       已 normalize 的 FS 路徑（可能是 UNC forward/backslash 形式）
+        path_mappings: {local_prefix: win_prefix} 映射表（settings.path_mappings）
+
+    Returns:
+        命中映射時回傳 local FS 路徑；未命中或映射為空回傳 None。
+
+    Notes:
+        - 用 to_windows_path() 把 win_prefix 統一轉成 backslash 形式再做 startswith 比對，
+          確保 forward-slash UNC 與 backslash UNC 輸入均可命中。
+        - to_windows_path() 對某些 Unix 路徑（如 /home/...）在某些環境會拋 ValueError，
+          此情況以 try/except 捕捉後跳過該 mapping，不中斷整個查找。
+        - suffix（prefix 之後的部分）一律轉成 POSIX forward slash 再拼接 local_prefix。
+        - 大小寫敏感（known limitation, T6）：startswith 比對是 case-sensitive。
+          Windows 路徑大小寫不敏感、POSIX 大小寫敏感、UNC server 視 server 而定。
+          目前不做 case folding 以避免誤傷 POSIX path。
+        - 命中 boundary check（T6 P1 fix）：tail（命中後的剩餘部分）必須為空或以
+          separator 開頭，避免 //NAS/share 誤命中 //NAS/share2。
+        - trailing separator normalize（T6 P2 fix）：win_prefix 與 local_prefix 結尾
+          的 / 或 \\ 會被 rstrip('/\\\\') 清掉，避免拼接時缺斜線或雙斜線。
+    """
+    if not fs_path or not path_mappings:
+        return None
+
+    SEPS = ('/', '\\')
+
+    for local_prefix, win_prefix in path_mappings.items():
+        try:
+            win_bs_raw = to_windows_path(win_prefix)
+        except ValueError:
+            continue
+
+        # P2 fix: strip trailing separators from both prefixes（charset rstrip）
+        local_clean = local_prefix.rstrip('/\\')
+        win_bs = win_bs_raw.rstrip('/\\')
+        win_fwd = win_bs.replace('\\', '/')
+
+        for prefix in (win_bs, win_fwd):
+            if not fs_path.startswith(prefix):
+                continue
+            tail = fs_path[len(prefix):]
+            # P1 fix: boundary check — tail 必須為空或以 separator 開頭
+            if tail and tail[0] not in SEPS:
+                continue  # boundary fail（e.g. share vs share2）
+            suffix = tail.replace('\\', '/')
+            return local_clean + suffix
+
+    return None
 
 
 def uri_to_fs_path(uri: str) -> str:

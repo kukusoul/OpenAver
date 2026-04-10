@@ -191,13 +191,15 @@
         <div class="showcase-grid" x-show="mode === 'grid'">
             <template x-for="(video, index) in paginatedVideos" :key="video.path">
                 <div class="av-card-preview"
+                     :class="{ 'missing-cover': !video.has_cover }"
                      @click="openLightbox(getCurrentFilteredIndex(index))"
                      :style="`--card-index: ${index}`"
                      :data-flip-id="video.path">
                     <div class="av-card-preview-img">
                         <img :src="video.cover_url"
                              :alt="video.number"
-                             loading="lazy">
+                             loading="lazy"
+                             @error="handleCoverError(video, $event)">
                         <div class="av-card-preview-overlay">
                             <button class="btn-glass-circle"
                                     @click.stop="playVideo(video.path)"
@@ -208,6 +210,13 @@
                                     @click.stop="openLocal(video.path)"
                                     title="{{ t('search.action.open_folder') }}">
                                 <i class="bi bi-folder2-open"></i>
+                            </button>
+                            <button class="btn-glass-circle enrich-btn"
+                                    x-show="!video.has_cover || !video.has_nfo"
+                                    :disabled="_enriching"
+                                    @click.stop="enrichVideo(video)"
+                                    :title="t('showcase.action.enrich')">
+                                <i class="bi" :class="_enriching ? 'bi-arrow-clockwise spin' : 'bi-search'"></i>
                             </button>
                         </div>
                     </div>
@@ -352,7 +361,7 @@
                 <div class="lightbox-cover">
                     <img :src="currentLightboxVideo?.cover_url"
                          :alt="currentLightboxVideo?.number"
-                         @error="$event.target.onerror=null; $event.target.src='data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22400%22 height=%22300%22 fill=%22%23666%22><rect width=%22400%22 height=%22300%22 fill=%22%23222%22/><text x=%2250%%22 y=%2250%%22 text-anchor=%22middle%22 dy=%22.3em%22 font-size=%2216%22>No Image</text></svg>'">
+                         @error="handleCoverError(currentLightboxVideo, $event)">
                     <!-- Cover Action Buttons -->
                     <div class="cover-actions">
                         <button class="lb-action-btn" @click="playVideo(currentLightboxVideo?.path)" data-tooltip="{{ t('showcase.action.play') }}" aria-label="{{ t('showcase.action.play') }}">
@@ -360,6 +369,14 @@
                         </button>
                         <button class="lb-action-btn" @click="openLocal(currentLightboxVideo?.path)" data-tooltip="{{ t('search.action.open_folder') }}" aria-label="{{ t('search.action.open_folder') }}">
                             <i class="bi bi-folder2-open"></i>
+                        </button>
+                        <button class="lb-action-btn"
+                                x-show="!currentLightboxVideo?.has_cover || !currentLightboxVideo?.has_nfo"
+                                :disabled="_enriching"
+                                @click.stop="enrichVideo(currentLightboxVideo)"
+                                data-tooltip="{{ t('showcase.action.enrich') }}"
+                                :aria-label="t('showcase.action.enrich')">
+                            <i class="bi" :class="_enriching ? 'bi-arrow-clockwise spin' : 'bi-search'"></i>
                         </button>
                     </div>
                 </div>
@@ -428,6 +445,44 @@
                         <template x-for="tag in (currentLightboxVideo?.tags || '').split(',').filter(t => t.trim())" :key="tag">
                             <a href="#" class="lb-tag lb-link" @click.prevent="searchFromMetadata(tag.trim())" x-text="tag.trim()"></a>
                         </template>
+                    </div>
+
+                    <!-- Row 6: User Tags (T4) -->
+                    <div class="lb-user-tags"
+                         x-show="!!currentLightboxVideo?.path">
+                        <!-- User tag badges with × remove button -->
+                        <template x-for="tag in (currentLightboxVideo?.user_tags || [])" :key="tag">
+                            <span class="lb-user-tag">
+                                <span x-text="tag"></span>
+                                <button class="lb-tag-remove"
+                                        @click.stop="removeLbUserTag(tag)"
+                                        :title="tag">×</button>
+                            </span>
+                        </template>
+
+                        <!-- + 新增按鈕（有 path 才顯示） -->
+                        <button class="lb-tag-add-btn"
+                                x-show="!addingLbTag && !!currentLightboxVideo?.path"
+                                @click.stop="showAddLbTagInput()"
+                                :title="t('showcase.lightbox.add_tag')">+</button>
+
+                        <!-- Inline 輸入框 -->
+                        <span class="lb-tag-input-wrapper" x-show="addingLbTag">
+                            <input class="lb-tag-input"
+                                   x-ref="lbTagInput"
+                                   x-model="newLbTagValue"
+                                   type="text"
+                                   maxlength="20"
+                                   :placeholder="t('showcase.lightbox.tag_placeholder')"
+                                   @keydown.enter.stop="confirmAddLbTag()"
+                                   @keydown.escape.stop="cancelAddLbTag()">
+                            <button class="lb-tag-confirm"
+                                    @click.stop="confirmAddLbTag()"
+                                    title="✓">✓</button>
+                            <button class="lb-tag-cancel"
+                                    @click.stop="cancelAddLbTag()"
+                                    title="✕">✕</button>
+                        </span>
                     </div>
 
                 </div>

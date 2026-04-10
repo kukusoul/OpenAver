@@ -52,6 +52,7 @@ def init_db(db_path: Path = None) -> None:
             label TEXT DEFAULT '',
             tags TEXT,
             sample_images TEXT DEFAULT '',
+            user_tags TEXT DEFAULT '[]',
             duration INTEGER,
             size_bytes INTEGER,
             cover_path TEXT,
@@ -111,6 +112,10 @@ def init_db(db_path: Path = None) -> None:
     if 'sample_images' not in existing_cols:
         cursor.execute("ALTER TABLE videos ADD COLUMN sample_images TEXT DEFAULT ''")
 
+    # Migration: 加入 Phase 41b user_tags 欄位
+    if 'user_tags' not in existing_cols:
+        cursor.execute("ALTER TABLE videos ADD COLUMN user_tags TEXT DEFAULT '[]'")
+
     conn.commit()
     conn.close()
 
@@ -129,6 +134,7 @@ class Video:
     series: Optional[str] = None
     label: str = ""
     tags: List[str] = field(default_factory=list)  # JSON
+    user_tags: List[str] = field(default_factory=list)  # JSON - 用戶自訂標籤
     sample_images: List[str] = field(default_factory=list)  # JSON
     duration: Optional[int] = None
     size_bytes: int = 0
@@ -169,6 +175,7 @@ class Video:
             series=info.series or None,
             label=info.label or '',
             tags=tags,
+            user_tags=info.user_tags or [],
             sample_images=info.sample_images or [],
             duration=info.duration,
             size_bytes=info.size,
@@ -184,6 +191,7 @@ class Video:
         # 序列化 JSON 欄位
         data['actresses'] = json.dumps(self.actresses, ensure_ascii=False)
         data['tags'] = json.dumps(self.tags, ensure_ascii=False)
+        data['user_tags'] = json.dumps(self.user_tags, ensure_ascii=False)
         data['sample_images'] = json.dumps(self.sample_images, ensure_ascii=False)
         # 序列化 datetime
         if self.created_at:
@@ -213,6 +221,14 @@ class Video:
                 data['tags'] = []
         else:
             data['tags'] = []
+
+        if 'user_tags' in data and data['user_tags']:
+            try:
+                data['user_tags'] = json.loads(data['user_tags'])
+            except json.JSONDecodeError:
+                data['user_tags'] = []
+        else:
+            data['user_tags'] = []
 
         if 'sample_images' in data and data['sample_images']:
             try:
@@ -275,7 +291,18 @@ class VideoRepository:
 
             columns = list(video_dict.keys())
             placeholders = ', '.join(['?'] * len(columns))
-            update_clause = ', '.join([f"{col} = excluded.{col}" for col in columns if col != 'path'])
+            update_parts = []
+            for col in columns:
+                if col == 'path':
+                    continue
+                elif col == 'user_tags':
+                    # user_tags = '[]' 時視同「不更新」，保留 DB 現有值
+                    update_parts.append(
+                        "user_tags = CASE WHEN excluded.user_tags = '[]' THEN videos.user_tags ELSE excluded.user_tags END"
+                    )
+                else:
+                    update_parts.append(f"{col} = excluded.{col}")
+            update_clause = ', '.join(update_parts)
 
             sql = f"""
                 INSERT INTO videos ({', '.join(columns)})
@@ -325,7 +352,18 @@ class VideoRepository:
 
                 columns = list(video_dict.keys())
                 placeholders_sql = ', '.join(['?'] * len(columns))
-                update_clause = ', '.join([f"{col} = excluded.{col}" for col in columns if col != 'path'])
+                update_parts = []
+                for col in columns:
+                    if col == 'path':
+                        continue
+                    elif col == 'user_tags':
+                        # user_tags = '[]' 時視同「不更新」，保留 DB 現有值
+                        update_parts.append(
+                            "user_tags = CASE WHEN excluded.user_tags = '[]' THEN videos.user_tags ELSE excluded.user_tags END"
+                        )
+                    else:
+                        update_parts.append(f"{col} = excluded.{col}")
+                update_clause = ', '.join(update_parts)
 
                 sql = f"""
                     INSERT INTO videos ({', '.join(columns)})
@@ -547,6 +585,28 @@ class VideoRepository:
             )
             rows = cursor.fetchall()
             return [Video.from_row(row, self._get_columns()) for row in rows]
+        finally:
+            conn.close()
+
+    def update_user_tags(self, path: str, user_tags: List[str]) -> bool:
+        """安全更新 user_tags 欄位（不碰其他欄位）
+
+        Args:
+            path: 影片路徑（DB key，file:/// URI 格式）
+            user_tags: 新的 user_tags 列表
+
+        Returns:
+            bool: 是否成功更新
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                "UPDATE videos SET user_tags = ?, updated_at = CURRENT_TIMESTAMP WHERE path = ?",
+                (json.dumps(user_tags, ensure_ascii=False), path)
+            )
+            conn.commit()
+            return cursor.rowcount > 0
         finally:
             conn.close()
 

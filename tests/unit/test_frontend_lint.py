@@ -1271,3 +1271,160 @@ class TestNextLightboxLoadMore:
             "nextLightboxVideo() loadMore 成功後缺少 playLightboxSwitch（T3c 動畫觸發缺失）"
         assert state_pos < switch_pos, \
             "T3c 違反 state-first：currentIndex 更新必須在 playLightboxSwitch 之前"
+
+
+RESULT_CARD_JS = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "search" / "state" / "result-card.js"
+PATH_UTILS_JS = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "components" / "path-utils.js"
+FILE_LIST_JS = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "search" / "state" / "file-list.js"
+
+
+class TestUserTagsApiGuard:
+    """41b-T3: 確保 confirmAddTag 和 removeUserTag 改接 /api/user-tags API"""
+
+    def _result_card(self):
+        return RESULT_CARD_JS.read_text(encoding="utf-8")
+
+    def _path_utils(self):
+        return PATH_UTILS_JS.read_text(encoding="utf-8")
+
+    def _html(self):
+        return SEARCH_HTML.read_text(encoding="utf-8")
+
+    def _locale(self, name):
+        return json.loads((LOCALES_ROOT / name).read_text(encoding="utf-8"))
+
+    def _get_nested(self, d, dotted_key):
+        keys = dotted_key.split(".")
+        cur = d
+        for k in keys:
+            if not isinstance(cur, dict) or k not in cur:
+                return None
+            cur = cur[k]
+        return cur
+
+    def test_confirm_add_tag_calls_user_tags_api(self):
+        """confirmAddTag() 程式碼含 /api/user-tags fetch call"""
+        content = self._result_card()
+        assert "user-tags" in content, \
+            "result-card.js 缺少 /api/user-tags 呼叫（confirmAddTag 應改接 API）"
+
+    def test_confirm_add_tag_is_async(self):
+        """confirmAddTag() 是 async 函數"""
+        content = self._result_card()
+        assert "async confirmAddTag()" in content, \
+            "result-card.js confirmAddTag() 應改為 async（API fetch 需要）"
+
+    def test_remove_user_tag_calls_user_tags_api(self):
+        """removeUserTag() 程式碼含 /api/user-tags fetch call"""
+        content = self._result_card()
+        # 確認 removeUserTag 區塊有 fetch 呼叫
+        start = content.find("async removeUserTag(")
+        assert start != -1, \
+            "result-card.js removeUserTag() 應改為 async（API fetch 需要）"
+        func_body = content[start:start + 1500]
+        assert "user-tags" in func_body, \
+            "result-card.js removeUserTag() 內缺少 /api/user-tags 呼叫"
+
+    def test_remove_user_tag_is_async(self):
+        """removeUserTag() 是 async 函數"""
+        content = self._result_card()
+        assert "async removeUserTag(" in content, \
+            "result-card.js removeUserTag() 應改為 async（API fetch 需要）"
+
+    def test_result_card_does_not_use_path_to_file_uri(self):
+        """result-card.js 不再呼叫 pathToFileUri()（路徑契約：禁止 JS 手刻 file:///）"""
+        content = self._result_card()
+        assert "pathToFileUri" not in content, \
+            "result-card.js 仍呼叫 pathToFileUri()，違反路徑契約：前端應直接傳 file.path，讓後端正規化"
+
+    def test_path_utils_does_not_have_path_to_file_uri(self):
+        """path-utils.js 不含 pathToFileUri 函數定義（已刪除，防止誤用）"""
+        content = self._path_utils()
+        assert "pathToFileUri" not in content, \
+            "path-utils.js 仍含 pathToFileUri 函數，應已刪除（WSL 環境下會產生錯誤 URI）"
+
+    def test_path_utils_still_has_path_to_display(self):
+        """path-utils.js 仍保留 pathToDisplay 函數"""
+        content = self._path_utils()
+        assert "pathToDisplay" in content, \
+            "path-utils.js 缺少 pathToDisplay 函數（用於前端顯示路徑）"
+
+    def test_confirm_add_tag_no_direct_push(self):
+        """confirmAddTag() 不再直接 c.user_tags.push(tag)（已改為 API response 更新）"""
+        content = self._result_card()
+        # 找到 confirmAddTag 函數體，確認沒有直接 push 且不先呼叫 API
+        start = content.find("async confirmAddTag()")
+        assert start != -1, "result-card.js 找不到 async confirmAddTag() 函數"
+        # 截取函數體（到下一個同層函數前）
+        func_body = content[start:start + 2000]
+        # 如果有 push(tag)，只允許在 API 成功分支後的 saveState 附近（不應該在 API 前直接 push）
+        # 最簡單守衛：直接 c.user_tags.push(tag) 不應在函數內出現
+        assert "c.user_tags.push(tag)" not in func_body, \
+            "result-card.js confirmAddTag() 仍直接 c.user_tags.push(tag)，應改為 API response 更新"
+
+    def test_add_button_has_file_mode_guard(self):
+        """+ 按鈕 x-show 含 listMode === 'file' guard"""
+        html = self._html()
+        assert "listMode === 'file'" in html, \
+            "search.html + 按鈕缺少 listMode === 'file' guard（應僅在 file 模式顯示）"
+
+    def test_add_button_has_file_path_guard(self):
+        """+ 按鈕 x-show 含 fileList[currentFileIndex]?.path guard"""
+        html = self._html()
+        assert "fileList[currentFileIndex]?.path" in html, \
+            "search.html + 按鈕缺少 fileList[currentFileIndex]?.path guard"
+
+    def test_user_tags_stored_at_file_level(self):
+        """confirmAddTag/removeUserTag 更新 fileList[currentFileIndex].user_tags（P2: file-level）"""
+        content = self._result_card()
+        assert "fileList[this.currentFileIndex].user_tags" in content, \
+            "result-card.js 未將 user_tags 寫入 fileList[currentFileIndex].user_tags（應為 file-level）"
+
+    def test_current_user_tags_method_exists(self):
+        """result-card.js 含 currentUserTags() helper（P2: file-level user_tags）"""
+        content = self._result_card()
+        assert "currentUserTags()" in content, \
+            "result-card.js 缺少 currentUserTags() method（P2: user_tags 應從 file-level 讀取）"
+
+    def test_template_uses_current_user_tags(self):
+        """search.html 用戶標籤 template 使用 currentUserTags()（P2）"""
+        html = self._html()
+        assert "currentUserTags()" in html, \
+            "search.html 用戶標籤 template 仍用 current().user_tags，應改為 currentUserTags()"
+
+    def test_set_file_list_initializes_user_tags(self):
+        """file-list.js setFileList 給每個 file 初始化 user_tags: []（P2）"""
+        content = (FILE_LIST_JS).read_text(encoding="utf-8")
+        assert "user_tags: []" in content, \
+            "file-list.js setFileList 未初始化 user_tags: []（切換 file 前 user_tags 為 undefined）"
+
+    def test_tag_api_failed_key_exists_all_locales(self):
+        """四語系 search.error.tag_api_failed key 都存在"""
+        for locale_file in ["zh_TW.json", "zh_CN.json", "en.json", "ja.json"]:
+            data = self._locale(locale_file)
+            val = self._get_nested(data, "search.error.tag_api_failed")
+            assert val, f"{locale_file} 缺少 search.error.tag_api_failed key"
+
+    def test_fetch_user_tags_method_exists(self):
+        """result-card.js 含 fetchUserTagsForCurrent() 補查方法"""
+        content = self._result_card()
+        assert "fetchUserTagsForCurrent" in content, \
+            "result-card.js 缺少 fetchUserTagsForCurrent() 方法（策略二：前端補查 user_tags）"
+
+    def test_fetch_user_tags_writes_to_file_level(self):
+        """fetchUserTagsForCurrent 把結果寫入 file-level user_tags（P2）
+        實作使用 captured file ref（race-safe pattern）：
+        const file = this.fileList?.[this.currentFileIndex]; ... file.user_tags = ...
+        """
+        content = self._result_card()
+        start = content.find("async fetchUserTagsForCurrent()")
+        assert start != -1, "result-card.js 找不到 fetchUserTagsForCurrent()"
+        func_body = content[start:start + 800]
+        # 接受兩種等效寫法：
+        # 1. 直接索引：fileList[this.currentFileIndex].user_tags
+        # 2. captured ref（race-safe）：const file = ...; file.user_tags = ...
+        has_direct = "fileList[this.currentFileIndex].user_tags" in func_body
+        has_captured_ref = ("file.user_tags" in func_body and
+                            "this.fileList?.[this.currentFileIndex]" in func_body)
+        assert has_direct or has_captured_ref, \
+            "fetchUserTagsForCurrent 未寫入 file-level user_tags（P2: 需有 fileList[idx].user_tags 或 captured ref file.user_tags）"
