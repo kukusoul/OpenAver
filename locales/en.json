@@ -416,7 +416,8 @@
       "toggle_order": "Toggle Sort Order",
       "toggle_info": "Show/Hide Info (S)",
       "play_video": "Open Video",
-      "play": "Play"
+      "play": "Play",
+      "enrich": "Enrich"
     },
     "toolbar": {
       "sort_prefix": "Sort",
@@ -504,6 +505,10 @@
       "toggle_info": "Toggle Info",
       "pagination": "Pagination",
       "close": "Close"
+    },
+    "enrich": {
+      "success": "Enriched successfully",
+      "failed": "Enrich failed, please try again"
     }
   },
   "help": {

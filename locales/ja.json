@@ -416,7 +416,8 @@
       "toggle_order": "並び順を切替",
       "toggle_info": "情報を表示/非表示 (S)",
       "play_video": "動画を開く",
-      "play": "再生"
+      "play": "再生",
+      "enrich": "情報補完"
     },
     "toolbar": {
       "sort_prefix": "並び替え",
@@ -504,6 +505,10 @@
       "toggle_info": "情報表示",
       "pagination": "ページ送り",
       "close": "閉じる"
+    },
+    "enrich": {
+      "success": "情報補完が完了しました",
+      "failed": "情報補完に失敗しました。後ほど再試行してください"
     }
   },
   "help": {
