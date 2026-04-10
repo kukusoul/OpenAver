@@ -191,6 +191,7 @@
         <div class="showcase-grid" x-show="mode === 'grid'">
             <template x-for="(video, index) in paginatedVideos" :key="video.path">
                 <div class="av-card-preview"
+                     :class="{ 'missing-cover': !video.has_cover }"
                      @click="openLightbox(getCurrentFilteredIndex(index))"
                      :style="`--card-index: ${index}`"
                      :data-flip-id="video.path">
@@ -208,6 +209,13 @@
                                     @click.stop="openLocal(video.path)"
                                     title="{{ t('search.action.open_folder') }}">
                                 <i class="bi bi-folder2-open"></i>
+                            </button>
+                            <button class="btn-glass-circle enrich-btn"
+                                    x-show="!video.has_cover || !video.has_nfo"
+                                    :disabled="_enriching"
+                                    @click.stop="enrichVideo(video)"
+                                    :title="t('showcase.action.enrich')">
+                                <i class="bi" :class="_enriching ? 'bi-arrow-clockwise spin' : 'bi-search'"></i>
                             </button>
                         </div>
                     </div>
@@ -360,6 +368,14 @@
                         </button>
                         <button class="lb-action-btn" @click="openLocal(currentLightboxVideo?.path)" data-tooltip="{{ t('search.action.open_folder') }}" aria-label="{{ t('search.action.open_folder') }}">
                             <i class="bi bi-folder2-open"></i>
+                        </button>
+                        <button class="lb-action-btn"
+                                x-show="!currentLightboxVideo?.has_cover || !currentLightboxVideo?.has_nfo"
+                                :disabled="_enriching"
+                                @click.stop="enrichVideo(currentLightboxVideo)"
+                                data-tooltip="{{ t('showcase.action.enrich') }}"
+                                :aria-label="t('showcase.action.enrich')">
+                            <i class="bi" :class="_enriching ? 'bi-arrow-clockwise spin' : 'bi-search'"></i>
                         </button>
                     </div>
                 </div>

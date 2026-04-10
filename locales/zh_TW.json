@@ -416,7 +416,8 @@
       "toggle_order": "切換排序方向",
       "toggle_info": "顯示/隱藏資訊 (S)",
       "play_video": "開啟影片",
-      "play": "播放"
+      "play": "播放",
+      "enrich": "補資料"
     },
     "toolbar": {
       "sort_prefix": "排序",
@@ -504,6 +505,10 @@
       "toggle_info": "顯示資訊",
       "pagination": "翻頁",
       "close": "關閉"
+    },
+    "enrich": {
+      "success": "補資料完成",
+      "failed": "補資料失敗，請稍後再試"
     }
   },
   "help": {

@@ -83,6 +83,9 @@ function showcaseState() {
         addingLbTag: false,
         newLbTagValue: '',
 
+        // Enrich 狀態 (T3)
+        _enriching: false,
+
         // F1: helper — 更新 lightboxIndex + currentLightboxVideo 一致性
         _setLightboxIndex(idx) {
             this.lightboxIndex = idx;
@@ -1056,6 +1059,55 @@ function showcaseState() {
                 }
             } catch (e) {
                 this.showToast(window.t('showcase.lightbox.tag_api_failed'), 'error');
+            }
+        },
+
+        // --- Enrich 補資料 (T3) ---
+        async enrichVideo(video) {
+            if (this._enriching) return;
+            if (!video || !video.path) return;
+            this._enriching = true;
+            try {
+                const mode = !video.has_cover ? 'refresh_full' : 'fill_missing';
+                const resp = await fetch('/api/enrich-single', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        file_path: video.path,
+                        number: video.number,
+                        mode: mode,
+                        write_nfo: true,
+                        write_cover: true,
+                        overwrite_existing: false,
+                    }),
+                });
+                const result = await resp.json();
+                if (result.success) {
+                    await this.refreshVideoData(video);
+                    this.showToast(window.t('showcase.enrich.success'), 'success');
+                } else {
+                    this.showToast(result.error || window.t('showcase.enrich.failed'), 'error');
+                }
+            } catch (e) {
+                this.showToast(window.t('showcase.enrich.failed'), 'error');
+            } finally {
+                this._enriching = false;
+            }
+        },
+
+        async refreshVideoData(video) {
+            try {
+                const resp = await fetch(`/api/showcase/video?path=${encodeURIComponent(video.path)}`);
+                if (!resp.ok) return;
+                const data = await resp.json();
+                if (data.success && data.video) {
+                    if (data.video.cover_url) {
+                        data.video.cover_url = data.video.cover_url + '&t=' + Date.now();
+                    }
+                    Object.assign(video, data.video);
+                }
+            } catch (e) {
+                // refresh 失敗不顯示額外 toast，enrich 成功本體已顯示
             }
         },
 

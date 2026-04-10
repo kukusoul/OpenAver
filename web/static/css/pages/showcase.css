@@ -1437,3 +1437,11 @@
 .lb-tag-cancel {
     color: var(--color-error);
 }
+
+/* T3: 無封面卡片 overlay 常駐顯示（pointer-events 必須補 auto，否則不可點擊）*/
+:is(#ds-gallery-components, .ds-gallery-composition)
+.av-card-preview.missing-cover
+.av-card-preview-overlay {
+    opacity: 1;
+    pointer-events: auto;
+}
