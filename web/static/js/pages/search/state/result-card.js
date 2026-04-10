@@ -295,8 +295,8 @@ window.SearchStateMixin_ResultCard = {
             });
             const data = await resp.json();
             if (data.success) {
-                // P2: 更新 file-level user_tags
-                this.fileList[this.currentFileIndex].user_tags = data.user_tags;
+                // P2: 更新 file-level user_tags（用 captured file ref 避免 await 期間切檔 race）
+                file.user_tags = data.user_tags;
                 this.saveState();
             } else {
                 this.showToast(window.t('search.error.tag_api_failed'), 'error');
@@ -329,8 +329,8 @@ window.SearchStateMixin_ResultCard = {
             });
             const data = await resp.json();
             if (data.success) {
-                // P2: 更新 file-level user_tags
-                this.fileList[this.currentFileIndex].user_tags = data.user_tags;
+                // P2: 更新 file-level user_tags（用 captured file ref 避免 await 期間切檔 race）
+                file.user_tags = data.user_tags;
                 this.saveState();
             } else {
                 this.showToast(window.t('search.error.tag_api_failed'), 'error');
@@ -356,8 +356,8 @@ window.SearchStateMixin_ResultCard = {
             const resp = await fetch(`/api/user-tags?file_path=${encodeURIComponent(file.path)}`);
             const data = await resp.json();
             if (Array.isArray(data.user_tags)) {
-                // P2: 寫入 file-level user_tags
-                this.fileList[this.currentFileIndex].user_tags = data.user_tags;
+                // P2: 寫入 file-level user_tags（用 captured file ref 避免 await 期間切檔 race）
+                file.user_tags = data.user_tags;
             }
         } catch {
             // E9: 靜默忽略，不阻擋搜尋結果顯示
