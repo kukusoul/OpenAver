@@ -84,8 +84,12 @@ def _parse_graphis_profile(html: str) -> dict:
                     result['hip'] = f"{bwh_match.group(4)}cm"
 
             elif 'hobby' in label or '趣味' in label:
-                # Full text of second span
-                result['hobby'] = value_text
+                # <br> 分隔 JP/EN，get_text('\n') 保留分隔後只取 JP 第一段
+                # 避免「get_text(strip=True)」預設 separator='' 把 <br> 吞掉
+                # 導致 JP+EN 無縫拼接（例：'読書Reading,Cooking'）
+                hobby_raw = value_span.get_text('\n', strip=True)
+                parts = [p.strip() for p in hobby_raw.split('\n') if p.strip()]
+                result['hobby'] = parts[0] if parts else ''
 
     except Exception as e:
         logger.warning(f"[graphis] _parse_graphis_profile error: {e}")
