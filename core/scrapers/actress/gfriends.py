@@ -79,23 +79,30 @@ def _check_gfriends_url(folder: str, name: str) -> Optional[str]:
     優先嘗試 AI-Fix 版本（人工增強版），miss 才 fallback 原版。
     涼森れむ 的 v-Prestige folder 同時存在 119×170 原版（AI-Fix input）與
     476×680 AI-Fix 輸出 — 翻轉順序確保拿到正式圖。
+
+    每個 probe 獨立 try/except：AI-Fix 失敗（狀態碼 ≠ 200 或 exception）
+    都 fallback 原版，避免 flaky timeout 讓整個 lookup abort。
     """
+    # AI-Fix 優先（人工增強版）
+    ai_fix_url = f"{CDN_BASE}/{folder}/AI-Fix-{name}.jpg"
     try:
-        # AI-Fix 優先（人工增強版）
-        ai_fix_url = f"{CDN_BASE}/{folder}/AI-Fix-{name}.jpg"
         resp = requests.head(ai_fix_url, timeout=3)
         if resp.status_code == 200:
             return ai_fix_url
+    except Exception:
+        # AI-Fix probe failed — fall through to original
+        pass
 
-        # Fallback 原版
-        url = f"{CDN_BASE}/{folder}/{name}.jpg"
+    # Fallback 原版
+    url = f"{CDN_BASE}/{folder}/{name}.jpg"
+    try:
         resp2 = requests.head(url, timeout=3)
         if resp2.status_code == 200:
             return url
-
-        return None
     except Exception:
-        return None
+        pass
+
+    return None
 
 
 def lookup_gfriends(name: str, makers: list = None) -> Optional[str]:

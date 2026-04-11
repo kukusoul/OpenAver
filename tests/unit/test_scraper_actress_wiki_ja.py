@@ -485,3 +485,28 @@ def test_photo_alt_guard_prefers_human_photo_suzumori_remu():
     assert "sign" not in photo_url.lower(), f"signature-like URL: {photo_url!r}"
     # 是人像
     assert "Trend_Girls" in photo_url, f"human photo not selected: {photo_url!r}"
+
+
+# ---------------------------------------------------------------------------
+# 12. Codex review #2 — alias-only infobox must not be dropped by meaningful_fields
+# ---------------------------------------------------------------------------
+
+def test_bieimei_only_infobox_returns_dict_not_none():
+    """
+    Codex review #2 (T7.2 completeness fix):
+    若某頁 infobox 只有 別名 row 而無 birth/height/blood/等其他 text field，
+    parser 應該仍回 dict（含 other_names），而非被 meaningful_fields guard 丟掉。
+    不然 T7.2 加 other_names 對未來 alias ingestion 的目的會被抵消。
+    """
+    html = '''
+    <html><body>
+    <table class="infobox biography">
+      <tr><th>別名</th><td>松嶋真麻</td></tr>
+    </table>
+    </body></html>
+    '''
+    result = _parse_wiki_ja_html(html, "テスト女優")
+    assert result is not None, \
+        "parser must return dict when only 別名 (alias) is present — " \
+        "other_names alone counts as meaningful for alias ingestion"
+    assert result["other_names"] == ["松嶋真麻"]

@@ -44,3 +44,30 @@ def test_exception_returns_none():
     with patch('core.scrapers.actress.gfriends.requests.head',
                side_effect=Exception('network')):
         assert _check_gfriends_url('xxx', 'yyy') is None
+
+
+def test_ai_fix_exception_falls_back_to_original():
+    """
+    Codex review #1 (T7.1 regression fix):
+    AI-Fix HEAD 拋 exception 時，應該 fallback 原版，而非整個回 None。
+    舊外層 try/except 會讓 AI-Fix exception 直接 abort 整個函數。
+    """
+    import requests as req_module
+
+    call_count = {'n': 0}
+
+    def mock_head(url, **kwargs):
+        call_count['n'] += 1
+        if call_count['n'] == 1:
+            # AI-Fix probe — raise exception
+            raise req_module.exceptions.Timeout("flaky network")
+        else:
+            # Original probe — success
+            return MagicMock(status_code=200)
+
+    with patch('core.scrapers.actress.gfriends.requests.head', side_effect=mock_head):
+        url = _check_gfriends_url('8-Ideapocket', '明里つむぎ')
+
+    assert url is not None, "expected fallback to original after AI-Fix exception"
+    assert 'AI-Fix-' not in url, f"expected original URL, got {url!r}"
+    assert call_count['n'] == 2, f"expected 2 HEAD calls, got {call_count['n']}"

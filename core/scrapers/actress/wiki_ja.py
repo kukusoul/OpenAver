@@ -184,7 +184,7 @@ def _parse_wiki_ja_html(html: str, name: str) -> Optional[Dict]:
     # they would suppress richer fallback sources in the orchestrator cascade.
     meaningful_fields = ("birth", "height", "bust", "waist", "hip", "cup",
                          "blood", "hometown", "nickname", "exclusive_makers",
-                         "debut_year")
+                         "debut_year", "other_names")
     if not any(result.get(k) for k in meaningful_fields):
         logger.debug(f"[wiki_ja] infobox found but no usable text fields for {name}")
         return None
