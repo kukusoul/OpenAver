@@ -169,13 +169,15 @@ def test_get_actress_profile_both_sources():
     """測試雙來源合併邏輯（Mock）"""
     from core.scrapers.actress.orchestrator import get_actress_profile, _cache
 
-    # Mock Graphis 回傳照片（含 birth 供 TD-1 age 計算）
+    # Mock Graphis 回傳照片（含 birth/height/cup 供 TD-1 + text cascade 測試）
     def mock_graphis(name):
         return {
             'name': name,
             'prof_url': 'https://graphis.ne.jp/prof.jpg',
             'backdrop_url': 'https://graphis.ne.jp/model.jpg',
             'birth': '1997-12-03',
+            'height': '160cm',
+            'cup': 'G',
         }
 
     # Mock JavBus 回傳資料（新 orchestrator 不呼叫 javbus，留作舊 patch chain 參考）
@@ -189,7 +191,9 @@ def test_get_actress_profile_both_sources():
             'cup': 'G'
         }
 
-    with patch('core.scrapers.actress.graphis.scrape_graphis_photo', side_effect=mock_graphis), \
+    with patch('core.scrapers.actress.minnano_av.scrape_minnano_av', return_value=None), \
+         patch('core.scrapers.actress.wiki_ja.scrape_wiki_ja', return_value=None), \
+         patch('core.scrapers.actress.graphis.scrape_graphis_photo', side_effect=mock_graphis), \
          patch('core.scrapers.actress.javbus.scrape_actress_profile', side_effect=mock_javbus), \
          patch('core.scrapers.actress.gfriends.lookup_gfriends', return_value=None):
 
@@ -207,8 +211,10 @@ def test_get_actress_profile_both_sources():
         assert result['cup'] == 'G'
 
 
-def test_get_actress_profile_javbus_only():
-    """測試只有 JavBus 有資料（Mock）"""
+def test_get_actress_profile_all_routes_none_javbus_ignored():
+    """T4.3 semantic: javbus is schema-only (not data). When all active routes
+    (minnano/wiki/graphis/gfriends) return None, result is None — even if the legacy
+    javbus safety-net mock has data. Validates that the new orchestrator ignores javbus."""
     from core.scrapers.actress.orchestrator import get_actress_profile, _cache
 
     def mock_javbus(name):
@@ -219,15 +225,16 @@ def test_get_actress_profile_javbus_only():
             'age': 29
         }
 
-    with patch('core.scrapers.actress.graphis.scrape_graphis_photo', return_value=None), \
+    with patch('core.scrapers.actress.minnano_av.scrape_minnano_av', return_value=None), \
+         patch('core.scrapers.actress.wiki_ja.scrape_wiki_ja', return_value=None), \
+         patch('core.scrapers.actress.graphis.scrape_graphis_photo', return_value=None), \
          patch('core.scrapers.actress.javbus.scrape_actress_profile', side_effect=mock_javbus), \
          patch('core.scrapers.actress.gfriends.lookup_gfriends', return_value=None):
 
         result = get_actress_profile("桜空もも")
 
-        assert result is not None
-        assert result['img'] == 'https://javbus.com/img.jpg'
-        assert result['birth'] == '1996-12-03'
+        # All active routes return None → orchestrator returns None (javbus is ignored)
+        assert result is None
 
 
 def test_get_actress_profile_graphis_only():
@@ -237,11 +244,14 @@ def test_get_actress_profile_graphis_only():
     def mock_graphis(name):
         return {
             'name': name,
+            'name_ja': name,   # T4.3: orchestrator reads name_ja for result['name']
             'prof_url': 'https://graphis.ne.jp/prof.jpg',
             'backdrop_url': 'https://graphis.ne.jp/model.jpg'
         }
 
-    with patch('core.scrapers.actress.graphis.scrape_graphis_photo', side_effect=mock_graphis), \
+    with patch('core.scrapers.actress.minnano_av.scrape_minnano_av', return_value=None), \
+         patch('core.scrapers.actress.wiki_ja.scrape_wiki_ja', return_value=None), \
+         patch('core.scrapers.actress.graphis.scrape_graphis_photo', side_effect=mock_graphis), \
          patch('core.scrapers.actress.javbus.scrape_actress_profile', return_value=None), \
          patch('core.scrapers.actress.gfriends.lookup_gfriends', return_value=None):
 
@@ -257,8 +267,11 @@ def test_get_actress_profile_both_fail():
     """測試雙來源都失敗（Mock）"""
     from core.scrapers.actress.orchestrator import get_actress_profile, _cache
 
-    with patch('core.scrapers.actress.graphis.scrape_graphis_photo', return_value=None), \
-         patch('core.scrapers.actress.javbus.scrape_actress_profile', return_value=None):
+    with patch('core.scrapers.actress.minnano_av.scrape_minnano_av', return_value=None), \
+         patch('core.scrapers.actress.wiki_ja.scrape_wiki_ja', return_value=None), \
+         patch('core.scrapers.actress.graphis.scrape_graphis_photo', return_value=None), \
+         patch('core.scrapers.actress.javbus.scrape_actress_profile', return_value=None), \
+         patch('core.scrapers.actress.gfriends.lookup_gfriends', return_value=None):
 
         result = get_actress_profile("不存在的女優")
         assert result is None
@@ -287,7 +300,9 @@ def test_get_actress_profile_cache_hit():
             'age': 29
         }
 
-    with patch('core.scrapers.actress.graphis.scrape_graphis_photo', side_effect=mock_graphis) as graphis_mock, \
+    with patch('core.scrapers.actress.minnano_av.scrape_minnano_av', return_value=None) as minnano_mock, \
+         patch('core.scrapers.actress.wiki_ja.scrape_wiki_ja', return_value=None) as wiki_mock, \
+         patch('core.scrapers.actress.graphis.scrape_graphis_photo', side_effect=mock_graphis) as graphis_mock, \
          patch('core.scrapers.actress.javbus.scrape_actress_profile', side_effect=mock_javbus) as javbus_mock, \
          patch('core.scrapers.actress.gfriends.lookup_gfriends', return_value=None):
 
@@ -295,7 +310,8 @@ def test_get_actress_profile_cache_hit():
         result1 = get_actress_profile("桜空もも")
         assert result1 is not None
         assert graphis_mock.call_count == 1
-        assert javbus_mock.call_count == 1
+        # T4.3: javbus is not called by new orchestrator — safety-net mock stays at 0
+        assert javbus_mock.call_count == 0
 
         # 第二次呼叫（應從 cache 取得）
         result2 = get_actress_profile("桜空もも")
@@ -303,7 +319,7 @@ def test_get_actress_profile_cache_hit():
         assert result1 == result2
         # Mock 不應被再次呼叫
         assert graphis_mock.call_count == 1
-        assert javbus_mock.call_count == 1
+        assert javbus_mock.call_count == 0
 
 
 def test_get_actress_profile_cache_expired():
@@ -330,6 +346,8 @@ def test_get_actress_profile_cache_expired():
         return fixed_time[0]
 
     with patch('time.time', side_effect=mock_time), \
+         patch('core.scrapers.actress.minnano_av.scrape_minnano_av', return_value=None), \
+         patch('core.scrapers.actress.wiki_ja.scrape_wiki_ja', return_value=None), \
          patch('core.scrapers.actress.graphis.scrape_graphis_photo', side_effect=mock_graphis) as graphis_mock, \
          patch('core.scrapers.actress.javbus.scrape_actress_profile', side_effect=mock_javbus) as javbus_mock, \
          patch('core.scrapers.actress.gfriends.lookup_gfriends', return_value=None):
@@ -362,7 +380,9 @@ def test_get_actress_profile_cache_name_normalization():
     def mock_javbus(name):
         return {'name': name, 'img': 'https://javbus.com/img.jpg'}
 
-    with patch('core.scrapers.actress.graphis.scrape_graphis_photo', side_effect=mock_graphis) as graphis_mock, \
+    with patch('core.scrapers.actress.minnano_av.scrape_minnano_av', return_value=None), \
+         patch('core.scrapers.actress.wiki_ja.scrape_wiki_ja', return_value=None), \
+         patch('core.scrapers.actress.graphis.scrape_graphis_photo', side_effect=mock_graphis) as graphis_mock, \
          patch('core.scrapers.actress.javbus.scrape_actress_profile', side_effect=mock_javbus), \
          patch('core.scrapers.actress.gfriends.lookup_gfriends', return_value=None):
 
@@ -910,19 +930,23 @@ def _make_javbus_result(name="桜空もも", **overrides):
 
 
 def test_get_actress_profile_gfriends_wins():
-    """gfriends 圖片優先級最高：img 應為 gfriends URL，而非 graphis/javbus"""
+    """gfriends 圖片勝出：graphis 無 prof_url 時，gfriends 應成為 photo cascade 的 winner。
+    T4.3 note: orchestrator photo cascade = graphis prof_url → gfriends → wiki → minnano.
+    To let gfriends win, graphis must have prof_url=None."""
     from core.scrapers.actress.orchestrator import get_actress_profile, _cache
 
     gfriends_url = 'https://cdn.jsdelivr.net/gh/gfriends/gfriends@master/Content/7-S1/桜空もも.jpg'
 
-    with patch('core.scrapers.actress.graphis.scrape_graphis_photo', return_value=_make_graphis_result()), \
+    with patch('core.scrapers.actress.minnano_av.scrape_minnano_av', return_value=None), \
+         patch('core.scrapers.actress.wiki_ja.scrape_wiki_ja', return_value=None), \
+         patch('core.scrapers.actress.graphis.scrape_graphis_photo', return_value=_make_graphis_result(prof_url=None)), \
          patch('core.scrapers.actress.javbus.scrape_actress_profile', return_value=_make_javbus_result()), \
          patch('core.scrapers.actress.gfriends.lookup_gfriends', return_value=gfriends_url):
 
         result = get_actress_profile("桜空もも", makers=['S1'])
 
         assert result is not None
-        # gfriends wins over graphis prof_url and javbus img
+        # gfriends wins photo cascade (graphis has no prof_url, javbus is ignored)
         assert result['img'] == gfriends_url
         # Backdrop still comes from graphis
         assert result['backdrop'] == 'https://graphis.ne.jp/model.jpg'
@@ -937,7 +961,9 @@ def test_get_actress_profile_graphis_text_wins():
     """
     from core.scrapers.actress.orchestrator import get_actress_profile, _cache
 
-    with patch('core.scrapers.actress.graphis.scrape_graphis_photo', return_value=_make_graphis_result(age=28, height='160cm', cup='G')), \
+    with patch('core.scrapers.actress.minnano_av.scrape_minnano_av', return_value=None), \
+         patch('core.scrapers.actress.wiki_ja.scrape_wiki_ja', return_value=None), \
+         patch('core.scrapers.actress.graphis.scrape_graphis_photo', return_value=_make_graphis_result(age=28, height='160cm', cup='G')), \
          patch('core.scrapers.actress.javbus.scrape_actress_profile', return_value=_make_javbus_result(age=27, height='155cm', cup='F')), \
          patch('core.scrapers.actress.gfriends.lookup_gfriends', return_value=None):
 
@@ -954,7 +980,9 @@ def test_get_actress_profile_name_en():
     """graphis name_en 正確傳遞到最終結果"""
     from core.scrapers.actress.orchestrator import get_actress_profile, _cache
 
-    with patch('core.scrapers.actress.graphis.scrape_graphis_photo', return_value=_make_graphis_result(name_en='Momo Sakurazora')), \
+    with patch('core.scrapers.actress.minnano_av.scrape_minnano_av', return_value=None), \
+         patch('core.scrapers.actress.wiki_ja.scrape_wiki_ja', return_value=None), \
+         patch('core.scrapers.actress.graphis.scrape_graphis_photo', return_value=_make_graphis_result(name_en='Momo Sakurazora')), \
          patch('core.scrapers.actress.javbus.scrape_actress_profile', return_value=_make_javbus_result()), \
          patch('core.scrapers.actress.gfriends.lookup_gfriends', return_value=None):
 
@@ -965,27 +993,29 @@ def test_get_actress_profile_name_en():
 
 
 def test_get_actress_profile_birth_javbus_only():
-    """birth/hometown 只來自 javbus，不被 graphis 覆蓋"""
+    """T4.3 semantic: In new orchestrator (T3+), javbus is schema-only; birth/hometown come
+    from the cascade winner (graphis here). birth comes from graphis ('1997-12-03');
+    hometown is None because graphis has no hometown field and javbus is ignored."""
     from core.scrapers.actress.orchestrator import get_actress_profile, _cache
 
-    javbus_birth = '1996-12-03'
-    javbus_hometown = '東京都'
-
-    # Graphis result intentionally has no birth/hometown fields
+    # Graphis result has birth='1997-12-03' (added by T4.2) but no hometown
     graphis = _make_graphis_result()
 
-    javbus = _make_javbus_result(birth=javbus_birth, hometown=javbus_hometown)
+    javbus = _make_javbus_result(birth='1996-12-03', hometown='東京都')
 
-    with patch('core.scrapers.actress.graphis.scrape_graphis_photo', return_value=graphis), \
+    with patch('core.scrapers.actress.minnano_av.scrape_minnano_av', return_value=None), \
+         patch('core.scrapers.actress.wiki_ja.scrape_wiki_ja', return_value=None), \
+         patch('core.scrapers.actress.graphis.scrape_graphis_photo', return_value=graphis), \
          patch('core.scrapers.actress.javbus.scrape_actress_profile', return_value=javbus), \
          patch('core.scrapers.actress.gfriends.lookup_gfriends', return_value=None):
 
         result = get_actress_profile("桜空もも")
 
         assert result is not None
-        # JavBus birth and hometown preserved
-        assert result.get('birth') == javbus_birth
-        assert result.get('hometown') == javbus_hometown
+        # birth comes from graphis cascade winner (javbus ignored)
+        assert result.get('birth') == '1997-12-03'
+        # hometown is None: graphis has no hometown, javbus is ignored
+        assert result.get('hometown') is None
 
 
 def test_get_actress_profile_gfriends_only():
@@ -994,14 +1024,17 @@ def test_get_actress_profile_gfriends_only():
 
     gfriends_url = 'https://cdn.jsdelivr.net/gh/gfriends/gfriends@master/Content/7-S1/桜空もも.jpg'
 
-    with patch('core.scrapers.actress.graphis.scrape_graphis_photo', return_value=None), \
+    with patch('core.scrapers.actress.minnano_av.scrape_minnano_av', return_value=None), \
+         patch('core.scrapers.actress.wiki_ja.scrape_wiki_ja', return_value=None), \
+         patch('core.scrapers.actress.graphis.scrape_graphis_photo', return_value=None), \
          patch('core.scrapers.actress.javbus.scrape_actress_profile', return_value=None), \
          patch('core.scrapers.actress.gfriends.lookup_gfriends', return_value=gfriends_url):
 
         result = get_actress_profile("桜空もも", makers=['S1'])
 
         assert result is not None
-        assert result['name'] == '桜空もも'
+        # T4.3: name comes from text cascade winner; with all text sources None, name is None
+        assert result['name'] is None
         assert result['img'] == gfriends_url
 
 
