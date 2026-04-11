@@ -44,9 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 42b 新增：orchestrator 4 路整合測試（TestHappyPath / TestC1Cascade / TestPhotoCascade / TestTD1Age / TestComputeAgeUnit / TestLegacyFlatConsistency / TestCacheTTL / TestMeaningfulTextFilter）
 - 42c 新增：gfriends 4 case + wiki_ja 4 新 case + graphis parser 5 test
 - 42e 刪除：`test_scraper_actress_javbus.py` 整檔 9 tests + `test_actress_profile.py` 1 dead test + `test_scraper_actress_orchestrator.py` 3 schema slot tests
-
-### Known Issues
-- `tests/integration/test_scraper_actress_orchestrator.py` 全 mock 卻在 integration/ 目錄，按 CLAUDE.md 分類規則應在 unit/（42b 遺留，非 42e 引入，本 PR 不處理以免 scope creep，milestone 或下次 pre-merge 再搬）
+- **測試目錄修正**：`test_scraper_actress_orchestrator.py` 從 `tests/integration/` 搬到 `tests/unit/`（全 mock 無 TestClient，按 CLAUDE.md 分類規則應在 unit/；42b 遺留的目錄分類錯誤，pre-merge 一併修正）
 
 ## [0.7.0] - 2026-04-10
 
