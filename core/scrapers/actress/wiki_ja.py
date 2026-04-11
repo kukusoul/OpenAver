@@ -76,6 +76,7 @@ def _parse_wiki_ja_html(html: str, name: str) -> Optional[Dict]:
     result: Dict = {
         "name_ja": name,
         "nickname": "",
+        "other_names": [],
         "birth": "",
         "hometown": "",
         "height": "",
@@ -102,6 +103,12 @@ def _parse_wiki_ja_html(html: str, name: str) -> Optional[Dict]:
 
         if "愛称" in label:
             result["nickname"] = value
+
+        elif "別名" in label:
+            # Split by Japanese/Chinese/ASCII commas.
+            # 不清洗 (中華圏名) 括號說明 — Phase 43 alias pipeline 責任
+            raw = re.split(r"[\u3001\uFF0C,]", value)
+            result["other_names"] = [s.strip() for s in raw if s.strip()]
 
         elif "生年月日" in label or "誕生" in label:
             m = re.search(r"(\d{4})年\s*(\d{1,2})月\s*(\d{1,2})日", value)
@@ -153,14 +160,16 @@ def _parse_wiki_ja_html(html: str, name: str) -> Optional[Dict]:
                 if m:
                     result["debut_year"] = m.group(1)
 
-    # --- Photo: first img with width >= 100 (skip flag icons ~25×17) ---
-    # C3: string-only URL transform, no HTTP
+    # --- Photo: first img with width >= 100 AND non-empty alt ---
+    # C3: string-only URL transform, no HTTP.
+    # alt guard (Finding B): 簽名圖 alt='' 會被濾掉，避免 Wiki 重排後誤抓
     for img in infobox.find_all("img"):
         try:
             w = int(img.get("width", "0") or "0")
         except (ValueError, TypeError):
             w = 0
-        if w >= 100:
+        alt = (img.get("alt") or "").strip()
+        if w >= 100 and alt:
             src = img.get("src", "")
             if not src:
                 continue
