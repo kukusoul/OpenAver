@@ -686,3 +686,42 @@ class TestMeaningfulTextFilter:
         assert result is not None
         assert result["primary_text_source"] == "minnano"
         assert result["text"]["agency"] == "プレステージ"
+
+    def test_wiki_other_names_only_wins_c1(self):
+        """Codex PR #23 P2: Wiki's `other_names` (別名/芸名 row) must count as
+        meaningful text. `wiki_ja._parse_wiki_ja_html` explicitly allows alias-only
+        infoboxes to return a dict (rather than None) — see test_bieimei_only_infobox_returns_dict_not_none
+        in test_scraper_actress_wiki_ja.py. If orchestrator's _MEANINGFUL_TEXT_FIELDS
+        omits `other_names`, an alias-only wiki result is silently dropped from the
+        C1 cascade even though the parser deliberately preserved it for Phase 43
+        alias ingestion.
+
+        Regression: when minnano/graphis/gfriends all miss, a wiki dict with only
+        other_names populated MUST win C1 as primary text source (not None).
+        """
+        wiki_other_names_only = {
+            "name_ja": _ACTRESS_NAME,
+            "nickname": "",
+            "other_names": ["松嶋真麻", "別名2"],  # the only non-empty field
+            "birth": "",
+            "hometown": "",
+            "height": "", "bust": "", "waist": "", "hip": "", "cup": "", "blood": "",
+            "exclusive_makers": "",
+            "debut_year": "",
+            "photo_url": "",
+            "photo_needs_resize": False,
+            "photo_license": "",
+        }
+
+        with patch(_PATCH_MINNANO, return_value=None), \
+             patch(_PATCH_WIKI, return_value=wiki_other_names_only), \
+             patch(_PATCH_GRAPHIS, return_value=None), \
+             patch(_PATCH_GFRIENDS, return_value=None):
+            result = get_actress_profile(_ACTRESS_NAME)
+
+        assert result is not None, \
+            "alias-only wiki must not collapse result to None"
+        assert result["primary_text_source"] == "wiki", \
+            "wiki with only other_names must win C1 cascade when other sources miss"
+        assert result["text"] == wiki_other_names_only
+        assert result["all_sources"]["wiki"]["other_names"] == ["松嶋真麻", "別名2"]

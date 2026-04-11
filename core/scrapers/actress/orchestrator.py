@@ -24,8 +24,10 @@ _MEANINGFUL_TEXT_FIELDS = (
     # Common / Wiki / Graphis / Minnano — physical + biographical
     "birth", "height", "bust", "waist", "hip", "cup", "blood",
     "hometown", "hobby",
-    # Wiki-specific
-    "nickname", "exclusive_makers", "debut_year",
+    # Wiki-specific — includes other_names so alias-only infoboxes participate
+    # in C1 cascade (mirrors wiki_ja._parse_wiki_ja_html meaningful_fields guard;
+    # see test_bieimei_only_infobox_returns_dict_not_none)
+    "nickname", "exclusive_makers", "debut_year", "other_names",
     # Minnano-specific — the C1 primary value proposition
     # (Minnano is chosen as C1 primary mostly because of these richer fields)
     "aliases", "agency", "debut_work", "tags", "blog_url", "official_url",
