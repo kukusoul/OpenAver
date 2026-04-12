@@ -1030,6 +1030,13 @@ class TestShowcasePreciseMatchState:
         assert "_favoriteHeartLoading" in block, \
             "addFavoriteFromSearch must use _favoriteHeartLoading for loading state"
 
+    def test_toggleActressMode_clears_preciseMatch(self):
+        """44b: toggleActressMode must call _clearPreciseMatch when entering actress mode"""
+        js = self._js()
+        block = self._extract_fn_block(js, 'toggleActressMode()')
+        assert "_clearPreciseMatch" in block, \
+            "toggleActressMode must call _clearPreciseMatch to avoid state leak when clearing search"
+
 
 class TestGeminiLocaleKeyGuard:
     """39a-T3: 守衛 settings.js 不再使用 gemini_n_flash_models locale key"""

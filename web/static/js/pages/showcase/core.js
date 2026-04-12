@@ -399,6 +399,7 @@ function showcaseState() {
             var needEntry = false;
             if (this.showFavoriteActresses) {
                 this.search = '';
+                this._clearPreciseMatch();
                 if (_actresses.length === 0) {
                     this.loadActresses();
                 } else {
