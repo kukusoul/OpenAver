@@ -2175,8 +2175,8 @@ class TestHeroImageErrorGuard:
         # 找到 hero-card class 屬性（排除註解）
         match = re.search(r'class="[^"]*hero-card[^"]*"', content)
         assert match, "search.html 缺少 hero-card class 區塊"
-        # 取 hero-card 區塊（往後 800 字元足以覆蓋 img tag）
-        hero_block = content[match.start():match.start() + 800]
+        # 取 hero-card 區塊（往後 1200 字元覆蓋 img tag + overlay）
+        hero_block = content[match.start():match.start() + 1200]
         # 提取 @error 屬性值
         error_match = re.search(r'@error="([^"]*)"', hero_block)
         assert error_match, "hero-card 區塊缺少 @error handler"
@@ -2191,7 +2191,7 @@ class TestHeroImageErrorGuard:
         content = self.SEARCH_HTML.read_text(encoding='utf-8')
         match = re.search(r'class="[^"]*hero-card[^"]*"', content)
         assert match, "search.html 缺少 hero-card class 區塊"
-        hero_block = content[match.start():match.start() + 800]
+        hero_block = content[match.start():match.start() + 1200]
         error_match = re.search(r'@error="([^"]*)"', hero_block)
         assert error_match, "hero-card 區塊缺少 @error handler"
         error_value = error_match.group(1)

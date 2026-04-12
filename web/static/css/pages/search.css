@@ -785,7 +785,7 @@
 
 /* T5: 已收藏愛心按鈕 — 紅色，不可點擊 */
 .hero-card .btn-glass-circle.is-favorite {
-    color: #ff4d6d;
+    color: var(--color-favorite);
     cursor: default;
 }
 
@@ -900,4 +900,4 @@
 
 /* Actress Lightbox Row 1 愛心（inline，使用 .btn-glass-circle） */
 .actress-lb-header .btn-glass-circle { width: 32px; height: 32px; font-size: 1rem; margin-left: auto; }
-.actress-lb-header .btn-glass-circle.is-favorite { color: #ff4d6d; cursor: default; }
+.actress-lb-header .btn-glass-circle.is-favorite { color: var(--color-favorite); cursor: default; }
