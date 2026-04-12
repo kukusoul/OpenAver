@@ -17,6 +17,7 @@ from urllib.parse import quote
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
+from core.maker_mapping import load_prefix_mapping
 
 from core.database import ActressRepository, Actress, init_db
 from core.actress_photo import download_actress_photo, get_local_photo_path, delete_local_photo
@@ -126,12 +127,25 @@ def add_favorite(req: FavoriteRequest):
             }
         )
 
-    # 2. cache hit — 不打網路
+    # 2. 番號前綴 → 片商名轉換（前端傳 SSIS，gfriends 需要 S1）
+    resolved_makers = None
+    if req.makers:
+        prefix_map = load_prefix_mapping()
+        seen = set()
+        ordered = []
+        for p in req.makers:
+            maker = prefix_map.get(p.upper())
+            if maker and maker not in seen:
+                seen.add(maker)
+                ordered.append(maker)
+        resolved_makers = ordered or None
+
+    # 3. cache hit — 不打網路
     profile = get_cached_profile(name)
 
-    # 3. cache miss → 重新抓取
+    # 4. cache miss → 重新抓取
     if profile is None:
-        result = get_actress_profile(name, makers=req.makers)
+        result = get_actress_profile(name, makers=resolved_makers)
         if result.data is None:
             if result.timed_out:
                 return JSONResponse(

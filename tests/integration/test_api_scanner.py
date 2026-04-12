@@ -96,7 +96,7 @@ class TestScannerAPI:
         response = client.get("/api/gallery/player")
         assert response.status_code == 422
         data = response.json()
-        assert data["detail"][0]["type"] == "missing"
+        assert data["error"] == "validation_error"
 
 
 # ============ POST /api/gallery/generate-from-ids ============

@@ -5,7 +5,8 @@ from pathlib import Path
 import re
 
 from fastapi import FastAPI, Request
-from fastapi.responses import RedirectResponse
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -65,6 +66,14 @@ app.include_router(capabilities_router.router)
 app.include_router(collection_router.router)
 app.include_router(collection_router.user_tags_router)
 app.include_router(actress_router.router)
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    return JSONResponse(
+        status_code=422,
+        content={"error": "validation_error", "message": "請求格式錯誤，缺少必要欄位"}
+    )
 
 
 # ============ 輔助函數 ============

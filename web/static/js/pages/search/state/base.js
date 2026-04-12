@@ -504,8 +504,18 @@ window.SearchStateMixin_Base = function () {
             return Array.from(makers);
         },
 
+        _safeUrl(url) {
+            if (!url || typeof url !== 'string') return '#';
+            if (!url.startsWith('http://') && !url.startsWith('https://')) return '#';
+            return url;
+        },
+
         async addFavoriteActress() {
             if (!this.actressProfile || this.actressProfile.is_favorite || this._actressFavoriteLoading) return;
+
+            // capture reference before await — 防止 await 期間切女優的 race（同 41d pattern）
+            const capturedProfile = this.actressProfile;
+            const capturedName = this.actressProfile.name;
 
             this._actressFavoriteLoading = true;
 
@@ -518,7 +528,7 @@ window.SearchStateMixin_Base = function () {
                 const resp = await fetch('/api/actresses/favorite', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name: this.actressProfile.name, makers }),
+                    body: JSON.stringify({ name: capturedName, makers }),
                     signal: controller.signal,
                 });
 
@@ -527,22 +537,23 @@ window.SearchStateMixin_Base = function () {
 
                 if (resp.status === 200) {
                     const data = await resp.json();
-                    // 更新 actressProfile：標記已收藏 + 更新 img 為本地路徑
+                    // stale-check：await 期間可能已切女優，丟棄過時結果
+                    if (this.actressProfile !== capturedProfile) return;
                     const actress = data.actress || {};
                     this.actressProfile = {
-                        ...this.actressProfile,
+                        ...capturedProfile,
                         is_favorite: true,
-                        img: actress.photo_url || this.actressProfile.img,
+                        img: actress.photo_url || capturedProfile.img,
                     };
                     this.showToast(window.t('search.actress.favorite_success'), 'success');
                 } else if (resp.status === 409) {
-                    // 已收藏（競態或重複點擊）
                     const data = await resp.json();
+                    if (this.actressProfile !== capturedProfile) return;
                     const actress = data.actress || {};
                     this.actressProfile = {
-                        ...this.actressProfile,
+                        ...capturedProfile,
                         is_favorite: true,
-                        img: actress.photo_url || this.actressProfile.img,
+                        img: actress.photo_url || capturedProfile.img,
                     };
                 } else {
                     const data = await resp.json().catch(() => ({}));

@@ -171,11 +171,11 @@
                 <!-- Row 5: 社群連結 -->
                 <div class="lb-actress-urls">
                     <a x-show="actressProfile?.blog_url"
-                       :href="actressProfile?.blog_url"
+                       :href="_safeUrl(actressProfile?.blog_url)"
                        target="_blank" rel="noopener"
                        x-text="actressProfile?.blog_url"></a>
                     <a x-show="actressProfile?.official_url"
-                       :href="actressProfile?.official_url"
+                       :href="_safeUrl(actressProfile?.official_url)"
                        target="_blank" rel="noopener"
                        x-text="actressProfile?.official_url"></a>
                 </div>
