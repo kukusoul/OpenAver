@@ -239,6 +239,24 @@ class TestActressRescrapeEndpoint:
         saved = repo.get_by_name("新人女優")
         assert saved is not None
 
+    def test_rescrape_returns_real_video_count(self, client_with_db):
+        """rescrape 成功後，回應 actress.video_count 應為真實值（非硬編碼 0）"""
+        client, db_path = client_with_db
+        from core.scrapers.actress.orchestrator import ProfileResult
+
+        profile = self._make_profile("三上悠亜")
+        mock_result = ProfileResult(data=profile, timed_out=False)
+
+        with patch("web.routers.actress.get_actress_profile", return_value=mock_result), \
+             patch("web.routers.actress.download_actress_photo", return_value=True), \
+             patch("core.database.ActressRepository.count_videos_for_actress", return_value=5):
+            response = client.post("/api/actresses/三上悠亜/rescrape")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert data["actress"]["video_count"] == 5
+
 
 # ---------------------------------------------------------------------------
 # Backward compatibility: _actress_to_response default video_count

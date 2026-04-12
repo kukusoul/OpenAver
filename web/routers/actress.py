@@ -214,11 +214,12 @@ def add_favorite(req: FavoriteRequest):
         actress.name, profile.get("photo_url"), profile.get("photo_source")
     )
 
+    video_count = repo.count_videos_for_actress(actress.name)
     return JSONResponse(
         status_code=200,
         content={
             "success": True,
-            "actress": _actress_to_response(actress),
+            "actress": _actress_to_response(actress, video_count),
             "photo_downloaded": photo_downloaded,
         }
     )
@@ -337,11 +338,12 @@ def rescrape_actress(name: str):
         actress.name, profile.get("photo_url"), profile.get("photo_source")
     )
 
+    video_count = repo.count_videos_for_actress(actress.name)
     return JSONResponse(
         status_code=200,
         content={
             "success": True,
-            "actress": _actress_to_response(actress, 0),
+            "actress": _actress_to_response(actress, video_count),
             "photo_downloaded": photo_downloaded,
         }
     )
