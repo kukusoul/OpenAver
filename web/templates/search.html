@@ -33,7 +33,7 @@
             <!-- Cover Image -->
             <div class="lightbox-cover">
                 <img :src="actressLightboxMode()
-                         ? (actressProfile?.img ? `/api/proxy-image?url=${encodeURIComponent(actressProfile.img)}` : '')
+                         ? (actressProfile?.img ? (actressProfile.img.startsWith('/api/') ? actressProfile.img : `/api/proxy-image?url=${encodeURIComponent(actressProfile.img)}`) : '')
                          : (currentLightboxVideo()?.cover ? `/api/proxy-image?url=${encodeURIComponent(currentLightboxVideo().cover)}` : '')"
                      :alt="actressLightboxMode() ? actressProfile?.name : currentLightboxVideo()?.number"
                      x-show="!_heroLightboxImageError"
@@ -46,10 +46,19 @@
                 </div>
                 <!-- cover-actions: 封面失敗時按鈕仍可用（返回詳情、開啟資料夾等不依賴圖片） -->
                 <div class="cover-actions">
+                    <!-- 返回詳情：影片模式才顯示 -->
                     <button class="lb-action-btn"
-                            @click="actressLightboxMode() ? closeLightbox() : switchToDetail(lightboxIndex)"
+                            x-show="!actressLightboxMode()"
+                            @click="switchToDetail(lightboxIndex)"
                             data-tooltip="{{ t('search.action.back_to_detail') }}" aria-label="{{ t('search.action.back_to_detail') }}">
                         <i class="bi bi-arrow-return-left"></i>
+                    </button>
+                    <!-- Actress source link：取代返回詳情的位置，actress 模式才顯示 -->
+                    <button class="lb-action-btn"
+                            x-show="actressLightboxMode() && !actressProfile?.is_favorite && _actressSourceUrl()"
+                            @click.stop="openSourceUrl(_actressSourceUrl())"
+                            data-tooltip="{{ t('search.action.open_source_url') }}" aria-label="{{ t('search.action.open_source_url') }}">
+                        <i class="bi bi-box-arrow-up-right"></i>
                     </button>
                     <button class="lb-action-btn"
                             @click="openLocal(currentLightboxVideo()?._localStatus?.paths?.[0] || '')"
@@ -109,6 +118,75 @@
                     <template x-for="tag in (currentLightboxVideo()?.tags || [])" :key="tag">
                         <span class="lb-tag" x-text="tag"></span>
                     </template>
+                </div>
+            </div>
+
+            <!-- Phase 43 T6: Actress Lightbox metadata -->
+            <div class="lightbox-metadata actress-lightbox-meta" x-show="actressLightboxMode()">
+                <!-- Row 1: 名稱 + name_en + 愛心 -->
+                <div class="lb-header actress-lb-header">
+                    <div class="lb-title" x-text="actressProfile?.name || '-'"></div>
+                    <span class="lb-name-en" x-show="actressProfile?.name_en" x-text="actressProfile?.name_en"></span>
+                    <!-- 愛心（Lightbox 版）— CD-10: 只做加入，已收藏純指示 -->
+                    <button class="btn-glass-circle"
+                            x-show="actressProfile && !actressProfile?.is_favorite && !_actressFavoriteLoading"
+                            @click.stop="addFavoriteActress()"
+                            :title="t('search.actress.add_favorite')">
+                        <i class="bi bi-heart"></i>
+                    </button>
+                    <button class="btn-glass-circle" x-show="_actressFavoriteLoading" disabled>
+                        <span class="loading loading-spinner loading-xs"></span>
+                    </button>
+                    <span class="btn-glass-circle is-favorite"
+                          x-show="actressProfile?.is_favorite && !_actressFavoriteLoading"
+                          :title="t('search.actress.favorited')">
+                        <i class="bi bi-heart-fill"></i>
+                    </span>
+                </div>
+
+                <!-- Row 2: 核心 metadata（· 串接，空欄位跳過） -->
+                <div class="lb-actress-core" x-text="[
+                    actressProfile?.age ? actressProfile.age + t('search.unit.age') : '',
+                    actressProfile?.birth || '',
+                    actressProfile?.height || '',
+                    actressProfile?.cup ? actressProfile.cup + t('search.unit.cup') : '',
+                    [actressProfile?.bust, actressProfile?.waist, actressProfile?.hip].filter(Boolean).join('-')
+                ].filter(Boolean).join(' · ')"></div>
+
+                <!-- Row 3: Aliases chips -->
+                <div class="lb-chips-row" x-show="(actressProfile?.aliases || []).length > 0">
+                    <template x-for="alias in _visibleAliases()" :key="alias">
+                        <span class="lb-tag" x-text="alias"></span>
+                    </template>
+                    <span class="lb-chips-more"
+                          x-show="!_actressChipsExpanded.aliases && (actressProfile?.aliases || []).length > _chipsLimit()"
+                          @click="_actressChipsExpanded = {..._actressChipsExpanded, aliases: true}"
+                          x-text="'+' + ((actressProfile?.aliases || []).length - _chipsLimit())">
+                    </span>
+                </div>
+
+                <!-- Row 4: 其餘資訊 chips（tags + hometown + nickname + agency + hobby + debut_work） -->
+                <div class="lb-chips-row" x-show="_allInfoChips().length > 0">
+                    <template x-for="chip in _visibleInfoChips()" :key="chip">
+                        <span class="lb-tag" x-text="chip"></span>
+                    </template>
+                    <span class="lb-chips-more"
+                          x-show="!_actressChipsExpanded.info && _allInfoChips().length > _chipsLimit()"
+                          @click="_actressChipsExpanded = {..._actressChipsExpanded, info: true}"
+                          x-text="'+' + (_allInfoChips().length - _chipsLimit())">
+                    </span>
+                </div>
+
+                <!-- Row 5: 社群連結 -->
+                <div class="lb-actress-urls">
+                    <a x-show="actressProfile?.blog_url"
+                       :href="_safeUrl(actressProfile?.blog_url)"
+                       target="_blank" rel="noopener"
+                       x-text="actressProfile?.blog_url"></a>
+                    <a x-show="actressProfile?.official_url"
+                       :href="_safeUrl(actressProfile?.official_url)"
+                       target="_blank" rel="noopener"
+                       x-text="actressProfile?.official_url"></a>
                 </div>
             </div>
         </div>
@@ -552,7 +630,9 @@
                      @click="actressProfile && openActressLightbox()">
                     <div class="av-card-preview-img">
                         <!-- A7-Prod: 正常態（actressProfile 有值） -->
-                        <img :src="actressProfile?.img ? `/api/proxy-image?url=${encodeURIComponent(actressProfile.img)}` : ''"
+                        <img :src="actressProfile?.img
+                                 ? (actressProfile.img.startsWith('/api/') ? actressProfile.img : `/api/proxy-image?url=${encodeURIComponent(actressProfile.img)}`)
+                                 : ''"
                              :alt="actressProfile?.name"
                              loading="lazy"
                              x-show="actressProfile && !_heroCardImageError"
@@ -565,15 +645,42 @@
                         </div>
                         <!-- A7-Prod: skeleton 預留態（shimmer） -->
                         <div class="skeleton-cover shimmer" x-show="!actressProfile && _heroSlotReserved"></div>
+                        <!-- T5: 愛心 overlay（CD-13） -->
+                        <div class="av-card-preview-overlay"
+                             :class="actressProfile?.is_favorite ? 'always-visible' : ''"
+                             x-show="actressProfile"
+                             @click.stop>
+                            <!-- 已收藏：常駐實心愛心（CD-10：不可點擊，純指示） -->
+                            <button class="btn-glass-circle is-favorite"
+                                    x-show="actressProfile?.is_favorite"
+                                    disabled
+                                    :title="t('search.actress.favorited')">
+                                <i class="bi bi-heart-fill"></i>
+                            </button>
+                            <!-- Loading：spinner -->
+                            <button class="btn-glass-circle"
+                                    x-show="!actressProfile?.is_favorite && _actressFavoriteLoading"
+                                    disabled>
+                                <span class="loading loading-spinner loading-sm"></span>
+                            </button>
+                            <!-- 未收藏：hover 顯示空心愛心（可點擊） -->
+                            <button class="btn-glass-circle"
+                                    x-show="!actressProfile?.is_favorite && !_actressFavoriteLoading"
+                                    @click="addFavoriteActress()"
+                                    :title="t('search.actress.add_favorite')">
+                                <i class="bi bi-heart"></i>
+                            </button>
+                        </div>
                     </div>
                     <div class="av-card-preview-footer">
-                        <!-- A7-Prod: 正常態 footer -->
+                        <!-- A7-Prod: 正常態 footer — T5: name + age -->
                         <div class="footer-default" x-show="actressProfile">
-                            <span class="av-num" x-text="actressProfile?.birth || '-'">-</span>
-                            <span class="av-actress" x-text="actressProfile?.height || ''"></span>
+                            <span class="av-num" x-text="actressProfile?.name || '-'">-</span>
+                            <span class="av-actress" x-text="actressProfile?.age ? actressProfile.age + t('search.unit.age') : ''"></span>
                         </div>
+                        <!-- T5: footer-hover — height · cup · bust-waist-hip -->
                         <div class="footer-hover" x-show="actressProfile">
-                            <div class="hover-title" x-text="[actressProfile?.name_en || '', actressProfile?.name || '', actressProfile?.age ? actressProfile?.age + '歲' : '', actressProfile?.cup ? actressProfile?.cup + '罩杯' : '', actressProfile?.bust || '', actressProfile?.waist || '', actressProfile?.hip || '', actressProfile?.hometown || '', actressProfile?.hobby || ''].filter(Boolean).join(' · ') || '-'"></div>
+                            <div class="hover-title" x-text="[actressProfile?.height || '', actressProfile?.cup ? actressProfile.cup + t('search.unit.cup') : '', [actressProfile?.bust, actressProfile?.waist, actressProfile?.hip].filter(Boolean).join('-')].filter(Boolean).join(' · ') || '-'"></div>
                         </div>
                         <!-- A7-Prod: skeleton 預留態 footer -->
                         <div class="footer-default" x-show="!actressProfile && _heroSlotReserved">

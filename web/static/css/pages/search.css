@@ -777,6 +777,18 @@
     transform-origin: center center;  /* 置中（覆蓋 65% center 的 AV 封面偏移） */
 }
 
+/* T5: Hero Card 愛心 overlay 常駐（已收藏時不需 hover） */
+.hero-card .av-card-preview-overlay.always-visible {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* T5: 已收藏愛心按鈕 — 紅色，不可點擊 */
+.hero-card .btn-glass-circle.is-favorite {
+    color: var(--color-favorite);
+    cursor: default;
+}
+
 /* ==================== T6b: 統一 Toast 容器 ==================== */
 .search-toast-container {
     position: fixed;
@@ -871,3 +883,21 @@
 .sample-gallery .sg-main-img.gsap-animating {
     transition: none !important;
 }
+
+/* ==================== Phase 43 T6: Actress Lightbox ==================== */
+.actress-lightbox-meta .lb-header { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.actress-lightbox-meta .lb-name-en { font-size: 0.9em; opacity: 0.7; }
+.actress-lightbox-meta .lb-actress-core { font-size: 0.95em; margin: 8px 0; opacity: 0.85; }
+.actress-lightbox-meta .lb-chips-row { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.actress-lightbox-meta .lb-chips-more {
+    cursor: pointer; font-size: 0.85em; padding: 2px 8px;
+    border-radius: 12px; border: 1px solid currentColor; opacity: 0.6;
+}
+.actress-lightbox-meta .lb-chips-more:hover { opacity: 1; }
+.actress-lightbox-meta .lb-actress-urls { margin-top: 8px; }
+.actress-lightbox-meta .lb-actress-urls a { display: block; font-size: 0.8em; word-break: break-all; opacity: 0.7; }
+.actress-lightbox-meta .lb-actress-urls a:hover { opacity: 1; text-decoration: underline; }
+
+/* Actress Lightbox Row 1 愛心（inline，使用 .btn-glass-circle） */
+.actress-lb-header .btn-glass-circle { width: 32px; height: 32px; font-size: 1rem; margin-left: auto; }
+.actress-lb-header .btn-glass-circle.is-favorite { color: var(--color-favorite); cursor: default; }

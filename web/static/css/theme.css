@@ -87,6 +87,7 @@
 
     /* Accent 色系（粉紅，女優管理） */
     --accent-pink: #ec4899;           /* Tailwind pink-500 - 女優識別色 */
+    --color-favorite: #ff4d6d;        /* 收藏愛心色 */
 
     /* Error 色系擴展（淡紅，delete hover） */
     --color-error-hover: #ff6b6b;     /* 柔和紅 - 刪除按鈕 hover */

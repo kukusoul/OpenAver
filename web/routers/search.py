@@ -178,8 +178,7 @@ def search(
             top_actor = _analyze_top_actor(results, threshold=0.8, min_samples=3)
             if top_actor:
                 logger.info(f"[Actress Profile] Fetching profile for: {top_actor}")
-                from core.scrapers.actress.orchestrator import get_actress_profile
-                actress_profile = get_actress_profile(top_actor, makers=_extract_top_makers(results))
+                actress_profile = _fetch_actress_profile_with_db(top_actor, _extract_top_makers(results))
                 if not actress_profile:
                     logger.info(f"[Actress Profile] Not found for: {top_actor}")
 
@@ -320,6 +319,52 @@ def _analyze_top_actor(results: List[Dict], threshold: float = 0.8, min_samples:
     else:
         logger.info(f"[Consistency] Ratio {ratio:.1%} < {threshold:.0%}, skip actress_profile")
         return None
+
+
+def _fetch_actress_profile_with_db(top_actor: str, makers: list) -> Optional[dict]:
+    """
+    DB 優先查詢：
+    1. 查 ActressRepository
+    2. DB hit → 組裝 response（本地照片 URL），附加 is_favorite=True
+    3. DB miss → 走 orchestrator，附加 is_favorite=False
+
+    Returns:
+        profile dict（前端 actressProfile），或 None（查無資料）
+    """
+    from core.database import ActressRepository, init_db
+    from web.routers.actress import _actress_to_response  # 共用 serializer，避免重複邏輯
+
+    init_db()
+    repo = ActressRepository()
+    actress = repo.get_by_name(top_actor)
+
+    if actress:
+        # DB hit：組裝 actressProfile（前端 legacy flat shape 相容）
+        profile = _actress_to_response(actress)
+        profile["is_favorite"] = True
+        # 補 legacy flat shortcuts（現有 template 依賴）
+        profile["img"] = profile.get("photo_url")
+        return profile
+
+    # DB miss：走 orchestrator（ProfileResult 回傳型別，T3 已改）
+    from core.scrapers.actress.orchestrator import get_actress_profile
+    result = get_actress_profile(top_actor, makers=makers)
+    profile = result.data  # ProfileResult.data
+    if profile:
+        profile["is_favorite"] = False
+        # 補齊前端需要的頂層欄位（orchestrator legacy flat shape 缺 aliases/tags 等）
+        from web.routers.actress import _flatten_aliases
+        text = profile.get("text") or {}
+        profile["aliases"] = _flatten_aliases(text.get("aliases"))
+        profile["tags"] = text.get("tags") or []
+        profile["agency"] = text.get("agency")
+        profile["nickname"] = text.get("nickname")
+        profile["debut_work"] = text.get("debut_work")
+        profile["blog_url"] = text.get("blog_url")
+        profile["official_url"] = text.get("official_url")
+        profile["primary_text_source"] = profile.get("primary_text_source")
+        profile["photo_source"] = profile.get("photo_source")
+    return profile
 
 
 _BATCH_MAX_WORKERS = 2
@@ -500,8 +545,7 @@ async def search_stream(
                     top_actor = _analyze_top_actor(results, threshold=0.8, min_samples=3)
                     if top_actor:
                         logger.info(f"[Actress Profile] Fetching profile for: {top_actor}")
-                        from core.scrapers.actress.orchestrator import get_actress_profile
-                        actress_profile = get_actress_profile(top_actor, makers=_extract_top_makers(results))
+                        actress_profile = _fetch_actress_profile_with_db(top_actor, _extract_top_makers(results))
                         if not actress_profile:
                             logger.info(f"[Actress Profile] Not found for: {top_actor}")
 

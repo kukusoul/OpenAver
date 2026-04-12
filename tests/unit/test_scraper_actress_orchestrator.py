@@ -18,7 +18,7 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-from core.scrapers.actress.orchestrator import get_actress_profile, _cache, _CACHE_TTL, _compute_age_from_birth
+from core.scrapers.actress.orchestrator import get_actress_profile, get_cached_profile, ProfileResult, _cache, _CACHE_TTL, _compute_age_from_birth
 
 # ---------------------------------------------------------------------------
 # Patch target constants
@@ -152,7 +152,9 @@ class TestHappyPath:
              patch(_PATCH_GFRIENDS, return_value=gfurl):
             result = get_actress_profile(_ACTRESS_NAME)
 
-        assert result is not None
+        assert isinstance(result, ProfileResult)
+        assert result.data is not None
+        assert result.timed_out is False
 
     def test_primary_text_source_minnano(self):
         minnano = _make_minnano()
@@ -166,8 +168,9 @@ class TestHappyPath:
              patch(_PATCH_GFRIENDS, return_value=gfurl):
             result = get_actress_profile(_ACTRESS_NAME)
 
-        assert result["primary_text_source"] == "minnano"
-        assert result["text"] == minnano
+        assert result.data["primary_text_source"] == "minnano"
+        assert result.data["text"] == minnano
+        assert result.timed_out is False
 
     def test_photo_cascade_graphis_wins(self):
         minnano = _make_minnano()
@@ -181,9 +184,10 @@ class TestHappyPath:
              patch(_PATCH_GFRIENDS, return_value=gfurl):
             result = get_actress_profile(_ACTRESS_NAME)
 
-        assert result["photo_source"] == "graphis"
-        assert result["photo_url"] == graphis["prof_url"]
-        assert result["backdrop_url"] == graphis["backdrop_url"]
+        assert result.data["photo_source"] == "graphis"
+        assert result.data["photo_url"] == graphis["prof_url"]
+        assert result.data["backdrop_url"] == graphis["backdrop_url"]
+        assert result.timed_out is False
 
     def test_all_sources_dict(self):
         minnano = _make_minnano()
@@ -197,10 +201,11 @@ class TestHappyPath:
              patch(_PATCH_GFRIENDS, return_value=gfurl):
             result = get_actress_profile(_ACTRESS_NAME)
 
-        assert result["all_sources"]["minnano"] == minnano
-        assert result["all_sources"]["wiki"] == wiki
-        assert result["all_sources"]["graphis"] == graphis
-        assert result["all_sources"]["gfriends"] == gfurl
+        assert result.data["all_sources"]["minnano"] == minnano
+        assert result.data["all_sources"]["wiki"] == wiki
+        assert result.data["all_sources"]["graphis"] == graphis
+        assert result.data["all_sources"]["gfriends"] == gfurl
+        assert result.timed_out is False
 
     def test_legacy_flat_name_and_img(self):
         minnano = _make_minnano()
@@ -212,8 +217,9 @@ class TestHappyPath:
              patch(_PATCH_GFRIENDS, return_value=None):
             result = get_actress_profile(_ACTRESS_NAME)
 
-        assert result["name"] == minnano["name_ja"]
-        assert result["img"] == result["photo_url"]
+        assert result.data["name"] == minnano["name_ja"]
+        assert result.data["img"] == result.data["photo_url"]
+        assert result.timed_out is False
 
 
 # ---------------------------------------------------------------------------
@@ -233,11 +239,12 @@ class TestC1Cascade:
              patch(_PATCH_GFRIENDS, return_value=gfurl):
             result = get_actress_profile(_ACTRESS_NAME)
 
-        assert result["primary_text_source"] == "wiki"
-        assert result["text"] == wiki
-        assert result["name"] == wiki["name_ja"]
+        assert result.data["primary_text_source"] == "wiki"
+        assert result.data["text"] == wiki
+        assert result.data["name"] == wiki["name_ja"]
         # Photo cascade: Graphis still wins because it has prof_url
-        assert result["photo_source"] == "graphis"
+        assert result.data["photo_source"] == "graphis"
+        assert result.timed_out is False
 
     def test_minnano_wiki_none_graphis_wins(self):
         graphis = _make_graphis()
@@ -249,15 +256,16 @@ class TestC1Cascade:
              patch(_PATCH_GFRIENDS, return_value=gfurl):
             result = get_actress_profile(_ACTRESS_NAME)
 
-        assert result["primary_text_source"] == "graphis"
-        assert result["text"] == graphis
+        assert result.data["primary_text_source"] == "graphis"
+        assert result.data["text"] == graphis
         # Bug 2 fix: name falls back to queried name (text.name is "" in _make_graphis,
         # so the final fallback is the queried `name` arg)
-        assert result["name"] == _ACTRESS_NAME  # queried name fallback via text.name or name arg
+        assert result.data["name"] == _ACTRESS_NAME  # queried name fallback via text.name or name arg
         # Graphis has name_en
-        assert result["name_en"] == graphis["name_en"]
+        assert result.data["name_en"] == graphis["name_en"]
         # Graphis has no birth key
-        assert result["birth"] is None
+        assert result.data["birth"] is None
+        assert result.timed_out is False
 
     def test_all_four_none_returns_none(self):
         with patch(_PATCH_MINNANO, return_value=None), \
@@ -266,7 +274,9 @@ class TestC1Cascade:
              patch(_PATCH_GFRIENDS, return_value=None):
             result = get_actress_profile(_ACTRESS_NAME)
 
-        assert result is None
+        assert isinstance(result, ProfileResult)
+        assert result.data is None
+        assert result.timed_out is False
 
 
 # ---------------------------------------------------------------------------
@@ -287,9 +297,10 @@ class TestPhotoCascade:
              patch(_PATCH_GFRIENDS, return_value=gfurl):
             result = get_actress_profile(_ACTRESS_NAME)
 
-        assert result["photo_source"] == "gfriends"
-        assert result["photo_url"] == gfurl
-        assert result["img"] == gfurl
+        assert result.data["photo_source"] == "gfriends"
+        assert result.data["photo_url"] == gfurl
+        assert result.data["img"] == gfurl
+        assert result.timed_out is False
 
     def test_graphis_none_gfriends_none_wiki_wins(self):
         wiki = _make_wiki()
@@ -300,8 +311,9 @@ class TestPhotoCascade:
              patch(_PATCH_GFRIENDS, return_value=None):
             result = get_actress_profile(_ACTRESS_NAME)
 
-        assert result["photo_source"] == "wiki"
-        assert result["photo_url"] == wiki["photo_url"]
+        assert result.data["photo_source"] == "wiki"
+        assert result.data["photo_url"] == wiki["photo_url"]
+        assert result.timed_out is False
 
     def test_only_minnano_has_photo(self):
         minnano = _make_minnano()
@@ -312,8 +324,9 @@ class TestPhotoCascade:
              patch(_PATCH_GFRIENDS, return_value=None):
             result = get_actress_profile(_ACTRESS_NAME)
 
-        assert result["photo_source"] == "minnano"
-        assert result["photo_url"] == minnano["photo_url"]
+        assert result.data["photo_source"] == "minnano"
+        assert result.data["photo_url"] == minnano["photo_url"]
+        assert result.timed_out is False
 
 
 # ---------------------------------------------------------------------------
@@ -336,14 +349,16 @@ class TestTD1Age:
     def test_age_before_birthday_in_year(self):
         # Birth 1998-03-31, frozen 2026-01-01 → hasn't reached birthday → age 27
         result = self._call_with_frozen_now(datetime(2026, 1, 1), "1998-03-31")
-        assert result["current_age"] == 27
-        assert result["age"] == 27
+        assert result.data["current_age"] == 27
+        assert result.data["age"] == 27
+        assert result.timed_out is False
 
     def test_age_after_birthday_in_year(self):
         # Birth 1998-03-31, frozen 2026-04-01 → past birthday → age 28
         result = self._call_with_frozen_now(datetime(2026, 4, 1), "1998-03-31")
-        assert result["current_age"] == 28
-        assert result["age"] == 28
+        assert result.data["current_age"] == 28
+        assert result.data["age"] == 28
+        assert result.timed_out is False
 
     def test_age_none_when_birth_none(self):
         minnano = _make_minnano(birth=None)
@@ -353,8 +368,9 @@ class TestTD1Age:
              patch(_PATCH_GFRIENDS, return_value=None):
             result = get_actress_profile(_ACTRESS_NAME)
 
-        assert result["current_age"] is None
-        assert result["age"] is None
+        assert result.data["current_age"] is None
+        assert result.data["age"] is None
+        assert result.timed_out is False
 
     def test_age_none_when_birth_invalid(self):
         minnano = _make_minnano(birth="invalid-format")
@@ -364,8 +380,9 @@ class TestTD1Age:
              patch(_PATCH_GFRIENDS, return_value=None):
             result = get_actress_profile(_ACTRESS_NAME)
 
-        assert result["current_age"] is None
-        assert result["age"] is None
+        assert result.data["current_age"] is None
+        assert result.data["age"] is None
+        assert result.timed_out is False
 
     def test_age_not_read_from_graphis_stale_field(self):
         # Graphis has age=999; orchestrator must compute from birth, not read 999
@@ -380,8 +397,9 @@ class TestTD1Age:
              patch('core.scrapers.actress.orchestrator.datetime', FrozenDT):
             result = get_actress_profile(_ACTRESS_NAME)
 
-        assert result["age"] != 999
-        assert result["age"] == 27  # computed, not from graphis
+        assert result.data["age"] != 999
+        assert result.data["age"] == 27  # computed, not from graphis
+        assert result.timed_out is False
 
     def test_age_consistency_age_equals_current_age(self):
         minnano = _make_minnano(birth="1995-06-15")
@@ -394,7 +412,8 @@ class TestTD1Age:
              patch('core.scrapers.actress.orchestrator.datetime', FrozenDT):
             result = get_actress_profile(_ACTRESS_NAME)
 
-        assert result["age"] == result["current_age"]
+        assert result.data["age"] == result.data["current_age"]
+        assert result.timed_out is False
 
 
 # ---------------------------------------------------------------------------
@@ -426,16 +445,16 @@ class TestComputeAgeUnit:
 
 class TestLegacyFlatConsistency:
 
-    def _assert_consistency(self, result):
-        assert result["img"] == result["photo_url"]
-        assert result["backdrop"] == result["backdrop_url"]
-        assert result["age"] == result["current_age"]
-        text = result.get("text")
+    def _assert_consistency(self, data):
+        assert data["img"] == data["photo_url"]
+        assert data["backdrop"] == data["backdrop_url"]
+        assert data["age"] == data["current_age"]
+        text = data.get("text")
         if text is not None:
             # name cascades: text.name_ja → text.name → queried name arg
             expected_name = text.get("name_ja") or text.get("name") or _ACTRESS_NAME
-            assert result["name"] == expected_name
-            assert result["birth"] == text.get("birth")
+            assert data["name"] == expected_name
+            assert data["birth"] == text.get("birth")
 
     def test_consistency_full_happy_path(self):
         minnano = _make_minnano()
@@ -447,7 +466,8 @@ class TestLegacyFlatConsistency:
              patch(_PATCH_GFRIENDS, return_value=None):
             result = get_actress_profile(_ACTRESS_NAME)
 
-        self._assert_consistency(result)
+        self._assert_consistency(result.data)
+        assert result.timed_out is False
 
     def test_consistency_wiki_as_text_source(self):
         wiki    = _make_wiki()
@@ -459,7 +479,8 @@ class TestLegacyFlatConsistency:
              patch(_PATCH_GFRIENDS, return_value=None):
             result = get_actress_profile(_ACTRESS_NAME)
 
-        self._assert_consistency(result)
+        self._assert_consistency(result.data)
+        assert result.timed_out is False
 
     def test_consistency_only_minnano(self):
         minnano = _make_minnano()
@@ -470,7 +491,8 @@ class TestLegacyFlatConsistency:
              patch(_PATCH_GFRIENDS, return_value=None):
             result = get_actress_profile(_ACTRESS_NAME)
 
-        self._assert_consistency(result)
+        self._assert_consistency(result.data)
+        assert result.timed_out is False
 
 
 # ---------------------------------------------------------------------------
@@ -496,7 +518,9 @@ class TestCacheTTL:
         # Scraper should have been called exactly once (cache hit on second call)
         assert mock_minnano.call_count == 1
         # Both results should be identical (from cache)
-        assert result1["name"] == result2["name"] == "初回結果"
+        assert result1.data["name"] == result2.data["name"] == "初回結果"
+        assert result1.timed_out is False
+        assert result2.timed_out is False
 
     def test_cache_expired_fetches_fresh(self):
         """Stale cache entry (older than TTL) causes fresh scraper call."""
@@ -520,7 +544,8 @@ class TestCacheTTL:
 
         # Fresh scraper should have been called
         assert mock_minnano.call_count == 1
-        assert result["name"] == "fresh"
+        assert result.data["name"] == "fresh"
+        assert result.timed_out is False
 
 
 # ---------------------------------------------------------------------------
@@ -556,12 +581,13 @@ class TestMeaningfulTextFilter:
              patch(_PATCH_GFRIENDS, return_value=None):
             result = get_actress_profile(_ACTRESS_NAME)
 
-        assert result is not None
+        assert result.data is not None
         # Graphis (with real data) must win C1, not the wiki shell
-        assert result["primary_text_source"] == "graphis"
-        assert result["text"] == graphis
+        assert result.data["primary_text_source"] == "graphis"
+        assert result.data["text"] == graphis
         # But wiki dict is still stored in all_sources for reference
-        assert result["all_sources"]["wiki"] == wiki_shell
+        assert result.data["all_sources"]["wiki"] == wiki_shell
+        assert result.timed_out is False
 
     def test_minnano_shell_does_not_suppress_wiki(self):
         """Parallel safety: if minnano returns a shell (no meaningful text), wiki wins."""
@@ -592,8 +618,9 @@ class TestMeaningfulTextFilter:
              patch(_PATCH_GFRIENDS, return_value=None):
             result = get_actress_profile(_ACTRESS_NAME)
 
-        assert result is not None
-        assert result["primary_text_source"] == "wiki"
+        assert result.data is not None
+        assert result.data["primary_text_source"] == "wiki"
+        assert result.timed_out is False
 
     def test_all_shells_no_text_source(self):
         """All text sources return shells (no meaningful text) → primary_text_source None.
@@ -611,12 +638,13 @@ class TestMeaningfulTextFilter:
 
         # minnano_shell is truthy → not any([...]) guard does not fire
         # but neither shell has meaningful text, so cascade picks no text source
-        assert result is not None
-        assert result["primary_text_source"] is None
-        assert result["text"] is None
-        assert result["current_age"] is None
+        assert result.data is not None
+        assert result.data["primary_text_source"] is None
+        assert result.data["text"] is None
+        assert result.data["current_age"] is None
         # Bug 2 fix: name falls back to queried arg when text is None
-        assert result["name"] == _ACTRESS_NAME
+        assert result.data["name"] == _ACTRESS_NAME
+        assert result.timed_out is False
 
     def test_minnano_aliases_only_wins_c1_over_wiki(self):
         """Codex 2nd review: Minnano's C1 primary value is aliases/agency/debut_work/
@@ -651,14 +679,15 @@ class TestMeaningfulTextFilter:
              patch(_PATCH_GFRIENDS, return_value=None):
             result = get_actress_profile(_ACTRESS_NAME)
 
-        assert result is not None
+        assert result.data is not None
         # C1 cascade: Minnano wins because aliases is non-empty (C1 primary value proposition)
-        assert result["primary_text_source"] == "minnano"
-        assert result["text"] == minnano_aliases_only
+        assert result.data["primary_text_source"] == "minnano"
+        assert result.data["text"] == minnano_aliases_only
         # Phase 43 auto-populate consumers reach aliases via all_sources.minnano.aliases
-        assert len(result["all_sources"]["minnano"]["aliases"]) == 2
+        assert len(result.data["all_sources"]["minnano"]["aliases"]) == 2
         # Wiki is still stored for reference but not the text source
-        assert result["all_sources"]["wiki"] == wiki
+        assert result.data["all_sources"]["wiki"] == wiki
+        assert result.timed_out is False
 
     def test_minnano_agency_only_wins_c1(self):
         """Same logic as above but with only agency field populated — proves the
@@ -683,9 +712,10 @@ class TestMeaningfulTextFilter:
              patch(_PATCH_GFRIENDS, return_value=None):
             result = get_actress_profile(_ACTRESS_NAME)
 
-        assert result is not None
-        assert result["primary_text_source"] == "minnano"
-        assert result["text"]["agency"] == "プレステージ"
+        assert result.data is not None
+        assert result.data["primary_text_source"] == "minnano"
+        assert result.data["text"]["agency"] == "プレステージ"
+        assert result.timed_out is False
 
     def test_wiki_other_names_only_wins_c1(self):
         """Codex PR #23 P2: Wiki's `other_names` (別名/芸名 row) must count as
@@ -719,9 +749,10 @@ class TestMeaningfulTextFilter:
              patch(_PATCH_GFRIENDS, return_value=None):
             result = get_actress_profile(_ACTRESS_NAME)
 
-        assert result is not None, \
+        assert result.data is not None, \
             "alias-only wiki must not collapse result to None"
-        assert result["primary_text_source"] == "wiki", \
+        assert result.data["primary_text_source"] == "wiki", \
             "wiki with only other_names must win C1 cascade when other sources miss"
-        assert result["text"] == wiki_other_names_only
-        assert result["all_sources"]["wiki"]["other_names"] == ["松嶋真麻", "別名2"]
+        assert result.data["text"] == wiki_other_names_only
+        assert result.data["all_sources"]["wiki"]["other_names"] == ["松嶋真麻", "別名2"]
+        assert result.timed_out is False

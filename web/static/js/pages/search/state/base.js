@@ -144,7 +144,15 @@ window.SearchStateMixin_Base = function () {
         lightboxCloseTimer: null,  // F2: delayed clear timer for lightbox close
 
         // ===== T2d: Actress Profile State =====
-        actressProfile: null,      // { name, img, backdrop, birth, age, height, cup, bust, waist, hip, hometown, hobby }
+        actressProfile: null,      // { name, img, backdrop, birth, age, height, cup, bust, waist, hip, hometown, hobby, is_favorite }
+
+        // ===== T5: Actress Favorite State =====
+        _actressFavoriteLoading: false,
+        _actressFavoriteGen: 0,
+        _actressFavoriteTimer: null,
+
+        // ===== Phase 43 T6: Actress Chips Expanded State =====
+        _actressChipsExpanded: { aliases: false, info: false },
 
         // ===== T6a: Grid Image Error State =====
         // Grid 模式圖片錯誤追蹤
@@ -448,6 +456,135 @@ window.SearchStateMixin_Base = function () {
             var h = cover.offsetHeight;
             if (h > 0) {
                 cover.style.setProperty('--cover-height', h + 'px');
+            }
+        },
+
+        // ===== Phase 43 T6: Actress Chips Helpers =====
+
+        _chipsLimit() {
+            return window.innerWidth < 768 ? 6 : 10;
+        },
+
+        _allInfoChips() {
+            if (!this.actressProfile) return [];
+            const p = this.actressProfile;
+            return [
+                ...(p.tags || []),
+                ...(p.hometown ? [p.hometown] : []),
+                ...(p.nickname ? [p.nickname] : []),
+                ...(p.agency ? [p.agency] : []),
+                ...(p.hobby ? [p.hobby] : []),
+                ...(p.debut_work ? [p.debut_work] : []),
+            ];
+        },
+
+        _visibleAliases() {
+            const aliases = this.actressProfile?.aliases || [];
+            if (this._actressChipsExpanded.aliases) return aliases;
+            return aliases.slice(0, this._chipsLimit());
+        },
+
+        _visibleInfoChips() {
+            const chips = this._allInfoChips();
+            if (this._actressChipsExpanded.info) return chips;
+            return chips.slice(0, this._chipsLimit());
+        },
+
+        // ===== T5: Actress Favorite =====
+
+        // 從 searchResults 提取片商前綴（供 /api/actresses/favorite makers 參數）
+        _extractCurrentMakers() {
+            const results = this.searchResults || [];
+            const makers = new Set();
+            results.forEach(r => {
+                if (r.number) {
+                    const m = r.number.match(/^([A-Za-z]+)/);
+                    if (m) makers.add(m[1].toUpperCase());
+                }
+            });
+            return Array.from(makers);
+        },
+
+        _safeUrl(url) {
+            if (!url || typeof url !== 'string') return '#';
+            if (!url.startsWith('http://') && !url.startsWith('https://')) return '#';
+            return url;
+        },
+
+        // ===== T10: Actress Source URL =====
+
+        _actressSourceUrl() {
+            const src = this.actressProfile?.primary_text_source;
+            const name = this.actressProfile?.name;
+            if (!src || !name) return null;
+            if (src === 'wiki') return `https://ja.wikipedia.org/wiki/${encodeURIComponent(name)}`;
+            if (src === 'minnano') return `https://www.minnano-av.com/search_result.php?search_scope=actress&search_word=${encodeURIComponent(name)}`;
+            return null;
+        },
+
+        async addFavoriteActress() {
+            if (!this.actressProfile || this.actressProfile.is_favorite || this._actressFavoriteLoading) return;
+
+            // capture reference before await — 防止 await 期間切女優的 race（同 41d pattern）
+            const capturedProfile = this.actressProfile;
+            const capturedName = this.actressProfile.name;
+
+            const gen = ++this._actressFavoriteGen;
+            this._actressFavoriteLoading = true;
+
+            // 10s 前端 timeout
+            const controller = new AbortController();
+            this._actressFavoriteTimer = setTimeout(() => controller.abort(), 10000);
+
+            try {
+                const makers = this._extractCurrentMakers();
+                const resp = await fetch('/api/actresses/favorite', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: capturedName, makers }),
+                    signal: controller.signal,
+                });
+
+                clearTimeout(this._actressFavoriteTimer);
+                this._actressFavoriteTimer = null;
+
+                if (resp.status === 200) {
+                    const data = await resp.json();
+                    // stale-check：await 期間可能已切女優，丟棄過時結果
+                    if (this.actressProfile !== capturedProfile) return;
+                    const actress = data.actress || {};
+                    this.actressProfile = {
+                        ...capturedProfile,
+                        is_favorite: true,
+                        img: actress.photo_url || capturedProfile.img,
+                    };
+                    this.showToast(window.t('search.actress.favorite_success'), 'success');
+                } else if (resp.status === 409) {
+                    const data = await resp.json();
+                    if (this.actressProfile !== capturedProfile) return;
+                    const actress = data.actress || {};
+                    this.actressProfile = {
+                        ...capturedProfile,
+                        is_favorite: true,
+                        img: actress.photo_url || capturedProfile.img,
+                    };
+                } else {
+                    const data = await resp.json().catch(() => ({}));
+                    this.showToast(window.t('search.actress.favorite_error'), 'error');
+                    console.error('[addFavoriteActress] 失敗:', resp.status, data);
+                }
+            } catch (err) {
+                clearTimeout(this._actressFavoriteTimer);
+                this._actressFavoriteTimer = null;
+
+                if (err.name === 'AbortError') {
+                    this.showToast(window.t('search.actress.favorite_timeout'), 'error');
+                } else {
+                    this.showToast(window.t('search.actress.favorite_error'), 'error');
+                    console.error('[addFavoriteActress] 例外:', err);
+                }
+            } finally {
+                if (this._actressFavoriteGen === gen) this._actressFavoriteLoading = false;
             }
         },
     };
