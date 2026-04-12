@@ -169,6 +169,7 @@ function showcaseState() {
             this.restoreState();        // M2c: 先恢復狀態
             const savedPage = this.page;
             await this.fetchVideos();
+            if (this.showFavoriteActresses) { this.loadActresses(); }
             this.applyFilterAndSort(true);  // M4a: 套用搜尋篩選（跳過 pagination，下面統一處理）
             this.page = savedPage;          // 恢復儲存的頁碼
             this.updatePagination();        // 單次分頁（會 clamp 超出範圍的頁碼）
@@ -428,7 +429,7 @@ function showcaseState() {
                 if (sort === 'video_count') {
                     va = a.video_count || 0;
                     vb = b.video_count || 0;
-                } else if (sort === 'created_at') {
+                } else if (sort === 'added_at') {
                     va = a.created_at || '';
                     vb = b.created_at || '';
                 } else if (sort === 'age') {
@@ -678,14 +679,16 @@ function showcaseState() {
                 });
                 const data = await resp.json();
                 if (data.success && data.actress) {
-                    Object.assign(this.currentLightboxActress, data.actress);
-                    // photo cache-bust：讓瀏覽器不用 cached image
-                    if (this.currentLightboxActress.photo_url) {
-                        this.currentLightboxActress.photo_url += '&t=' + Date.now();
-                    }
-                    // 同步更新 _actresses 中的對應項
+                    // 先更新 _actresses 陣列（不論 lightbox 是否切換，grid 資料都要刷新）
                     const idx = _actresses.findIndex(a => a.name === name);
                     if (idx >= 0) Object.assign(_actresses[idx], data.actress);
+                    // stale guard：只在 lightbox 仍顯示同一位女優時更新 lightbox
+                    if (this.currentLightboxActress?.name === name) {
+                        Object.assign(this.currentLightboxActress, data.actress);
+                        if (this.currentLightboxActress.photo_url) {
+                            this.currentLightboxActress.photo_url += '?t=' + Date.now();
+                        }
+                    }
                     this.showToast(window.t('showcase.actress.rescrapeSuccess'), 'success');
                 } else {
                     this.showToast(window.t('showcase.actress.rescrapeError') || data.error || 'Error', 'error');
@@ -711,6 +714,12 @@ function showcaseState() {
                     const idx = _actresses.findIndex(a => a.name === name);
                     if (idx >= 0) _actresses.splice(idx, 1);
                     this.applyActressFilterAndSort();
+                    if (this.currentLightboxActress?.name !== name) {
+                        // stale guard: lightbox switched to a different actress during request
+                        // array cleanup already done above, but don't close lightbox
+                        this.showToast(window.t('showcase.actress.removeSuccess'), 'success');
+                        return;
+                    }
                     this.closeActressLightbox();
                     this.showToast(window.t('showcase.actress.removeSuccess'), 'success');
                 } else {
