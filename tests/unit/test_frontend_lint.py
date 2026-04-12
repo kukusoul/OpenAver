@@ -1002,6 +1002,34 @@ class TestShowcasePreciseMatchState:
         assert "_actressesLoaded = true" in js, \
             "showcase/core.js loadActresses() 缺少 _actressesLoaded = true"
 
+    def _html(self):
+        return SHOWCASE_HTML.read_text(encoding="utf-8")
+
+    # --- 44b-T2: Heart icon ---
+    def test_addFavoriteFromSearch_method_exists(self):
+        """44b-T2: addFavoriteFromSearch method must exist in core.js"""
+        assert "addFavoriteFromSearch" in self._js(), \
+            "Missing addFavoriteFromSearch method in showcase core.js"
+
+    def test_heart_button_in_html(self):
+        """44b-T2: heart button calling addFavoriteFromSearch must exist in showcase.html"""
+        assert "addFavoriteFromSearch" in self._html(), \
+            "Missing addFavoriteFromSearch call in showcase.html"
+
+    def test_heart_button_preciseMatch_condition(self):
+        """44b-T2: heart button must be gated by _isPreciseActressMatch"""
+        assert "_isPreciseActressMatch" in self._html(), \
+            "Heart button missing _isPreciseActressMatch condition in showcase.html"
+
+    def test_heart_icon_loading_state(self):
+        """44b-T2: addFavoriteFromSearch must handle _favoriteHeartLoading"""
+        js = self._js()
+        idx = js.find("addFavoriteFromSearch")
+        assert idx != -1, "addFavoriteFromSearch not found"
+        block = js[idx:idx+2000]
+        assert "_favoriteHeartLoading" in block, \
+            "addFavoriteFromSearch must use _favoriteHeartLoading for loading state"
+
 
 class TestGeminiLocaleKeyGuard:
     """39a-T3: 守衛 settings.js 不再使用 gemini_n_flash_models locale key"""

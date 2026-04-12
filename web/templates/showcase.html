@@ -76,6 +76,19 @@
                            x-model="actressSearch"
                            @input.debounce.300ms="onActressSearchChange()">
                     <div class="search-actions-right">
+                        <!-- 44b: heart icon (precise match) -->
+                        <button class="btn-icon"
+                                x-show="!showFavoriteActresses && _isPreciseActressMatch"
+                                x-cloak
+                                :disabled="_matchedActress?.is_favorite || _favoriteHeartLoading"
+                                @click="addFavoriteFromSearch()"
+                                :title="_matchedActress?.is_favorite ? t('showcase.actress.favorited') : t('showcase.actress.addFavorite')">
+                            <i class="bi" :class="{
+                                'bi-arrow-clockwise spin': _favoriteHeartLoading,
+                                'bi-heart-fill': _matchedActress?.is_favorite && !_favoriteHeartLoading,
+                                'bi-heart': !_matchedActress?.is_favorite && !_favoriteHeartLoading
+                            }" :style="_matchedActress?.is_favorite && !_favoriteHeartLoading ? 'color: var(--color-favorite)' : ''"></i>
+                        </button>
                         <button class="btn-icon"
                                 x-show="(!showFavoriteActresses && search !== '') || (showFavoriteActresses && actressSearch !== '')"
                                 @click="showFavoriteActresses ? (actressSearch = '', onActressSearchChange()) : (search = '', onSearchChange())"

@@ -744,6 +744,43 @@ function showcaseState() {
             }
         },
 
+        async addFavoriteFromSearch() {
+            if (this._favoriteHeartLoading || this._matchedActress?.is_favorite) return;
+            this._favoriteHeartLoading = true;
+            var capturedName = this._matchedActress?.name;
+            if (!capturedName) { this._favoriteHeartLoading = false; return; }
+            try {
+                var resp = await fetch('/api/actresses/favorite', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: capturedName })
+                });
+                if (!this._matchedActress || this._matchedActress.name !== capturedName) return;
+                if (resp.status === 200 || resp.status === 409) {
+                    var data = await resp.json();
+                    var actress = data.actress || data;
+                    actress.is_favorite = true;
+                    this._matchedActress = actress;
+                    if (!_actresses.find(function(a) { return a.name === actress.name; })) {
+                        _actresses.push(actress);
+                    }
+                    if (resp.status === 200) {
+                        this.showToast(window.t('showcase.actress.addSuccess'), 'success');
+                    } else {
+                        this.showToast(window.t('showcase.actress.addDuplicate'), 'info');
+                    }
+                } else if (resp.status === 404) {
+                    this.showToast(window.t('showcase.actress.addNotFound'), 'error');
+                } else {
+                    this.showToast(window.t('showcase.actress.addTimeout'), 'error');
+                }
+            } catch (err) {
+                this.showToast(window.t('showcase.actress.addTimeout'), 'error');
+            } finally {
+                this._favoriteHeartLoading = false;
+            }
+        },
+
         async rescrapeActress() {
             if (this._rescraping || !this.currentLightboxActress) return;
             this._rescraping = true;

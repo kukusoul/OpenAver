@@ -550,7 +550,9 @@
       "removeSuccess": "Removed from favorites",
       "empty": "No favorite actresses yet",
       "emptyHint": "Click + in the top right to add one",
-      "search_films": "Search related films"
+      "search_films": "Search related films",
+      "addFavorite": "Add to favorites",
+      "favorited": "Favorited"
     }
   },
   "help": {
