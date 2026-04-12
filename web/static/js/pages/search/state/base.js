@@ -144,7 +144,11 @@ window.SearchStateMixin_Base = function () {
         lightboxCloseTimer: null,  // F2: delayed clear timer for lightbox close
 
         // ===== T2d: Actress Profile State =====
-        actressProfile: null,      // { name, img, backdrop, birth, age, height, cup, bust, waist, hip, hometown, hobby }
+        actressProfile: null,      // { name, img, backdrop, birth, age, height, cup, bust, waist, hip, hometown, hobby, is_favorite }
+
+        // ===== T5: Actress Favorite State =====
+        _actressFavoriteLoading: false,
+        _actressFavoriteTimer: null,
 
         // ===== T6a: Grid Image Error State =====
         // Grid 模式圖片錯誤追蹤
@@ -448,6 +452,81 @@ window.SearchStateMixin_Base = function () {
             var h = cover.offsetHeight;
             if (h > 0) {
                 cover.style.setProperty('--cover-height', h + 'px');
+            }
+        },
+
+        // ===== T5: Actress Favorite =====
+
+        // 從 searchResults 提取片商前綴（供 /api/actresses/favorite makers 參數）
+        _extractCurrentMakers() {
+            const results = this.searchResults || [];
+            const makers = new Set();
+            results.forEach(r => {
+                if (r.number) {
+                    const m = r.number.match(/^([A-Za-z]+)/);
+                    if (m) makers.add(m[1].toUpperCase());
+                }
+            });
+            return Array.from(makers);
+        },
+
+        async addFavoriteActress() {
+            if (!this.actressProfile || this.actressProfile.is_favorite || this._actressFavoriteLoading) return;
+
+            this._actressFavoriteLoading = true;
+
+            // 10s 前端 timeout
+            const controller = new AbortController();
+            this._actressFavoriteTimer = setTimeout(() => controller.abort(), 10000);
+
+            try {
+                const makers = this._extractCurrentMakers();
+                const resp = await fetch('/api/actresses/favorite', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: this.actressProfile.name, makers }),
+                    signal: controller.signal,
+                });
+
+                clearTimeout(this._actressFavoriteTimer);
+                this._actressFavoriteTimer = null;
+
+                if (resp.status === 200) {
+                    const data = await resp.json();
+                    // 更新 actressProfile：標記已收藏 + 更新 img 為本地路徑
+                    const actress = data.actress || {};
+                    this.actressProfile = {
+                        ...this.actressProfile,
+                        is_favorite: true,
+                        img: actress.photo_url || this.actressProfile.img,
+                    };
+                    this.showToast(window.t('search.actress.favorite_success'), 'success');
+                } else if (resp.status === 409) {
+                    // 已收藏（競態或重複點擊）
+                    const data = await resp.json();
+                    const actress = data.actress || {};
+                    this.actressProfile = {
+                        ...this.actressProfile,
+                        is_favorite: true,
+                        img: actress.photo_url || this.actressProfile.img,
+                    };
+                } else {
+                    const data = await resp.json().catch(() => ({}));
+                    this.showToast(window.t('search.actress.favorite_error'), 'error');
+                    console.error('[addFavoriteActress] 失敗:', resp.status, data);
+                }
+            } catch (err) {
+                clearTimeout(this._actressFavoriteTimer);
+                this._actressFavoriteTimer = null;
+
+                if (err.name === 'AbortError') {
+                    this.showToast(window.t('search.actress.favorite_timeout'), 'error');
+                } else {
+                    this.showToast(window.t('search.actress.favorite_error'), 'error');
+                    console.error('[addFavoriteActress] 例外:', err);
+                }
+            } finally {
+                this._actressFavoriteLoading = false;
             }
         },
     };

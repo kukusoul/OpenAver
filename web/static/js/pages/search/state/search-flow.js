@@ -142,6 +142,7 @@ window.SearchStateMixin_SearchFlow = {
         this.currentOffset = 0;
         this.hasMoreResults = false;
         this.actressProfile = null;  // T2d: 清空上次的女優資料
+        this._actressFavoriteLoading = false;  // Phase 43: 清空收藏 loading 狀態
         this.displayMode = 'detail';  // T3a: 新搜尋重置顯示模式
         this._gridImageErrors = new Set();  // T6a: 清空 Grid 圖片錯誤記錄
         this._heroCardImageError = false;   // A6-1: 清空 Hero Card 圖片錯誤

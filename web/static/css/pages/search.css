@@ -777,6 +777,18 @@
     transform-origin: center center;  /* 置中（覆蓋 65% center 的 AV 封面偏移） */
 }
 
+/* T5: Hero Card 愛心 overlay 常駐（已收藏時不需 hover） */
+.hero-card .av-card-preview-overlay.always-visible {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* T5: 已收藏愛心按鈕 — 紅色，不可點擊 */
+.hero-card .btn-glass-circle.is-favorite {
+    color: #ff4d6d;
+    cursor: default;
+}
+
 /* ==================== T6b: 統一 Toast 容器 ==================== */
 .search-toast-container {
     position: fixed;
