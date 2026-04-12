@@ -8,6 +8,7 @@ var _videos = [];
 var _filteredVideos = [];
 var _actresses = [];
 var _filteredActresses = [];
+var _actressesLoaded = false;
 
 // 41c B-lite: 無封面 placeholder SVG (cover 載入失敗時 handleCoverError 換上)
 // viewBox 800x600 對齊 lightbox 4:3，grid card aspect-ratio:3/2 會 crop 上下少許但不影響 icon 居中
@@ -132,6 +133,12 @@ function showcaseState() {
         // Enrich 狀態 (T3)
         _enriching: false,
 
+        // 44b: 精準匹配狀態
+        _isPreciseActressMatch: false,
+        _matchedActress: null,
+        _preciseMatchSource: null,
+        _favoriteHeartLoading: false,
+
         // F1: helper — 更新 lightboxIndex + currentLightboxVideo 一致性
         _setLightboxIndex(idx) {
             this.lightboxIndex = idx;
@@ -149,6 +156,34 @@ function showcaseState() {
                 ? _filteredActresses[idx] : null;
             this.currentLightboxVideo = null;    // 互斥：清除影片
             this._actressChipsExpanded = { aliases: false, info: false };
+        },
+
+        // 44b: 精準匹配 helpers
+        _clearPreciseMatch() {
+            this._isPreciseActressMatch = false;
+            this._matchedActress = null;
+            this._preciseMatchSource = null;
+            this._favoriteHeartLoading = false;
+        },
+
+        async _checkPreciseActressMatch(term, source) {
+            var capturedTerm = (term || '').trim();
+            if (!_actressesLoaded && _actresses.length === 0) {
+                await this.loadActresses();
+            }
+            if (this.search.trim() !== capturedTerm) return;
+            var found = _actresses.find(function(a) { return a.name === capturedTerm; });
+            if (found) {
+                this._isPreciseActressMatch = true;
+                this._matchedActress = found;
+                this._preciseMatchSource = source;
+            } else if (source === 'metadata') {
+                this._isPreciseActressMatch = true;
+                this._matchedActress = { name: capturedTerm, is_favorite: false };
+                this._preciseMatchSource = source;
+            } else {
+                this._clearPreciseMatch();
+            }
         },
 
         // --- 生命週期 ---
@@ -321,6 +356,12 @@ function showcaseState() {
         onSearchChange() {
             // B8: 透過 _animateFilter 觸發篩選動畫
             this._animateFilter();
+            var trimmed = this.search.trim();
+            if (!trimmed) {
+                this._clearPreciseMatch();
+            } else {
+                this._checkPreciseActressMatch(trimmed, 'manual');
+            }
         },
 
         onSortChange() {
@@ -406,6 +447,7 @@ function showcaseState() {
                 this.filteredActressCount = 0;
             } finally {
                 this.actressLoading = false;
+                _actressesLoaded = true;
             }
         },
 
@@ -1332,6 +1374,7 @@ function showcaseState() {
 
             this.search = term;
             this._animateFilter();
+            this._checkPreciseActressMatch(term, 'metadata');
         },
 
         prevLightboxVideo() {

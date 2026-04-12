@@ -908,6 +908,101 @@ class TestShowcaseActressState:
             "showcase/core.js handleKeydown 缺少 this.nextActressLightbox() 呼叫"
 
 
+class TestShowcasePreciseMatchState:
+    """Phase 44b-T1: Showcase 精準匹配 Alpine state 守衛"""
+
+    def _js(self):
+        return SHOWCASE_CORE_JS.read_text(encoding="utf-8")
+
+    def _extract_fn_block(self, content, fn_anchor):
+        """提取從 fn_anchor 開始到下一個頂層逗號的函數區塊"""
+        start = content.find(fn_anchor)
+        if start == -1:
+            return ''
+        return content[start:start + 2000]
+
+    # --- Module-level flag ---
+    def test_actressesLoaded_flag_exists(self):
+        """var _actressesLoaded 存在於 module scope"""
+        js = self._js()
+        assert "var _actressesLoaded" in js, \
+            "showcase/core.js 缺少 module-level var _actressesLoaded"
+
+    # --- Alpine state properties ---
+    def test_isPreciseActressMatch_state_exists(self):
+        """_isPreciseActressMatch 出現於 Alpine state"""
+        js = self._js()
+        assert "_isPreciseActressMatch" in js, \
+            "showcase/core.js 缺少 Alpine state 屬性 _isPreciseActressMatch"
+
+    def test_matchedActress_state_exists(self):
+        """_matchedActress 出現於 Alpine state"""
+        js = self._js()
+        assert "_matchedActress" in js, \
+            "showcase/core.js 缺少 Alpine state 屬性 _matchedActress"
+
+    def test_preciseMatchSource_state_exists(self):
+        """_preciseMatchSource 出現於 Alpine state"""
+        js = self._js()
+        assert "_preciseMatchSource" in js, \
+            "showcase/core.js 缺少 Alpine state 屬性 _preciseMatchSource"
+
+    def test_favoriteHeartLoading_state_exists(self):
+        """_favoriteHeartLoading 出現於 Alpine state"""
+        js = self._js()
+        assert "_favoriteHeartLoading" in js, \
+            "showcase/core.js 缺少 Alpine state 屬性 _favoriteHeartLoading"
+
+    # --- Methods ---
+    def test_checkPreciseActressMatch_method_exists(self):
+        """_checkPreciseActressMatch 方法存在於 core.js"""
+        js = self._js()
+        assert "_checkPreciseActressMatch" in js, \
+            "showcase/core.js 缺少 _checkPreciseActressMatch 方法"
+
+    def test_clearPreciseMatch_method_exists(self):
+        """_clearPreciseMatch 方法存在於 core.js"""
+        js = self._js()
+        assert "_clearPreciseMatch" in js, \
+            "showcase/core.js 缺少 _clearPreciseMatch 方法"
+
+    # --- Trigger points ---
+    def test_searchFromMetadata_triggers_preciseMatch(self):
+        """_checkPreciseActressMatch 出現於 searchFromMetadata 區段"""
+        js = self._js()
+        block = self._extract_fn_block(js, 'searchFromMetadata(term)')
+        assert "_checkPreciseActressMatch" in block, \
+            "showcase/core.js searchFromMetadata 缺少 _checkPreciseActressMatch 呼叫"
+
+    def test_onSearchChange_triggers_preciseMatch(self):
+        """_checkPreciseActressMatch 出現於 onSearchChange 區段"""
+        js = self._js()
+        block = self._extract_fn_block(js, 'onSearchChange()')
+        assert "_checkPreciseActressMatch" in block, \
+            "showcase/core.js onSearchChange 缺少 _checkPreciseActressMatch 呼叫"
+
+    def test_onSearchChange_clears_preciseMatch(self):
+        """_clearPreciseMatch 出現於 onSearchChange 區段"""
+        js = self._js()
+        block = self._extract_fn_block(js, 'onSearchChange()')
+        assert "_clearPreciseMatch" in block, \
+            "showcase/core.js onSearchChange 缺少 _clearPreciseMatch 呼叫"
+
+    # --- Stale guard pattern ---
+    def test_stale_guard_pattern(self):
+        """capturedTerm 出現於 core.js（stale guard 標誌）"""
+        js = self._js()
+        assert "capturedTerm" in js, \
+            "showcase/core.js 缺少 capturedTerm stale guard pattern"
+
+    # --- Lazy load flag ---
+    def test_loadActresses_sets_loaded_flag(self):
+        """_actressesLoaded = true 出現於 core.js（懶載 flag 設定）"""
+        js = self._js()
+        assert "_actressesLoaded = true" in js, \
+            "showcase/core.js loadActresses() 缺少 _actressesLoaded = true"
+
+
 class TestGeminiLocaleKeyGuard:
     """39a-T3: 守衛 settings.js 不再使用 gemini_n_flash_models locale key"""
 
