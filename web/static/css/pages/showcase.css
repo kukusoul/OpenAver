@@ -714,6 +714,24 @@
     transform: scale(0.95);
 }
 
+/* Danger modifier — red tint for remove button (44c-T3) */
+.lb-action-btn--danger {
+    border-color: rgba(255, 100, 100, 0.5);
+    color: #ff6b6b;
+}
+
+.lb-action-btn--danger:hover {
+    background: rgba(255, 100, 100, 0.25);
+    border-color: rgba(255, 100, 100, 0.7);
+}
+
+/* Touch fallback — cover-actions always visible on touch devices (44c-T3) */
+@media (pointer: coarse) {
+    .lightbox-cover .cover-actions {
+        opacity: 1;
+    }
+}
+
 /* CSS Tooltip — 桌機輔助，觸控裝置不依賴 */
 .lb-action-btn[data-tooltip]::after {
     content: attr(data-tooltip);

@@ -506,6 +506,21 @@
                                  x-show="!currentLightboxActress?.photo_url">
                                 <i class="bi bi-person" style="font-size:4rem; opacity:0.3"></i>
                             </div>
+                            <div class="cover-actions">
+                                <button class="lb-action-btn"
+                                        @click.stop="rescrapeActress()"
+                                        :disabled="_rescraping"
+                                        :data-tooltip="t('showcase.actress.rescrape')"
+                                        :aria-label="t('showcase.actress.rescrape')">
+                                    <i class="bi" :class="_rescraping ? 'bi-arrow-clockwise spin' : 'bi-arrow-repeat'"></i>
+                                </button>
+                                <button class="lb-action-btn lb-action-btn--danger"
+                                        @click.stop="removeActress()"
+                                        :data-tooltip="t('showcase.actress.remove')"
+                                        :aria-label="t('showcase.actress.remove')">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
                         </div>
 
                         <!-- Actress Metadata Panel -->
@@ -559,21 +574,6 @@
                                    target="_blank"
                                    rel="noopener"
                                    x-text="currentLightboxActress?.official_url"></a>
-                            </div>
-                            <!-- Row 6: Action buttons (T5) -->
-                            <div class="lb-actress-actions" style="margin-top:8px; display:flex; gap:8px;">
-                                <button class="lb-tag-add-btn"
-                                        @click="rescrapeActress()"
-                                        :disabled="_rescraping">
-                                    <i class="bi" :class="_rescraping ? 'bi-arrow-clockwise spin' : 'bi-arrow-repeat'"></i>
-                                    {{ t('showcase.actress.rescrape') }}
-                                </button>
-                                <button class="lb-tag-add-btn"
-                                        @click="removeActress()"
-                                        style="color:var(--color-error);">
-                                    <i class="bi bi-trash"></i>
-                                    {{ t('showcase.actress.remove') }}
-                                </button>
                             </div>
                         </div>
                     </div>
