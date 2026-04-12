@@ -33,7 +33,7 @@
             <!-- Cover Image -->
             <div class="lightbox-cover">
                 <img :src="actressLightboxMode()
-                         ? (actressProfile?.img ? `/api/proxy-image?url=${encodeURIComponent(actressProfile.img)}` : '')
+                         ? (actressProfile?.img ? (actressProfile.img.startsWith('/api/') ? actressProfile.img : `/api/proxy-image?url=${encodeURIComponent(actressProfile.img)}`) : '')
                          : (currentLightboxVideo()?.cover ? `/api/proxy-image?url=${encodeURIComponent(currentLightboxVideo().cover)}` : '')"
                      :alt="actressLightboxMode() ? actressProfile?.name : currentLightboxVideo()?.number"
                      x-show="!_heroLightboxImageError"
@@ -109,6 +109,75 @@
                     <template x-for="tag in (currentLightboxVideo()?.tags || [])" :key="tag">
                         <span class="lb-tag" x-text="tag"></span>
                     </template>
+                </div>
+            </div>
+
+            <!-- Phase 43 T6: Actress Lightbox metadata -->
+            <div class="lightbox-metadata actress-lightbox-meta" x-show="actressLightboxMode()">
+                <!-- Row 1: 名稱 + name_en + 愛心 -->
+                <div class="lb-header actress-lb-header">
+                    <div class="lb-title" x-text="actressProfile?.name || '-'"></div>
+                    <span class="lb-name-en" x-show="actressProfile?.name_en" x-text="actressProfile?.name_en"></span>
+                    <!-- 愛心（Lightbox 版）— CD-10: 只做加入，已收藏純指示 -->
+                    <button class="btn-glass-circle"
+                            x-show="actressProfile && !actressProfile?.is_favorite && !_actressFavoriteLoading"
+                            @click.stop="addFavoriteActress()"
+                            :title="t('search.actress.add_favorite')">
+                        <i class="bi bi-heart"></i>
+                    </button>
+                    <button class="btn-glass-circle" x-show="_actressFavoriteLoading" disabled>
+                        <span class="loading loading-spinner loading-xs"></span>
+                    </button>
+                    <span class="btn-glass-circle is-favorite"
+                          x-show="actressProfile?.is_favorite && !_actressFavoriteLoading"
+                          :title="t('search.actress.favorited')">
+                        <i class="bi bi-heart-fill"></i>
+                    </span>
+                </div>
+
+                <!-- Row 2: 核心 metadata（· 串接，空欄位跳過） -->
+                <div class="lb-actress-core" x-text="[
+                    actressProfile?.age ? actressProfile.age + t('search.unit.age') : '',
+                    actressProfile?.birth || '',
+                    actressProfile?.height || '',
+                    actressProfile?.cup ? actressProfile.cup + t('search.unit.cup') : '',
+                    [actressProfile?.bust, actressProfile?.waist, actressProfile?.hip].filter(Boolean).join('-')
+                ].filter(Boolean).join(' · ')"></div>
+
+                <!-- Row 3: Aliases chips -->
+                <div class="lb-chips-row" x-show="(actressProfile?.aliases || []).length > 0">
+                    <template x-for="alias in _visibleAliases()" :key="alias">
+                        <span class="lb-tag" x-text="alias"></span>
+                    </template>
+                    <span class="lb-chips-more"
+                          x-show="!_actressChipsExpanded.aliases && (actressProfile?.aliases || []).length > _chipsLimit()"
+                          @click="_actressChipsExpanded = {..._actressChipsExpanded, aliases: true}"
+                          x-text="'+' + ((actressProfile?.aliases || []).length - _chipsLimit())">
+                    </span>
+                </div>
+
+                <!-- Row 4: 其餘資訊 chips（tags + hometown + nickname + agency + hobby + debut_work） -->
+                <div class="lb-chips-row" x-show="_allInfoChips().length > 0">
+                    <template x-for="chip in _visibleInfoChips()" :key="chip">
+                        <span class="lb-tag" x-text="chip"></span>
+                    </template>
+                    <span class="lb-chips-more"
+                          x-show="!_actressChipsExpanded.info && _allInfoChips().length > _chipsLimit()"
+                          @click="_actressChipsExpanded = {..._actressChipsExpanded, info: true}"
+                          x-text="'+' + (_allInfoChips().length - _chipsLimit())">
+                    </span>
+                </div>
+
+                <!-- Row 5: 社群連結 -->
+                <div class="lb-actress-urls">
+                    <a x-show="actressProfile?.blog_url"
+                       :href="actressProfile?.blog_url"
+                       target="_blank" rel="noopener"
+                       x-text="actressProfile?.blog_url"></a>
+                    <a x-show="actressProfile?.official_url"
+                       :href="actressProfile?.official_url"
+                       target="_blank" rel="noopener"
+                       x-text="actressProfile?.official_url"></a>
                 </div>
             </div>
         </div>

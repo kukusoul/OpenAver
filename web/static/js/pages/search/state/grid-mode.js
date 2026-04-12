@@ -121,6 +121,9 @@ window.SearchStateMixin_GridMode = {
         // T8: 若 gallery 開啟中一併關閉（外部直接關 lightbox 時 gallery 不應殘留）
         if (this.sampleGalleryOpen) this.closeSampleGallery();
 
+        // Phase 43 T6: 重置 actress chips 展開狀態
+        this._actressChipsExpanded = { aliases: false, info: false };
+
         this._lightboxGeneration++;  // B19: invalidate pending $nextTick lightbox callbacks
         // Instant close — kill any in-progress lightbox animations, then sync close
         if (typeof gsap !== 'undefined') {
@@ -152,6 +155,7 @@ window.SearchStateMixin_GridMode = {
         if (this._lightboxAnimating) return;  // D2: guard
         if (!this.actressProfile) return;  // A6-2: 無女優資料時不開啟 lightbox
         this._heroLightboxImageError = false;  // A6-1: 重置圖片錯誤狀態
+        this._actressChipsExpanded = { aliases: false, info: false };  // Phase 43 T6: 重置 chips 展開狀態
         this.lightboxIndex = -1;
         this.lightboxOpen = true;
 

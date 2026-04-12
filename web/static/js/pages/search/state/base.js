@@ -150,6 +150,9 @@ window.SearchStateMixin_Base = function () {
         _actressFavoriteLoading: false,
         _actressFavoriteTimer: null,
 
+        // ===== Phase 43 T6: Actress Chips Expanded State =====
+        _actressChipsExpanded: { aliases: false, info: false },
+
         // ===== T6a: Grid Image Error State =====
         // Grid 模式圖片錯誤追蹤
         _gridImageErrors: new Set(),
@@ -453,6 +456,37 @@ window.SearchStateMixin_Base = function () {
             if (h > 0) {
                 cover.style.setProperty('--cover-height', h + 'px');
             }
+        },
+
+        // ===== Phase 43 T6: Actress Chips Helpers =====
+
+        _chipsLimit() {
+            return window.innerWidth < 768 ? 6 : 10;
+        },
+
+        _allInfoChips() {
+            if (!this.actressProfile) return [];
+            const p = this.actressProfile;
+            return [
+                ...(p.tags || []),
+                ...(p.hometown ? [p.hometown] : []),
+                ...(p.nickname ? [p.nickname] : []),
+                ...(p.agency ? [p.agency] : []),
+                ...(p.hobby ? [p.hobby] : []),
+                ...(p.debut_work ? [p.debut_work] : []),
+            ];
+        },
+
+        _visibleAliases() {
+            const aliases = this.actressProfile?.aliases || [];
+            if (this._actressChipsExpanded.aliases) return aliases;
+            return aliases.slice(0, this._chipsLimit());
+        },
+
+        _visibleInfoChips() {
+            const chips = this._allInfoChips();
+            if (this._actressChipsExpanded.info) return chips;
+            return chips.slice(0, this._chipsLimit());
         },
 
         // ===== T5: Actress Favorite =====
