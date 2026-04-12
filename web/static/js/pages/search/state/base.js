@@ -510,6 +510,17 @@ window.SearchStateMixin_Base = function () {
             return url;
         },
 
+        // ===== T10: Actress Source URL =====
+
+        _actressSourceUrl() {
+            const src = this.actressProfile?.primary_text_source;
+            const name = this.actressProfile?.name;
+            if (!src || !name) return null;
+            if (src === 'wiki') return `https://ja.wikipedia.org/wiki/${encodeURIComponent(name)}`;
+            if (src === 'minnano') return `https://www.minnano-av.com/search_result.php?search_scope=actress&search_word=${encodeURIComponent(name)}`;
+            return null;
+        },
+
         async addFavoriteActress() {
             if (!this.actressProfile || this.actressProfile.is_favorite || this._actressFavoriteLoading) return;
 

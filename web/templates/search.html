@@ -133,6 +133,12 @@
                           :title="t('search.actress.favorited')">
                         <i class="bi bi-heart-fill"></i>
                     </span>
+                    <button class="lb-action-btn"
+                            x-show="!actressProfile?.is_favorite && _actressSourceUrl()"
+                            @click.stop="openSourceUrl(_actressSourceUrl())"
+                            data-tooltip="{{ t('search.action.open_source_url') }}" aria-label="{{ t('search.action.open_source_url') }}">
+                        <i class="bi bi-box-arrow-up-right"></i>
+                    </button>
                 </div>
 
                 <!-- Row 2: 核心 metadata（· 串接，空欄位跳過） -->
@@ -668,6 +674,12 @@
                         <div class="footer-default" x-show="actressProfile">
                             <span class="av-num" x-text="actressProfile?.name || '-'">-</span>
                             <span class="av-actress" x-text="actressProfile?.age ? actressProfile.age + t('search.unit.age') : ''"></span>
+                            <button class="info-icon-btn"
+                                    x-show="!actressProfile?.is_favorite && _actressSourceUrl()"
+                                    @click.stop="openSourceUrl(_actressSourceUrl())"
+                                    :title="t('search.action.open_source_url')">
+                                <i class="bi bi-box-arrow-up-right"></i>
+                            </button>
                         </div>
                         <!-- T5: footer-hover — height · cup · bust-waist-hip -->
                         <div class="footer-hover" x-show="actressProfile">
