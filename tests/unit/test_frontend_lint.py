@@ -1918,6 +1918,56 @@ class TestShowcaseActressCRUD:
             "showcase.html 缺少 removeActress()（Row 6 移除最愛按鈕 @click handler）"
 
 
+class TestShowcaseActressCardFooter:
+    """Phase 44c-T2: Actress Card Footer 三欄 + hover 守衛"""
+
+    def _html(self):
+        return SHOWCASE_HTML.read_text(encoding="utf-8")
+
+    def _js(self):
+        return SHOWCASE_CORE_JS.read_text(encoding="utf-8")
+
+    def test_actress_footer_default_three_cols(self):
+        """showcase.html actress card footer 含 footer-default 三欄結構"""
+        html = self._html()
+        assert "footer-default" in html and "_actressCardMiddle" in html, \
+            "showcase.html actress-card-footer 缺少 footer-default 三欄結構或 _actressCardMiddle 綁定"
+
+    def test_actress_footer_hover(self):
+        """showcase.html actress card footer 含 footer-hover + _actressHoverInfo 綁定"""
+        html = self._html()
+        assert "footer-hover" in html and "_actressHoverInfo" in html, \
+            "showcase.html actress-card-footer 缺少 footer-hover 層或 _actressHoverInfo 綁定"
+
+    def test_actress_card_middle_method(self):
+        """core.js 含 _actressCardMiddle() 方法"""
+        js = self._js()
+        assert "_actressCardMiddle" in js, \
+            "showcase/core.js 缺少 _actressCardMiddle() 方法（footer 動態排序指標）"
+
+    def test_actress_hover_info_method(self):
+        """core.js 含 _actressHoverInfo() 方法"""
+        js = self._js()
+        assert "_actressHoverInfo" in js, \
+            "showcase/core.js 缺少 _actressHoverInfo() 方法（footer hover 身體數據）"
+
+    def test_actress_hover_info_excludes_age(self):
+        """_actressHoverInfo 不包含 age（CD-7：age 在右欄不重複）"""
+        js = self._js()
+        import re
+        m = re.search(r'_actressHoverInfo\(actress\)\s*\{(.+?)^\s{8}\},', js, re.DOTALL | re.MULTILINE)
+        if m:
+            body = m.group(1)
+            assert "actress.age" not in body, \
+                "_actressHoverInfo 方法體不應包含 age（CD-7）"
+
+    def test_actress_card_middle_uses_actress_sort(self):
+        """_actressCardMiddle 讀取 actressSort 狀態"""
+        js = self._js()
+        assert "actressSort" in js, \
+            "showcase/core.js 缺少 actressSort 狀態（_actressCardMiddle 依賴）"
+
+
 class TestShowcaseActressI18n:
     """Phase 44a-T7: 確保 4 個 locale 都含 showcase 女優相關新 keys"""
 

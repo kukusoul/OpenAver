@@ -342,11 +342,10 @@
 }
 
 .actress-card-footer {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0.5rem 0.75rem;
-    gap: 0.5rem;
+    position: relative;
+    overflow: hidden;
+    height: 2.5rem;
+    padding: 0 0.75rem;
 }
 
 .actress-name {
@@ -366,6 +365,40 @@
     font-family: var(--font-mono);
     flex-shrink: 0;
     white-space: nowrap;
+}
+
+/* Actress Card Footer — three-column layout + hover swap (44c-T2, CD-3) */
+.actress-card-footer .footer-default {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 100%;
+    gap: 0.5rem;
+}
+
+.actress-card-footer .footer-default .av-num {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+    min-width: 0;
+}
+
+.actress-sort-indicator {
+    font-size: 0.75rem;
+    color: var(--accent);
+    font-family: var(--font-mono);
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+.actress-card:hover .footer-hover {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.actress-card:hover .footer-default {
+    opacity: 0;
 }
 
 /* ==================== Card Footer Switch (M3e) ==================== */

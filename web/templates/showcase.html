@@ -466,8 +466,14 @@
                         </div>
                         <!-- Footer -->
                         <div class="actress-card-footer">
-                            <span class="actress-name" x-text="actress.name"></span>
-                            <span class="actress-count-badge" x-text="actress.video_count + t('showcase.unit.videos_count')"></span>
+                            <div class="footer-default">
+                                <span class="av-num" x-text="actress.name"></span>
+                                <span class="actress-sort-indicator" x-text="_actressCardMiddle(actress)"></span>
+                                <span class="av-actress" x-text="actress.age ? actress.age + t('search.unit.age') : ''"></span>
+                            </div>
+                            <div class="footer-hover">
+                                <span class="hover-title" x-text="_actressHoverInfo(actress)"></span>
+                            </div>
                         </div>
                     </div>
                 </template>

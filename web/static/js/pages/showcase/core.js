@@ -602,6 +602,35 @@ function showcaseState() {
             return parts.join(' · ');
         },
 
+        // --- 44c T2: Actress card footer helpers ---
+
+        _actressCardMiddle(actress) {
+            if (!actress) return '';
+            var sort = this.actressSort;
+            if (sort === 'video_count') {
+                return (actress.video_count || 0) + window.t('showcase.unit.films');
+            }
+            if (sort === 'cup') {
+                return actress.cup ? actress.cup + window.t('search.unit.cup') : '';
+            }
+            if (sort === 'height') {
+                return actress.height || '';
+            }
+            // 'age'、'name'、'added_at' 與左右欄重複或過長，不顯示
+            return '';
+        },
+
+        _actressHoverInfo(actress) {
+            if (!actress) return '';
+            var parts = [];
+            if (actress.height) parts.push(actress.height);
+            if (actress.cup) parts.push(actress.cup + window.t('search.unit.cup'));
+            if (actress.bust && actress.waist && actress.hip) {
+                parts.push(actress.bust + '-' + actress.waist + '-' + actress.hip);
+            }
+            return parts.join(' \u00b7 ');
+        },
+
         _allInfoChips() {
             var a = this.currentLightboxActress; if (!a) return [];
             return [].concat(a.tags || [], [a.hometown, a.nickname, a.agency, a.hobby, a.debut_work]).filter(Boolean);
