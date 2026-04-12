@@ -352,11 +352,18 @@ def _fetch_actress_profile_with_db(top_actor: str, makers: list) -> Optional[dic
     profile = result.data  # ProfileResult.data
     if profile:
         profile["is_favorite"] = False
-        # Flatten aliases: minnano 回傳 dict list，前端需純字串 list
+        # 補齊前端需要的頂層欄位（orchestrator legacy flat shape 缺 aliases/tags 等）
         from web.routers.actress import _flatten_aliases
-        text = profile.get("text")
-        if text:
-            text["aliases"] = _flatten_aliases(text.get("aliases"))
+        text = profile.get("text") or {}
+        profile["aliases"] = _flatten_aliases(text.get("aliases"))
+        profile["tags"] = text.get("tags") or []
+        profile["agency"] = text.get("agency")
+        profile["nickname"] = text.get("nickname")
+        profile["debut_work"] = text.get("debut_work")
+        profile["blog_url"] = text.get("blog_url")
+        profile["official_url"] = text.get("official_url")
+        profile["primary_text_source"] = profile.get("primary_text_source")
+        profile["photo_source"] = profile.get("photo_source")
     return profile
 
 

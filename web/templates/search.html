@@ -46,10 +46,19 @@
                 </div>
                 <!-- cover-actions: 封面失敗時按鈕仍可用（返回詳情、開啟資料夾等不依賴圖片） -->
                 <div class="cover-actions">
+                    <!-- 返回詳情：影片模式才顯示 -->
                     <button class="lb-action-btn"
-                            @click="actressLightboxMode() ? closeLightbox() : switchToDetail(lightboxIndex)"
+                            x-show="!actressLightboxMode()"
+                            @click="switchToDetail(lightboxIndex)"
                             data-tooltip="{{ t('search.action.back_to_detail') }}" aria-label="{{ t('search.action.back_to_detail') }}">
                         <i class="bi bi-arrow-return-left"></i>
+                    </button>
+                    <!-- Actress source link：取代返回詳情的位置，actress 模式才顯示 -->
+                    <button class="lb-action-btn"
+                            x-show="actressLightboxMode() && !actressProfile?.is_favorite && _actressSourceUrl()"
+                            @click.stop="openSourceUrl(_actressSourceUrl())"
+                            data-tooltip="{{ t('search.action.open_source_url') }}" aria-label="{{ t('search.action.open_source_url') }}">
+                        <i class="bi bi-box-arrow-up-right"></i>
                     </button>
                     <button class="lb-action-btn"
                             @click="openLocal(currentLightboxVideo()?._localStatus?.paths?.[0] || '')"
@@ -133,12 +142,6 @@
                           :title="t('search.actress.favorited')">
                         <i class="bi bi-heart-fill"></i>
                     </span>
-                    <button class="lb-action-btn"
-                            x-show="!actressProfile?.is_favorite && _actressSourceUrl()"
-                            @click.stop="openSourceUrl(_actressSourceUrl())"
-                            data-tooltip="{{ t('search.action.open_source_url') }}" aria-label="{{ t('search.action.open_source_url') }}">
-                        <i class="bi bi-box-arrow-up-right"></i>
-                    </button>
                 </div>
 
                 <!-- Row 2: 核心 metadata（· 串接，空欄位跳過） -->
@@ -674,12 +677,6 @@
                         <div class="footer-default" x-show="actressProfile">
                             <span class="av-num" x-text="actressProfile?.name || '-'">-</span>
                             <span class="av-actress" x-text="actressProfile?.age ? actressProfile.age + t('search.unit.age') : ''"></span>
-                            <button class="info-icon-btn"
-                                    x-show="!actressProfile?.is_favorite && _actressSourceUrl()"
-                                    @click.stop="openSourceUrl(_actressSourceUrl())"
-                                    :title="t('search.action.open_source_url')">
-                                <i class="bi bi-box-arrow-up-right"></i>
-                            </button>
                         </div>
                         <!-- T5: footer-hover — height · cup · bust-waist-hip -->
                         <div class="footer-hover" x-show="actressProfile">
