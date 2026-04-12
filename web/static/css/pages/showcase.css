@@ -1604,4 +1604,58 @@
     cursor: pointer; font-size: 0.85em; padding: 2px 8px;
     border-radius: 12px; border: 1px solid currentColor; opacity: 0.6;
 }
+
+/* ==================== Mode Toggle Capsule (44c-T4) ==================== */
+
+.spotlight-search .mode-toggle {
+    position: absolute;
+    left: 0.5rem;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 999px;
+    padding: 2px;
+}
+
+.mode-toggle-btn {
+    width: 2rem;
+    height: 2rem;
+    border-radius: 50%;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9rem;
+    transition: all 0.15s ease;
+}
+
+.mode-toggle-btn.active {
+    background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    color: var(--text-primary);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+}
+
+.mode-toggle-btn:not(.active):hover {
+    color: var(--text-secondary);
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.mode-toggle-btn:disabled {
+    opacity: 0.3;
+    pointer-events: none;
+}
+
+/* Override theme.css default (3.5rem) to avoid toggle overlap (44c-T4) */
+.spotlight-search input {
+    padding-left: 5.5rem;
+}
 .lightbox-metadata .lb-chips-more:hover { opacity: 1; }

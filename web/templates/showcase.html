@@ -45,16 +45,24 @@
         <!-- Toolbar -->
         <div class="showcase-toolbar">
             <div class="toolbar-section toolbar-search">
-                <!-- 模式切換 toggle (T3) -->
-                <button class="btn btn-ghost btn-sm"
-                        @click="toggleActressMode()"
-                        :disabled="(!showFavoriteActresses && search !== '') || (showFavoriteActresses && actressSearch !== '')"
-                        :class="{ 'opacity-40 pointer-events-none': (!showFavoriteActresses && search !== '') || (showFavoriteActresses && actressSearch !== '') }"
-                        :title="showFavoriteActresses ? t('showcase.mode.video') : t('showcase.mode.actress')">
-                    <i class="bi" :class="showFavoriteActresses ? 'bi-person' : 'bi-film'"></i>
-                </button>
                 <div class="spotlight-search">
-                    <i class="bi bi-search search-icon-left"></i>
+                    <!-- 模式切換 segmented toggle (44c-T4) -->
+                    <div class="mode-toggle">
+                        <button class="mode-toggle-btn"
+                                :class="{ 'active': !showFavoriteActresses }"
+                                @click="showFavoriteActresses && toggleActressMode()"
+                                :disabled="showFavoriteActresses && actressSearch !== ''"
+                                :title="t('showcase.mode.video')">
+                            <i class="bi bi-film"></i>
+                        </button>
+                        <button class="mode-toggle-btn"
+                                :class="{ 'active': showFavoriteActresses }"
+                                @click="!showFavoriteActresses && toggleActressMode()"
+                                :disabled="!showFavoriteActresses && search !== ''"
+                                :title="t('showcase.mode.actress')">
+                            <i class="bi bi-person"></i>
+                        </button>
+                    </div>
                     <!-- 影片搜尋框 (CD-11) -->
                     <input type="text"
                            x-show="!showFavoriteActresses"
