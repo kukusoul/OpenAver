@@ -1699,3 +1699,50 @@
     --spotlight-left-slot: 5.5rem;
 }
 .lightbox-metadata .lb-chips-more:hover { opacity: 1; }
+
+/* ==================== Phase 44b T3: Hero Card ==================== */
+
+/* Grid Mode Hero Card — cursor pointer */
+.hero-card {
+    cursor: pointer;
+}
+
+/* Hero Card 圖片：contain 完整顯示（不裁切女優照片） */
+:is(#ds-gallery-components, .ds-gallery-composition) .hero-card .av-card-preview-img {
+    background: var(--bg-card, rgba(0, 0, 0, 0.05));
+}
+
+:is(#ds-gallery-components, .ds-gallery-composition) .hero-card .av-card-preview-img img {
+    object-fit: contain;
+    transform-origin: center center;
+}
+
+/* Hero Card 愛心 overlay 常駐（已收藏時不需 hover） */
+.hero-card .av-card-preview-overlay.always-visible {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* 已收藏愛心按鈕 — 紅色，不可點擊 */
+.hero-card .btn-glass-circle.is-favorite {
+    color: var(--color-favorite);
+    cursor: default;
+}
+
+/* No-cover fallback placeholder（Hero Card 圖片載入失敗） */
+.av-card-no-cover {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    color: var(--text-muted);
+    font-size: 0.7rem;
+    gap: 0.25rem;
+}
+
+.av-card-no-cover i {
+    font-size: 1.5rem;
+    opacity: 0.4;
+}

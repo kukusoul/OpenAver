@@ -138,6 +138,7 @@ function showcaseState() {
         _matchedActress: null,
         _preciseMatchSource: null,
         _favoriteHeartLoading: false,
+        _heroCardImageError: false,
 
         // F1: helper — 更新 lightboxIndex + currentLightboxVideo 一致性
         _setLightboxIndex(idx) {
@@ -164,6 +165,7 @@ function showcaseState() {
             this._matchedActress = null;
             this._preciseMatchSource = null;
             this._favoriteHeartLoading = false;
+            this._heroCardImageError = false;
         },
 
         async _checkPreciseActressMatch(term, source) {
@@ -172,6 +174,7 @@ function showcaseState() {
                 await this.loadActresses();
             }
             if (this.search.trim() !== capturedTerm) return;
+            this._heroCardImageError = false;
             var found = _actresses.find(function(a) { return a.name === capturedTerm; });
             if (found) {
                 this._isPreciseActressMatch = true;
@@ -1255,6 +1258,10 @@ function showcaseState() {
                     self._lightboxAnimating = false;
                 }
             });
+        },
+
+        openHeroCardLightbox() {
+            // T4: will implement -1 sentinel lightbox for hero card
         },
 
         closeLightbox() {
