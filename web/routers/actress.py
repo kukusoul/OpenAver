@@ -1,0 +1,271 @@
+"""
+女優 API Router — /api/actresses
+
+端點：
+    POST   /api/actresses/favorite          收藏女優
+    GET    /api/actresses/photo/{name}      取得本地照片（binary）
+    GET    /api/actresses/{name}            查詢已收藏女優
+    DELETE /api/actresses/{name}            刪除已收藏女優
+
+注意：photo/{name} 必須定義在 {name} 之前，否則 FastAPI 會將 "photo" 解析為 {name}。
+"""
+
+import re
+from typing import Optional, List
+from urllib.parse import quote
+
+from fastapi import APIRouter
+from fastapi.responses import JSONResponse, Response
+from pydantic import BaseModel
+
+from core.database import ActressRepository, Actress, init_db
+from core.actress_photo import download_actress_photo, get_local_photo_path, delete_local_photo
+from core.scrapers.actress.orchestrator import (
+    get_cached_profile,
+    get_actress_profile,
+    _compute_age_from_birth as _compute_age,
+)
+from core.logger import get_logger
+
+logger = get_logger(__name__)
+
+router = APIRouter(prefix="/api/actresses", tags=["actresses"])
+
+
+# ---------------------------------------------------------------------------
+# Request model
+# ---------------------------------------------------------------------------
+
+class FavoriteRequest(BaseModel):
+    name: str
+    makers: Optional[List[str]] = None
+
+
+# ---------------------------------------------------------------------------
+# Helper functions
+# ---------------------------------------------------------------------------
+
+def _safe_int(v) -> Optional[int]:
+    """帶單位字串（如 '80cm'）或 None → int 或 None"""
+    if v is None:
+        return None
+    try:
+        stripped = re.sub(r"[^\d]", "", str(v))
+        return int(stripped) if stripped else None
+    except (ValueError, TypeError):
+        return None
+
+
+def _actress_to_response(actress: Actress) -> dict:
+    """將 Actress dataclass 轉為 API response dict"""
+    local_path = get_local_photo_path(actress.name)
+    if local_path is not None:
+        photo_url = f"/api/actresses/photo/{quote(actress.name)}"
+    else:
+        photo_url = None
+
+    return {
+        "name": actress.name,
+        "name_en": actress.name_en,
+        "birth": actress.birth,
+        "age": _compute_age(actress.birth),
+        "height": actress.height,
+        "cup": actress.cup,
+        "bust": actress.bust,
+        "waist": actress.waist,
+        "hip": actress.hip,
+        "hometown": actress.hometown,
+        "hobby": actress.hobby,
+        "aliases": actress.aliases or [],
+        "agency": actress.agency,
+        "debut_work": actress.debut_work,
+        "tags": actress.tags or [],
+        "nickname": actress.nickname,
+        "blog_url": actress.blog_url,
+        "official_url": actress.official_url,
+        "photo_url": photo_url,
+        "photo_source": actress.photo_source,
+        "primary_text_source": actress.primary_text_source,
+    }
+
+
+# ---------------------------------------------------------------------------
+# 端點一：POST /api/actresses/favorite — 收藏女優
+# ---------------------------------------------------------------------------
+
+@router.post("/favorite")
+def add_favorite(req: FavoriteRequest):
+    """
+    收藏女優。
+
+    流程：
+    1. 檢查是否已收藏 → 409
+    2. 嘗試從 cache 取得 profile（不打網路）
+    3. cache miss → 呼叫 orchestrator 重新抓取
+    4. 組裝 Actress → DB save → 下載照片
+    5. 回傳 200 with actress data
+    """
+    name = req.name.strip()
+    if not name:
+        return JSONResponse(
+            status_code=422,
+            content={"error": "invalid_name", "message": "name 不可為空"}
+        )
+
+    init_db()
+    repo = ActressRepository()
+
+    # 1. 已收藏檢查 → 409
+    if repo.exists(name):
+        existing = repo.get_by_name(name)
+        return JSONResponse(
+            status_code=409,
+            content={
+                "error": "already_exists",
+                "actress": _actress_to_response(existing),
+            }
+        )
+
+    # 2. cache hit — 不打網路
+    profile = get_cached_profile(name)
+
+    # 3. cache miss → 重新抓取
+    if profile is None:
+        result = get_actress_profile(name, makers=req.makers)
+        if result.data is None:
+            if result.timed_out:
+                return JSONResponse(
+                    status_code=504,
+                    content={"error": "timeout", "message": "Scraper 超時"}
+                )
+            else:
+                return JSONResponse(
+                    status_code=404,
+                    content={"error": "not_found", "message": "查無此女優"}
+                )
+        profile = result.data
+
+    # 4. 組裝 Actress dataclass
+    text = profile.get("text") or {}
+
+    actress = Actress(
+        name=profile.get("name") or name,
+        name_en=profile.get("name_en"),
+        birth=text.get("birth"),
+        height=text.get("height"),
+        cup=text.get("cup"),
+        bust=_safe_int(text.get("bust")),
+        waist=_safe_int(text.get("waist")),
+        hip=_safe_int(text.get("hip")),
+        hometown=text.get("hometown"),
+        hobby=text.get("hobby"),
+        aliases=text.get("aliases") or [],
+        agency=text.get("agency"),
+        debut_work=text.get("debut_work"),
+        tags=text.get("tags") or [],
+        nickname=text.get("nickname"),
+        blog_url=text.get("blog_url"),
+        official_url=text.get("official_url"),
+        photo_source=profile.get("photo_source"),
+        primary_text_source=profile.get("primary_text_source"),
+    )
+
+    # DB save（ON CONFLICT DO UPDATE）
+    repo.save(actress)
+    logger.info("[actress] 收藏女優：%s", actress.name)
+
+    # 5. 下載照片（photo_url 可能為 None，函數內部已有 guard）
+    photo_downloaded = download_actress_photo(
+        name, profile.get("photo_url"), profile.get("photo_source")
+    )
+
+    return JSONResponse(
+        status_code=200,
+        content={
+            "success": True,
+            "actress": _actress_to_response(actress),
+            "photo_downloaded": photo_downloaded,
+        }
+    )
+
+
+# ---------------------------------------------------------------------------
+# 端點四：GET /api/actresses/photo/{name} — 本地照片 binary response
+# NOTE：必須定義在 GET /{name} 之前！
+# ---------------------------------------------------------------------------
+
+@router.get("/photo/{name}")
+def get_actress_photo(name: str):
+    """
+    取得女優本地照片（binary image response）。
+    FastAPI 自動 decode URL-encoded path parameter。
+    """
+    path = get_local_photo_path(name)
+    if path is None:
+        return Response(b"", status_code=404)
+
+    _MIME_MAP = {
+        ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+        ".png": "image/png", ".webp": "image/webp", ".gif": "image/gif",
+    }
+    media_type = _MIME_MAP.get(path.suffix.lower(), "image/jpeg")
+
+    return Response(
+        content=path.read_bytes(),
+        media_type=media_type,
+    )
+
+
+# ---------------------------------------------------------------------------
+# 端點二：GET /api/actresses/{name} — 查詢已收藏女優
+# ---------------------------------------------------------------------------
+
+@router.get("/{name}")
+def get_actress(name: str):
+    """
+    查詢已收藏的女優資料。
+    """
+    init_db()
+    repo = ActressRepository()
+    actress = repo.get_by_name(name)
+    if actress is None:
+        return JSONResponse(
+            status_code=404,
+            content={"error": "not_found"}
+        )
+
+    return JSONResponse(
+        status_code=200,
+        content={
+            "actress": _actress_to_response(actress),
+            "is_favorite": True,
+        }
+    )
+
+
+# ---------------------------------------------------------------------------
+# 端點三：DELETE /api/actresses/{name} — 刪除已收藏女優
+# ---------------------------------------------------------------------------
+
+@router.delete("/{name}")
+def delete_actress(name: str):
+    """
+    刪除已收藏的女優（DB + 本地照片）。
+    """
+    init_db()
+    repo = ActressRepository()
+
+    if not repo.exists(name):
+        return JSONResponse(
+            status_code=404,
+            content={"error": "not_found"}
+        )
+
+    repo.delete_by_name(name)
+    delete_local_photo(name)  # idempotent，不需檢查回傳值
+    logger.info("[actress] 刪除女優：%s", name)
+
+    return JSONResponse(
+        status_code=200,
+        content={"success": True}
+    )

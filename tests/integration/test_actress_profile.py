@@ -187,16 +187,17 @@ def test_get_actress_profile_both_sources():
 
         result = get_actress_profile("桜空もも")
 
-        assert result is not None
+        assert result.data is not None
         # Graphis 照片優先（gfriends 回傳 None）
-        assert result['img'] == 'https://graphis.ne.jp/prof.jpg'
-        assert result['backdrop'] == 'https://graphis.ne.jp/model.jpg'
+        assert result.data['img'] == 'https://graphis.ne.jp/prof.jpg'
+        assert result.data['backdrop'] == 'https://graphis.ne.jp/model.jpg'
 
         # graphis text wins cascade (minnano/wiki mocked None by T4.3)
-        assert result['birth'] == '1997-12-03'   # from graphis (via text cascade)
-        assert result['age'] == 28                # TD-1: from birth 1997-12-03 + frozen 2026-04-11
-        assert result['height'] == '160cm'
-        assert result['cup'] == 'G'
+        assert result.data['birth'] == '1997-12-03'   # from graphis (via text cascade)
+        assert result.data['age'] == 28                # TD-1: from birth 1997-12-03 + frozen 2026-04-11
+        assert result.data['height'] == '160cm'
+        assert result.data['cup'] == 'G'
+        assert result.timed_out is False
 
 
 
@@ -219,10 +220,11 @@ def test_get_actress_profile_graphis_only():
 
         result = get_actress_profile("桜空もも")
 
-        assert result is not None
-        assert result['name'] == '桜空もも'
-        assert result['img'] == 'https://graphis.ne.jp/prof.jpg'
-        assert result['backdrop'] == 'https://graphis.ne.jp/model.jpg'
+        assert result.data is not None
+        assert result.data['name'] == '桜空もも'
+        assert result.data['img'] == 'https://graphis.ne.jp/prof.jpg'
+        assert result.data['backdrop'] == 'https://graphis.ne.jp/model.jpg'
+        assert result.timed_out is False
 
 
 def test_get_actress_profile_both_fail():
@@ -235,7 +237,8 @@ def test_get_actress_profile_both_fail():
          patch('core.scrapers.actress.gfriends.lookup_gfriends', return_value=None):
 
         result = get_actress_profile("不存在的女優")
-        assert result is None
+        assert result.data is None
+        assert result.timed_out is False
 
 
 # ============================================================================
@@ -260,13 +263,13 @@ def test_get_actress_profile_cache_hit():
 
         # 第一次呼叫
         result1 = get_actress_profile("桜空もも")
-        assert result1 is not None
+        assert result1.data is not None
         assert graphis_mock.call_count == 1
 
         # 第二次呼叫（應從 cache 取得）
         result2 = get_actress_profile("桜空もも")
-        assert result2 is not None
-        assert result1 == result2
+        assert result2.data is not None
+        assert result1.data == result2.data
         # Mock 不應被再次呼叫
         assert graphis_mock.call_count == 1
 
@@ -296,7 +299,7 @@ def test_get_actress_profile_cache_expired():
 
         # 第一次呼叫
         result1 = get_actress_profile("桜空もも")
-        assert result1 is not None
+        assert result1.data is not None
         assert graphis_mock.call_count == 1
 
         # 模擬時間過期（超過 TTL）
@@ -304,7 +307,7 @@ def test_get_actress_profile_cache_expired():
 
         # 第二次呼叫（應重新抓取）
         result2 = get_actress_profile("桜空もも")
-        assert result2 is not None
+        assert result2.data is not None
         assert graphis_mock.call_count == 2  # 應被再次呼叫
 
 
@@ -326,13 +329,13 @@ def test_get_actress_profile_cache_name_normalization():
 
         # 第一次：正常名稱
         result1 = get_actress_profile("桜空もも")
-        assert result1 is not None
+        assert result1.data is not None
         assert graphis_mock.call_count == 1
 
         # 第二次：帶前後空白（應命中 cache）
         result2 = get_actress_profile("  桜空もも  ")
-        assert result2 is not None
-        assert result1 == result2
+        assert result2.data is not None
+        assert result1.data == result2.data
         assert graphis_mock.call_count == 1  # 不應再次呼叫
 
 
@@ -865,11 +868,12 @@ def test_get_actress_profile_gfriends_wins():
 
         result = get_actress_profile("桜空もも", makers=['S1'])
 
-        assert result is not None
+        assert result.data is not None
         # gfriends wins photo cascade (graphis has no prof_url, javbus is ignored)
-        assert result['img'] == gfriends_url
+        assert result.data['img'] == gfriends_url
         # Backdrop still comes from graphis
-        assert result['backdrop'] == 'https://graphis.ne.jp/model.jpg'
+        assert result.data['backdrop'] == 'https://graphis.ne.jp/model.jpg'
+        assert result.timed_out is False
 
 
 def test_get_actress_profile_graphis_text_wins():
@@ -888,11 +892,12 @@ def test_get_actress_profile_graphis_text_wins():
 
         result = get_actress_profile("桜空もも")
 
-        assert result is not None
+        assert result.data is not None
         # Graphis text wins
-        assert result['age'] == 28
-        assert result['height'] == '160cm'
-        assert result['cup'] == 'G'
+        assert result.data['age'] == 28
+        assert result.data['height'] == '160cm'
+        assert result.data['cup'] == 'G'
+        assert result.timed_out is False
 
 
 def test_get_actress_profile_name_en():
@@ -906,8 +911,9 @@ def test_get_actress_profile_name_en():
 
         result = get_actress_profile("桜空もも")
 
-        assert result is not None
-        assert result.get('name_en') == 'Momo Sakurazora'
+        assert result.data is not None
+        assert result.data.get('name_en') == 'Momo Sakurazora'
+        assert result.timed_out is False
 
 
 def test_get_actress_profile_birth_from_graphis():
@@ -925,11 +931,12 @@ def test_get_actress_profile_birth_from_graphis():
 
         result = get_actress_profile("桜空もも")
 
-        assert result is not None
+        assert result.data is not None
         # birth comes from graphis cascade winner (javbus ignored)
-        assert result.get('birth') == '1997-12-03'
+        assert result.data.get('birth') == '1997-12-03'
         # hometown is None: graphis has no hometown, javbus is ignored
-        assert result.get('hometown') is None
+        assert result.data.get('hometown') is None
+        assert result.timed_out is False
 
 
 def test_get_actress_profile_gfriends_only():
@@ -945,10 +952,11 @@ def test_get_actress_profile_gfriends_only():
 
         result = get_actress_profile("桜空もも", makers=['S1'])
 
-        assert result is not None
+        assert result.data is not None
         # Bug 2 fix: name falls back to queried name arg when all text sources are None
-        assert result['name'] == '桜空もも'
-        assert result['img'] == gfriends_url
+        assert result.data['name'] == '桜空もも'
+        assert result.data['img'] == gfriends_url
+        assert result.timed_out is False
 
 
 # ============================================================================

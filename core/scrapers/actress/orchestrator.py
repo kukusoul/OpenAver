@@ -9,10 +9,13 @@ Routes:
     TD-1     : current_age computed from text.birth, never read from source
 """
 
+from collections import namedtuple
 from datetime import datetime
 from typing import Optional, Dict
 
 from core.logger import get_logger
+
+ProfileResult = namedtuple("ProfileResult", ["data", "timed_out"])
 
 logger = get_logger(__name__)
 
@@ -74,21 +77,34 @@ def _compute_age_from_birth(birth: Optional[str]) -> Optional[int]:
     return age
 
 
-def get_actress_profile(name: str, makers: list = None) -> Optional[Dict]:
+def get_cached_profile(name: str) -> Optional[dict]:
+    """公開 cache 讀取 — 回傳 cached profile dict 或 None（不觸發 scrape）"""
+    import time
+    key = _normalize_name(name)
+    entry = _cache.get(key)
+    if entry and (time.time() - entry["timestamp"]) < _CACHE_TTL:
+        return entry["data"]
+    return None
+
+
+def get_actress_profile(name: str, makers: list = None) -> ProfileResult:
     """
     取得女優完整資料（minnano + wiki + graphis + gfriends 四來源並行）
 
     Phase 42b T3: 4-route parallel with C1 cascade, C4 mixed return shape, TD-1 age fix.
+    Phase 43 T3: 回傳 ProfileResult namedtuple（data, timed_out）。
 
     Args:
         name: 女優名稱（日文）
         makers: 片商名稱列表（從搜尋結果統計，用於 gfriends 查表）
 
     Returns:
-        C4 mixed shape dict (nested new fields + legacy flat shortcuts), or None if all sources miss.
+        ProfileResult(data=dict, timed_out=False) 若有資料；
+        ProfileResult(data=None, timed_out=True) 若全部 timeout；
+        ProfileResult(data=None, timed_out=False) 若全部 miss（非 timeout）。
     """
     import time
-    from concurrent.futures import ThreadPoolExecutor
+    from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
     from core.scrapers.actress.minnano_av import scrape_minnano_av
     from core.scrapers.actress.wiki_ja import scrape_wiki_ja
     from core.scrapers.actress.graphis import scrape_graphis_photo
@@ -99,7 +115,7 @@ def get_actress_profile(name: str, makers: list = None) -> Optional[Dict]:
     if cache_key in _cache:
         cached = _cache[cache_key]
         if time.time() - cached['timestamp'] < _CACHE_TTL:
-            return cached['data']
+            return ProfileResult(data=cached['data'], timed_out=False)
         else:
             del _cache[cache_key]  # 過期清理
 
@@ -111,27 +127,40 @@ def get_actress_profile(name: str, makers: list = None) -> Optional[Dict]:
     gfriends_future = executor.submit(lookup_gfriends, name, makers)
 
     start = time.time()
+    any_timed_out = False
 
     try:
         minnano_result = minnano_future.result(timeout=5)
+    except FuturesTimeoutError:
+        minnano_result = None
+        any_timed_out = True
     except Exception:
         minnano_result = None
 
     remaining = max(0, 5 - (time.time() - start))
     try:
         wiki_result = wiki_future.result(timeout=remaining)
+    except FuturesTimeoutError:
+        wiki_result = None
+        any_timed_out = True
     except Exception:
         wiki_result = None
 
     remaining = max(0, 5 - (time.time() - start))
     try:
         graphis_result = graphis_future.result(timeout=remaining)
+    except FuturesTimeoutError:
+        graphis_result = None
+        any_timed_out = True
     except Exception:
         graphis_result = None
 
     remaining = max(0, 5 - (time.time() - start))
     try:
         gfriends_url = gfriends_future.result(timeout=remaining)
+    except FuturesTimeoutError:
+        gfriends_url = None
+        any_timed_out = True
     except Exception:
         gfriends_url = None
 
@@ -139,7 +168,7 @@ def get_actress_profile(name: str, makers: list = None) -> Optional[Dict]:
 
     # Edge case: all routes returned nothing
     if not any([minnano_result, wiki_result, graphis_result, gfriends_url]):
-        return None
+        return ProfileResult(data=None, timed_out=any_timed_out)
 
     # C1 — text primary source cascade: Minnano → Wikipedia → Graphis → None
     # Each source must have meaningful text fields to be eligible (not just name_ja shell)
@@ -215,4 +244,4 @@ def get_actress_profile(name: str, makers: list = None) -> Optional[Dict]:
         'timestamp': time.time()
     }
 
-    return result
+    return ProfileResult(data=result, timed_out=False)

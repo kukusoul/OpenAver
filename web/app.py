@@ -50,6 +50,7 @@ from web.routers import showcase as showcase_router
 from web.routers import motion_lab as motion_lab_router
 from web.routers import capabilities as capabilities_router
 from web.routers import collection as collection_router
+from web.routers import actress as actress_router
 app.include_router(search_router.router)
 app.include_router(config_router.router)
 app.include_router(scraper_router.router)
@@ -63,6 +64,7 @@ app.include_router(motion_lab_router.router)
 app.include_router(capabilities_router.router)
 app.include_router(collection_router.router)
 app.include_router(collection_router.user_tags_router)
+app.include_router(actress_router.router)
 
 
 # ============ 輔助函數 ============
