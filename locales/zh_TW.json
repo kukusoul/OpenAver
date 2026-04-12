@@ -459,13 +459,15 @@
       "video": "影片模式"
     },
     "search": {
-      "actress": "搜尋女優名稱..."
+      "actress": "搜尋女優名稱...",
+      "video": "搜尋番號、女優、標題..."
     },
     "unit": {
       "videos": "部",
       "minutes": "分鐘",
       "minutes_abbr": "分",
-      "videos_count": " 部"
+      "videos_count": " 部",
+      "films": "片"
     },
     "per_page": {
       "all": "全部"

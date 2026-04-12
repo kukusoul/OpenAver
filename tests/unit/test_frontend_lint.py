@@ -1916,3 +1916,56 @@ class TestShowcaseActressCRUD:
         html = self._html()
         assert "removeActress()" in html, \
             "showcase.html 缺少 removeActress()（Row 6 移除最愛按鈕 @click handler）"
+
+
+class TestShowcaseActressI18n:
+    """Phase 44a-T7: 確保 4 個 locale 都含 showcase 女優相關新 keys"""
+
+    LOCALES_ROOT = Path(__file__).parent.parent.parent / "locales"
+
+    def _locale(self, name):
+        return json.loads((self.LOCALES_ROOT / name).read_text(encoding="utf-8"))
+
+    def _get_nested(self, d, dotted_key):
+        keys = dotted_key.split(".")
+        cur = d
+        for k in keys:
+            if not isinstance(cur, dict) or k not in cur:
+                return None
+            cur = cur[k]
+        return cur
+
+    @pytest.mark.parametrize("key", [
+        "showcase.mode.actress",
+        "showcase.mode.video",
+        "showcase.search.actress",
+        "showcase.search.video",
+        "showcase.actress.add",
+        "showcase.actress.addPlaceholder",
+        "showcase.actress.addSuccess",
+        "showcase.actress.addDuplicate",
+        "showcase.actress.addNotFound",
+        "showcase.actress.addTimeout",
+        "showcase.actress.rescrape",
+        "showcase.actress.rescrapeSuccess",
+        "showcase.actress.rescrapeError",
+        "showcase.actress.remove",
+        "showcase.actress.removeConfirm",
+        "showcase.actress.removeSuccess",
+        "showcase.actress.empty",
+        "showcase.actress.emptyHint",
+        "showcase.sort.actress.video_count",
+        "showcase.sort.actress.name",
+        "showcase.sort.actress.added_at",
+        "showcase.sort.actress.age",
+        "showcase.sort.actress.height",
+        "showcase.sort.actress.cup",
+        "showcase.unit.videos_count",
+        "showcase.unit.films",
+    ])
+    def test_key_exists_all_locales(self, key):
+        """指定 key 在 4 個 locale 都存在且非 None"""
+        for locale_file in ["zh_TW.json", "zh_CN.json", "en.json", "ja.json"]:
+            data = self._locale(locale_file)
+            val = self._get_nested(data, key)
+            assert val is not None, f"{locale_file} 缺少 {key}"
