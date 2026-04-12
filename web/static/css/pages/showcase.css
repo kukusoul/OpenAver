@@ -35,12 +35,11 @@
     /* Spacing */
     padding: 0.75rem 1.5rem;
 
-    /* Layout */
-    display: flex;
-    flex-wrap: wrap;
+    /* Layout — 3-column grid: [balance] [search] [controls] (44c-T8) */
+    display: grid;
+    grid-template-columns: 1fr var(--spotlight-width) 1fr;
     gap: 1rem;
     align-items: center;
-    justify-content: space-between;
 }
 
 /* Toolbar 區段 */
@@ -50,15 +49,16 @@
     gap: 0.75rem;
 }
 
-/* Search 區段 - 寬度撐滿 */
+/* Search 區段 — grid 中欄，永遠置中 (44c-T8) */
 .toolbar-search {
-    flex: 1;
-    min-width: 280px; /* 防止過窄 */
+    grid-column: 2;
+    width: 100%;
 }
 
-/* Controls 區段 - 自動寬度 */
+/* Controls 區段 — grid 右欄，靠右對齊 (44c-T8) */
 .toolbar-controls {
-    flex-shrink: 0;
+    grid-column: 3;
+    justify-self: end;
     flex-wrap: wrap;
 }
 
@@ -760,7 +760,7 @@
 /* Danger modifier — red tint for remove button (44c-T3) */
 .lb-action-btn--danger {
     border-color: rgba(255, 100, 100, 0.5);
-    color: #ff6b6b;
+    color: var(--color-error-hover);
 }
 
 .lb-action-btn--danger:hover {
@@ -879,24 +879,21 @@
 }
 
 /* ==================== Responsive: Toolbar ==================== */
-/* 小螢幕：Toolbar 垂直排列 */
+/* 小螢幕：Toolbar 單欄堆疊 (44c-T8) */
 @media (max-width: 768px) {
     .showcase-toolbar {
-        flex-direction: column;
-        align-items: stretch;
+        grid-template-columns: 1fr;
         gap: 0.75rem;
         padding: 1rem;
     }
 
-    .toolbar-section {
-        width: 100%;
-    }
-
     .toolbar-search {
-        min-width: auto;
+        grid-column: 1;
     }
 
     .toolbar-controls {
+        grid-column: 1;
+        justify-self: stretch;
         justify-content: space-between;
     }
 }
@@ -1697,8 +1694,8 @@
     pointer-events: none;
 }
 
-/* Override theme.css default (3.5rem) to avoid toggle overlap (44c-T4) */
-.spotlight-search input {
-    padding-left: 5.5rem;
+/* Variant: mode-toggle — wider left slot for capsule toggle (44c-T8) */
+.spotlight-search--mode-toggle {
+    --spotlight-left-slot: 5.5rem;
 }
 .lightbox-metadata .lb-chips-more:hover { opacity: 1; }
