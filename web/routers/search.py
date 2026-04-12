@@ -352,6 +352,11 @@ def _fetch_actress_profile_with_db(top_actor: str, makers: list) -> Optional[dic
     profile = result.data  # ProfileResult.data
     if profile:
         profile["is_favorite"] = False
+        # Flatten aliases: minnano 回傳 dict list，前端需純字串 list
+        from web.routers.actress import _flatten_aliases
+        text = profile.get("text")
+        if text:
+            text["aliases"] = _flatten_aliases(text.get("aliases"))
     return profile
 
 

@@ -57,6 +57,25 @@ def _safe_int(v) -> Optional[int]:
         return None
 
 
+def _flatten_aliases(raw) -> list:
+    """
+    將 aliases 欄位統一轉為純字串 list。
+
+    minnano scraper 回傳 dict list（每筆含 ja/hiragana/romaji），
+    wiki scraper 回傳純字串 list。
+    前端需要純字串 list，此 helper 統一兩種格式。
+
+    Args:
+        raw: list of dict | list of str | None
+
+    Returns:
+        list of str（空 list 若 raw 為 None 或 []）
+    """
+    if not raw:
+        return []
+    return [a.get("ja", "") if isinstance(a, dict) else str(a) for a in raw]
+
+
 def _actress_to_response(actress: Actress) -> dict:
     """將 Actress dataclass 轉為 API response dict"""
     local_path = get_local_photo_path(actress.name)
@@ -173,7 +192,7 @@ def add_favorite(req: FavoriteRequest):
         hip=_safe_int(text.get("hip")),
         hometown=text.get("hometown"),
         hobby=text.get("hobby"),
-        aliases=text.get("aliases") or [],
+        aliases=_flatten_aliases(text.get("aliases")),
         agency=text.get("agency"),
         debut_work=text.get("debut_work"),
         tags=text.get("tags") or [],
