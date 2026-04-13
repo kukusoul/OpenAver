@@ -410,14 +410,19 @@
     "alias": {
       "section_title": "Actress Name Aliases",
       "collapse_title": "Expand/Collapse",
-      "label_old": "Old Name",
-      "placeholder_old": "e.g. miru",
-      "label_new": "New Name",
-      "placeholder_new": "e.g. 坂道みる",
+      "search_placeholder": "Add actress / filter...",
+      "filter_hint": "Filtering — {count} matches, press Enter or [Add] to create \"{name}\"",
+      "add": "Add",
+      "online_search": "Online Search",
       "loading": "Loading...",
-      "empty": "No aliases defined",
-      "applied": "({count} applied)",
-      "delete_title": "Delete"
+      "empty": "No alias records",
+      "no_results": "No suggestions found",
+      "add_alias": "+ Alias",
+      "alias_input_placeholder": "Enter alias",
+      "confirm": "Confirm",
+      "delete_group_title": "Delete this alias group",
+      "delete_alias_title": "Remove this alias",
+      "error_conflict": "Alias conflict"
     },
     "dirty_modal": {
       "title": "Unsaved Changes",

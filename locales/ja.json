@@ -410,14 +410,19 @@
     "alias": {
       "section_title": "女優名管理",
       "collapse_title": "展開/折りたたむ",
-      "label_old": "旧名前",
-      "placeholder_old": "例: miru",
-      "label_new": "新名前",
-      "placeholder_new": "例: 坂道みる",
+      "search_placeholder": "女優を追加 / 絞り込み...",
+      "filter_hint": "絞り込み中 — {count} 件一致、Enterまたは[追加]で「{name}」を作成",
+      "add": "追加",
+      "online_search": "オンライン検索",
       "loading": "読み込み中...",
-      "empty": "エイリアスがありません",
-      "applied": "({count}件適用済み)",
-      "delete_title": "削除"
+      "empty": "エイリアス記録なし",
+      "no_results": "候補が見つかりません",
+      "add_alias": "+ エイリアス",
+      "alias_input_placeholder": "エイリアスを入力",
+      "confirm": "確認",
+      "delete_group_title": "この名前グループを削除",
+      "delete_alias_title": "このエイリアスを削除",
+      "error_conflict": "エイリアスの競合"
     },
     "dirty_modal": {
       "title": "未保存の変更",

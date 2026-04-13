@@ -410,14 +410,19 @@
     "alias": {
       "section_title": "女优名称管理",
       "collapse_title": "展开/收起",
-      "label_old": "旧名称",
-      "placeholder_old": "例：miru",
-      "label_new": "新名称",
-      "placeholder_new": "例：坂道みる",
+      "search_placeholder": "新增女优 / 筛选...",
+      "filter_hint": "筛选中 — {count} 条符合，按 Enter 或 [新增] 可建立「{name}」",
+      "add": "新增",
+      "online_search": "在线搜索",
       "loading": "载入中...",
-      "empty": "暂无别名对照",
-      "applied": "(已应用 {count})",
-      "delete_title": "删除"
+      "empty": "暂无别名记录",
+      "no_results": "无搜索建议",
+      "add_alias": "+ 别名",
+      "alias_input_placeholder": "输入别名",
+      "confirm": "确认加入",
+      "delete_group_title": "删除此女优别名组",
+      "delete_alias_title": "移除此别名",
+      "error_conflict": "别名冲突"
     },
     "dirty_modal": {
       "title": "尚未保存的更改",
