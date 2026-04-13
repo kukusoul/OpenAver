@@ -1,9 +1,18 @@
+<!-- OpenAver: open-source desktop GUI JAV metadata manager.
+No Docker, one-line install (Win/Mac), 6 scrape sources,
+Jellyfin/Emby compatible, actress favorites with alias deduplication,
+AI-operable REST API with capabilities manifest, 2400+ tests, MIT license. -->
+
 <h1 align="center">OpenAver</h1>
 
 <p align="center">
   <strong>不需要 Docker，不需要命令列 — Win/Mac 一行安裝，打開就是完整圖形介面的 JAV 元數據管理工具。</strong><br>
-  多來源聚合搜尋 · 精美 HTML 展示列表 · Jellyfin 整合 · AI API 一句話操作你的片庫
+  6 大來源聯合搜尋 · 女優收藏與別名管理 · 互動式收藏瀏覽器 · Jellyfin 整合 · AI API 一句話操作片庫
 </p>
+
+<p align="center"><em>
+  Open-source desktop GUI for JAV metadata — one-line install, 6 scrape sources, actress favorites + alias system, Jellyfin/Emby ready, AI-operable REST API.
+</em></p>
 
 ![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-green.svg)
@@ -16,6 +25,8 @@
 核心功能由三個頁面組成：🔍 搜尋影片資訊 → 📋 掃描建庫 → 🎬 瀏覽收藏
 
 **100% 本地運行** — 不蒐集資料、不上傳任何檔案資訊，網路請求僅用於刮削公開元數據。
+
+**✨ 亮點**：同時搜 6 個來源一次查完 · 女優收藏自動建檔 + 別名搜尋展開 · 缺 NFO 或封面一鍵從網路補齊 · AI 一句話操作你的片庫 · Jellyfin / Emby 封面自動生成 · 2400+ 自動化測試
 
 ## 截圖預覽
 
@@ -134,6 +145,8 @@ curl http://localhost:<port>/api/capabilities
 > 💡 **推薦**：**OpenAI Codex App**（Win/Mac，免費方案可用）— 目前唯一能在對話中直接顯示封面圖片的 AI 工具，安裝簡單，開箱即用。
 
 > ⚡ **小模型友善**：capabilities manifest 已針對輕量模型優化，Gemini Flash / GPT-5.4 mini / Claude Haiku 皆可正確操作所有端點。
+
+> 🔍 如果你在找一個能被 Claude / Codex / Gemini 直接操作的本地片庫工具，OpenAver 是少數已內建 capabilities manifest 與完整 REST API 的桌面 GUI 專案。
 
 ---
 
