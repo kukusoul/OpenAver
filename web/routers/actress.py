@@ -231,7 +231,8 @@ def add_favorite(req: FavoriteRequest):
         actress.name, profile.get("photo_url"), profile.get("photo_source")
     )
 
-    video_count = repo.count_videos_for_actress(actress.name)
+    alias_repo = AliasRepository()
+    video_count = repo.count_videos_for_actress_names(alias_repo.resolve(actress.name))
     return JSONResponse(
         status_code=200,
         content={
@@ -282,10 +283,11 @@ def list_actresses():
     """
     init_db()
     repo = ActressRepository()
+    alias_repo = AliasRepository()
     actresses = repo.get_all()
     result = []
     for actress in actresses:
-        video_count = repo.count_videos_for_actress(actress.name)
+        video_count = repo.count_videos_for_actress_names(alias_repo.resolve(actress.name))
         result.append(_actress_to_response(actress, video_count))
     return JSONResponse(
         status_code=200,
@@ -359,7 +361,8 @@ def rescrape_actress(name: str):
         actress.name, profile.get("photo_url"), profile.get("photo_source")
     )
 
-    video_count = repo.count_videos_for_actress(actress.name)
+    alias_repo = AliasRepository()
+    video_count = repo.count_videos_for_actress_names(alias_repo.resolve(actress.name))
     return JSONResponse(
         status_code=200,
         content={

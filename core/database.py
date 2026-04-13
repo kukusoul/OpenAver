@@ -1630,17 +1630,28 @@ class ActressRepository:
         finally:
             conn.close()
 
-    def count_videos_for_actress(self, name: str) -> int:
-        """Count videos featuring this actress using json_each for exact matching."""
+    def count_videos_for_actress_names(self, names: set) -> int:
+        """Count videos where any actress name in `names` appears in the actresses JSON array.
+
+        Uses COUNT(DISTINCT videos.rowid) to avoid double-counting a video that
+        lists multiple aliases of the same actress.
+        """
+        if not names:
+            return 0
+        placeholders = ",".join("?" * len(names))
         conn = self._get_connection()
         try:
             cursor = conn.execute(
-                """SELECT COUNT(*) FROM videos, json_each(videos.actresses)
-                   WHERE json_valid(videos.actresses) AND json_each.value = ?""",
-                (name,)
+                f"""SELECT COUNT(DISTINCT videos.rowid) FROM videos, json_each(videos.actresses)
+                   WHERE json_valid(videos.actresses) AND json_each.value IN ({placeholders})""",
+                tuple(names),
             )
             return cursor.fetchone()[0]
         except sqlite3.OperationalError:
             return 0
         finally:
             conn.close()
+
+    def count_videos_for_actress(self, name: str) -> int:
+        """Count videos featuring this actress (backward-compatible single-name wrapper)."""
+        return self.count_videos_for_actress_names({name})
