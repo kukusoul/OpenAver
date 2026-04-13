@@ -43,7 +43,12 @@ class CreateAliasRequest(BaseModel):
     def primary_name_not_empty(cls, v: str) -> str:
         if not v or not v.strip():
             raise ValueError("primary_name 不可為空")
-        return v
+        return v.strip()
+
+    @field_validator("aliases")
+    @classmethod
+    def strip_aliases(cls, v: List[str]) -> List[str]:
+        return [a.strip() for a in v if a.strip()]
 
 
 class AddAliasRequest(BaseModel):
@@ -54,7 +59,7 @@ class AddAliasRequest(BaseModel):
     def alias_not_empty(cls, v: str) -> str:
         if not v or not v.strip():
             raise ValueError("alias 不可為空")
-        return v
+        return v.strip()
 
 
 class SearchOnlineRequest(BaseModel):

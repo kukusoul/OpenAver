@@ -361,7 +361,12 @@ def rescrape_actress(name: str):
         actress.name, profile.get("photo_url"), profile.get("photo_source")
     )
 
+    # P1 Codex fix: rescrape 後同步 alias index（與 add_favorite 同 pattern）
     alias_repo = AliasRepository()
+    try:
+        alias_repo.sync_from_favorite(actress.name, actress.aliases or [])
+    except Exception:
+        logger.warning("[actress] rescrape alias sync failed: %s", actress.name)
     video_count = repo.count_videos_for_actress_names(alias_repo.resolve(actress.name))
     return JSONResponse(
         status_code=200,

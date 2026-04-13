@@ -253,20 +253,18 @@ class TestFavoriteSyncException:
 
 
 # ---------------------------------------------------------------------------
-# 5. Rescrape does NOT call sync_from_favorite
+# 5. Rescrape ALSO calls sync_from_favorite (P1 Codex fix)
 # ---------------------------------------------------------------------------
 
-class TestRescrapeNoSync:
-    """POST /{name}/rescrape 不觸發 sync"""
+class TestRescrapeSync:
+    """POST /{name}/rescrape 觸發 sync（與 favorite 同 pattern）"""
 
-    def test_rescrape_does_not_call_sync(self, client, mock_alias_repo, monkeypatch):
-        """rescrape → AliasRepository.sync_from_favorite 未被呼叫"""
-        # rescrape bypasses cache — it always calls get_actress_profile directly
-        # mock_alias_repo is already injected via AliasRepository patch in client fixture
+    def test_rescrape_calls_sync(self, client, mock_alias_repo, monkeypatch):
+        """rescrape → AliasRepository.sync_from_favorite 被呼叫"""
         resp = client.post("/api/actresses/橋本ありな/rescrape")
         assert resp.status_code == 200
 
-        mock_alias_repo.sync_from_favorite.assert_not_called()
+        mock_alias_repo.sync_from_favorite.assert_called_once()
 
     def test_rescrape_returns_success(self, client):
         """rescrape 正常回傳 200"""
