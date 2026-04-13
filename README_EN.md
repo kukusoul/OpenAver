@@ -65,7 +65,7 @@ Download from [GitHub Releases](https://github.com/slive777/OpenAver/releases/la
 | **Windows x64** | `OpenAver-vX.X.X-Windows-x64.zip` |
 | **macOS arm64** | `OpenAver-vX.X.X-macOS-arm64.zip` |
 
-> ⚠️ Manual ZIP install requires extra steps to clear security restrictions — see Troubleshooting below.
+> ⚠️ Manual ZIP install requires extra steps to clear security restrictions — see the Troubleshooting document included in the ZIP.
 > ℹ️ macOS builds target Apple Silicon (M1/M2/M3/M4) only.
 
 On first launch, a built-in setup wizard walks you through folder configuration and basic settings — no docs required.
@@ -204,52 +204,7 @@ python build_macos.py    # macOS
 
 ## Troubleshooting
 
-> 💡 If you used the recommended **one-line install**, most issues below do not apply.
-
-### Upgrading (ZIP Manual Install)
-
-Overlaying a new ZIP can leave stale Python packages behind. **Before upgrading, delete the `python` folder**:
-
-- **Windows**: Delete `%USERPROFILE%\OpenAver\python\`
-- **macOS**: Delete `~/OpenAver/python/`
-
-### Windows — App Won't Start / Crashes
-
-**Cause**: Windows Mark of the Web blocks downloaded executables.
-
-**Fix**:
-1. Right-click the downloaded ZIP → **Properties**
-2. Check **Unblock** → OK
-3. Re-extract and run `OpenAver.bat`
-
-*Alternatively, extract with 7-Zip to bypass this restriction.*
-
-**Startup scripts**:
-- `OpenAver.bat` — Normal launch
-- `OpenAver_Debug.bat` — Debug launch (verbose logging), log file: `%USERPROFILE%\OpenAver\logs\debug.log`
-
-### macOS — App Blocked by Gatekeeper
-
-**Cause**: macOS Gatekeeper blocks unsigned applications.
-
-Run in Terminal:
-```bash
-cd ~/Downloads/OpenAver
-xattr -dr com.apple.quarantine .
-./OpenAver.command
-```
-
-After initial setup, you can double-click `OpenAver.command` directly.
-
-**Startup scripts**:
-- `OpenAver.command` — Normal launch
-- `OpenAver_Debug.command` — Debug launch, log file: `~/OpenAver/logs/debug.log`
-
-### Blank UI / Missing Effects (All Install Methods)
-
-**Cause**: Missing WebView2 Runtime (common on Windows 10 and VMs).
-
-**Fix**: Download and install the [Microsoft Edge WebView2 Runtime](https://go.microsoft.com/fwlink/p/?LinkId=2124703).
+> 💡 See the Troubleshooting document included in the ZIP, or check the [GitHub Wiki](https://github.com/slive777/OpenAver/wiki).
 
 ---
 

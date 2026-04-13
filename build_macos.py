@@ -44,6 +44,10 @@ COPY_ITEMS = [
     "windows",  # 包含 standalone.py
     "locales",
     "maker_mapping.json",
+    "docs/TROUBLESHOOTING_MAC.md",
+    "docs/TROUBLESHOOTING_MAC_EN.md",
+    "docs/疑難排解-macOS.md",
+    "docs/Troubleshooting-macOS.md",
 ]
 
 # 共用套件
@@ -186,6 +190,7 @@ def copy_project_files():
             ))
         elif src.is_file():
             print(f"  複製檔案: {item}")
+            dst.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(src, dst)
 
     # 複製範例檔案

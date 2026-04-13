@@ -13,13 +13,15 @@
 
 **[English](README_EN.md)** | 繁體中文
 
-核心功能由三個頁面組成：🔍 搜尋影片資訊 → 📋 生成展示牆 → 🎬 瀏覽收藏
+核心功能由三個頁面組成：🔍 搜尋影片資訊 → 📋 掃描建庫 → 🎬 瀏覽收藏
 
 **100% 本地運行** — 不蒐集資料、不上傳任何檔案資訊，網路請求僅用於刮削公開元數據。
 
 ## 截圖預覽
 
-![Search Hero Detail](docs/screenshots/home.png)
+| 搜尋頁 | 女優收藏 |
+|--------|---------|
+| ![Search](docs/screenshots/home.png) | ![Actress](docs/screenshots/showcase-actress.png) |
 
 <details>
 <summary>更多截圖</summary>
@@ -28,8 +30,8 @@
 |-------------|------------------|
 | ![Search Demo](docs/screenshots/demo2.gif) | ![Search](docs/screenshots/search-detail.png) |
 
-| Showcase Grid | Showcase 詳細 |
-|---------------|---------------|
+| Showcase 影片模式 | Showcase 詳細 |
+|-------------------|---------------|
 | ![Grid](docs/screenshots/showcase-grid.png) | ![Detail](docs/screenshots/showcase-detail.png) |
 
 </details>
@@ -65,7 +67,7 @@ irm https://raw.githubusercontent.com/slive777/OpenAver/main/install.ps1 | iex
 | **Windows x64** | `OpenAver-vX.X.X-Windows-x64.zip` |
 | **macOS arm64** | `OpenAver-vX.X.X-macOS-arm64.zip` |
 
-> ⚠️ 手動 ZIP 安裝需額外步驟解除安全限制，見下方「疑難排解」。
+> ⚠️ 手動 ZIP 安裝需額外步驟解除安全限制，見 ZIP 內附的疑難排解文件。
 > ℹ️ macOS 版本僅支援 Apple Silicon (M1/M2/M3/M4)。
 
 首次開啟會自動進入新手導覽，帶你完成資料夾與基本設定，不需要先讀文件。
@@ -74,32 +76,35 @@ irm https://raw.githubusercontent.com/slive777/OpenAver/main/install.ps1 | iex
 
 ## 核心功能
 
-### 🔍 Spotlight Search (搜尋)
-- **多來源聯合搜尋**: 同時搜尋 JavBus, Jav321, JavDB, DMM, D2Pass, HEYZO，一次查完所有來源。
-- **大圖詳情頁**: 封面、劇照、演員、標籤集中顯示，不用反覆切頁找資訊。
-- **智慧搜尋**: 番號、女優名、系列、片商都能搜，搜尋結果自動比對本地片庫並標示已收藏。
-- **版本自動辨識**: 自動識別 UC/LEAK/4K 等版本差異，整理檔名時不用手動補。
-- **女優畫廊模式 (Beta)**: 女優搜尋結果 > 10 片時自動切換為 Gallery 瀏覽，顯示女優個人資料 Hero Card。
-- **劇照瀏覽**: 搜尋結果直接瀏覽完整劇照。
-- **本地檔案批次搜尋**: 拖入影片檔案或資料夾，自動辨識番號並批次查詢影片資訊、封面與劇照。
+### 🔍 Search（搜尋）
+- **多來源聯合搜尋**：同時搜尋 JavBus, Jav321, JavDB, DMM, D2Pass, HEYZO，一次查完所有來源。
+- **大圖詳情頁**：封面、劇照、演員、標籤集中顯示，不用反覆切頁找資訊。
+- **智慧搜尋**：番號、女優名、系列、片商都能搜，搜尋結果自動比對本地片庫並標示已收藏。
+- **女優功能**：搜尋已收藏女優自動顯示個人資料卡，搜尋結果可直接加入收藏。
+- **版本自動辨識**：自動識別 UC/LEAK/4K 等版本差異，整理檔名時不用手動補。
+- **本地檔案批次搜尋**：拖入影片檔案或資料夾，自動辨識番號並批次查詢影片資訊、封面與劇照。
 
-### 📝 Scanner (掃描與列表生成)
-- **Showcase 展示列表**: 掃描本地影片資料夾，自動生成精美的互動式展示頁面（流暢動效 + 毛玻璃特效 + Lightbox 劇照瀏覽）。
-- **即時進度視窗**: 掃描到哪裡、補了哪些資料，畫面上直接看得到。
-- **NFO 補全**: 自動檢測並補全缺失的 NFO 檔案。
-- **字幕偵測**: 影片搬移時自動偵測並搬移同目錄字幕檔。
-- **Jellyfin 圖片模式**: 自動生成 poster/thumb/fanart 供 Jellyfin 使用。
-- **靜態 HTML 匯出**: 同時生成獨立的 HTML 索引檔，不需部署伺服器也能離線瀏覽。
+### 🎬 Showcase（瀏覽收藏）
+- **影片模式**：封面牆 Grid + 詳細 Lightbox + 搜尋篩選排序 + 劇照瀏覽，完整的互動式收藏瀏覽器。
+- **女優模式**：收藏女優 Grid + 個人資料 Lightbox + 按罩杯 / 年齡 / 身高排序，一鍵重新抓取更新資料。
+- **視覺設計**：GSAP 動效 + Fluent Design 毛玻璃特效 + Dark Mode，SSR 即時渲染。
+
+### 📋 Scanner（掃描與管理）
+- **掃描建庫**：掃描本地影片資料夾，建立 SQLite 元數據庫，自動讀取 NFO 封面。
+- **NFO / 封面補完**：偵測缺失的 NFO 欄位或檔案，一鍵從網路刮削補齊。
+- **女優別名管理**：新增、編輯別名，搜尋時自動展開所有已知名稱。
+- **字幕偵測**：影片搬移時自動偵測並搬移同目錄字幕檔。
 
 ### 🌐 AI 翻譯
 - 日文標題一鍵翻譯為你的 UI 語系（繁中 / 简中 / 英文），日文模式跳過翻譯。
 - 支援 **Ollama**（本地 GPU，免費無限制）、**Gemini Flash**（Google 雲端，有免費額度）和 **OpenAI API Compatible**（OpenRouter、任意相容端點）。
 
-### ⚙️ Settings (設定)
-- **Dark Mode**: 全站深色模式，自動同步至生成的展示列表。
-- **路徑管理**: 靈活設定輸出路徑與檔案命名規則，支援 `{suffix}` 格式變數。
-- **我的最愛資料夾**: 設定常用資料夾，一鍵載入並自動搜尋。
-- **多語系 UI**: 繁中 / 简中 / 日文 / 英文，即時切換。
+### ⚙️ Settings（設定）
+- **多語系 UI**：繁中 / 简中 / 日文 / 英文，即時切換。
+- **路徑管理**：靈活設定輸出路徑與檔案命名規則，支援 `{suffix}` 格式變數。
+- **我的最愛資料夾**：設定常用資料夾，一鍵載入並自動搜尋。
+- **Jellyfin 圖片模式**：自動生成 poster / fanart 供 Jellyfin / Emby 使用。
+- **靜態 HTML 匯出**：生成獨立 HTML 索引檔，不需部署伺服器也能離線瀏覽。
 
 ### 🤖 AI-Ready API
 
@@ -143,7 +148,7 @@ curl http://localhost:<port>/api/capabilities
 | **Animation** | GSAP 3.14+ + Motion Adapter (reduced-motion support) |
 | **Desktop** | PyWebView (Windows/macOS) |
 | **Database** | SQLite (WAL mode) |
-| **Testing** | Pytest (1600+ tests) |
+| **Testing** | Pytest (2400+ tests) |
 
 ### 從原始碼執行
 
@@ -203,52 +208,7 @@ python build_macos.py    # macOS
 
 ## 疑難排解
 
-> 💡 如果您使用上方推薦的 **一行安裝**，以下步驟通常不需要。疑難排解僅適用於手動 ZIP 安裝。
-
-### 升級注意事項（ZIP 手動安裝）
-
-覆蓋安裝可能殘留舊版 Python 套件，導致啟動失敗。**升級前請先刪除 `python` 資料夾**：
-
-- **Windows**: 刪除 `%USERPROFILE%\OpenAver\python\`
-- **macOS**: 刪除 `~/OpenAver/python/`
-
-### Windows 程式無法啟動 / 閃退
-
-**原因**: Windows Mark of the Web 封鎖了從網路下載的執行檔。
-
-**解法**:
-1. 對下載的 ZIP 點擊 **右鍵** → **內容**
-2. 勾選 **「解除封鎖 (Unblock)」** → 確定
-3. 重新解壓縮並執行 `OpenAver.bat`
-
-*或者使用 7-Zip 解壓縮，通常可避開此問題。*
-
-**啟動腳本**:
-- `OpenAver.bat` — 正常啟動
-- `OpenAver_Debug.bat` — 調試版本（顯示詳細日誌），日誌檔案：`%USERPROFILE%\OpenAver\logs\debug.log`
-
-### macOS 無法開啟 / 安全性警告
-
-**原因**: macOS Gatekeeper 阻擋未簽名的應用程式。
-
-在終端機依序執行：
-```bash
-cd ~/Downloads/OpenAver
-xattr -dr com.apple.quarantine .
-./OpenAver.command
-```
-
-設定完成後，之後可直接雙擊 `OpenAver.command` 執行。
-
-**啟動腳本**:
-- `OpenAver.command` — 正常啟動
-- `OpenAver_Debug.command` — 調試版本，日誌檔案：`~/OpenAver/logs/debug.log`
-
-### 介面顯示異常 / 空白（所有安裝方式）
-
-**原因**: 缺少 WebView2 Runtime（常見於 Windows 10 或虛擬機）。
-
-**解法**: 下載並安裝 [Microsoft Edge WebView2 Runtime](https://go.microsoft.com/fwlink/p/?LinkId=2124703)。
+> 💡 疑難排解請參閱打包版 ZIP 內附的「疑難排解」文件，或查看 [GitHub Wiki](https://github.com/slive777/OpenAver/wiki)。
 
 ---
 

@@ -38,6 +38,10 @@ COPY_ITEMS = [
     "windows",
     "locales",
     "maker_mapping.json",
+    "docs/TROUBLESHOOTING_WIN.md",
+    "docs/TROUBLESHOOTING_WIN_EN.md",
+    "docs/疑難排解-Windows.md",
+    "docs/Troubleshooting-Windows.md",
 ]
 
 # 主要套件（會自動解析依賴）
@@ -314,6 +318,7 @@ def copy_project_files():
             ))
         elif src.is_file():
             print(f"  複製檔案: {item}")
+            dst.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(src, dst)
 
     # 複製 config.default.json（預設設定範本）
