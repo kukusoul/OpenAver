@@ -95,7 +95,7 @@
     /* ===== Components: Spotlight Search (44c-T8a) ===== */
     --spotlight-width: 680px;         /* single source of truth for pill width */
     --spotlight-left-slot: 3.5rem;    /* default left padding (search icon) */
-    --spotlight-right-slot: 8.5rem;   /* default right padding — fits 3 buttons (heart+clear+submit) */
+    --spotlight-right-slot: 6rem;     /* default right padding (action buttons) */
 }
 
 
