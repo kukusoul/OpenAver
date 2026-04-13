@@ -429,6 +429,10 @@ Option 2: Manual Install
   https://go.microsoft.com/fwlink/p/?LinkId=2124703
 - Internet connection
 
+[Upgrading]
+- Delete %USERPROFILE%\\OpenAver\\python\\ before extracting a new version
+- Your settings and logs are preserved automatically
+
 [Notes]
 - First launch may take a moment
 - Config: app\\web\\config.json
@@ -472,6 +476,10 @@ Telegram: https://t.me/+J-U2l96gv0FjZTBl
 - Microsoft Edge WebView2 Runtime
   https://go.microsoft.com/fwlink/p/?LinkId=2124703
 - 網路連線
+
+[升級注意]
+- 升級前請先刪除 %USERPROFILE%\\OpenAver\\python\\ 資料夾
+- 設定檔和記錄檔會自動保留
 
 [注意事項]
 - 首次啟動可能較慢
