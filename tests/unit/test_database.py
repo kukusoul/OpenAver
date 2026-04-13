@@ -387,8 +387,8 @@ def test_actress_aliases_new_schema_has_seed_data(tmp_path):
     cursor = conn.cursor()
     cursor.execute("SELECT COUNT(*) FROM actress_aliases")
     count = cursor.fetchone()[0]
-    # 新 schema 種子資料：坂道みる, 新ありな, 河北彩花, 深田えいみ（4 組）
-    assert count >= 3
+    # 新表無種子資料，fresh DB 應為空
+    assert count == 0
     conn.close()
 
 

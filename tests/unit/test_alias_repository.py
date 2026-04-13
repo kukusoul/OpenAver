@@ -18,7 +18,7 @@ from core.database import init_db, get_connection
 
 @pytest.fixture
 def tmp_db(tmp_path):
-    """新 schema DB（透過 init_db 建立）；含種子資料"""
+    """新 schema DB（透過 init_db 建立）"""
     db_path = tmp_path / "test_alias.db"
     init_db(db_path)
     return db_path
@@ -26,14 +26,9 @@ def tmp_db(tmp_path):
 
 @pytest.fixture
 def empty_db(tmp_path):
-    """新 schema DB，seed data 已清空（供 AliasRepository 單元測試隔離使用）"""
+    """新 schema DB（供 AliasRepository 單元測試隔離使用）"""
     db_path = tmp_path / "empty_alias.db"
     init_db(db_path)
-    # 清除 init_db 插入的種子資料
-    conn = get_connection(db_path)
-    conn.execute("DELETE FROM actress_aliases")
-    conn.commit()
-    conn.close()
     return db_path
 
 
@@ -210,8 +205,8 @@ class TestInitDbMigration:
         assert set(aliases) == {"天海こころ", "心菜りお"}
         conn.close()
 
-    def test_seed_data_inserted_on_new_db(self, tmp_path):
-        """新建 DB 有種子資料（供既有 test_actress_alias_api.py 期望 >= 3 筆）"""
+    def test_no_seed_data_on_new_db(self, tmp_path):
+        """新建 DB 無種子資料（plan-45: 新表不需要種子）"""
         db_path = tmp_path / "seed_test.db"
         init_db(db_path)
         conn = sqlite3.connect(str(db_path))
@@ -219,7 +214,7 @@ class TestInitDbMigration:
         cursor.execute("SELECT COUNT(*) FROM actress_aliases")
         count = cursor.fetchone()[0]
         conn.close()
-        assert count >= 3
+        assert count == 0
 
 
 # ---------------------------------------------------------------------------

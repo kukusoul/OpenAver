@@ -10,6 +10,31 @@ var _actresses = [];
 var _filteredActresses = [];
 var _actressesLoaded = false;
 var _nameToGroup = {};  // { "舊名": ["新名", "舊名"], "新名": [...] } 雙向 alias map
+var _aliasMapLoaded = false;
+
+/**
+ * 45-P2 fix: 獨立載入 alias map，init() 時無條件呼叫。
+ * 冪等：已載入時直接 return。
+ */
+async function _loadAliasMap() {
+    if (_aliasMapLoaded) return;
+    try {
+        var resp = await fetch('/api/actress-aliases');
+        if (resp.ok) {
+            var data = await resp.json();
+            var groups = (data && data.groups) || [];
+            _nameToGroup = {};
+            groups.forEach(function(g) {
+                var all = [g.primary_name].concat(g.aliases || []);
+                all.forEach(function(n) { _nameToGroup[n] = all; });
+            });
+        }
+    } catch (e) {
+        console.warn('[Showcase] Failed to fetch actress aliases:', e);
+        _nameToGroup = {};
+    }
+    _aliasMapLoaded = true;
+}
 
 // 41c B-lite: 無封面 placeholder SVG (cover 載入失敗時 handleCoverError 換上)
 // viewBox 800x600 對齊 lightbox 4:3，grid card aspect-ratio:3/2 會 crop 上下少許但不影響 icon 居中
@@ -221,6 +246,7 @@ function showcaseState() {
             this.restoreState();        // M2c: 先恢復狀態
             const savedPage = this.page;
             await this.fetchVideos();
+            await _loadAliasMap();      // 45-P2: 無條件載入 alias map（影片搜尋也需要）
             if (this.showFavoriteActresses) { this.loadActresses(); }
             this.applyFilterAndSort(true);  // M4a: 套用搜尋篩選（跳過 pagination，下面統一處理）
             this.page = savedPage;          // 恢復儲存的頁碼
@@ -448,24 +474,8 @@ function showcaseState() {
                     return;
                 }
                 _actresses = data.actresses || [];
-                // 45: 並行 fetch alias map（失敗靜默退化，不阻塞女優列表）
-                try {
-                    var aliasResp = await fetch('/api/actress-aliases');
-                    if (aliasResp.ok) {
-                        var aliasData = await aliasResp.json();
-                        var groups = (aliasData && aliasData.groups) || [];
-                        _nameToGroup = {};
-                        groups.forEach(function(group) {
-                            var allNames = [group.primary_name].concat(group.aliases || []);
-                            allNames.forEach(function(n) { _nameToGroup[n] = allNames; });
-                        });
-                    } else {
-                        _nameToGroup = {};
-                    }
-                } catch (e) {
-                    console.warn('[Showcase] Failed to fetch actress aliases:', e);
-                    _nameToGroup = {};
-                }
+                // 45: alias map（冪等，init 可能已載入）
+                await _loadAliasMap();
                 this.applyActressFilterAndSort();
                 // 卡片進場動畫（applyActressFilterAndSort 更新 paginatedActresses，Alpine 渲染後呼叫）
                 var gen = ++this._animGeneration;

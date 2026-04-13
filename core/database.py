@@ -151,7 +151,6 @@ def init_db(db_path: Path = None) -> None:
                 primary_name  TEXT PRIMARY KEY,
                 aliases       TEXT NOT NULL DEFAULT '[]',
                 source        TEXT NOT NULL DEFAULT 'manual',
-                applied_count INTEGER DEFAULT 0,
                 created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
@@ -170,21 +169,9 @@ def init_db(db_path: Path = None) -> None:
                 primary_name  TEXT PRIMARY KEY,
                 aliases       TEXT NOT NULL DEFAULT '[]',
                 source        TEXT NOT NULL DEFAULT 'manual',
-                applied_count INTEGER DEFAULT 0,
                 created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
-        """)
-
-    # Seed data：若新表為空，插入種子資料供既有測試使用
-    if cursor.execute("SELECT COUNT(*) FROM actress_aliases").fetchone()[0] == 0:
-        # 使用新 schema 格式（平坦 group）插入種子資料
-        cursor.execute("""
-            INSERT INTO actress_aliases (primary_name, aliases, source) VALUES
-            ('坂道みる',  '["miru"]',             'manual'),
-            ('新ありな',  '["橋本ありな"]',         'manual'),
-            ('河北彩花',  '["河北彩伽"]',           'manual'),
-            ('深田えいみ','["天海こころ","心菜りお"]','manual')
         """)
 
     # 刪除舊 index（新 schema 不需要；IF EXISTS 保證 idempotent）
