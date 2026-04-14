@@ -415,9 +415,15 @@ Option 2: Manual Install
   Windows built-in extraction keeps "Mark of the Web",
   which blocks the app from running.
 
-1. Extract ZIP with 7-Zip / WinRAR
-2. Double-click OpenAver.bat to launch
-3. Use OpenAver_Debug.bat for troubleshooting
+[Step 1] Extract ZIP
+  - Right-click ZIP -> "Extract All..." (use 7-Zip or WinRAR for best results)
+
+[Step 2] Open Command Prompt in the folder
+  - Shift + right-click inside the OpenAver folder
+  - Select "Open PowerShell window here" or "Open command window here"
+
+[Step 3] Launch
+  OpenAver.bat
 
   If you already extracted with Windows built-in:
   Right-click the ZIP -> Properties -> check "Unblock" -> OK,
@@ -427,15 +433,28 @@ Option 2: Manual Install
 - Windows 10/11 64-bit
 - Microsoft Edge WebView2 Runtime
   https://go.microsoft.com/fwlink/p/?LinkId=2124703
-- Internet connection
+- Internet connection (required on first run to fetch metadata)
 
 [Upgrading]
 - Delete %USERPROFILE%\\OpenAver\\python\\ before extracting a new version
 - Your settings and logs are preserved automatically
 
+[Startup Scripts]
+
+OpenAver.bat       — Normal launch (runs in background)
+OpenAver_Debug.bat — Debug mode, logs to Command Prompt and %USERPROFILE%\\OpenAver\\logs\\debug.log
+
+[Troubleshooting]
+
+If the app won't start, use OpenAver_Debug.bat:
+  1. Double-click OpenAver_Debug.bat
+  2. A Command Prompt window shows live logs; also saved to %USERPROFILE%\\OpenAver\\logs\\debug.log
+  3. Attach the log content to your GitHub Issue
+
 [Notes]
 - First launch may take a moment
 - Config: app\\web\\config.json
+  (Full path example: C:\\Users\\YourName\\OpenAver\\app\\web\\config.json)
 - Logs: %USERPROFILE%\\OpenAver\\logs\\debug.log
 
 [Report Issues]
@@ -463,9 +482,15 @@ Telegram: https://t.me/+J-U2l96gv0FjZTBl
   Windows 內建解壓縮會保留「網路標記」(Mark of the Web)，
   導致程式無法正常執行。
 
-1. 用 7-Zip / WinRAR 解壓 ZIP
-2. 雙擊 OpenAver.bat 啟動
-3. 除錯用 OpenAver_Debug.bat
+[步驟 1] 解壓 ZIP
+  - 對 ZIP 按右鍵 → 「解壓縮全部...」（建議使用 7-Zip 或 WinRAR）
+
+[步驟 2] 在資料夾中開啟命令提示字元
+  - Shift + 右鍵點擊 OpenAver 資料夾內部空白處
+  - 選擇「在此開啟 PowerShell 視窗」或「在此開啟命令視窗」
+
+[步驟 3] 啟動程式
+  OpenAver.bat
 
   如果已經用內建解壓縮：
   對 ZIP 按右鍵 → 內容 → 勾選「解除封鎖」→ 確定，
@@ -475,15 +500,28 @@ Telegram: https://t.me/+J-U2l96gv0FjZTBl
 - Windows 10/11 64-bit
 - Microsoft Edge WebView2 Runtime
   https://go.microsoft.com/fwlink/p/?LinkId=2124703
-- 網路連線
+- 網路連線（首次執行需連線外部服務取得資料）
 
 [升級注意]
 - 升級前請先刪除 %USERPROFILE%\\OpenAver\\python\\ 資料夾
 - 設定檔和記錄檔會自動保留
 
+[啟動腳本說明]
+
+OpenAver.bat       — 正常啟動（程式在背景運行）
+OpenAver_Debug.bat — 調試模式，命令提示字元顯示完整日誌，同時輸出到 %USERPROFILE%\\OpenAver\\logs\\debug.log
+
+[故障排除]
+
+如果程式無法啟動，請使用 OpenAver_Debug.bat 查看詳細日誌：
+  1. 雙擊 OpenAver_Debug.bat
+  2. 命令提示字元視窗會即時顯示日誌，同時寫入 %USERPROFILE%\\OpenAver\\logs\\debug.log
+  3. 將日誌內容附加到 GitHub Issue
+
 [注意事項]
 - 首次啟動可能較慢
 - 設定檔：app\\web\\config.json
+  （完整路徑範例：C:\\Users\\你的帳號\\OpenAver\\app\\web\\config.json）
 - 記錄檔：%USERPROFILE%\\OpenAver\\logs\\debug.log
 
 [回報問題]
