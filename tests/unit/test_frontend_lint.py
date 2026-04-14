@@ -2504,3 +2504,20 @@ class TestShowcaseToolbarStructureGuard:
         assert direct_groups == 1, (
             f"影片模式 .toolbar-controls 直接子 .control-group 應為 1 個（全部 5 icon 合併），實際為 {direct_groups} 個。"
         )
+
+
+class TestActressIconGuard:
+    """T6E: 確保女優 icon 統一為 bi-person-circle"""
+
+    def test_showcase_no_bare_bi_person(self):
+        """showcase.html 不應有 bi-person（非 circle/heart）"""
+        html = Path("web/templates/showcase.html").read_text(encoding="utf-8")
+        # 匹配 bi-person 但排除 bi-person-circle 和 bi-person-heart
+        matches = re.findall(r'class="bi bi-person(?!-circle|-heart)"', html)
+        # 排除 icon catalog 展示（如有）
+        assert len(matches) == 0, f"showcase.html 仍有 {len(matches)} 處 bi-person（非 circle/heart）"
+
+    def test_scanner_no_bi_person_badge(self):
+        """scanner.html 不應有 bi-person-badge"""
+        html = Path("web/templates/scanner.html").read_text(encoding="utf-8")
+        assert "bi-person-badge" not in html, "scanner.html 仍有 bi-person-badge"

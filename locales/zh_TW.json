@@ -682,7 +682,8 @@
       "h6_manage": "收藏管理",
       "manage_add": "從搜尋頁或瀏覽頁加入收藏，照片自動下載至本地",
       "manage_alias": "別名管理：Scanner 頁面可新增、編輯女優別名，搜尋時自動展開所有已知名稱",
-      "manage_enrich": "瀏覽頁卡片可一鍵重新抓取（rescrape）更新女優資料"
+      "manage_enrich": "瀏覽頁卡片可一鍵重新抓取（rescrape）更新女優資料",
+      "manage_photo_path": "收藏女優的照片存放於 output/Gfriends/ 目錄下"
     },
     "scanner": {
       "title": "影片列表生成 (Scanner)",

@@ -428,15 +428,12 @@ function showcaseState() {
             var self = this;
             var needEntry = false;
             if (this.showFavoriteActresses) {
-                this.search = '';
                 this._clearPreciseMatch();
                 if (_actresses.length === 0) {
                     this.loadActresses();
                 } else {
                     needEntry = true;
                 }
-            } else {
-                this.actressSearch = '';
             }
             var gen = ++this._animGeneration;
             this.$nextTick(function () {
@@ -810,6 +807,7 @@ function showcaseState() {
                     this._matchedActress = actress;
                     if (!_actresses.find(function(a) { return a.name === actress.name; })) {
                         _actresses.push(actress);
+                        this.applyActressFilterAndSort();
                     }
                     if (resp.status === 200) {
                         this.showToast(window.t('showcase.actress.addSuccess'), 'success');
@@ -840,7 +838,10 @@ function showcaseState() {
                 if (data.success && data.actress) {
                     // 先更新 _actresses 陣列（不論 lightbox 是否切換，grid 資料都要刷新）
                     const idx = _actresses.findIndex(a => a.name === name);
-                    if (idx >= 0) Object.assign(_actresses[idx], data.actress);
+                    if (idx >= 0) {
+                        Object.assign(_actresses[idx], data.actress);
+                        this.applyActressFilterAndSort();
+                    }
                     // stale guard：只在 lightbox 仍顯示同一位女優時更新 lightbox
                     if (this.currentLightboxActress?.name === name) {
                         Object.assign(this.currentLightboxActress, data.actress);
@@ -881,6 +882,10 @@ function showcaseState() {
                     }
                     this.closeActressLightbox();
                     this.showToast(window.t('showcase.actress.removeSuccess'), 'success');
+                    var searchTerm = this.search.trim();
+                    if (searchTerm) {
+                        this._checkPreciseActressMatch(searchTerm, 'manual');
+                    }
                 } else {
                     this.showToast(data.error || 'Error', 'error');
                 }

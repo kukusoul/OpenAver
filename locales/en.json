@@ -682,7 +682,8 @@
       "h6_manage": "Favorites Management",
       "manage_add": "Add favorites from Search or Showcase; profile photo is downloaded locally automatically",
       "manage_alias": "Alias management: add and edit actress aliases on the Scanner page; all known aliases are expanded automatically during search",
-      "manage_enrich": "One-click rescrape on Showcase cards to refresh actress data"
+      "manage_enrich": "One-click rescrape on Showcase cards to refresh actress data",
+      "manage_photo_path": "Favorited actress photos are stored in the output/Gfriends/ directory"
     },
     "scanner": {
       "title": "Video List Generator (Scanner)",
