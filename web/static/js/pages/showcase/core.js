@@ -434,6 +434,8 @@ function showcaseState() {
                 } else {
                     needEntry = true;
                 }
+            } else {
+                needEntry = true;
             }
             var gen = ++this._animGeneration;
             this.$nextTick(function () {
@@ -1291,6 +1293,8 @@ function showcaseState() {
             }
 
             this._setLightboxIndex(index);
+            var lightboxEl = document.querySelector('.showcase-lightbox');
+            if (lightboxEl) lightboxEl.classList.add('gsap-animating');
             this.lightboxOpen = true;
             document.body.classList.add('overflow-hidden');
 
@@ -1325,6 +1329,8 @@ function showcaseState() {
             this.currentLightboxVideo = null;
             this.addingLbTag = false;
             this._videoChipsExpanded = false;
+            var lightboxEl = document.querySelector('.showcase-lightbox');
+            if (lightboxEl) lightboxEl.classList.add('gsap-animating');
             this.lightboxOpen = true;
             document.body.classList.add('overflow-hidden');
 

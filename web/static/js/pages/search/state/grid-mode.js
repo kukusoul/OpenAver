@@ -89,6 +89,8 @@ window.SearchStateMixin_GridMode = {
 
         this._heroLightboxImageError = false;  // A6-1: 重置圖片錯誤狀態
         this.lightboxIndex = index;
+        var lightboxEl = document.querySelector('.showcase-lightbox');
+        if (lightboxEl) lightboxEl.classList.add('gsap-animating');
         this.lightboxOpen = true;
         // 同步 currentIndex（讓 Detail 與 Grid 保持一致）
         this.currentIndex = index;
