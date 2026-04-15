@@ -13,7 +13,8 @@ router = APIRouter(prefix="/api", tags=["capabilities"])
 _TOOLS: list[dict] = [
     {
         "name": "search",
-        "description": "搜尋單一番號或女優，回傳 metadata + 封面 URL",
+        "description": "搜尋單一番號或女優，回傳 metadata + 封面 URL。不修改資料庫",
+        "side_effect": False,
         "method": "GET",
         "path": "/api/search",
         "input_schema": {
@@ -56,7 +57,8 @@ _TOOLS: list[dict] = [
     },
     {
         "name": "batch_search",
-        "description": "一次搜尋多個番號，適合文章解析後批量查詢",
+        "description": "一次搜尋多個番號，適合文章解析後批量查詢。不修改資料庫",
+        "side_effect": False,
         "method": "POST",
         "path": "/api/batch-search",
         "input_schema": {
@@ -135,7 +137,8 @@ _TOOLS: list[dict] = [
     },
     {
         "name": "local_status",
-        "description": "批量查詢番號是否已在本地收藏",
+        "description": "批量查詢番號是否已在本地收藏。不修改資料庫",
+        "side_effect": False,
         "method": "GET",
         "path": "/api/search/local-status",
         "input_schema": {
@@ -153,7 +156,8 @@ _TOOLS: list[dict] = [
     },
     {
         "name": "parse_filename",
-        "description": "從檔名提取番號和字幕偵測",
+        "description": "從檔名提取番號和字幕偵測。不修改資料庫",
+        "side_effect": False,
         "method": "POST",
         "path": "/api/parse-filename",
         "input_schema": {
@@ -694,7 +698,8 @@ _TOOLS: list[dict] = [
     },
     {
         "name": "get_actress",
-        "description": "查詢單一收藏女優資料（含本地照片 URL）",
+        "description": "查詢單一收藏女優資料（含本地照片 URL）。不修改資料庫",
+        "side_effect": False,
         "method": "GET",
         "path": "/api/actresses/{name}",
         "input_schema": {
@@ -965,7 +970,7 @@ async def get_capabilities(request: Request):
                 "description": "用戶提供論壇 URL 或直接貼文章內文，AI 抓取內容並提取番號/女優名",
                 "steps": [
                     "1. 判斷輸入：URL → 嘗試抓取頁面內容；純文字 → 直接解析",
-                    "2. 若 URL 是 ptt.cc → HTTP GET 取得 HTML → 解析內文",
+                    "2. 若 URL 是 ptt.cc → curl -b 'over18=1' 取得 HTML → 從 div#main-content 解析內文（PTT 年齡驗證是 client-side JS，加 cookie 即可繞過）",
                     "3. 若 URL 是其他論壇 → 回覆用戶「此論壇無法直接抓取，請複製文章內文貼上」",
                     "4. 從內容提取番號（如 'fc2 793288 半外半中' → FC2-PPV-793288）",
                     "5. POST /api/batch-search 批量取得 metadata + 封面 URL",
