@@ -2568,3 +2568,39 @@ class TestGhostFlyGuards:
         assert idx_animating > 0, "找不到 gsap-animating classList.add"
         assert idx_open > 0, "找不到 lightboxOpen = true"
         assert idx_animating < idx_open, "gsap-animating 應在 lightboxOpen = true 之前"
+
+
+class TestTutorialExpandGuard:
+    """T10: 新手教學 7 步守衛"""
+
+    def test_tutorial_has_7_steps(self):
+        """tutorial.js 包含 7 個步驟 id"""
+        js = Path("web/static/js/components/tutorial.js").read_text(encoding="utf-8")
+        expected_ids = ['search', 'files', 'scanner', 'showcase', 'settings', 'help', 'samples']
+        for step_id in expected_ids:
+            assert f"id: '{step_id}'" in js, f"tutorial.js 缺少步驟 id: '{step_id}'"
+
+    def test_tutorial_last_step_has_large(self):
+        """最後一步（samples）有 large: true"""
+        js = Path("web/static/js/components/tutorial.js").read_text(encoding="utf-8")
+        # 找 samples step 區塊，確認包含 large: true
+        samples_idx = js.find("id: 'samples'")
+        assert samples_idx > 0, "找不到 samples 步驟"
+        # 從 samples 往後找到這個物件的結尾 }
+        block_end = js.find('}', samples_idx)
+        block = js[samples_idx:block_end]
+        assert 'large: true' in block, "samples 步驟缺少 large: true"
+
+    @pytest.mark.parametrize("locale", ["zh_TW", "en", "ja", "zh_CN"])
+    def test_tutorial_i18n_keys_complete(self, locale):
+        """四語系 tutorial step1-7 key 全部存在且非空"""
+        import json
+        data = json.loads(Path(f"locales/{locale}.json").read_text(encoding="utf-8"))
+        tutorial = data.get("tutorial", {})
+        for i in range(1, 8):
+            title_key = f"step{i}_title"
+            content_key = f"step{i}_content"
+            assert title_key in tutorial and tutorial[title_key], \
+                f"{locale}.json 缺少或為空: tutorial.{title_key}"
+            assert content_key in tutorial and tutorial[content_key], \
+                f"{locale}.json 缺少或為空: tutorial.{content_key}"

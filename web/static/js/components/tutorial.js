@@ -27,17 +27,31 @@ class SpotlightTutorial {
                 position: 'right'
             },
             {
-                id: 'settings',
-                target: '#sidebar a[href="/settings"]',
+                id: 'showcase',
+                target: '#sidebar a[href="/showcase"]',
                 title: window.t('tutorial.step4_title'),
                 content: window.t('tutorial.step4_content'),
                 position: 'right'
             },
             {
-                id: 'samples',
-                target: '#emptyState',
+                id: 'settings',
+                target: '#sidebar a[href="/settings"]',
                 title: window.t('tutorial.step5_title'),
                 content: window.t('tutorial.step5_content'),
+                position: 'right'
+            },
+            {
+                id: 'help',
+                target: '#sidebar a[href="/help"]',
+                title: window.t('tutorial.step6_title'),
+                content: window.t('tutorial.step6_content'),
+                position: 'right'
+            },
+            {
+                id: 'samples',
+                target: '#emptyState',
+                title: window.t('tutorial.step7_title'),
+                content: window.t('tutorial.step7_content'),
                 position: 'bottom',
                 large: true
             }
@@ -117,8 +131,8 @@ class SpotlightTutorial {
         const step = this.steps[stepIndex];
         const target = document.querySelector(step.target);
 
-        if (!target) {
-            console.warn(`Tutorial target not found: ${step.target}`);
+        if (!target || target.offsetParent === null) {
+            console.warn(`Tutorial target not found or hidden: ${step.target}`);
             this.nextStep();
             return;
         }
@@ -128,6 +142,9 @@ class SpotlightTutorial {
         const isInSidebar = sidebar && sidebar.contains(target);
         const overlay = document.getElementById('tutorialOverlay');
         const spotlight = document.getElementById('tutorialSpotlight');
+
+        // 清除之前的高亮（sidebar 和非 sidebar 分支都需要）
+        this.clearHighlights();
 
         if (isInSidebar) {
             // Sidebar Mode：遮罩只覆蓋主內容區
@@ -143,8 +160,6 @@ class SpotlightTutorial {
             overlay.classList.remove('sidebar-mode');
             overlay.style.left = '';
             spotlight.style.display = '';
-            // 清除之前的高亮
-            this.clearHighlights();
             this.positionSpotlight(target);
         }
 
