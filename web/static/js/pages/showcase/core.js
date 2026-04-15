@@ -904,13 +904,26 @@ function showcaseState() {
         searchActressFilms(actressName) {
             if (!actressName) return;
             if (this.lightboxOpen) this.closeLightbox();
-            if (this.showFavoriteActresses) {
+            var wasActressMode = this.showFavoriteActresses;
+            if (wasActressMode) {
                 this.showFavoriteActresses = false;
                 this.actressSearch = '';
             }
             this.search = actressName;
             this._animateFilter();
             this._checkPreciseActressMatch(actressName, 'metadata');
+            if (wasActressMode) {
+                var self = this;
+                var gen = ++this._animGeneration;
+                this.$nextTick(function () {
+                    if (self._animGeneration !== gen) return;
+                    window.ShowcaseAnimations?.playModeCrossfade?.('actress', self.mode);
+                    if (self.mode === 'grid') {
+                        var grid = self._getActiveGrid();
+                        window.ShowcaseAnimations?.playEntry?.(grid);
+                    }
+                });
+            }
         },
 
         // --- 44c T6: Active grid helper ---
