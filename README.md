@@ -119,12 +119,22 @@ irm https://raw.githubusercontent.com/slive777/OpenAver/main/install.ps1 | iex
 
 ### 🤖 AI-Ready API
 
-你的 AI 助手現在能直接操作你的片庫：
+OpenAver 內建 capabilities manifest，AI agent 讀一次就知道所有端點怎麼用。不只查資料 — 它能自己串多個步驟，完成那些人做起來瑣碎到放棄的事。
 
-- 「幫我搜 SAME-123, PRED-456, IPZZ-789 的完整資訊」— 多來源聯合搜尋
+**一句話，AI 自己跑完整流程：**
+
+- **「幫我把片子最多的 top 20 女優加入最愛，跳過已收藏的。」**
+  <sub>SQL 統計 → 查重 → 批次收藏 → 下載照片</sub>
+- **「橋本ありな 跟 新ありな 是同一人而且退休了，幫我加 tag。」**
+  <sub>建立別名關聯 → 搜出兩個名字的所有片 → 批次加上「引退」標籤</sub>
+- **「這篇文章提到的番號，做成有封面的 HTML 頁面。」**
+  <sub>解析番號 → 批次搜尋 → 下載封面 → 生成 Gallery HTML</sub>
+
+**日常操作也順手：**
+
+- 「搜 SAME-123, PRED-456, IPZZ-789 的完整資訊」— 多來源聯合搜尋
 - 「把 D:\av 的 NFO 資料補齊」— 原地補完，不搬移不改名
-- 「我今年抓最多的系列作品是哪個？」— SQL 查詢收藏資料庫
-- 「幫我把這篇文章提到的番號做成圖文並茂的網頁」— 封面自動嵌入 HTML
+- 「我今年抓最多的系列是哪個？」— SQL 查詢收藏資料庫
 
 不需要 SDK，不需要讀文件。一行 curl，AI 自學所有端點：
 
@@ -145,8 +155,6 @@ curl http://localhost:<port>/api/capabilities
 > 💡 **推薦**：**OpenAI Codex App**（Win/Mac，免費方案可用）— 目前唯一能在對話中直接顯示封面圖片的 AI 工具，安裝簡單，開箱即用。
 
 > ⚡ **小模型友善**：capabilities manifest 已針對輕量模型優化，Gemini Flash / GPT-5.4 mini / Claude Haiku 皆可正確操作所有端點。
-
-> 🔍 如果你在找一個能被 Claude / Codex / Gemini 直接操作的本地片庫工具，OpenAver 是少數已內建 capabilities manifest 與完整 REST API 的桌面 GUI 專案。
 
 ---
 
