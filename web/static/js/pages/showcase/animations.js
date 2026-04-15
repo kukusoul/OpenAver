@@ -399,7 +399,9 @@
             if (coverImg) gsap.killTweensOf(coverImg);
 
             // C21: 暫時關掉 CSS transition
-            lightboxEl.classList.add('gsap-animating');
+            if (!lightboxEl.classList.contains('gsap-animating')) {
+                lightboxEl.classList.add('gsap-animating');
+            }
 
             var tl = gsap.timeline({
                 id: 'showcaseLightboxOpen',
@@ -421,14 +423,14 @@
             // 2. Content card scale pop-in
             if (content) {
                 tl.fromTo(content,
-                    { scale: 0.92, opacity: 0 },
-                    { scale: 1, opacity: 1, duration: 0.18, ease: 'back.out(1.2)' },
+                    { scale: 0.95, opacity: 0, transformOrigin: 'center center' },
+                    { scale: 1, opacity: 1, duration: 0.18, ease: 'power2.out', transformOrigin: 'center center' },
                     0.03
                 );
             }
 
-            // 3. Cover image slide-up fade-in
-            if (coverImg) {
+            // 3. Cover image slide-up fade-in（ghost fly 時跳過）
+            if (coverImg && !options.skipCover) {
                 tl.fromTo(coverImg,
                     { y: 12, opacity: 0 },
                     { y: 0, opacity: 1, duration: 0.16, ease: 'power2.out' },

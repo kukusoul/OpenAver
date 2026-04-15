@@ -682,7 +682,8 @@
       "h6_manage": "お気に入り管理",
       "manage_add": "検索ページまたはショーケースページからお気に入りに追加。プロフィール写真は自動でローカルに保存",
       "manage_alias": "別名管理：Scanner ページで女優の別名を追加・編集。検索時にすべての既知の別名が自動展開される",
-      "manage_enrich": "ショーケースカードのワンクリック再スクレイプで女優情報を最新に更新"
+      "manage_enrich": "ショーケースカードのワンクリック再スクレイプで女優情報を最新に更新",
+      "manage_photo_path": "お気に入り女優の写真は output/Gfriends/ ディレクトリに保存されます"
     },
     "scanner": {
       "title": "動画リスト生成（Scanner）",
@@ -801,15 +802,19 @@
     "skip": "スキップ",
     "next": "次へ →",
     "done": "完了 🎉",
-    "step1_title": "💡 検索機能",
-    "step1_content": "品番（例: SONE-001）または女優名を入力<br>ファイルをドロップすると品番を自動抽出して検索",
-    "step2_title": "📁 一括処理",
-    "step2_content": "複数ファイルを追加し、一度に20件検索<br>お気に入りフォルダからの読み込みに対応",
-    "step3_title": "📝 リスト生成",
-    "step3_content": "ローカルフォルダをスキャンし、HTML展示ページを生成<br>NFOファイルを自動補完",
-    "step4_title": "⚙️ カスタマイズ",
-    "step4_content": "Dark Modeの切替、お気に入りフォルダの設定<br>UIと機能の設定を調整",
-    "step5_title": "🎬 さっそく体験！",
-    "step5_content": "<code>チュートリアル</code>フォルダ<br>または任意の<code>.mp4</code>ファイルをこのウィンドウにドロップ<br><br><small class=\"text-muted\">検索可能な11個の実例を収録</small>"
+    "step1_title": "💡 動画情報を検索",
+    "step1_content": "品番（例: SONE-001）または女優名を入力して検索<br>結果をクリックすると、カバー・キャスト・あらすじを一括自動取得",
+    "step2_title": "📁 まとめて整理",
+    "step2_content": "フォルダごと追加して一括検索・スクレイピング<br>数十本のカバーとNFOを自動補完、一本ずつの作業は不要",
+    "step3_title": "📋 フォルダをスキャン",
+    "step3_content": "ローカルフォルダを追加してスキャン、不足のNFOとカバーを一括補完<br>スキャン後はShowcaseでコレクション全体を確認できます",
+    "step4_title": "🎬 コレクションを閲覧",
+    "step4_content": "Showcaseはあなたのプライベート動画ライブラリ、カバーウォールで一目瞭然<br>女優モードに切り替えると、お気に入り女優の写真と作品を閲覧できます",
+    "step5_title": "⚙️ 個人設定",
+    "step5_content": "ダークモード切替、言語とフォントサイズの調整で快適な画面を作れます<br>検索ソースの優先順位やアプリ起動時のデフォルトページも設定可能",
+    "step6_title": "🤖 AIに任せる",
+    "step6_content": "HelpページにあるコマンドをClaude CodeやCursorに貼り付けるだけ<br>AIが自動で検索・スクレイピング・整理をすべてこなしてくれます",
+    "step7_title": "🎯 さっそく体験！",
+    "step7_content": "<code>チュートリアル</code>フォルダ<br>または任意の<code>.mp4</code>ファイルをこのウィンドウにドロップ<br><br><small class=\"text-muted\">検索可能な11個の実例を収録</small>"
   }
 }

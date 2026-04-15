@@ -894,7 +894,13 @@
     .toolbar-controls {
         grid-column: 1;
         justify-self: stretch;
-        justify-content: space-between;
+        justify-content: flex-end;
+    }
+
+    /* 單一 .control-group 含 5 icon：允許在極窄視窗下整組折行 */
+    .toolbar-controls .control-group {
+        flex-wrap: wrap;
+        justify-content: flex-end;
     }
 }
 
@@ -1532,7 +1538,7 @@
     gap: 0.2rem;
     padding: 0.15rem 0.5rem;
     background: var(--accent);
-    color: var(--text-inverse);
+    color: var(--color-primary-content);
     border-radius: 999px;
     font-size: 0.6875rem;
 }
@@ -1689,11 +1695,6 @@
     background: rgba(255, 255, 255, 0.06);
 }
 
-.mode-toggle-btn:disabled {
-    opacity: 0.3;
-    pointer-events: none;
-}
-
 /* Variant: mode-toggle — wider left slot for capsule toggle (44c-T8) */
 .spotlight-search--mode-toggle {
     --spotlight-left-slot: 5.5rem;
@@ -1724,10 +1725,10 @@
     pointer-events: auto;
 }
 
-/* 已收藏愛心按鈕 — 紅色，不可點擊 */
+/* 已收藏愛心按鈕 — 紅色，可點擊（浮動愛心粒子效果） */
 .hero-card .btn-glass-circle.is-favorite {
     color: var(--color-favorite);
-    cursor: default;
+    cursor: pointer;
 }
 
 /* No-cover fallback placeholder（Hero Card 圖片載入失敗） */

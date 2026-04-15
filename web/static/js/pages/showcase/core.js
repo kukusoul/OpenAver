@@ -428,7 +428,6 @@ function showcaseState() {
             var self = this;
             var needEntry = false;
             if (this.showFavoriteActresses) {
-                this.search = '';
                 this._clearPreciseMatch();
                 if (_actresses.length === 0) {
                     this.loadActresses();
@@ -436,7 +435,11 @@ function showcaseState() {
                     needEntry = true;
                 }
             } else {
-                this.actressSearch = '';
+                needEntry = true;
+                var searchTerm = this.search.trim();
+                if (searchTerm) {
+                    this._checkPreciseActressMatch(searchTerm, 'manual');
+                }
             }
             var gen = ++this._animGeneration;
             this.$nextTick(function () {
@@ -810,6 +813,7 @@ function showcaseState() {
                     this._matchedActress = actress;
                     if (!_actresses.find(function(a) { return a.name === actress.name; })) {
                         _actresses.push(actress);
+                        this.applyActressFilterAndSort();
                     }
                     if (resp.status === 200) {
                         this.showToast(window.t('showcase.actress.addSuccess'), 'success');
@@ -840,7 +844,10 @@ function showcaseState() {
                 if (data.success && data.actress) {
                     // 先更新 _actresses 陣列（不論 lightbox 是否切換，grid 資料都要刷新）
                     const idx = _actresses.findIndex(a => a.name === name);
-                    if (idx >= 0) Object.assign(_actresses[idx], data.actress);
+                    if (idx >= 0) {
+                        Object.assign(_actresses[idx], data.actress);
+                        this.applyActressFilterAndSort();
+                    }
                     // stale guard：只在 lightbox 仍顯示同一位女優時更新 lightbox
                     if (this.currentLightboxActress?.name === name) {
                         Object.assign(this.currentLightboxActress, data.actress);
@@ -881,6 +888,10 @@ function showcaseState() {
                     }
                     this.closeActressLightbox();
                     this.showToast(window.t('showcase.actress.removeSuccess'), 'success');
+                    var searchTerm = this.search.trim();
+                    if (searchTerm) {
+                        this._checkPreciseActressMatch(searchTerm, 'manual');
+                    }
                 } else {
                     this.showToast(data.error || 'Error', 'error');
                 }
@@ -893,13 +904,26 @@ function showcaseState() {
         searchActressFilms(actressName) {
             if (!actressName) return;
             if (this.lightboxOpen) this.closeLightbox();
-            if (this.showFavoriteActresses) {
+            var wasActressMode = this.showFavoriteActresses;
+            if (wasActressMode) {
                 this.showFavoriteActresses = false;
                 this.actressSearch = '';
             }
             this.search = actressName;
             this._animateFilter();
             this._checkPreciseActressMatch(actressName, 'metadata');
+            if (wasActressMode) {
+                var self = this;
+                var gen = ++this._animGeneration;
+                this.$nextTick(function () {
+                    if (self._animGeneration !== gen) return;
+                    window.ShowcaseAnimations?.playModeCrossfade?.('actress', self.mode);
+                    if (self.mode === 'grid') {
+                        var grid = self._getActiveGrid();
+                        window.ShowcaseAnimations?.playEntry?.(grid);
+                    }
+                });
+            }
         },
 
         // --- 44c T6: Active grid helper ---
@@ -1285,25 +1309,64 @@ function showcaseState() {
                 return;
             }
 
+            // ★ C17 step 1: ghost fly — 在 state 變更前捕獲 fromRect
+            var fromRect = null;
+            var coverSrc = null;
+            if (!this.lightboxOpen) {
+                var gridEl = this._getActiveGrid();
+                if (gridEl) {
+                    var cardEl;
+                    if (this.showFavoriteActresses) {
+                        var actress = _filteredActresses[index];
+                        cardEl = actress
+                            ? gridEl.querySelector('[data-flip-id="actress:' + CSS.escape(actress.name) + '"]')
+                            : null;
+                    } else {
+                        var video = _filteredVideos[index];
+                        cardEl = video
+                            ? gridEl.querySelector('[data-flip-id="' + CSS.escape(video.path) + '"]')
+                            : null;
+                    }
+                    if (cardEl) {
+                        var imgEl = cardEl.querySelector('.av-card-preview-img img, .actress-card-photo img');
+                        if (imgEl && imgEl.complete && imgEl.getBoundingClientRect().width > 0) {
+                            fromRect = imgEl.getBoundingClientRect();
+                            coverSrc = imgEl.src;
+                        }
+                    }
+                }
+            }
+
             this._setLightboxIndex(index);
+            var lightboxEl = document.querySelector('.showcase-lightbox');
+            if (lightboxEl) lightboxEl.classList.add('gsap-animating');
             this.lightboxOpen = true;
             document.body.classList.add('overflow-hidden');
 
             // B16: GSAP 進場動畫（fire-and-forget）
             var self = this;
             var lbGen = ++this._lightboxGeneration;
-            this.$nextTick(() => {
-                if (self._lightboxGeneration !== lbGen) return;  // B19: stale
-                var lightboxEl = document.querySelector('.showcase-lightbox');
+            this.$nextTick(function () {
+                if (self._lightboxGeneration !== lbGen) return;
                 if (!lightboxEl) return;
-                self._lightboxAnimating = true;
-                var tl = window.ShowcaseAnimations?.playLightboxOpen?.(lightboxEl, {
-                    onComplete: function () {
-                        self._lightboxAnimating = false;
+
+                if (fromRect && window.GhostFly && window.GhostFly.playGridToLightbox) {
+                    self._lightboxAnimating = true;
+                    window.GhostFly.playGridToLightbox(fromRect, lightboxEl, {
+                        coverSrc: coverSrc,
+                        onComplete: function () { self._lightboxAnimating = false; }
+                    });
+                    if (window.ShowcaseAnimations && window.ShowcaseAnimations.playLightboxOpen) {
+                        window.ShowcaseAnimations.playLightboxOpen(lightboxEl, { skipCover: true });
                     }
-                });
-                if (!tl) {
-                    self._lightboxAnimating = false;
+                } else {
+                    self._lightboxAnimating = true;
+                    var tl = window.ShowcaseAnimations && window.ShowcaseAnimations.playLightboxOpen
+                        ? window.ShowcaseAnimations.playLightboxOpen(lightboxEl, {
+                            onComplete: function () { self._lightboxAnimating = false; }
+                        })
+                        : null;
+                    if (!tl) self._lightboxAnimating = false;
                 }
             });
         },
@@ -1320,6 +1383,8 @@ function showcaseState() {
             this.currentLightboxVideo = null;
             this.addingLbTag = false;
             this._videoChipsExpanded = false;
+            var lightboxEl = document.querySelector('.showcase-lightbox');
+            if (lightboxEl) lightboxEl.classList.add('gsap-animating');
             this.lightboxOpen = true;
             document.body.classList.add('overflow-hidden');
 
@@ -1347,14 +1412,44 @@ function showcaseState() {
             }
 
             this.addingLbTag = false;    // 關閉 lightbox 時重置 user tag 輸入框
+
+            // ★ C11: fly-back — 必須在 generation++ / lightboxOpen = false 之前捕獲
+            var closingIndex = this.lightboxIndex;
+            var lbEl = document.querySelector('.showcase-lightbox');
+            var lbImg = lbEl ? lbEl.querySelector('.lightbox-cover img') : null;
+            var flybackFromRect = lbImg ? lbImg.getBoundingClientRect() : null;
+            var flybackCoverSrc = lbImg ? lbImg.src : null;
+
+            // 快照 fly-back 目標的 data-flip-id（在狀態變更前，避免 toggleActressMode / removeActress 翻轉後失效）
+            var flybackFlipId = null;
+            if (closingIndex >= 0) {
+                if (this.showFavoriteActresses) {
+                    var actress = _filteredActresses[closingIndex];
+                    if (actress) flybackFlipId = 'actress:' + actress.name;
+                } else {
+                    var video = _filteredVideos[closingIndex];
+                    if (video) flybackFlipId = video.path;
+                }
+            }
+
             this._lightboxGeneration++;  // B19: invalidate pending $nextTick lightbox callbacks
             // Instant close — kill any in-progress lightbox animations, then sync cleanup
             _killLightboxTimelines();
-            var lbEl = document.querySelector('.showcase-lightbox');
             if (lbEl) lbEl.classList.remove('gsap-animating');
             this._lightboxAnimating = false;
             this.lightboxOpen = false;
             document.body.classList.remove('overflow-hidden');
+
+            // ★ Fly-back — 用快照的 flipId 在整個頁面搜尋，不依賴 mode 或活陣列
+            if (flybackFlipId && flybackFromRect && window.GhostFly && window.GhostFly.playLightboxToGrid) {
+                var self = this;
+                this.$nextTick(function () {
+                    var cardEl = document.querySelector('[data-flip-id="' + CSS.escape(flybackFlipId) + '"]');
+                    if (cardEl) {
+                        window.GhostFly.playLightboxToGrid(flybackFromRect, cardEl, { coverSrc: flybackCoverSrc });
+                    }
+                });
+            }
 
             // F2: delay state clearing until CSS transition completes (250ms)
             // Keep currentLightboxVideo intact during fade-out, then clear after

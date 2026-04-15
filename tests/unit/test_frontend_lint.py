@@ -1,5 +1,6 @@
 """前端靜態守衛 — 確保 template 包含必要的 Alpine 綁定"""
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -2420,3 +2421,186 @@ class TestScannerAliasV2Guard:
         alias = data.get("scanner", {}).get("alias", {})
         assert "filter_hint" in alias, \
             "zh_TW.json 缺少 scanner.alias.filter_hint"
+
+
+class TestUserTagCSSGuard:
+    """T3: 確保 user-tag 選擇器不使用 --text-inverse（dark mode 對比度修正）"""
+
+    def test_search_user_tag_no_text_inverse(self):
+        """search.css 的 .tag-badge.user-tag 不使用 --text-inverse"""
+        css = Path("web/static/css/pages/search.css").read_text(encoding="utf-8")
+        # 截取 .tag-badge.user-tag 選擇器區塊
+        match = re.search(r'\.tag-badge\.user-tag\s*\{([^}]+)\}', css)
+        assert match, ".tag-badge.user-tag selector not found in search.css"
+        block = match.group(1)
+        assert "--text-inverse" not in block, \
+            ".tag-badge.user-tag should use --color-primary-content, not --text-inverse"
+
+    def test_showcase_lb_user_tag_no_text_inverse(self):
+        """showcase.css 的 .lb-user-tag 不使用 --text-inverse"""
+        css = Path("web/static/css/pages/showcase.css").read_text(encoding="utf-8")
+        match = re.search(r'\.lb-user-tag\s*\{([^}]+)\}', css)
+        assert match, ".lb-user-tag selector not found in showcase.css"
+        block = match.group(1)
+        assert "--text-inverse" not in block, \
+            ".lb-user-tag should use --color-primary-content, not --text-inverse"
+
+
+class TestShowcaseToolbarStructureGuard:
+    """T5: 確保影片模式 .toolbar-controls 直接子 .control-group 數量為 2"""
+
+    def _html(self):
+        return SHOWCASE_HTML.read_text(encoding="utf-8")
+
+    def test_video_mode_toolbar_has_two_control_groups(self):
+        """影片模式 .toolbar-controls 直接子 .control-group 應有 2 個
+
+        group 1: funnel + sort-dir
+        group 2: mode dropdown + eye button + perPage dropdown
+        """
+        html = self._html()
+
+        # 找到影片模式的 toolbar-controls（x-show="!showFavoriteActresses"）
+        # 用正則截取從開啟標籤到對應結尾 </div> 的區塊
+        # 先找到開啟的 div
+        start_pattern = re.compile(
+            r'<div[^>]+class="[^"]*toolbar-section toolbar-controls[^"]*"[^>]+x-show="!showFavoriteActresses"[^>]*>'
+        )
+        start_match = start_pattern.search(html)
+        assert start_match, (
+            "showcase.html 找不到影片模式 .toolbar-controls（x-show=\"!showFavoriteActresses\"）"
+        )
+
+        # 從開啟標籤後，追蹤 div 巢狀深度找到對應的結尾 </div>
+        pos = start_match.end()
+        depth = 1
+        tag_pattern = re.compile(r'<(/?)div[\s>]')
+        while depth > 0 and pos < len(html):
+            m = tag_pattern.search(html, pos)
+            if not m:
+                break
+            if m.group(1) == '/':
+                depth -= 1
+            else:
+                depth += 1
+            pos = m.end()
+
+        block = html[start_match.end():pos]
+
+        # 計算直接子 .control-group 數量：找開啟的 <div class="control-group">
+        # 只計算深度 1 的（直接子）
+        direct_groups = 0
+        depth = 0
+        tag_re = re.compile(r'<(/?)(div)(?:\s+([^>]*))?>')
+        for m in tag_re.finditer(block):
+            closing, tag, attrs = m.group(1), m.group(2), m.group(3) or ''
+            if closing:
+                depth -= 1
+            else:
+                if depth == 0 and 'control-group' in attrs:
+                    direct_groups += 1
+                depth += 1
+
+        assert direct_groups == 1, (
+            f"影片模式 .toolbar-controls 直接子 .control-group 應為 1 個（全部 5 icon 合併），實際為 {direct_groups} 個。"
+        )
+
+
+class TestActressIconGuard:
+    """T6E: 確保女優 icon 統一為 bi-person-circle"""
+
+    def test_showcase_no_bare_bi_person(self):
+        """showcase.html 不應有 bi-person（非 circle/heart）"""
+        html = Path("web/templates/showcase.html").read_text(encoding="utf-8")
+        # 匹配 bi-person 但排除 bi-person-circle 和 bi-person-heart
+        matches = re.findall(r'class="bi bi-person(?!-circle|-heart)"', html)
+        # 排除 icon catalog 展示（如有）
+        assert len(matches) == 0, f"showcase.html 仍有 {len(matches)} 處 bi-person（非 circle/heart）"
+
+    def test_scanner_no_bi_person_badge(self):
+        """scanner.html 不應有 bi-person-badge"""
+        html = Path("web/templates/scanner.html").read_text(encoding="utf-8")
+        assert "bi-person-badge" not in html, "scanner.html 仍有 bi-person-badge"
+
+
+class TestGhostFlyGuards:
+    """T8: Ghost Fly 架構守衛"""
+
+    def test_ghost_fly_js_exists(self):
+        """ghost-fly.js 檔案存在"""
+        assert Path("web/static/js/shared/ghost-fly.js").exists()
+
+    def test_ghost_fly_loaded_in_base_html(self):
+        """base.html 載入 ghost-fly.js"""
+        html = Path("web/templates/base.html").read_text(encoding="utf-8")
+        assert "ghost-fly.js" in html
+
+    def test_skip_cover_supported_in_showcase_animations(self):
+        """showcase/animations.js playLightboxOpen 支援 skipCover"""
+        js = Path("web/static/js/pages/showcase/animations.js").read_text(encoding="utf-8")
+        assert "skipCover" in js
+
+    def test_skip_cover_supported_in_search_animations(self):
+        """search/animations.js playLightboxOpen 支援 skipCover"""
+        js = Path("web/static/js/pages/search/animations.js").read_text(encoding="utf-8")
+        assert "skipCover" in js
+
+    def test_ghost_fly_fallback_exists_in_search_animations(self):
+        """search/animations.js 委派函式有 GhostFly fallback"""
+        js = Path("web/static/js/pages/search/animations.js").read_text(encoding="utf-8")
+        # createCoverGhost 應委派到 window.GhostFly
+        assert "window.GhostFly" in js
+        # 應有 else fallback（GhostFly 不存在時）
+        # 在 createCoverGhost / cleanupGhost / cleanupStaleGhosts 區域
+        lines = js.split('\n')
+        ghost_fly_refs = [i for i, line in enumerate(lines) if 'window.GhostFly' in line]
+        assert len(ghost_fly_refs) >= 3, "應有至少 3 個 window.GhostFly 引用（三個委派函式）"
+
+    def test_gsap_animating_before_lightbox_open(self):
+        """showcase/core.js 的 gsap-animating 在 lightboxOpen = true 之前"""
+        js = Path("web/static/js/pages/showcase/core.js").read_text(encoding="utf-8")
+        # 只在 openLightbox 函數區域內檢查順序
+        idx_fn = js.find("openLightbox(")
+        assert idx_fn > 0, "找不到 openLightbox 函數"
+        fn_scope = js[idx_fn:]
+        idx_animating = fn_scope.find("classList.add('gsap-animating')")
+        idx_open = fn_scope.find("this.lightboxOpen = true")
+        assert idx_animating > 0, "找不到 gsap-animating classList.add"
+        assert idx_open > 0, "找不到 lightboxOpen = true"
+        assert idx_animating < idx_open, "gsap-animating 應在 lightboxOpen = true 之前"
+
+
+class TestTutorialExpandGuard:
+    """T10: 新手教學 7 步守衛"""
+
+    def test_tutorial_has_7_steps(self):
+        """tutorial.js 包含 7 個步驟 id"""
+        js = Path("web/static/js/components/tutorial.js").read_text(encoding="utf-8")
+        expected_ids = ['search', 'files', 'scanner', 'showcase', 'settings', 'help', 'samples']
+        for step_id in expected_ids:
+            assert f"id: '{step_id}'" in js, f"tutorial.js 缺少步驟 id: '{step_id}'"
+
+    def test_tutorial_last_step_has_large(self):
+        """最後一步（samples）有 large: true"""
+        js = Path("web/static/js/components/tutorial.js").read_text(encoding="utf-8")
+        # 找 samples step 區塊，確認包含 large: true
+        samples_idx = js.find("id: 'samples'")
+        assert samples_idx > 0, "找不到 samples 步驟"
+        # 從 samples 往後找到這個物件的結尾 }
+        block_end = js.find('}', samples_idx)
+        block = js[samples_idx:block_end]
+        assert 'large: true' in block, "samples 步驟缺少 large: true"
+
+    @pytest.mark.parametrize("locale", ["zh_TW", "en", "ja", "zh_CN"])
+    def test_tutorial_i18n_keys_complete(self, locale):
+        """四語系 tutorial step1-7 key 全部存在且非空"""
+        import json
+        data = json.loads(Path(f"locales/{locale}.json").read_text(encoding="utf-8"))
+        tutorial = data.get("tutorial", {})
+        for i in range(1, 8):
+            title_key = f"step{i}_title"
+            content_key = f"step{i}_content"
+            assert title_key in tutorial and tutorial[title_key], \
+                f"{locale}.json 缺少或為空: tutorial.{title_key}"
+            assert content_key in tutorial and tutorial[content_key], \
+                f"{locale}.json 缺少或為空: tutorial.{content_key}"

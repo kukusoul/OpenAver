@@ -51,16 +51,14 @@
                         <button class="mode-toggle-btn"
                                 :class="{ 'active': !showFavoriteActresses }"
                                 @click="showFavoriteActresses && toggleActressMode()"
-                                :disabled="showFavoriteActresses && actressSearch !== ''"
                                 :title="t('showcase.mode.video')">
                             <i class="bi bi-film"></i>
                         </button>
                         <button class="mode-toggle-btn"
                                 :class="{ 'active': showFavoriteActresses }"
                                 @click="!showFavoriteActresses && toggleActressMode()"
-                                :disabled="!showFavoriteActresses && search !== ''"
                                 :title="t('showcase.mode.actress')">
-                            <i class="bi bi-person"></i>
+                            <i class="bi bi-person-circle"></i>
                         </button>
                     </div>
                     <!-- 影片搜尋框 (CD-11) -->
@@ -105,8 +103,8 @@
             </div>
 
             <div class="toolbar-section toolbar-controls" x-show="!showFavoriteActresses">
-                <!-- 排序 -->
                 <div class="control-group">
+                    <!-- 排序 -->
                     <div class="toolbar-dropdown-wrap" @click.outside="sortOpen = false">
                         <button class="btn-icon"
                                 @click="sortOpen = !sortOpen; modeOpen = false; perPageOpen = false"
@@ -126,7 +124,7 @@
                                 <i class="bi bi-type"></i> {{ t('showcase.sort.title') }}</a>
                             <a href="#" class="dropdown-item" :class="{ 'active': sort === 'actor' }"
                                @click.prevent="sort = 'actor'; onSortChange(); sortOpen = false">
-                                <i class="bi bi-person"></i> {{ t('showcase.sort.actor') }}</a>
+                                <i class="bi bi-person-circle"></i> {{ t('showcase.sort.actor') }}</a>
                             <a href="#" class="dropdown-item" :class="{ 'active': sort === 'maker' }"
                                @click.prevent="sort = 'maker'; onSortChange(); sortOpen = false">
                                 <i class="bi bi-building"></i> {{ t('showcase.sort.maker') }}</a>
@@ -144,60 +142,57 @@
                     <button class="btn-icon" @click="toggleOrder()" title="{{ t('showcase.action.toggle_order') }}">
                         <i class="bi" :class="order === 'asc' ? 'bi-sort-up' : 'bi-sort-down'"></i>
                     </button>
-                </div>
-
-                <!-- 顯示模式 -->
-                <div class="toolbar-dropdown-wrap" @click.outside="modeOpen = false">
-                    <button class="btn-icon"
-                            @click="modeOpen = !modeOpen; sortOpen = false; perPageOpen = false"
-                            :title="t('showcase.toolbar.mode_prefix') + ': ' + (mode === 'grid' ? t('showcase.mode.grid') : mode === 'table' ? t('showcase.mode.table') : t('showcase.mode.list'))"
-                            :class="{ 'active': modeOpen }">
-                        <i class="bi" :class="mode === 'grid' ? 'bi-grid-3x3' : mode === 'table' ? 'bi-table' : 'bi-list-ul'"></i>
-                    </button>
-                    <div class="toolbar-dropdown" x-show="modeOpen" x-transition.opacity.duration.150ms @click.stop>
-                        <a href="#" class="dropdown-item" :class="{ 'active': mode === 'grid' }"
-                           @click.prevent="switchMode('grid'); modeOpen = false">
-                            <i class="bi bi-grid-3x3"></i> {{ t('showcase.mode.grid') }}</a>
-                        <a href="#" class="dropdown-item" :class="{ 'active': mode === 'table' }"
-                           @click.prevent="switchMode('table'); modeOpen = false">
-                            <i class="bi bi-table"></i> {{ t('showcase.mode.table') }}</a>
-                        <a href="#" class="dropdown-item" :class="{ 'active': mode === 'list' }"
-                           @click.prevent="switchMode('list'); modeOpen = false">
-                            <i class="bi bi-list-ul"></i> {{ t('showcase.mode.list') }}</a>
+                    <!-- 顯示模式 -->
+                    <div class="toolbar-dropdown-wrap" @click.outside="modeOpen = false">
+                        <button class="btn-icon"
+                                @click="modeOpen = !modeOpen; sortOpen = false; perPageOpen = false"
+                                :title="t('showcase.toolbar.mode_prefix') + ': ' + (mode === 'grid' ? t('showcase.mode.grid') : mode === 'table' ? t('showcase.mode.table') : t('showcase.mode.list'))"
+                                :class="{ 'active': modeOpen }">
+                            <i class="bi" :class="mode === 'grid' ? 'bi-grid-3x3' : mode === 'table' ? 'bi-table' : 'bi-list-ul'"></i>
+                        </button>
+                        <div class="toolbar-dropdown" x-show="modeOpen" x-transition.opacity.duration.150ms @click.stop>
+                            <a href="#" class="dropdown-item" :class="{ 'active': mode === 'grid' }"
+                               @click.prevent="switchMode('grid'); modeOpen = false">
+                                <i class="bi bi-grid-3x3"></i> {{ t('showcase.mode.grid') }}</a>
+                            <a href="#" class="dropdown-item" :class="{ 'active': mode === 'table' }"
+                               @click.prevent="switchMode('table'); modeOpen = false">
+                                <i class="bi bi-table"></i> {{ t('showcase.mode.table') }}</a>
+                            <a href="#" class="dropdown-item" :class="{ 'active': mode === 'list' }"
+                               @click.prevent="switchMode('list'); modeOpen = false">
+                                <i class="bi bi-list-ul"></i> {{ t('showcase.mode.list') }}</a>
+                        </div>
                     </div>
-                </div>
-
-                <!-- 資訊顯示開關 (M3i - 僅 Grid 模式) -->
-                <button class="btn-icon"
-                        x-show="mode === 'grid'"
-                        :class="{ 'active': infoVisible }"
-                        @click="toggleInfo()"
-                        title="{{ t('showcase.action.toggle_info') }}">
-                    <i class="bi bi-eye"></i>
-                </button>
-
-                <!-- 每頁數量 -->
-                <div class="toolbar-dropdown-wrap" @click.outside="perPageOpen = false">
+                    <!-- 資訊顯示開關 (僅 Grid 模式) -->
                     <button class="btn-icon"
-                            @click="perPageOpen = !perPageOpen; sortOpen = false; modeOpen = false"
-                            :title="t('showcase.toolbar.per_page_prefix') + ': ' + (perPage == 0 ? t('showcase.per_page.all') : perPage + ' ' + t('showcase.unit.videos'))"
-                            :class="{ 'active': perPageOpen }">
-                        <i class="bi bi-list-nested"></i>
+                            x-show="mode === 'grid'"
+                            :class="{ 'active': infoVisible }"
+                            @click="toggleInfo()"
+                            title="{{ t('showcase.action.toggle_info') }}">
+                        <i class="bi bi-eye"></i>
                     </button>
-                    <div class="toolbar-dropdown" x-show="perPageOpen" x-transition.opacity.duration.150ms @click.stop>
-                        <a href="#" class="dropdown-item" :class="{ 'active': perPage == 30 }"
-                           @click.prevent="perPage = 30; onPerPageChange(); perPageOpen = false">30 {{ t('showcase.unit.videos') }}</a>
-                        <a href="#" class="dropdown-item" :class="{ 'active': perPage == 45 }"
-                           @click.prevent="perPage = 45; onPerPageChange(); perPageOpen = false">45 {{ t('showcase.unit.videos') }}</a>
-                        <a href="#" class="dropdown-item" :class="{ 'active': perPage == 60 }"
-                           @click.prevent="perPage = 60; onPerPageChange(); perPageOpen = false">60 {{ t('showcase.unit.videos') }}</a>
-                        <a href="#" class="dropdown-item" :class="{ 'active': perPage == 90 }"
-                           @click.prevent="perPage = 90; onPerPageChange(); perPageOpen = false">90 {{ t('showcase.unit.videos') }}</a>
-                        <a href="#" class="dropdown-item" :class="{ 'active': perPage == 120 }"
-                           @click.prevent="perPage = 120; onPerPageChange(); perPageOpen = false">120 {{ t('showcase.unit.videos') }}</a>
-                        <a href="#" class="dropdown-item"
-                           :class="{ 'active': perPage == 0, 'disabled pointer-events-none opacity-40': mode === 'grid' }"
-                           @click.prevent="if (mode !== 'grid') { perPage = 0; onPerPageChange(); perPageOpen = false }">{{ t('showcase.per_page.all') }}</a>
+                    <!-- 每頁數量 -->
+                    <div class="toolbar-dropdown-wrap" @click.outside="perPageOpen = false">
+                        <button class="btn-icon"
+                                @click="perPageOpen = !perPageOpen; sortOpen = false; modeOpen = false"
+                                :title="t('showcase.toolbar.per_page_prefix') + ': ' + (perPage == 0 ? t('showcase.per_page.all') : perPage + ' ' + t('showcase.unit.videos'))"
+                                :class="{ 'active': perPageOpen }">
+                            <i class="bi bi-list-nested"></i>
+                        </button>
+                        <div class="toolbar-dropdown" x-show="perPageOpen" x-transition.opacity.duration.150ms @click.stop>
+                            <a href="#" class="dropdown-item" :class="{ 'active': perPage == 30 }"
+                               @click.prevent="perPage = 30; onPerPageChange(); perPageOpen = false">30 {{ t('showcase.unit.videos') }}</a>
+                            <a href="#" class="dropdown-item" :class="{ 'active': perPage == 45 }"
+                               @click.prevent="perPage = 45; onPerPageChange(); perPageOpen = false">45 {{ t('showcase.unit.videos') }}</a>
+                            <a href="#" class="dropdown-item" :class="{ 'active': perPage == 60 }"
+                               @click.prevent="perPage = 60; onPerPageChange(); perPageOpen = false">60 {{ t('showcase.unit.videos') }}</a>
+                            <a href="#" class="dropdown-item" :class="{ 'active': perPage == 90 }"
+                               @click.prevent="perPage = 90; onPerPageChange(); perPageOpen = false">90 {{ t('showcase.unit.videos') }}</a>
+                            <a href="#" class="dropdown-item" :class="{ 'active': perPage == 120 }"
+                               @click.prevent="perPage = 120; onPerPageChange(); perPageOpen = false">120 {{ t('showcase.unit.videos') }}</a>
+                            <a href="#" class="dropdown-item"
+                               :class="{ 'active': perPage == 0, 'disabled pointer-events-none opacity-40': mode === 'grid' }"
+                               @click.prevent="if (mode !== 'grid') { perPage = 0; onPerPageChange(); perPageOpen = false }">{{ t('showcase.per_page.all') }}</a>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -225,7 +220,7 @@
                                 <i class="bi bi-calendar-plus"></i> {{ t('showcase.sort.actress.added_at') }}</a>
                             <a href="#" class="dropdown-item" :class="{ 'active': actressSort === 'age' }"
                                @click.prevent="actressSort = 'age'; onActressSortChange(); actressSortOpen = false">
-                                <i class="bi bi-person"></i> {{ t('showcase.sort.actress.age') }}</a>
+                                <i class="bi bi-person-circle"></i> {{ t('showcase.sort.actress.age') }}</a>
                             <a href="#" class="dropdown-item" :class="{ 'active': actressSort === 'height' }"
                                @click.prevent="actressSort = 'height'; onActressSortChange(); actressSortOpen = false">
                                 <i class="bi bi-arrow-up"></i> {{ t('showcase.sort.actress.height') }}</a>
@@ -320,7 +315,7 @@
                      x-show="_matchedActress"
                      @click.stop>
                   <button class="btn-glass-circle is-favorite"
-                          disabled
+                          @click.stop="window.GhostFly && GhostFly.floatingHearts($el)"
                           :title="t('showcase.actress.favorited')">
                     <i class="bi bi-heart-fill"></i>
                   </button>
@@ -526,7 +521,7 @@
                             </template>
                             <template x-if="!actress.photo_url">
                                 <div class="actress-no-photo">
-                                    <i class="bi bi-person"></i>
+                                    <i class="bi bi-person-circle"></i>
                                 </div>
                             </template>
                             <!-- Search films overlay (44c-T7) -->
@@ -578,7 +573,7 @@
                                  :alt="currentLightboxActress?.name">
                             <div class="actress-lb-cover-placeholder"
                                  x-show="!currentLightboxActress?.photo_url">
-                                <i class="bi bi-person" style="font-size:4rem; opacity:0.3"></i>
+                                <i class="bi bi-person-circle" style="font-size:4rem; opacity:0.3"></i>
                             </div>
                             <div class="cover-actions">
                                 <button class="lb-action-btn"

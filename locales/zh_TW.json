@@ -682,7 +682,8 @@
       "h6_manage": "收藏管理",
       "manage_add": "從搜尋頁或瀏覽頁加入收藏，照片自動下載至本地",
       "manage_alias": "別名管理：Scanner 頁面可新增、編輯女優別名，搜尋時自動展開所有已知名稱",
-      "manage_enrich": "瀏覽頁卡片可一鍵重新抓取（rescrape）更新女優資料"
+      "manage_enrich": "瀏覽頁卡片可一鍵重新抓取（rescrape）更新女優資料",
+      "manage_photo_path": "收藏女優的照片存放於 output/Gfriends/ 目錄下"
     },
     "scanner": {
       "title": "影片列表生成 (Scanner)",
@@ -801,15 +802,19 @@
     "skip": "跳過",
     "next": "下一步 →",
     "done": "完成 🎉",
-    "step1_title": "💡 搜尋功能",
-    "step1_content": "輸入番號（如 SONE-001）或女優名稱<br>也可拖入檔案，自動提取番號並搜尋",
-    "step2_title": "📁 批次處理",
-    "step2_content": "加入多個檔案，一次搜尋 20 個<br>支援我的最愛資料夾快速載入",
-    "step3_title": "📝 列表生成",
-    "step3_content": "掃描本地資料夾，生成精美的 HTML 展示頁<br>自動補全 NFO 檔案",
-    "step4_title": "⚙️ 個人化設定",
-    "step4_content": "切換 Dark Mode、設定我的最愛資料夾<br>調整介面與功能偏好",
-    "step5_title": "🎬 立即體驗！",
-    "step5_content": "拖放 <code>教學檔案</code> 資料夾<br>或其中任一 <code>.mp4</code> 檔案到此視窗<br><br><small class=\"text-muted\">內含 11 個真實可搜尋的範例</small>"
+    "step1_title": "💡 搜尋影片資訊",
+    "step1_content": "輸入番號（如 SONE-001）或女優名稱就能搜尋<br>找到後點一下，自動刮削封面、演員、劇情一次完成",
+    "step2_title": "📁 批次整理",
+    "step2_content": "把一整個資料夾的影片加進來，批量搜尋刮削<br>幾十部片自動補齊封面與 NFO，不用一個一個處理",
+    "step3_title": "📋 掃描資料夾",
+    "step3_content": "把本地資料夾加進來掃描，一鍵補齊缺少的 NFO 和封面<br>掃完後在 Showcase 就能看到整個收藏",
+    "step4_title": "🎬 瀏覽你的收藏",
+    "step4_content": "Showcase 是你的私人影片庫，影片封面牆一目了然<br>切換成女優模式，還能瀏覽收藏女優的照片與作品",
+    "step5_title": "⚙️ 個人化設定",
+    "step5_content": "切換深色模式、調整語言和字體大小，打造舒適的使用介面<br>也可以設定搜尋來源偏好和啟動時預設開啟的頁面",
+    "step6_title": "🤖 讓 AI 幫你操作",
+    "step6_content": "Help 頁有一個指令，複製後貼給 Claude Code 或 Cursor<br>AI 就能自動幫你搜尋、刮削、整理，不用自己一步一步來",
+    "step7_title": "🎯 立即體驗！",
+    "step7_content": "拖放 <code>教學檔案</code> 資料夾<br>或其中任一 <code>.mp4</code> 檔案到此視窗<br><br><small class=\"text-muted\">內含 11 個真實可搜尋的範例</small>"
   }
 }

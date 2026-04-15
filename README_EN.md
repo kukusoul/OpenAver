@@ -119,12 +119,22 @@ Translate Japanese titles into your UI locale (Traditional Chinese, Simplified C
 
 ### 🤖 AI-Ready API
 
-Your AI assistant can operate your library directly:
+OpenAver ships a capabilities manifest — your AI agent reads it once and knows every endpoint. It doesn't just look things up; it chains multiple steps to handle the tedious work you'd never bother doing by hand.
+
+**One sentence, full automated workflow:**
+
+- **"Add my top 20 actresses by video count to favorites, skip ones already saved."**
+  <sub>SQL stats → dedup check → batch favorite → download photos</sub>
+- **"橋本ありな and 新ありな are the same person and she's retired — tag them."**
+  <sub>Create alias link → find all videos under both names → batch-tag "retired"</sub>
+- **"Turn the video IDs in this article into an HTML page with covers."**
+  <sub>Parse IDs → batch search → download covers → generate gallery HTML</sub>
+
+**Everyday operations work too:**
 
 - "Search SAME-123, PRED-456, IPZZ-789 for me" — multi-source aggregation
 - "Fill in the missing NFO in D:\av" — in-place enrichment, no rename, no move
-- "Which series did I download the most this year?" — SQL queries on your collection
-- "Turn the IDs in this article into a visual gallery" — auto-embedded cover HTML
+- "Which series did I download the most this year?" — SQL query on your collection
 
 No SDK. No docs to read. One curl, and your AI learns every endpoint:
 
@@ -145,8 +155,6 @@ Works with any MCP / function-calling compatible AI tool:
 > 💡 **Recommended**: **OpenAI Codex App** (Win/Mac, free tier available) — the only AI tool that renders cover images directly in the conversation. Easy to install, works out of the box.
 
 > ⚡ **Small-model friendly**: The capabilities manifest is optimized for lightweight models — Gemini Flash / GPT-5.4 mini / Claude Haiku can all operate every endpoint correctly.
-
-> 🔍 Looking for a local video library tool that Claude / Codex / Gemini can operate directly? OpenAver is one of the few desktop GUI projects with a built-in capabilities manifest and full REST API.
 
 ---
 

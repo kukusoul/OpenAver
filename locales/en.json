@@ -487,7 +487,7 @@
       "minutes": "min",
       "minutes_abbr": "min",
       "videos_count": "",
-      "films": ""
+      "films": " films"
     },
     "per_page": {
       "all": "All"
@@ -682,7 +682,8 @@
       "h6_manage": "Favorites Management",
       "manage_add": "Add favorites from Search or Showcase; profile photo is downloaded locally automatically",
       "manage_alias": "Alias management: add and edit actress aliases on the Scanner page; all known aliases are expanded automatically during search",
-      "manage_enrich": "One-click rescrape on Showcase cards to refresh actress data"
+      "manage_enrich": "One-click rescrape on Showcase cards to refresh actress data",
+      "manage_photo_path": "Favorited actress photos are stored in the output/Gfriends/ directory"
     },
     "scanner": {
       "title": "Video List Generator (Scanner)",
@@ -801,15 +802,19 @@
     "skip": "Skip",
     "next": "Next →",
     "done": "Done 🎉",
-    "step1_title": "💡 Search",
-    "step1_content": "Enter an ID (e.g. SONE-001) or actress name<br>You can also drop files to auto-extract IDs and search",
-    "step2_title": "📁 Batch Processing",
-    "step2_content": "Add multiple files and search 20 at once<br>Quick load from your favorite folders",
-    "step3_title": "📝 List Generation",
-    "step3_content": "Scan local folders to generate an HTML showcase page<br>Auto-complete NFO files",
-    "step4_title": "⚙️ Settings",
-    "step4_content": "Toggle Dark Mode, set favorite folders<br>Customize your interface and features",
-    "step5_title": "🎬 Try It Now!",
-    "step5_content": "Drop the <code>Tutorial</code> folder<br>or any <code>.mp4</code> file into this window<br><br><small class=\"text-muted\">Contains 11 real searchable examples</small>"
+    "step1_title": "💡 Search for Video Info",
+    "step1_content": "Enter an ID (e.g. SONE-001) or actress name to search<br>Click a result to auto-scrape cover, cast, and description in one go",
+    "step2_title": "📁 Batch Organize",
+    "step2_content": "Add an entire folder of videos for bulk search and scraping<br>Dozens of titles get covers and NFO files filled in automatically",
+    "step3_title": "📋 Scan Folder",
+    "step3_content": "Add a local folder to scan and fill in missing NFO files and covers<br>After scanning, your entire collection appears in Showcase",
+    "step4_title": "🎬 Browse Your Collection",
+    "step4_content": "Showcase is your private video library with a cover wall at a glance<br>Switch to actress mode to browse photos and filmographies",
+    "step5_title": "⚙️ Personalize",
+    "step5_content": "Toggle dark mode, adjust language and font size for a comfortable interface<br>Also set your preferred search sources and default startup page",
+    "step6_title": "🤖 Let AI Do It For You",
+    "step6_content": "The Help page has a command — copy and paste it into Claude Code or Cursor<br>AI will automatically search, scrape, and organize for you",
+    "step7_title": "🎯 Try It Now!",
+    "step7_content": "Drop the <code>Tutorial</code> folder<br>or any <code>.mp4</code> file into this window<br><br><small class=\"text-muted\">Contains 11 real searchable examples</small>"
   }
 }
