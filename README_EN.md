@@ -156,6 +156,8 @@ Works with any MCP / function-calling compatible AI tool:
 
 > ⚡ **Small-model friendly**: The capabilities manifest is optimized for lightweight models — Gemini Flash / GPT-5.4 mini / Claude Haiku can all operate every endpoint correctly.
 
+> 💻 **Want your AI to pre-read the repo, or extend endpoints yourself?** Every endpoint is defined in [`web/routers/capabilities.py`](web/routers/capabilities.py) — AI agents cloning the repo will read this file first and learn every tool without even starting the server.
+
 ---
 
 ## Developer Guide
@@ -202,7 +204,9 @@ pytest
 ```
 OpenAver/
 ├── web/                # Web GUI (FastAPI)
-│   ├── routers/        # API endpoints (Search, Config, Scraper, Scanner, Capabilities)
+│   ├── routers/
+│   │   ├── capabilities.py  # 🌟 AI Manifest — self-describing definitions of every endpoint (single file)
+│   │   └── ...              # Other business endpoints (search / scanner / scraper / actress / ...)
 │   ├── templates/      # HTML templates (DaisyUI + Fluent Design 2)
 │   └── static/         # CSS/JS assets (modular JS, theme CSS)
 ├── core/               # Core logic

@@ -156,6 +156,8 @@ curl http://localhost:<port>/api/capabilities
 
 > ⚡ **小模型友善**：capabilities manifest 已針對輕量模型優化，Gemini Flash / GPT-5.4 mini / Claude Haiku 皆可正確操作所有端點。
 
+> 💻 **想讓 AI 預讀 repo、或自己擴充端點？** 所有端點定義在 [`web/routers/capabilities.py`](web/routers/capabilities.py) — AI agent clone repo 時會優先讀這個檔，不需要啟動服務就能學會所有工具。
+
 ---
 
 ## 開發者指南
@@ -202,7 +204,9 @@ pytest
 ```
 OpenAver/
 ├── web/                # Web GUI (FastAPI)
-│   ├── routers/        # API Endpoints (Search, Config, Scraper, Scanner, Capabilities)
+│   ├── routers/
+│   │   ├── capabilities.py  # 🌟 AI Manifest — 所有端點的自描述定義（單檔全貌）
+│   │   └── ...              # 其餘業務端點（search / scanner / scraper / actress / ...）
 │   ├── templates/      # HTML Templates (DaisyUI + Fluent Design 2)
 │   └── static/         # CSS/JS Assets (Modular JS, Theme CSS)
 ├── core/               # 核心邏輯
