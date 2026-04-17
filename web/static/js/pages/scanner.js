@@ -97,6 +97,7 @@ function scannerPage() {
     missingEnrichSuccess: 0,
     missingEnrichFailed: 0,
     resumePillVisible: false,
+    missingConfirmModalOpen: false,   // TASK-13: 大批量補完 confirm dialog 開關
     _enrichAbortController: null,
 
     // ===== T7b: EventSource 管理 =====
@@ -996,18 +997,12 @@ function scannerPage() {
             const result = await resp.json();
             if (!result.success) return;
             const d = result.data;
-            if (d.total_missing > 0 && d.items !== null) {
+            if (d.total_missing > 0) {
+                // TASK-13: 後端永遠回傳完整 items 清單；前端於 runMissingEnrich 內做 > 500 confirm gate
                 this.missingBothCount = d.missing_both || 0;
                 this.missingNfoCount = d.missing_nfo || 0;
                 this.missingCoverCount = d.missing_cover || 0;
-                this.missingItems = d.items;
-                this.missingPillVisible = true;
-            } else if (d.total_missing > 500) {
-                // items is null — show count but disable button (handled via missingItems.length === 0)
-                this.missingBothCount = d.missing_both || 0;
-                this.missingNfoCount = d.missing_nfo || 0;
-                this.missingCoverCount = d.missing_cover || 0;
-                this.missingItems = [];
+                this.missingItems = Array.isArray(d.items) ? d.items : [];
                 this.missingPillVisible = true;
             } else {
                 this.missingPillVisible = false;
@@ -1017,8 +1012,14 @@ function scannerPage() {
         }
     },
 
-    async runMissingEnrich() {
+    async runMissingEnrich({ skipConfirm = false } = {}) {
         if (this.isGenerating || this.missingItems.length === 0) return;
+
+        // TASK-13: 大批量 confirm gate — > 500 筆彈 modal，等用戶按確認才繼續
+        if (!skipConfirm && this.missingItems.length > 500) {
+            this.missingConfirmModalOpen = true;
+            return;
+        }
 
         this.state = 'enriching';
         this.missingEnrichOffset = 0;
@@ -1164,9 +1165,22 @@ function scannerPage() {
     },
 
     resumeMissingEnrich() {
+        // TASK-13: 不在此清 localStorage；交由 runMissingEnrich 成功完成時統一清除。
+        // 若補完途中失敗或用戶取消，pending 保留、下次 reload 仍可恢復。
+        // skipConfirm:true — 用戶前一次已明確按過「一鍵補完」，resume 視為延續既有意圖。
         this.resumePillVisible = false;
-        localStorage.removeItem('avlist_enrich_pending');
-        this.runMissingEnrich();
+        this.runMissingEnrich({ skipConfirm: true });
+    },
+
+    // TASK-13: confirm modal 的確認按鈕 — 跳過 confirm gate、直接啟動補完
+    async confirmLargeMissingEnrich() {
+        this.missingConfirmModalOpen = false;
+        await this.runMissingEnrich({ skipConfirm: true });
+    },
+
+    // TASK-13: confirm modal 的取消按鈕 — 只關 modal，不清 localStorage（保留 resume 恢復點）
+    cancelLargeMissingEnrich() {
+        this.missingConfirmModalOpen = false;
     },
 
     dismissResume() {

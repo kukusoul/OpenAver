@@ -404,7 +404,13 @@
       "missing_resume_label": "Last enrich unfinished, remaining",
       "missing_resume_suffix": "",
       "missing_resume_btn": "Resume",
-      "missing_resume_dismiss": "Dismiss"
+      "missing_resume_dismiss": "Dismiss",
+      "missing_enrich_confirm_title": "Confirm Large Batch Enrich",
+      "missing_enrich_confirm_body_prefix": "About to enrich ",
+      "missing_enrich_confirm_body_middle": " videos, estimated time about ",
+      "missing_enrich_confirm_body_suffix": " minutes. Continue?",
+      "missing_enrich_confirm_cancel": "Cancel",
+      "missing_enrich_confirm_confirm": "Confirm"
     },
     "alias": {
       "section_title": "Actress Name Aliases",

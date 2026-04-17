@@ -12,7 +12,7 @@
      @dragleave.document="handleDragLeave($event)"
      @dragover.document.prevent
      @drop.document.prevent="handleDrop($event)"
-     @keydown.escape.window="dirtyCheckModalOpen && dirtyCheckCancel()">
+     @keydown.escape.window="dirtyCheckModalOpen && dirtyCheckCancel(); missingConfirmModalOpen && cancelLargeMissingEnrich();">
     <!-- Drag Overlay (must be inside x-data scope) -->
     <div class="drag-overlay" id="dragOverlay" x-show="showDragOverlay" x-transition.opacity>
         <div class="drag-overlay-content">
@@ -423,6 +423,29 @@
                     <span x-show="clearCacheLoading" class="loading loading-spinner loading-xs"></span>
                     <span x-show="!clearCacheLoading"><i class="bi bi-trash3"></i></span>
                     {{ t('scanner.clear_cache_modal.confirm') }}
+                </button>
+            </div>
+        </div>
+    </dialog>
+
+    <!-- TASK-13: Missing Enrich Confirm Modal (大批量 > 500 筆) -->
+    <dialog class="modal fluent-modal"
+            :class="{ 'modal-open': missingConfirmModalOpen }"
+            @click.self="cancelLargeMissingEnrich()">
+        <div class="modal-box fluent-modal-box">
+            <h3 class="fluent-modal-title">
+                <i class="bi bi-exclamation-triangle text-warning"></i>
+                <span x-text="window.t('scanner.stats.missing_enrich_confirm_title')"></span>
+            </h3>
+            <p class="fluent-modal-body">
+                <span x-text="window.t('scanner.stats.missing_enrich_confirm_body_prefix')"></span><strong x-text="missingItems.length"></strong><span x-text="window.t('scanner.stats.missing_enrich_confirm_body_middle')"></span><strong x-text="Math.ceil(missingItems.length / 20 * 2)"></strong><span x-text="window.t('scanner.stats.missing_enrich_confirm_body_suffix')"></span>
+            </p>
+            <div class="modal-action fluent-modal-actions">
+                <button type="button" class="btn btn-ghost" @click="cancelLargeMissingEnrich()">
+                    <span x-text="window.t('scanner.stats.missing_enrich_confirm_cancel')"></span>
+                </button>
+                <button type="button" class="btn btn-primary" @click="confirmLargeMissingEnrich()">
+                    <span x-text="window.t('scanner.stats.missing_enrich_confirm_confirm')"></span>
                 </button>
             </div>
         </div>

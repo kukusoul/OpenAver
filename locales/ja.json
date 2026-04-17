@@ -404,7 +404,13 @@
       "missing_resume_label": "前回の補完が未完了、残り",
       "missing_resume_suffix": "本",
       "missing_resume_btn": "再開",
-      "missing_resume_dismiss": "無視"
+      "missing_resume_dismiss": "無視",
+      "missing_enrich_confirm_title": "大量一括補完の確認",
+      "missing_enrich_confirm_body_prefix": "合計 ",
+      "missing_enrich_confirm_body_middle": " 件の動画を補完します。予想所要時間は約 ",
+      "missing_enrich_confirm_body_suffix": " 分です。続行しますか？",
+      "missing_enrich_confirm_cancel": "キャンセル",
+      "missing_enrich_confirm_confirm": "補完を確認"
     },
     "alias": {
       "section_title": "女優名管理",

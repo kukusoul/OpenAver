@@ -404,7 +404,13 @@
       "missing_resume_label": "上次補完未完成，剩餘",
       "missing_resume_suffix": "片",
       "missing_resume_btn": "繼續",
-      "missing_resume_dismiss": "忽略"
+      "missing_resume_dismiss": "忽略",
+      "missing_enrich_confirm_title": "確認大批量補完",
+      "missing_enrich_confirm_body_prefix": "共 ",
+      "missing_enrich_confirm_body_middle": " 部影片將進行補完，預估耗時約 ",
+      "missing_enrich_confirm_body_suffix": " 分鐘，是否繼續？",
+      "missing_enrich_confirm_cancel": "取消",
+      "missing_enrich_confirm_confirm": "確認補完"
     },
     "alias": {
       "section_title": "女優別名管理",

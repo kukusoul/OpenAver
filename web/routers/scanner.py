@@ -490,19 +490,7 @@ async def check_missing():
 
         total_missing = missing_both + missing_nfo + missing_cover
 
-        # 若超過 500 筆僅回計數，不回 items（前端禁止自動補完）
-        if total_missing > 500:
-            return {
-                "success": True,
-                "data": {
-                    "missing_both": missing_both,
-                    "missing_nfo": missing_nfo,
-                    "missing_cover": missing_cover,
-                    "total_missing": total_missing,
-                    "items": None,
-                }
-            }
-
+        # 永遠回傳完整 items 清單；大批量的 confirm gate 由前端處理
         return {
             "success": True,
             "data": {

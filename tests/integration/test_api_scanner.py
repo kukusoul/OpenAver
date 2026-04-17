@@ -642,3 +642,91 @@ class TestMissingCheckAPI:
         assert 'file_path' in item
         assert 'number' in item
         assert item['number'] == 'AAA-001'
+
+    def test_exactly_500_returns_full_items(self, client, tmp_path, monkeypatch):
+        """total_missing == 500（邊界，剛好不超過舊 cap）→ items 為完整 list"""
+        from unittest.mock import patch
+        from core.database import Video
+        from core.path_utils import to_file_uri
+        videos = [
+            Video(path=to_file_uri(str(tmp_path / f"v{i:04d}.mp4")),
+                  number=f"AAA-{i:04d}",
+                  cover_path="", nfo_mtime=0.0)
+            for i in range(500)
+        ]
+        db_path = self._make_db(tmp_path, videos)
+        with patch('web.routers.scanner.get_db_path', return_value=db_path):
+            resp = client.get('/api/gallery/missing-check')
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data['success'] is True
+        assert data['data']['total_missing'] == 500
+        assert data['data']['items'] is not None
+        assert isinstance(data['data']['items'], list)
+        assert len(data['data']['items']) == 500
+
+    def test_exactly_501_returns_full_items(self, client, tmp_path, monkeypatch):
+        """total_missing == 501（邊界，剛好超過舊 cap）→ items 為完整 list（非 None）"""
+        from unittest.mock import patch
+        from core.database import Video
+        from core.path_utils import to_file_uri
+        videos = [
+            Video(path=to_file_uri(str(tmp_path / f"v{i:04d}.mp4")),
+                  number=f"AAA-{i:04d}",
+                  cover_path="", nfo_mtime=0.0)
+            for i in range(501)
+        ]
+        db_path = self._make_db(tmp_path, videos)
+        with patch('web.routers.scanner.get_db_path', return_value=db_path):
+            resp = client.get('/api/gallery/missing-check')
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data['success'] is True
+        assert data['data']['total_missing'] == 501
+        assert data['data']['items'] is not None
+        assert isinstance(data['data']['items'], list)
+        assert len(data['data']['items']) == 501
+
+    def test_over_500_returns_full_items(self, client, tmp_path, monkeypatch):
+        """total_missing > 500 → items 為完整 list（本 task 後新行為，舊版為 None）"""
+        from unittest.mock import patch
+        from core.database import Video
+        from core.path_utils import to_file_uri
+        videos = [
+            Video(path=to_file_uri(str(tmp_path / f"v{i:04d}.mp4")),
+                  number=f"AAA-{i:04d}",
+                  cover_path="", nfo_mtime=0.0)
+            for i in range(750)
+        ]
+        db_path = self._make_db(tmp_path, videos)
+        with patch('web.routers.scanner.get_db_path', return_value=db_path):
+            resp = client.get('/api/gallery/missing-check')
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data['success'] is True
+        assert data['data']['total_missing'] == 750
+        assert data['data']['items'] is not None
+        assert isinstance(data['data']['items'], list)
+        assert len(data['data']['items']) == 750
+
+    def test_over_5000_returns_full_items(self, client, tmp_path, monkeypatch):
+        """total_missing > 5000（大批量）→ items 為完整 list"""
+        from unittest.mock import patch
+        from core.database import Video
+        from core.path_utils import to_file_uri
+        videos = [
+            Video(path=to_file_uri(str(tmp_path / f"v{i:05d}.mp4")),
+                  number=f"AAA-{i:05d}",
+                  cover_path="", nfo_mtime=0.0)
+            for i in range(5000)
+        ]
+        db_path = self._make_db(tmp_path, videos)
+        with patch('web.routers.scanner.get_db_path', return_value=db_path):
+            resp = client.get('/api/gallery/missing-check')
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data['success'] is True
+        assert data['data']['total_missing'] == 5000
+        assert data['data']['items'] is not None
+        assert isinstance(data['data']['items'], list)
+        assert len(data['data']['items']) == 5000

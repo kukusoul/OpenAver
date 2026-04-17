@@ -2660,3 +2660,99 @@ class TestTutorialExpandGuard:
                 f"{locale}.json 缺少或為空: tutorial.{title_key}"
             assert content_key in tutorial and tutorial[content_key], \
                 f"{locale}.json 缺少或為空: tutorial.{content_key}"
+
+
+class TestMissingEnrichConfirmGuard:
+    """TASK-13 (0.7.6 hotfix): 守衛 Scanner 一鍵補完 > 500 confirm dialog 的實作"""
+
+    def _js(self):
+        return SCANNER_JS.read_text(encoding="utf-8")
+
+    def _html(self):
+        return SCANNER_HTML.read_text(encoding="utf-8")
+
+    def _extract_function_body(self, js, fn_name):
+        """抓取具名 function（async fn_name(...) { ... }）函式主體（大括號平衡匹配）。
+        也涵蓋 `async runMissingEnrich({ skipConfirm = false } = {})` 這類 options pattern。"""
+        pattern = re.compile(
+            r'async\s+' + re.escape(fn_name) + r'\s*\([^)]*\)\s*\{',
+            re.DOTALL,
+        )
+        m = pattern.search(js)
+        if not m:
+            # 非 async 版本（例如 resumeMissingEnrich）
+            pattern_sync = re.compile(
+                re.escape(fn_name) + r'\s*\([^)]*\)\s*\{',
+                re.DOTALL,
+            )
+            m = pattern_sync.search(js)
+        assert m is not None, f"scanner.js 找不到 {fn_name} 函式"
+        start = m.end()  # 位於 { 之後
+        depth = 1
+        i = start
+        while i < len(js) and depth > 0:
+            c = js[i]
+            if c == '{':
+                depth += 1
+            elif c == '}':
+                depth -= 1
+            i += 1
+        return js[start:i - 1]
+
+    def test_js_has_missing_confirm_modal_open_state(self):
+        """scanner.js 含 missingConfirmModalOpen state 欄位宣告"""
+        js = self._js()
+        assert "missingConfirmModalOpen" in js, \
+            "scanner.js 缺少 missingConfirmModalOpen state（confirm modal 綁定用）"
+
+    def test_js_run_missing_enrich_has_threshold_check(self):
+        """runMissingEnrich 函式體含 skipConfirm 參數 + > 500 threshold 檢查 + missingConfirmModalOpen"""
+        js = self._js()
+        body = self._extract_function_body(js, "runMissingEnrich")
+        assert "skipConfirm" in body, \
+            "runMissingEnrich 函式體缺少 skipConfirm 參數處理"
+        assert "> 500" in body, \
+            "runMissingEnrich 函式體缺少 > 500 threshold 檢查"
+        assert "missingConfirmModalOpen" in body, \
+            "runMissingEnrich 函式體缺少 missingConfirmModalOpen 觸發"
+
+    def test_js_resume_missing_enrich_uses_skip_confirm(self):
+        """resumeMissingEnrich 不清 localStorage.avlist_enrich_pending 且用 skipConfirm: true 呼叫 runMissingEnrich"""
+        js = self._js()
+        body = self._extract_function_body(js, "resumeMissingEnrich")
+        assert "localStorage.removeItem('avlist_enrich_pending')" not in body and \
+               'localStorage.removeItem("avlist_enrich_pending")' not in body, \
+            "resumeMissingEnrich 不應 localStorage.removeItem('avlist_enrich_pending')（會丟恢復點）"
+        assert "skipConfirm: true" in body, \
+            "resumeMissingEnrich 應呼叫 runMissingEnrich({ skipConfirm: true })"
+
+    def test_html_has_missing_confirm_modal(self):
+        """scanner.html 含 missingConfirmModalOpen 綁定 + cancel/confirm 方法"""
+        html = self._html()
+        assert "missingConfirmModalOpen" in html, \
+            "scanner.html 缺少 missingConfirmModalOpen 綁定（confirm modal）"
+        assert "cancelLargeMissingEnrich" in html, \
+            "scanner.html 缺少 cancelLargeMissingEnrich 綁定"
+        assert "confirmLargeMissingEnrich" in html, \
+            "scanner.html 缺少 confirmLargeMissingEnrich 綁定"
+
+    @pytest.mark.parametrize("locale", ["zh_TW", "zh_CN", "ja", "en"])
+    def test_all_locales_have_missing_enrich_confirm_keys(self, locale):
+        """四語系都有 6 個 missing_enrich_confirm_* keys（純文字）"""
+        data = json.loads((LOCALES_ROOT / f"{locale}.json").read_text(encoding="utf-8"))
+        stats = data.get("scanner", {}).get("stats", {})
+        required = [
+            "missing_enrich_confirm_title",
+            "missing_enrich_confirm_body_prefix",
+            "missing_enrich_confirm_body_middle",
+            "missing_enrich_confirm_body_suffix",
+            "missing_enrich_confirm_cancel",
+            "missing_enrich_confirm_confirm",
+        ]
+        for key in required:
+            assert key in stats and stats[key], \
+                f"{locale}.json 缺少或為空：scanner.stats.{key}"
+            # 確保純文字：不含 HTML tag
+            value = stats[key]
+            assert "<" not in value and ">" not in value, \
+                f"{locale}.json scanner.stats.{key} 含 HTML tag（應純文字）: {value!r}"
