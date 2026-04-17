@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **打包版 README 跨平台對齊**：Windows / macOS 疑難排解、啟動腳本說明補齊
 
 ### Fixed
+- **User-tag 無法被搜尋**：Showcase 頁面搜尋框的 searchable 欄位清單漏掉 `user_tags`，用戶自訂 tag 輸入後搜不到對應影片，已補上
 - **User-tag dark mode 對比度**：`color: var(--text-inverse)` → `var(--color-primary-content)`
 - **GSAP Lightbox ease/scale 微調**：`scale 0.92 → 0.95`、`back.out → power2.out`、`gsap-animating` 時序提前
 - **狀態同步修正**：模式切換保留各自搜尋詞 + addFavorite/rescrape 後立即刷新 Grid + removeActress 後重算精準匹配

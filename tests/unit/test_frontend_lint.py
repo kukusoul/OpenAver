@@ -128,6 +128,23 @@ class TestShowcaseCoreJsSearchableFields:
     def _js(self):
         return SHOWCASE_CORE_JS.read_text(encoding="utf-8")
 
+    def _extract_searchable_fields(self, js: str) -> set[str]:
+        """從 core.js 抓出 `const searchable = [ ... ].filter(Boolean)` 的 array literal，
+        回傳所有 `video.XXX` 欄位成一個 set。
+
+        Structural guard：只解析真正 array literal 內容，不受註解或其他函數干擾。
+        若重構移除整個 array 或改名，此 helper 會回傳空集合導致測試失敗。
+        """
+        match = re.search(
+            r'const\s+searchable\s*=\s*\[(.*?)\]\.filter\(Boolean\)',
+            js,
+            re.DOTALL,
+        )
+        if not match:
+            return set()
+        array_body = match.group(1)
+        return set(re.findall(r'video\.(\w+)', array_body))
+
     def test_searchable_includes_director(self):
         """searchable fields 包含 video.director"""
         js = self._js()
@@ -145,6 +162,45 @@ class TestShowcaseCoreJsSearchableFields:
         js = self._js()
         assert "video.label" in js, \
             "showcase/core.js applyFilterAndSort searchable 缺少 video.label"
+
+    def test_searchable_includes_user_tags(self):
+        """searchable fields 包含 video.user_tags（用戶自訂 tag 需可搜尋）"""
+        js = self._js()
+        assert "video.user_tags" in js, \
+            "showcase/core.js applyFilterAndSort searchable 缺少 video.user_tags"
+
+    def test_searchable_array_structure(self):
+        """Structural guard: 必要欄位都必須在 `const searchable = [...]` array literal 內，
+        而非只存在於註解或其他函數中。若 applyFilterAndSort 被移除或 searchable 改名，
+        helper 回傳空集合，此測試會 fail。
+        """
+        js = self._js()
+        fields = self._extract_searchable_fields(js)
+
+        assert fields, (
+            "找不到 `const searchable = [...].filter(Boolean)` array literal；"
+            "applyFilterAndSort 可能已被移除或 searchable 已改名"
+        )
+
+        required = {
+            "title",
+            "original_title",
+            "actresses",
+            "number",
+            "maker",
+            "tags",
+            "release_date",
+            "path",
+            "director",
+            "series",
+            "label",
+            "user_tags",
+        }
+        missing = required - fields
+        assert not missing, (
+            f"showcase/core.js searchable array literal 缺少必要欄位: "
+            f"{sorted(missing)}（實際欄位: {sorted(fields)}）"
+        )
 
 
 SETTINGS_HTML = Path(__file__).parent.parent.parent / "web" / "templates" / "settings.html"
