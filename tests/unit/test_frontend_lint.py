@@ -2886,3 +2886,151 @@ class TestSearchFileJsSubtitleHelper:
             "file.js 缺少 _SUBTITLE_BRACKETS 常數（對齊 Python 字幕 bracket pattern）"
         assert "_SUBTITLE_TEXT_MARKERS" in js, \
             "file.js 缺少 _SUBTITLE_TEXT_MARKERS 常數（對齊 Python 字幕純文字 pattern）"
+
+
+class TestFetchSamplesButton:
+    """spec-48b §b3 b6 — 守衛 showcase.html fetch-samples-btn 的所有 Alpine 綁定合約"""
+
+    def _html(self):
+        return SHOWCASE_HTML.read_text(encoding="utf-8")
+
+    def _js(self):
+        return SHOWCASE_CORE_JS.read_text(encoding="utf-8")
+
+    def _fetch_samples_btn_tag(self, html: str):
+        """從 showcase.html 抽出 fetch-samples-btn 的完整 <button ...> tag。
+        回傳 None 若不存在（讓後續測試明確 fail）。
+        """
+        m = re.search(
+            r'<button\b[^>]*class="[^"]*fetch-samples-btn[^"]*"[^>]*>',
+            html,
+            re.DOTALL,
+        )
+        return m.group(0) if m else None
+
+    def test_fetch_samples_btn_exists_in_lb_header(self):
+        """showcase.html lb-header 內含 class="fetch-samples-btn" 的 button element"""
+        html = self._html()
+        tag = self._fetch_samples_btn_tag(html)
+        assert tag is not None, (
+            "showcase.html 缺少 class=\"fetch-samples-btn\" 的 button element（lb-header 內）"
+        )
+
+    def test_fetch_samples_btn_has_x_show_with_sample_images_check(self):
+        """fetch-samples-btn 的 x-show 在同一個 button tag 上，且含 sample_images 長度檢查"""
+        html = self._html()
+        tag = self._fetch_samples_btn_tag(html)
+        assert tag is not None, "fetch-samples-btn element 不存在，無法檢查 x-show"
+        # x-show attribute 必須在同一個 <button> tag 內
+        assert 'x-show=' in tag, (
+            "fetch-samples-btn 缺少 x-show attribute（必須在同一個 button tag 上，非其他 element）"
+        )
+        # x-show 必須含 sample_images 長度判斷（確保只在無劇照時顯示）
+        assert 'sample_images' in tag, (
+            "fetch-samples-btn 的 x-show 未包含 sample_images 條件（應為 length === 0）"
+        )
+
+    def test_fetch_samples_btn_has_click_handler(self):
+        """fetch-samples-btn 的 @click 在同一個 button tag 上，且呼叫 fetchSamples"""
+        html = self._html()
+        tag = self._fetch_samples_btn_tag(html)
+        assert tag is not None, "fetch-samples-btn element 不存在，無法檢查 @click"
+        assert '@click=' in tag or '@click.' in tag, (
+            "fetch-samples-btn 缺少 @click handler（必須在同一個 button tag 上）"
+        )
+        assert 'fetchSamples' in tag, (
+            "fetch-samples-btn 的 @click handler 未呼叫 fetchSamples（確保點擊觸發正確 method）"
+        )
+
+    def test_fetch_samples_btn_has_disabled_binding(self):
+        """fetch-samples-btn 的 :disabled binding 在同一個 button tag 上，且含 _fetchSamplesFailed"""
+        html = self._html()
+        tag = self._fetch_samples_btn_tag(html)
+        assert tag is not None, "fetch-samples-btn element 不存在，無法檢查 :disabled"
+        assert ':disabled=' in tag, (
+            "fetch-samples-btn 缺少 :disabled binding（必須在同一個 button tag 上）"
+        )
+        assert '_fetchSamplesFailed' in tag, (
+            "fetch-samples-btn 的 :disabled 未包含 _fetchSamplesFailed（確保失敗後鎖住按鈕）"
+        )
+
+    def test_fetch_samples_btn_has_x_text_for_i18n(self):
+        """fetch-samples-btn 的 x-text 在同一個 button tag 上，且引用 showcase.samples.fetch_btn"""
+        html = self._html()
+        tag = self._fetch_samples_btn_tag(html)
+        assert tag is not None, "fetch-samples-btn element 不存在，無法檢查 x-text"
+        assert 'x-text=' in tag, (
+            "fetch-samples-btn 缺少 x-text binding（應綁定 i18n key，不可 hardcode 文字）"
+        )
+        assert 'showcase.samples.fetch_btn' in tag, (
+            "fetch-samples-btn 的 x-text 未引用 showcase.samples.fetch_btn i18n key"
+        )
+
+    def test_fetching_loading_span_exists_with_x_show(self):
+        """showcase.html 含 loading span（x-show="_fetchSamplesLoading"）"""
+        html = self._html()
+        # loading span 不需 element-bound regex（單一用途，位置緊鄰 button）
+        assert '_fetchSamplesLoading' in html, (
+            "showcase.html 缺少 _fetchSamplesLoading 參照（loading span 或 x-show）"
+        )
+        assert 'showcase.samples.fetching' in html, (
+            "showcase.html 缺少 showcase.samples.fetching i18n key 參照（loading span x-text）"
+        )
+
+    def test_core_js_has_fetch_samples_method(self):
+        """core.js 含 fetchSamples method 定義"""
+        js = self._js()
+        # 接受 async fetchSamples(video) { 或 fetchSamples(video) { 兩種形式
+        assert re.search(r'(?:async\s+)?fetchSamples\s*\(\s*video\s*\)\s*\{', js), (
+            "showcase/core.js 缺少 fetchSamples(video) method 定義"
+        )
+
+    def test_core_js_has_fetch_samples_loading_state(self):
+        """core.js Alpine data 含 _fetchSamplesLoading 初始化"""
+        js = self._js()
+        assert '_fetchSamplesLoading:' in js or '_fetchSamplesLoading :' in js, (
+            "showcase/core.js Alpine data 缺少 _fetchSamplesLoading 初始化宣告"
+        )
+
+    def test_core_js_has_fetch_samples_failed_state(self):
+        """core.js Alpine data 含 _fetchSamplesFailed 初始化"""
+        js = self._js()
+        assert '_fetchSamplesFailed:' in js or '_fetchSamplesFailed :' in js, (
+            "showcase/core.js Alpine data 缺少 _fetchSamplesFailed 初始化宣告"
+        )
+
+    def test_close_lightbox_resets_fetch_samples_failed(self):
+        """closeLightbox() 含 _fetchSamplesFailed = {} 重置（Canonical Decision #12）"""
+        js = self._js()
+        # 找 closeLightbox 函數體（從 "closeLightbox()" 到下一個頂層 method 的 "," 為止）
+        # 用寬鬆 grep 即可：_fetchSamplesFailed = {} 必須出現在 closeLightbox 上下文
+        # 精確做法：確認 closeLightbox 定義後有 _fetchSamplesFailed = {}
+        close_lb_idx = js.find('closeLightbox() {')
+        assert close_lb_idx >= 0, "core.js 找不到 closeLightbox() 方法"
+        # 從 closeLightbox() 之後找 _fetchSamplesFailed = {}（在合理的函數體範圍內）
+        # 截取 closeLightbox 後 2000 個字元（足夠覆蓋整個函數體）
+        close_lb_body = js[close_lb_idx: close_lb_idx + 2000]
+        assert '_fetchSamplesFailed = {}' in close_lb_body, (
+            "closeLightbox() 函數體內缺少 _fetchSamplesFailed = {}（關閉 Lightbox 應重置失敗記憶，"
+            "Canonical Decision #12）"
+        )
+
+    @pytest.mark.parametrize("locale", ["zh_TW", "zh_CN", "en", "ja"])
+    def test_locale_files_have_samples_keys(self, locale):
+        """4 個語系 locale file 均含 showcase.samples 的 5 個 key"""
+        locale_file = LOCALES_ROOT / f"{locale}.json"
+        assert locale_file.exists(), f"locale 檔案不存在: {locale_file}"
+        data = json.loads(locale_file.read_text(encoding="utf-8"))
+        showcase = data.get("showcase", {})
+        samples = showcase.get("samples", {})
+        required_keys = {
+            "fetch_btn",
+            "fetching",
+            "success",
+            "fetch_failed",
+            "multi_video_error",
+        }
+        missing = required_keys - set(samples.keys())
+        assert not missing, (
+            f"locales/{locale}.json showcase.samples 缺少 key: {sorted(missing)}"
+        )

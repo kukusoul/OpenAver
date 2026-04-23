@@ -583,6 +583,13 @@
       "search_films": "Search related films",
       "addFavorite": "Add to favorites",
       "favorited": "Favorited"
+    },
+    "samples": {
+      "fetch_btn": "☁️ Fetch Stills",
+      "fetching": "Fetching...",
+      "success": "Stills fetched successfully",
+      "fetch_failed": "Failed to fetch stills, please try again",
+      "multi_video_error": "This folder contains other videos. Fetching stills here may affect them. Please move the video to its own folder first."
     }
   },
   "help": {

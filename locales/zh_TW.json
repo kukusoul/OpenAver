@@ -583,6 +583,13 @@
       "search_films": "搜尋相關影片",
       "addFavorite": "加入收藏",
       "favorited": "已收藏"
+    },
+    "samples": {
+      "fetch_btn": "☁️ 補抓劇照",
+      "fetching": "抓取中...",
+      "success": "劇照補抓完成",
+      "fetch_failed": "補抓劇照失敗，請稍後再試",
+      "multi_video_error": "此資料夾有其他影片，補抓劇照會污染其他片，請先將影片搬到獨立資料夾再試"
     }
   },
   "help": {
