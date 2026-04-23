@@ -2756,3 +2756,15 @@ class TestMissingEnrichConfirmGuard:
             value = stats[key]
             assert "<" not in value and ">" not in value, \
                 f"{locale}.json scanner.stats.{key} 含 HTML tag（應純文字）: {value!r}"
+
+
+class TestIMEGuard:
+    """spec-48a §a4 — IME composition guard"""
+
+    def test_search_input_has_ime_guard(self):
+        """search.html 的 searchQuery input 必須有 isComposing guard"""
+        content = (Path(__file__).parent.parent.parent / "web" / "templates" / "search.html").read_text(encoding="utf-8")
+        assert "isComposing" in content, \
+            "search.html 缺少 IME isComposing guard（@keydown.enter handler 應含 $event.isComposing）"
+        assert "@keydown.enter" in content or "@keydown.enter.prevent" in content, \
+            "search.html 缺少 @keydown.enter handler"
