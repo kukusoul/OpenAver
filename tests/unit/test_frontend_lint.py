@@ -2954,6 +2954,47 @@ class TestFetchSamplesButton:
             "fetch-samples-btn 的 :disabled 未包含 _fetchSamplesFailed（確保失敗後鎖住按鈕）"
         )
 
+    def test_disabled_binding_uses_explicit_boolean_coercion(self):
+        """fetch-samples-btn 的 :disabled 表達式必須強制 boolean，
+        防止 Alpine 3 將 undefined 正規化為 '' 而設置 disabled attribute。
+
+        背景（gotchas.md §Alpine.js Gotchas 第 6 條）：
+          - _fetchSamplesFailed[path] 在 key 不存在時回傳 undefined（非 false）
+          - Alpine 3 將 undefined 正規化為 "" 存入 _x_bindings.disabled cache
+          - 對 boolean attr，"" 視為「屬性存在」→ disabled="" = disabled="disabled"
+          - 結果：fresh session 下按鈕無法點擊（b6 bug）
+
+        接受的正確模式：
+          - !!_fetchSamplesFailed[   （!! 強制 boolean，推薦）
+          - _fetchSamplesFailed[...] === true  （嚴格比較）
+
+        拒絕的錯誤模式：
+          - 裸 _fetchSamplesFailed[...]（無 boolean 強制）
+        """
+        html = self._html()
+        tag = self._fetch_samples_btn_tag(html)
+        assert tag is not None, "fetch-samples-btn element 不存在，無法檢查 :disabled 表達式"
+
+        # 提取 :disabled="..." 的值
+        m = re.search(r':disabled=["\']([^"\']*)["\']', tag)
+        assert m is not None, (
+            "fetch-samples-btn 缺少 :disabled binding，無法驗證 boolean 強制"
+        )
+        disabled_expr = m.group(1)
+
+        # 確認表達式含有 boolean 強制（!! 或 === true）
+        pattern = re.compile(
+            r'(!!\s*_fetchSamplesFailed\[|_fetchSamplesFailed\[.+?\]\s*===\s*true)'
+        )
+        assert pattern.search(disabled_expr), (
+            f"fetch-samples-btn :disabled 表達式缺少 boolean 強制（當前：{disabled_expr!r}）。\n"
+            "問題：_fetchSamplesFailed[path] 在 key 不存在時回傳 undefined，"
+            "Alpine 3 將 undefined 正規化為 '' → disabled='' → 按鈕無法點擊。\n"
+            "修法：改為 !!_fetchSamplesFailed[currentLightboxVideo?.path] 或 "
+            "_fetchSamplesFailed[...] === true。\n"
+            "詳見 feature/AI_COLLABORATION/gotchas.md §Alpine.js Gotchas 第 6 條。"
+        )
+
     def test_fetch_samples_btn_has_x_text_for_i18n(self):
         """fetch-samples-btn 的 x-text 在同一個 button tag 上，且引用 showcase.samples.fetch_btn"""
         html = self._html()

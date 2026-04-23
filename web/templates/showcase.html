@@ -689,7 +689,7 @@
                                 <!-- §b3: 劇照補抓入口（無劇照時顯示） -->
                                 <button class="fetch-samples-btn"
                                         x-show="(currentLightboxVideo?.sample_images || []).length === 0 && !_fetchSamplesLoading"
-                                        :disabled="_fetchSamplesLoading || _fetchSamplesFailed[currentLightboxVideo?.path]"
+                                        :disabled="!!_fetchSamplesFailed[currentLightboxVideo?.path]"
                                         @click="fetchSamples(currentLightboxVideo)"
                                         x-text="t('showcase.samples.fetch_btn')">
                                 </button>
