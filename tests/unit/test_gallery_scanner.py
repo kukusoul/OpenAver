@@ -217,3 +217,75 @@ class TestNormalizeMaker:
             sc = VideoScanner()
         result = sc.normalize_maker("SONE-123", "AnyMaker")
         assert result == "S1"
+
+
+class TestCollectLongPaths:
+    """spec-48a §a5 契約 1+2 — _collect_long_paths helper 行為"""
+
+    def test_path_over_260_detected(self):
+        from web.routers.scanner import _collect_long_paths
+        long = 'C:\\' + 'a' * 260  # len = 263
+        short = 'C:\\short.mp4'
+        result = _collect_long_paths([{'path': long}, {'path': short}])
+        assert result == [long], "只該抓到超過 260 的路徑"
+
+    def test_path_exactly_260_not_flagged(self):
+        """恰好 260 字元不算長路徑（> 260 而非 >= 260）"""
+        from web.routers.scanner import _collect_long_paths
+        exactly = 'C:\\' + 'a' * 257  # 3 + 257 = 260
+        assert len(exactly) == 260
+        assert _collect_long_paths([{'path': exactly}]) == []
+
+    def test_path_261_flagged(self):
+        from web.routers.scanner import _collect_long_paths
+        p = 'C:\\' + 'a' * 258  # 3 + 258 = 261
+        assert len(p) == 261
+        assert _collect_long_paths([{'path': p}]) == [p]
+
+    def test_empty_input(self):
+        from web.routers.scanner import _collect_long_paths
+        assert _collect_long_paths([]) == []
+
+    def test_custom_threshold(self):
+        """threshold 參數可覆寫（方便測試，實際 caller 用預設 260）"""
+        from web.routers.scanner import _collect_long_paths
+        p = 'C:\\' + 'a' * 10  # len = 13
+        assert _collect_long_paths([{'path': p}], threshold=5) == [p]
+        assert _collect_long_paths([{'path': p}], threshold=20) == []
+
+    def test_helper_does_not_check_platform(self):
+        """helper 本身不 gate 平台（gate 是呼叫端責任，見 Canonical #13）"""
+        from web.routers.scanner import _collect_long_paths
+        # 即使在 linux 上呼叫 helper 也會收集 — 這是刻意的，避免 helper 被平台綁死
+        long = 'C:\\' + 'a' * 300
+        # 不 monkeypatch sys.platform，直接在當前平台驗證 helper 無 platform 判斷
+        assert _collect_long_paths([{'path': long}]) == [long]
+
+
+class TestEmitLongPathWarnings:
+    """spec-48a §a5 契約 4 — _emit_long_path_warnings helper 行為"""
+
+    def test_warning_emitted_when_non_empty(self, caplog):
+        """非空 list 應輸出 [a5] warning 到 scanner logger"""
+        import logging
+        from core.logger import get_logger
+        from web.routers.scanner import _emit_long_path_warnings
+        logger = get_logger('web.routers.scanner')
+        long_paths = ['C:\\' + 'a' * 280, 'C:\\' + 'b' * 290]
+        with caplog.at_level(logging.WARNING, logger='web.routers.scanner'):
+            _emit_long_path_warnings(logger, long_paths)
+        messages = [r.message for r in caplog.records]
+        # 第一則 summary + 每個路徑各一則（共 3）
+        assert any('[a5]' in m and '2' in m for m in messages), "summary warning 缺失"
+        assert any('a' * 280 in m for m in messages), "第一個路徑未輸出"
+        assert any('b' * 290 in m for m in messages), "第二個路徑未輸出"
+
+    def test_silent_when_empty(self, caplog):
+        """空 list 應完全靜默（不輸出任何 record）"""
+        import logging
+        from core.logger import get_logger
+        from web.routers.scanner import _emit_long_path_warnings
+        logger = get_logger('web.routers.scanner')
+        with caplog.at_level(logging.WARNING, logger='web.routers.scanner'):
+            _emit_long_path_warnings(logger, [])
+        assert not any('[a5]' in r.message for r in caplog.records)

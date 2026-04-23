@@ -730,3 +730,48 @@ class TestMissingCheckAPI:
         assert data['data']['items'] is not None
         assert isinstance(data['data']['items'], list)
         assert len(data['data']['items']) == 5000
+
+
+class TestScannerGenerateLongPathsField:
+    """spec-48a §a5 契約 3 — /api/gallery/generate SSE done event 必須含 long_paths key"""
+
+    def test_done_event_has_long_paths_key(self, client, tmp_path, monkeypatch, parse_sse_events):
+        """
+        SSE done event payload 必須含 long_paths 欄位（即使平台非 win32 也應為 [] 而非缺 key）。
+        用空資料夾讓掃描快速結束，重點驗證 payload 結構，不驗證內容。
+        """
+        scan_dir = tmp_path / "videos"
+        scan_dir.mkdir()
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        # Mock config — 單一空目錄，掃完即 done
+        monkeypatch.setattr("web.routers.scanner.load_config", lambda: {
+            "gallery": {
+                "directories": [str(scan_dir)],
+                "output_dir": str(output_dir),
+                "path_mappings": {},
+                "min_size_mb": 0,
+            },
+            "general": {"theme": "light"},
+            "scraper": {"video_extensions": [".mp4"]},
+        })
+
+        response = client.get('/api/gallery/generate')
+        assert response.status_code == 200
+
+        events = parse_sse_events(response.text)
+        done_events = [e for e in events if e.get('type') == 'done']
+        assert done_events, "SSE stream 未收到 done event"
+
+        done_payload = done_events[-1]
+        assert 'long_paths' in done_payload, (
+            "done SSE payload 缺少 long_paths 欄位"
+            "（實作可能漏掉 long_paths 參數或未抽 module-level helper）"
+        )
+        assert isinstance(done_payload['long_paths'], list), \
+            "long_paths 應為 list 型別"
+        # 非 win32 平台（CI / 開發機多為 linux）應為空 list
+        # win32 平台上空目錄也應為空 list
+        assert done_payload['long_paths'] == [], \
+            "空目錄 / 非 win32 平台下 long_paths 應為 []"

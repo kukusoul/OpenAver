@@ -21,12 +21,13 @@ import asyncio
 import base64
 import json
 import os
+import sys
 import time
 import requests
 from datetime import datetime
 from urllib.parse import unquote, quote
 from pathlib import Path
-from typing import Generator, List, Optional
+from typing import Any, Dict, Generator, List, Optional
 
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import StreamingResponse, HTMLResponse, Response, FileResponse, JSONResponse
@@ -55,6 +56,27 @@ _jellyfin_cache_time: float = 0
 def _sse_event(data: dict) -> str:
     """將 dict 編碼為 SSE 格式的單條 message。"""
     return f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+def _collect_long_paths(
+    all_files: List[Dict[str, Any]],
+    threshold: int = 260,
+) -> List[str]:
+    """a5: 從 fast_scan_directory 結果收集超過 threshold 的 path（純函數）。
+
+    呼叫端負責 platform gate（sys.platform == 'win32'）。
+    此 helper 不檢查平台，方便單元測試。
+    """
+    return [f['path'] for f in all_files if len(f['path']) > threshold]
+
+
+def _emit_long_path_warnings(logger_, long_paths: List[str]) -> None:
+    """a5: 把長路徑清單寫到 debug.log（空 list 時不輸出）。"""
+    if not long_paths:
+        return
+    logger_.warning(f"[a5] 發現 {len(long_paths)} 個路徑超過 260 字元：")
+    for p in long_paths:
+        logger_.warning(f"  {p}")
 
 
 def generate_avlist() -> Generator[str, None, None]:
@@ -117,6 +139,7 @@ def generate_avlist() -> Generator[str, None, None]:
         total_updated = 0
         total_deleted = 0
         session_added_paths = []  # 追蹤本次新增/變更的影片路徑
+        long_paths: list[str] = []  # a5: Windows 長路徑收集（只在 win32 填充）
 
         for idx, directory in enumerate(directories, 1):
             logger.info(f"[Gallery] 掃描: {directory}")
@@ -149,6 +172,10 @@ def generate_avlist() -> Generator[str, None, None]:
                 if not all_files:
                     yield _sse_event({"type": "log", "level": "info", "message": f"{directory}: 沒有影片檔案"})
                     continue
+
+                # a5: Windows 長路徑警告（gate 在呼叫端，不在 helper）
+                if sys.platform == 'win32':
+                    long_paths.extend(_collect_long_paths(all_files))
 
                 yield _sse_event({"type": "log", "level": "info", "message": f"{directory}: 找到 {len(all_files)} 個檔案"})
 
@@ -316,6 +343,9 @@ def generate_avlist() -> Generator[str, None, None]:
 
         logger.info(f"[Gallery] 完成，新增 {total_inserted}，更新 {total_updated}，刪除 {total_deleted}")
 
+        # a5: 寫長路徑清單到 debug.log（helper 內部判斷空 list）
+        _emit_long_path_warnings(logger, long_paths)
+
         # T3(40c) Codex fix: generate 後清空 jellyfin check 快取
         global _jellyfin_cache_result, _jellyfin_cache_time
         _jellyfin_cache_result = None
@@ -326,6 +356,7 @@ def generate_avlist() -> Generator[str, None, None]:
             "video_count": len(all_videos),
             "output_path": str(html_path),
             "session_update": session_update,
+            "long_paths": long_paths,  # a5
             "stats": {
                 "inserted": total_inserted,
                 "updated": total_updated,
