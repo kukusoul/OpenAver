@@ -2761,10 +2761,37 @@ class TestMissingEnrichConfirmGuard:
 class TestIMEGuard:
     """spec-48a §a4 — IME composition guard"""
 
-    def test_search_input_has_ime_guard(self):
-        """search.html 的 searchQuery input 必須有 isComposing guard"""
+    def test_search_input_has_keydown_enter_handler(self):
+        """#searchQuery input 本身必須有 @keydown.enter handler（不是別的元素）"""
         content = (Path(__file__).parent.parent.parent / "web" / "templates" / "search.html").read_text(encoding="utf-8")
-        assert "isComposing" in content, \
-            "search.html 缺少 IME isComposing guard（@keydown.enter handler 應含 $event.isComposing）"
-        assert "@keydown.enter" in content or "@keydown.enter.prevent" in content, \
-            "search.html 缺少 @keydown.enter handler"
+        m = re.search(r'<input\b[^>]*\bid="searchQuery"[^>]*>', content, re.DOTALL)
+        assert m, \
+            "search.html 找不到 id=\"searchQuery\" 的 <input> tag"
+        tag = m.group(0)
+        handler_m = re.search(r'@keydown\.enter(?:\.prevent)?="([^"]*)"', tag)
+        assert handler_m, \
+            "id=\"searchQuery\" input 缺少 @keydown.enter handler（handler 必須在 searchQuery input 上，不是別的元素）"
+
+    def test_handler_contains_iscomposing(self):
+        """#searchQuery @keydown.enter handler 必須含 isComposing guard"""
+        content = (Path(__file__).parent.parent.parent / "web" / "templates" / "search.html").read_text(encoding="utf-8")
+        m = re.search(r'<input\b[^>]*\bid="searchQuery"[^>]*>', content, re.DOTALL)
+        assert m, "search.html 找不到 id=\"searchQuery\" 的 <input> tag"
+        tag = m.group(0)
+        handler_m = re.search(r'@keydown\.enter(?:\.prevent)?="([^"]*)"', tag)
+        assert handler_m, "id=\"searchQuery\" input 缺少 @keydown.enter handler"
+        expr = handler_m.group(1)
+        assert "isComposing" in expr, \
+            f"id=\"searchQuery\" @keydown.enter handler 不含 isComposing guard（目前 handler: {expr!r}）"
+
+    def test_handler_contains_preventdefault(self):
+        """#searchQuery @keydown.enter handler 必須含 preventDefault()（防止 IME 確認觸發搜尋）"""
+        content = (Path(__file__).parent.parent.parent / "web" / "templates" / "search.html").read_text(encoding="utf-8")
+        m = re.search(r'<input\b[^>]*\bid="searchQuery"[^>]*>', content, re.DOTALL)
+        assert m, "search.html 找不到 id=\"searchQuery\" 的 <input> tag"
+        tag = m.group(0)
+        handler_m = re.search(r'@keydown\.enter(?:\.prevent)?="([^"]*)"', tag)
+        assert handler_m, "id=\"searchQuery\" input 缺少 @keydown.enter handler"
+        expr = handler_m.group(1)
+        assert "preventDefault()" in expr, \
+            f"id=\"searchQuery\" @keydown.enter handler 不含 preventDefault()（只用 return 無法阻擋 form submit，IME bug 會回來；目前 handler: {expr!r}）"
