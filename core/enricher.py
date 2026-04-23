@@ -210,23 +210,23 @@ def _write_extrafanart(
     fs_path: str,
     sample_images: List[str],
     write_extrafanart: bool,
-) -> int:
+) -> List[str]:
     if not write_extrafanart or not sample_images:
-        return 0
+        return []
 
     parent = Path(fs_path).parent
     extrafanart_dir = parent / "extrafanart"
     os.makedirs(str(extrafanart_dir), exist_ok=True)
 
-    count = 0
+    written_uris: List[str] = []
     for i, url in enumerate(sample_images):
         dest = str(extrafanart_dir / f"fanart{i+1}.jpg")
         try:
             if download_image(url, dest):
-                count += 1
+                written_uris.append(to_file_uri(dest))
         except Exception as e:
             logger.warning("extrafanart %d 下載失敗: %s", i + 1, e)
-    return count
+    return written_uris
 
 
 def enrich_single(
@@ -351,11 +351,12 @@ def enrich_single(
         overwrite_existing=overwrite_existing,
     )
 
-    extrafanart_written = _write_extrafanart(
+    written_uris = _write_extrafanart(
         fs_path=fs_path,
         sample_images=meta.get("sample_images", []),
         write_extrafanart=write_extrafanart,
     )
+    extrafanart_written = len(written_uris)
 
     # DB upsert 在寫檔後執行，才能知道本地封面路徑
     # db_to_sidecar 不打 scraper 也不更新 DB（metadata 不變）
@@ -364,7 +365,7 @@ def enrich_single(
         nfo_path = Path(fs_path).with_suffix(".nfo")
         nfo_mtime = nfo_path.stat().st_mtime if nfo_path.exists() else 0.0
         _db_upsert(repo, number, fs_path, meta, local_cover_path=local_cover,
-                   nfo_mtime=nfo_mtime, extrafanart_written=extrafanart_written)
+                   nfo_mtime=nfo_mtime, written_uris=written_uris)
 
     # nfo_mtime 獨立更新：不論 mode/source，只要 NFO 存在就同步 DB
     # 避免 analysis 永遠視為 missing_nfo
@@ -401,7 +402,7 @@ def _db_upsert(
     repo: VideoRepository, number: str, fs_path: str, meta: dict,
     local_cover_path: str = "",
     nfo_mtime: float = 0.0,
-    extrafanart_written: int = 0,
+    written_uris: List[str] = None,
 ) -> None:
     """更新 DB 記錄。fs_path 必須是已解析的 FS 路徑（非 file:/// URI）。"""
     try:
@@ -421,10 +422,10 @@ def _db_upsert(
         # 保留 DB 既有 user_tags（不被 scraper 覆蓋）
         preserved_user_tags = existing.user_tags if existing else []
 
-        # §b1: 只有磁碟真寫出 extrafanart 檔案才更新 DB sample_images；
-        # 否則保留現有值（等同 no-op），避免遠端 URL 污染 DB
-        if extrafanart_written > 0:
-            sample_imgs = meta.get("sample_images", [])
+        # §b1 / Codex P1: 只有磁碟真寫出 extrafanart 檔案才更新 DB sample_images；
+        # 使用 written_uris（local file:/// URIs），不寫 scraper 遠端 URL
+        if written_uris:
+            sample_imgs = written_uris
         else:
             sample_imgs = existing.sample_images if existing else []
 
@@ -494,18 +495,18 @@ def fetch_samples_only(
         return _empty
 
     sample_images = meta.get("sample_images", [])
-    count = _write_extrafanart(fs_path, sample_images, write_extrafanart=True)
+    written_uris = _write_extrafanart(fs_path, sample_images, write_extrafanart=True)
 
-    if count > 0:
+    if written_uris:
         repo = VideoRepository()
-        _db_upsert_samples_only(repo, fs_path, sample_images)
+        _db_upsert_samples_only(repo, fs_path, written_uris)
 
-    logger.info("[fetch_samples_only] %s: %d samples downloaded", number, count)
+    logger.info("[fetch_samples_only] %s: %d samples downloaded", number, len(written_uris))
     return EnrichResult(
         success=True,
         nfo_written=False,
         cover_written=False,
-        extrafanart_written=count,
+        extrafanart_written=len(written_uris),
         fields_filled=[],
         source_used=meta.get("source", ""),
         error=None,

@@ -553,22 +553,23 @@ class TestScannerSampleImagesValidationPass:
 
     def test_validate_preserves_relative_path(self, tmp_path):
         """相對路徑（舊 CLI scan_directory(relative_path=True) 格式或 migration 帶入）
-        不應被 cleanup 誤刪。cleanup pass 只管 file:/// URI。"""
+        不應被 cleanup 誤刪。cleanup pass 只管 file:/// URI。
+        http:// / https:// 遠端 URL 為 Codex P1 pre-fix 污染，應被清除。"""
         from core.gallery_scanner import _validate_sample_images
         # 不用 mock uri_to_fs_path / os.path.exists — 驗證「從未呼叫」才是重點
         result = _validate_sample_images(
             [
-                "MOVIE-001/extrafanart/fanart1.jpg",  # 舊相對路徑
-                "/mnt/d/legacy/abs/path.jpg",          # 舊絕對 FS 路徑
-                "http://example.com/remote.jpg",       # 遠端 URL（b1 修前的污染）
+                "MOVIE-001/extrafanart/fanart1.jpg",  # 舊相對路徑 → 保留
+                "/mnt/d/legacy/abs/path.jpg",          # 舊絕對 FS 路徑 → 保留
+                "http://example.com/remote.jpg",       # 遠端 URL（Codex P1 污染）→ 清除
+                "https://cdn.example.com/s2.jpg",      # https 遠端 URL → 清除
             ],
             video_path="file:///fake/v.mp4",
         )
         assert result == [
             "MOVIE-001/extrafanart/fanart1.jpg",
             "/mnt/d/legacy/abs/path.jpg",
-            "http://example.com/remote.jpg",
-        ], "非 file:/// URI 應原樣保留，cleanup pass 不該碰它們"
+        ], "非 file:/// URI 中，相對/絕對路徑保留，http:// / https:// 污染清除"
 
     def test_validate_cleanup_reproduces_codex_scenario(self, tmp_path):
         """Codex 報的最小重現：相對路徑在 cleanup pass 裡不應被當不存在檔案清掉。
@@ -585,3 +586,80 @@ class TestScannerSampleImagesValidationPass:
         count = _run_sample_images_cleanup_pass(mock_repo)
         assert count == 0, "相對路徑應保留，cleanup 不該觸發 update"
         mock_repo.update_sample_images.assert_not_called()
+
+    def test_validate_purges_http_url_pollution(self, tmp_path):
+        """Codex P1: http:// / https:// 遠端 URL 為 pre-fix scraper URL 污染，一律清除。
+        seeds DB: valid file:///（disk exists）+ missing file:///（disk absent）+ http:// URL
+        asserts: only the valid file:/// URI survives."""
+        from unittest.mock import patch
+        from core.gallery_scanner import _validate_sample_images
+
+        mixed_samples = [
+            "file:///valid/extrafanart/fanart1.jpg",   # 磁碟存在 → 保留
+            "file:///missing/extrafanart/fanart2.jpg", # 磁碟不存在 → 剔除
+            "http://example.com/s1.jpg",               # scraper URL 污染 → 清除
+            "https://cdn.example.com/s2.jpg",          # scraper URL 污染 → 清除
+        ]
+
+        def fake_uri_to_fs_path(uri):
+            return uri.replace("file:///", "/")
+
+        def fake_exists(path):
+            return "valid" in path  # only /valid/... exists
+
+        with patch("core.gallery_scanner.uri_to_fs_path", side_effect=fake_uri_to_fs_path), \
+             patch("os.path.exists", side_effect=fake_exists):
+            result = _validate_sample_images(mixed_samples, video_path="file:///v1.mp4")
+
+        assert result == ["file:///valid/extrafanart/fanart1.jpg"], (
+            f"只有磁碟存在的 file:/// URI 應保留；missing + http:// 應全部清除。got: {result}"
+        )
+
+    def test_validate_purges_http_logged_at_info(self, tmp_path):
+        """Codex P1: purge http:// entries 時應 log INFO（讓 debug.log 可見）。"""
+        from unittest.mock import patch
+        from core.gallery_scanner import _validate_sample_images
+
+        with patch("core.gallery_scanner.logger") as mock_logger:
+            _validate_sample_images(
+                ["http://example.com/s1.jpg", "https://cdn.example.com/s2.jpg"],
+                video_path="file:///v1.mp4",
+            )
+
+        # logger.info 應被呼叫，且訊息包含 purged 計數
+        assert mock_logger.info.called, "purge http:// 項目時應呼叫 logger.info"
+        call_args_str = str(mock_logger.info.call_args_list)
+        assert "purged" in call_args_str, f"info log 應包含 'purged'，got: {call_args_str}"
+        assert "2" in call_args_str, f"purged 計數應為 2，got: {call_args_str}"
+
+    def test_cleanup_pass_purges_http_urls_end_to_end(self, tmp_path):
+        """Codex P1 end-to-end: _run_sample_images_cleanup_pass 透過 repo 清除 http:// 污染。
+        DB 最終 sample_images 只剩 file:///valid.jpg；missing + http:// 均被清除。"""
+        from unittest.mock import MagicMock, patch
+        from core.gallery_scanner import _run_sample_images_cleanup_pass
+
+        mock_repo = MagicMock()
+        video = MagicMock()
+        video.path = "file:///A/v1.mp4"
+        video.sample_images = [
+            "file:///A/extrafanart/fanart1.jpg",  # 磁碟存在 → 保留
+            "file:///A/extrafanart/fanart2.jpg",  # 磁碟不存在 → 剔除
+            "http://example.com/s1.jpg",           # scraper URL 污染 → 清除
+        ]
+        mock_repo.get_all.return_value = [video]
+
+        def fake_uri_to_fs_path(uri):
+            return uri.replace("file:///", "/")
+
+        def fake_exists(path):
+            return "fanart1.jpg" in path  # only fanart1.jpg exists on disk
+
+        with patch("core.gallery_scanner.uri_to_fs_path", side_effect=fake_uri_to_fs_path), \
+             patch("os.path.exists", side_effect=fake_exists):
+            count = _run_sample_images_cleanup_pass(mock_repo)
+
+        assert count == 1, f"1 部影片的 sample_images 應被更新，got: {count}"
+        mock_repo.update_sample_images.assert_called_once_with(
+            "file:///A/v1.mp4",
+            ["file:///A/extrafanart/fanart1.jpg"],
+        )

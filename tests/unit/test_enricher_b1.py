@@ -11,14 +11,22 @@ class TestDbUpsertSampleImagesGate:
     """spec-48b §b1 AC#1 — _db_upsert sample_images gate"""
 
     def _run_enrich(self, write_extrafanart, download_count, existing_samples=None):
-        """Helper：執行 enrich_single 並回傳 repo.upsert call args"""
+        """Helper：執行 enrich_single 並回傳 repo.upsert call args
+
+        download_count: List[str] of local file:/// URIs (new return type of _write_extrafanart),
+                        or int (converted to a mock list of that length for backward compat).
+        """
         from unittest.mock import patch, MagicMock, call
+        if isinstance(download_count, int):
+            mock_written_uris = [f"file:///tmp/extrafanart/fanart{i+1}.jpg" for i in range(download_count)]
+        else:
+            mock_written_uris = download_count
         with patch("os.path.exists", return_value=True), \
              patch("core.enricher.VideoRepository") as mock_repo_cls, \
              patch("core.enricher.search_jav") as mock_search, \
              patch("core.enricher.generate_nfo", return_value=True), \
              patch("core.enricher.download_image", return_value=True), \
-             patch("core.enricher._write_extrafanart", return_value=download_count), \
+             patch("core.enricher._write_extrafanart", return_value=mock_written_uris), \
              patch("core.enricher.find_subtitle_files", return_value=[]):
             mock_repo = MagicMock()
             mock_existing = MagicMock()
@@ -67,11 +75,14 @@ class TestDbUpsertSampleImagesGate:
             "extrafanart_written=0 時不應寫入 scraper 回傳的遠端 URL"
 
     def test_extrafanart_written_positive_updates_sample_images(self):
-        """write_extrafanart=True 且下載 > 0 張 → 更新 DB"""
+        """write_extrafanart=True 且下載 > 0 張 → DB 更新為本地 file:/// URIs（非遠端 URL）"""
         args = self._run_enrich(write_extrafanart=True, download_count=2, existing_samples=[])
         video = args[0][0]
-        assert "http://example.com/s1.jpg" in video.sample_images, \
-            "extrafanart_written>0 時應寫入 scraper 回傳的 URLs"
+        assert len(video.sample_images) == 2, "extrafanart_written>0 時應寫入 2 筆 sample_images"
+        assert all(s.startswith("file:///") for s in video.sample_images), \
+            f"DB sample_images 應為 local file:/// URIs，實際: {video.sample_images}"
+        assert not any(s.startswith("http") for s in video.sample_images), \
+            f"scraper 遠端 URL 不應寫入 DB，實際: {video.sample_images}"
 
 
 class TestDatabaseHelpers:
@@ -200,7 +211,11 @@ class TestFetchSamplesOnly:
         write_count: int = 0,
         sample_images=None,
     ):
-        """Helper：執行 fetch_samples_only 並回傳 (result, mock_repo)"""
+        """Helper：執行 fetch_samples_only 並回傳 (result, mock_repo)
+
+        write_count: 模擬成功下載的張數；_write_extrafanart mock 回傳對應長度的
+                     local file:/// URIs list（新 return type）。
+        """
         from unittest.mock import patch, MagicMock
         if sample_images is None:
             sample_images = ["http://example.com/s1.jpg"]
@@ -219,10 +234,14 @@ class TestFetchSamplesOnly:
                 "sample_images": sample_images,
                 "source": "javbus",
             }
+        mock_written_uris = [
+            f"file:///tmp/SONE-205/extrafanart/fanart{i+1}.jpg"
+            for i in range(write_count)
+        ]
         with patch("os.path.exists", return_value=file_exists), \
              patch("core.enricher.VideoRepository") as mock_repo_cls, \
              patch("core.enricher.search_jav", return_value=search_result) as mock_search, \
-             patch("core.enricher._write_extrafanart", return_value=write_count) as mock_write:
+             patch("core.enricher._write_extrafanart", return_value=mock_written_uris) as mock_write:
             mock_repo = MagicMock()
             mock_repo_cls.return_value = mock_repo
             from core.enricher import fetch_samples_only
@@ -265,7 +284,7 @@ class TestFetchSamplesOnly:
         mock_repo.update_sample_images.assert_not_called()
 
     def test_download_success_updates_db(self):
-        """下載成功 count>0 → success=True, DB update_sample_images 被呼叫"""
+        """下載成功 count>0 → success=True, DB update_sample_images 被呼叫（local file:/// URIs）"""
         result, mock_repo, _search, _write = self._run_fetch(
             file_exists=True,
             sample_images=["http://example.com/s1.jpg", "http://example.com/s2.jpg"],
@@ -273,13 +292,17 @@ class TestFetchSamplesOnly:
         )
         assert result.success is True
         assert result.extrafanart_written == 2
-        # update_sample_images 被呼叫，path 應為 file:/// URI，sample_images 為 scraper 回傳的 URL 列表
+        # update_sample_images 被呼叫，path 應為 file:/// URI
+        # samples 必須是 local file:/// URIs（不是 scraper 遠端 URL）
         mock_repo.update_sample_images.assert_called_once()
         call_args = mock_repo.update_sample_images.call_args
         path_arg = call_args[0][0]
         samples_arg = call_args[0][1]
         assert path_arg.startswith("file:///"), f"DB path 應為 file:/// URI，實際：{path_arg!r}"
-        assert "http://example.com/s1.jpg" in samples_arg
+        assert all(s.startswith("file:///") for s in samples_arg), \
+            f"DB sample_images 應為 local file:/// URIs，實際: {samples_arg}"
+        assert not any(s.startswith("http") for s in samples_arg), \
+            f"scraper 遠端 URL 不應寫入 DB，實際: {samples_arg}"
 
     def test_write_extrafanart_returns_zero_no_db_write(self):
         """_write_extrafanart 回傳 0（下載全部失敗）→ gate 不通，DB 不更新"""
@@ -292,3 +315,22 @@ class TestFetchSamplesOnly:
         # 或依實作 success=True 亦可，關鍵是 DB 不更新
         assert result.extrafanart_written == 0
         mock_repo.update_sample_images.assert_not_called()
+
+    def test_db_receives_local_uris_not_scraper_urls(self):
+        """Codex P1 explicit guard: DB sample_images 必須是 local file:/// URIs。
+        belt-and-suspenders：確認 DB 絕對不會收到 scraper 回傳的 http:// URLs。
+        """
+        result, mock_repo, _search, _write = self._run_fetch(
+            file_exists=True,
+            sample_images=["http://example.com/s1.jpg", "http://example.com/s2.jpg"],
+            write_count=2,
+        )
+        assert result.success is True
+        mock_repo.update_sample_images.assert_called_once()
+        samples_arg = mock_repo.update_sample_images.call_args[0][1]
+        # 核心 P1 contract：所有 DB 寫入項目必須是 local file:/// URI
+        assert all(s.startswith("file:///") for s in samples_arg), \
+            f"[Codex P1] DB sample_images 必須是 file:/// URIs，got: {samples_arg}"
+        # 沒有任何 http:// / https:// 遠端 URL 寫入 DB
+        assert not any(s.startswith("http://") or s.startswith("https://") for s in samples_arg), \
+            f"[Codex P1] scraper URL 不得入庫: {samples_arg}"

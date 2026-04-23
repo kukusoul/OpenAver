@@ -839,13 +839,19 @@ class VideoScanner:
 def _validate_sample_images(sample_images: list, video_path: str = "") -> list:
     """驗證 sample_images 中的 file:/// URI 對應磁碟檔案存在性。
     不存在的項目剔除；uri_to_fs_path 轉換失敗也視為不存在（但 log warning）。
-    非 file:/// 格式（相對路徑、絕對 FS 路徑、http URL 等）原樣保留 —
+    非 file:/// 且非 http:// / https:// 格式（相對路徑、絕對 FS 路徑等）原樣保留 —
     cleanup pass 只管 file:/// URI 的磁碟失效情境。
+    http:// / https:// 遠端 URL 為 Codex P1 修前 scraper URL 污染，一律清除。
     """
     valid = []
+    non_file_purged = 0
     for uri in sample_images:
+        # 清除 scraper 遠端 URL 污染（pre-fix bug 寫入的 http:// / https://）
+        if uri.startswith('http://') or uri.startswith('https://'):
+            non_file_purged += 1
+            continue
         # 只 validate file:/// URI；其他格式（migration 帶入的相對路徑、
-        # 舊絕對 FS 路徑、遠端 http URL 等）原樣保留，不做磁碟檢查
+        # 舊絕對 FS 路徑等）原樣保留，不做磁碟檢查
         if not uri.startswith('file:///'):
             valid.append(uri)
             continue
@@ -865,6 +871,11 @@ def _validate_sample_images(sample_images: list, video_path: str = "") -> list:
                 "sample_image missing on disk; removing from DB. video=%s uri=%r fs=%s",
                 video_path, uri, fs,
             )
+    if non_file_purged > 0:
+        logger.info(
+            "[sample_images cleanup] %s: purged %d non-file:// URI entries",
+            video_path, non_file_purged,
+        )
     return valid
 
 
