@@ -550,3 +550,38 @@ class TestScannerSampleImagesValidationPass:
             "file:///A/v1.mp4",
             ["file:///A/ext/exist.jpg"],
         )
+
+    def test_validate_preserves_relative_path(self, tmp_path):
+        """相對路徑（舊 CLI scan_directory(relative_path=True) 格式或 migration 帶入）
+        不應被 cleanup 誤刪。cleanup pass 只管 file:/// URI。"""
+        from core.gallery_scanner import _validate_sample_images
+        # 不用 mock uri_to_fs_path / os.path.exists — 驗證「從未呼叫」才是重點
+        result = _validate_sample_images(
+            [
+                "MOVIE-001/extrafanart/fanart1.jpg",  # 舊相對路徑
+                "/mnt/d/legacy/abs/path.jpg",          # 舊絕對 FS 路徑
+                "http://example.com/remote.jpg",       # 遠端 URL（b1 修前的污染）
+            ],
+            video_path="file:///fake/v.mp4",
+        )
+        assert result == [
+            "MOVIE-001/extrafanart/fanart1.jpg",
+            "/mnt/d/legacy/abs/path.jpg",
+            "http://example.com/remote.jpg",
+        ], "非 file:/// URI 應原樣保留，cleanup pass 不該碰它們"
+
+    def test_validate_cleanup_reproduces_codex_scenario(self, tmp_path):
+        """Codex 報的最小重現：相對路徑在 cleanup pass 裡不應被當不存在檔案清掉。
+        直接跑 _run_sample_images_cleanup_pass，不 mock（用 MagicMock repo）。"""
+        from unittest.mock import MagicMock
+        from core.gallery_scanner import _run_sample_images_cleanup_pass
+
+        mock_repo = MagicMock()
+        video = MagicMock()
+        video.path = "file:///fake/v.mp4"
+        video.sample_images = ["MOVIE-001/extrafanart/fanart1.jpg"]  # Codex 重現的值
+        mock_repo.get_all.return_value = [video]
+
+        count = _run_sample_images_cleanup_pass(mock_repo)
+        assert count == 0, "相對路徑應保留，cleanup 不該觸發 update"
+        mock_repo.update_sample_images.assert_not_called()

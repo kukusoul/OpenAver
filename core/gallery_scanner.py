@@ -839,9 +839,16 @@ class VideoScanner:
 def _validate_sample_images(sample_images: list, video_path: str = "") -> list:
     """驗證 sample_images 中的 file:/// URI 對應磁碟檔案存在性。
     不存在的項目剔除；uri_to_fs_path 轉換失敗也視為不存在（但 log warning）。
+    非 file:/// 格式（相對路徑、絕對 FS 路徑、http URL 等）原樣保留 —
+    cleanup pass 只管 file:/// URI 的磁碟失效情境。
     """
     valid = []
     for uri in sample_images:
+        # 只 validate file:/// URI；其他格式（migration 帶入的相對路徑、
+        # 舊絕對 FS 路徑、遠端 http URL 等）原樣保留，不做磁碟檢查
+        if not uri.startswith('file:///'):
+            valid.append(uri)
+            continue
         try:
             fs = uri_to_fs_path(uri)
         except Exception as e:
