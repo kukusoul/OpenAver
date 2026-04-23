@@ -40,6 +40,9 @@ class TestStripSubtitleMarkers:
         ("日本字幕員訪談", "日本字幕員訪談"),
         # -C 後綴剝除後不影響其他內容
         ("ABC-123-C", "ABC-123"),
+        # Codex 指出的 orphan 分隔符：剝 marker 後尾端留 -/_ 必須一併清掉
+        ("正妹の中文版-中字", "正妹の中文版"),       # 尾端 orphan `-` 清掉
+        ("正妹の中文版_中文字幕", "正妹の中文版"),    # 尾端 orphan `_` 清掉
     ])
     def test_strip_exact_string(self, input_name, expected_exact):
         """exact-string 斷言：確認剝除後的字串與預期完全一致（而非只驗布林值）"""

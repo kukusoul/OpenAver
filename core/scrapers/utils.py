@@ -265,6 +265,11 @@ def strip_subtitle_markers(name: Optional[str]) -> Optional[str]:
     for marker in ['中文字幕', '中字', '字幕']:
         name = re.sub(rf'(?<![^\W_]){re.escape(marker)}(?![^\W_])', '', name)
 
+    # 2.5 marker 剝除後，清掉頭尾 orphan 的 -/_ 分隔符
+    # 例如「正妹の中文版-中字」剝「中字」後留「正妹の中文版-」，尾端 `-` 是 orphan
+    # 不動「-C/_C」組合 — 尾端 C 不匹配 [-_]+$
+    name = re.sub(r'^[-_]+|[-_]+$', '', name)
+
     # 3. 後綴 -C / _C（後接非英數或字串結尾）
     name = re.sub(r'[-_][Cc](?=[^A-Za-z0-9]|$)', '', name)
 

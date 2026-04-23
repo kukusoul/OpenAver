@@ -167,15 +167,25 @@ def generate_avlist() -> Generator[str, None, None]:
                 # 快速掃描取得檔案列表
                 min_size_bytes = min_size_mb * 1024 * 1024
                 video_extensions = get_video_extensions(config)
-                all_files = fast_scan_directory(normalized_dir, video_extensions, min_size_bytes)
+                # a5 Codex fix: 收集因 OSError/PermissionError 被跳過的路徑
+                # （含 Windows 長路徑觸發的 OSError — 這些 entry 根本不會進 all_files）
+                skipped_paths: list[str] = []
+                all_files = fast_scan_directory(
+                    normalized_dir,
+                    video_extensions,
+                    min_size_bytes,
+                    on_skip=lambda p, _e: skipped_paths.append(p),
+                )
 
-                if not all_files:
+                if not all_files and not skipped_paths:
                     yield _sse_event({"type": "log", "level": "info", "message": f"{directory}: 沒有影片檔案"})
                     continue
 
                 # a5: Windows 長路徑警告（gate 在呼叫端，不在 helper）
                 if sys.platform == 'win32':
                     long_paths.extend(_collect_long_paths(all_files))
+                    # 把因長度而失敗的 skipped 路徑也納入警告（filter >260 過濾非長路徑失敗）
+                    long_paths.extend(p for p in skipped_paths if len(p) > 260)
 
                 yield _sse_event({"type": "log", "level": "info", "message": f"{directory}: 找到 {len(all_files)} 個檔案"})
 
@@ -200,12 +210,24 @@ def generate_avlist() -> Generator[str, None, None]:
                         needs_scan.append(file_info)
 
                 # 清理已刪除的檔案（限定在此目錄下）
-                normalized_dir_uri = to_file_uri(normalized_dir, path_mappings)
-                deleted_paths = [p for p in db_index.keys() if is_path_under_dir(p, normalized_dir_uri) and p not in current_paths]
-                if deleted_paths:
-                    deleted_count = repo.delete_by_paths(deleted_paths)
-                    total_deleted += deleted_count
-                    yield _sse_event({"type": "log", "level": "info", "message": f"  清理 {deleted_count} 個已刪除檔案"})
+                # a5 Codex fix: scan 不完整時（skipped_paths 非空）跳過 deletion 偵測
+                # current_paths 只含本次成功掃到的檔案；若有路徑因 OSError/PermissionError
+                # 被跳過，current_paths 就不是本目錄完整集合，用它做 diff 會把「原本存在
+                # 但這次沒掃到（因失敗）」的 DB 紀錄誤判為已刪除並清掉。
+                # partial scan 只做 insert/update，不能 infer 刪除。
+                if skipped_paths:
+                    yield _sse_event({
+                        "type": "log",
+                        "level": "warn",
+                        "message": f"  {directory}: {len(skipped_paths)} 個路徑讀取失敗，跳過刪除偵測以免誤刪（詳見 debug.log）"
+                    })
+                else:
+                    normalized_dir_uri = to_file_uri(normalized_dir, path_mappings)
+                    deleted_paths = [p for p in db_index.keys() if is_path_under_dir(p, normalized_dir_uri) and p not in current_paths]
+                    if deleted_paths:
+                        deleted_count = repo.delete_by_paths(deleted_paths)
+                        total_deleted += deleted_count
+                        yield _sse_event({"type": "log", "level": "info", "message": f"  清理 {deleted_count} 個已刪除檔案"})
 
                 # 掃描並寫入需要更新的檔案
                 videos_to_upsert = []

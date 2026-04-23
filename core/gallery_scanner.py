@@ -14,7 +14,7 @@ import time
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field, fields as dataclass_fields
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 
 from core.logger import get_logger
 from core.maker_mapping import load_name_mapping, load_prefix_mapping
@@ -84,15 +84,39 @@ IMAGE_EXTENSIONS = ('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp')
 DEFAULT_CACHE_FILE = "gallery_cache.json"
 
 
-def fast_scan_directory(directory: str, extensions: set, min_size_bytes: int = 0) -> List[dict]:
+def fast_scan_directory(
+    directory: str,
+    extensions: set,
+    min_size_bytes: int = 0,
+    on_skip: Optional[Callable[[str, Exception], None]] = None,
+) -> List[dict]:
     """快速掃描目錄，一次取得所有檔案資訊
 
     使用 os.scandir() 替代 glob() + stat()，大幅減少系統呼叫次數
     同時收集 NFO 檔案的 mtime，用於偵測 NFO 更新
+
+    Args:
+        directory: 要掃描的根目錄
+        extensions: 目標副檔名集合（含點）
+        min_size_bytes: 最小檔案大小（bytes）
+        on_skip: 可選 callback，簽名 (path, exception) -> None。
+            每當內部 entry 或外層目錄因 OSError/PermissionError 被跳過時呼叫。
+            用於讓呼叫端捕捉「因長路徑/權限而無法存取」的檔案，因為這類 entry
+            根本不會進入回傳 results，僅透過 callback 讓呼叫端知道它們存在。
+            callback 本身拋的例外會被吞掉，不影響掃描進度。
     """
     logger.debug(f"[FastScan] 掃描目錄: {directory}")
     results = []
     nfo_mtimes = {}  # 記錄每個目錄中的 NFO mtime
+
+    def _safe_on_skip(p: str, exc: Exception) -> None:
+        if on_skip is None:
+            return
+        try:
+            on_skip(p, exc)
+        except Exception:
+            # callback 本身出錯不得影響掃描
+            pass
 
     def scan_recursive(path: str):
         try:
@@ -112,8 +136,8 @@ def fast_scan_directory(directory: str, extensions: set, min_size_bytes: int = 0
                                 # 記錄 NFO 的 mtime
                                 try:
                                     dir_nfos[stem] = entry.stat().st_mtime
-                                except OSError:
-                                    pass
+                                except OSError as e:
+                                    _safe_on_skip(entry.path, e)
                             elif ext in extensions:
                                 stat = entry.stat()
                                 if min_size_bytes <= 0 or ext in ZERO_SIZE_EXTENSIONS or stat.st_size >= min_size_bytes:
@@ -123,8 +147,9 @@ def fast_scan_directory(directory: str, extensions: set, min_size_bytes: int = 0
                                         'size': stat.st_size,
                                         'stem': stem
                                     })
-                    except (OSError, PermissionError):
-                        pass
+                    except (OSError, PermissionError) as e:
+                        # entry.path 是 os.DirEntry 的純拼接屬性，通常不會拋
+                        _safe_on_skip(entry.path, e)
 
                 # 將 NFO mtime 加入對應的影片資訊
                 for f in dir_files:
@@ -132,8 +157,8 @@ def fast_scan_directory(directory: str, extensions: set, min_size_bytes: int = 0
                     del f['stem']  # 不需要保留 stem
                     results.append(f)
 
-        except (OSError, PermissionError):
-            pass
+        except (OSError, PermissionError) as e:
+            _safe_on_skip(path, e)
 
     scan_recursive(directory)
     logger.debug(f"[FastScan] 找到 {len(results)} 個檔案")

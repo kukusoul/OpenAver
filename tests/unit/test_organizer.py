@@ -839,6 +839,9 @@ class TestExtractChineseTitleSubtitleMarkers:
         ("ABC-123-中字.mp4", "ABC-123", None),                         # 5. 修前: 殘留 -中字，修後: None
         ("ABC-123【中文字幕】.mp4", "ABC-123", None),                  # 6. 字幕 bracket → None（守護順序契約）
         ("ABC-123.mp4", "ABC-123", None),                              # 7. 無字幕無中文 → None
+        # 8-9. Codex 指出的 orphan 分隔符殘留 — 剝除 marker 後不應留下尾端 -/_
+        ("ABC-123 正妹の中文版-中字.mp4", "ABC-123", "正妹の中文版"),
+        ("ABC-123 正妹の中文版_中文字幕.mp4", "ABC-123", "正妹の中文版"),
     ])
     def test_subtitle_marker_cases(self, filename, number, expected):
         result = extract_chinese_title(filename, number)

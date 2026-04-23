@@ -219,6 +219,136 @@ class TestNormalizeMaker:
         assert result == "S1"
 
 
+class TestFastScanDirectorySkipCallback:
+    """spec-48a §a5 Codex fix — fast_scan_directory on_skip callback
+
+    背景：Windows 長路徑觸發 os.DirEntry.stat()/.is_file() 拋 OSError，
+    導致 entry 根本不進 results。T5 的 _collect_long_paths(results) 只看「掃到」
+    的檔案，永遠抓不到「因長而失敗」的那批。on_skip callback 讓呼叫端能捕捉
+    這些被跳過的 entry.path，再由呼叫端以 >260 篩出長路徑加進警告。
+    """
+
+    def test_on_skip_called_on_inner_entry_oserror(self, tmp_path, monkeypatch):
+        """當 entry.is_file() 拋 OSError，on_skip 必須被呼叫且帶 entry.path"""
+        import os
+        from core.gallery_scanner import fast_scan_directory
+
+        # 建一個空目錄作為掃描根
+        scan_root = tmp_path / "scan"
+        scan_root.mkdir()
+
+        # 建一個 fake DirEntry：is_dir/is_file 均拋 OSError
+        class FakeBadEntry:
+            def __init__(self, path):
+                self.path = path
+                self.name = os.path.basename(path)
+
+            def is_dir(self, follow_symlinks=False):
+                raise OSError(206, "The filename or extension is too long")
+
+            def is_file(self, follow_symlinks=False):
+                raise OSError(206, "The filename or extension is too long")
+
+            def stat(self, follow_symlinks=True):
+                raise OSError(206, "The filename or extension is too long")
+
+        bad_entry_path = str(scan_root / ("longname" + "x" * 300 + ".mp4"))
+        fake_entry = FakeBadEntry(bad_entry_path)
+
+        # monkeypatch os.scandir — 僅對 scan_root 回傳 fake entry
+        real_scandir = os.scandir
+
+        class FakeScandirCtx:
+            def __init__(self, entries):
+                self._entries = entries
+
+            def __enter__(self):
+                return iter(self._entries)
+
+            def __exit__(self, *a):
+                return False
+
+        def fake_scandir(path):
+            if os.path.normpath(path) == os.path.normpath(str(scan_root)):
+                return FakeScandirCtx([fake_entry])
+            return real_scandir(path)
+
+        monkeypatch.setattr("core.gallery_scanner.os.scandir", fake_scandir)
+
+        calls = []
+        results = fast_scan_directory(
+            str(scan_root), {'.mp4'}, 0,
+            on_skip=lambda p, e: calls.append((p, type(e).__name__)),
+        )
+
+        # 結果：entry 沒進 results，但 on_skip 被呼叫一次
+        assert results == [], "拋 OSError 的 entry 不應進入 results"
+        assert len(calls) == 1, "on_skip 應被呼叫一次"
+        assert calls[0][0] == bad_entry_path, "on_skip 應收到 entry.path"
+        assert calls[0][1] == 'OSError', "on_skip 應收到實際的 exception 類型"
+
+    def test_on_skip_called_on_outer_scandir_oserror(self, tmp_path, monkeypatch):
+        """當外層 os.scandir() 自己拋 OSError（整個目錄無法開），on_skip 收到目錄路徑"""
+        import os
+        from core.gallery_scanner import fast_scan_directory
+
+        scan_root = tmp_path / "scan"
+        scan_root.mkdir()
+
+        def fake_scandir(path):
+            raise PermissionError(13, "Permission denied")
+
+        monkeypatch.setattr("core.gallery_scanner.os.scandir", fake_scandir)
+
+        calls = []
+        results = fast_scan_directory(
+            str(scan_root), {'.mp4'}, 0,
+            on_skip=lambda p, e: calls.append((p, type(e).__name__)),
+        )
+
+        assert results == []
+        assert len(calls) == 1, "外層 scandir 失敗 on_skip 應被呼叫一次"
+        assert calls[0][0] == str(scan_root)
+        assert calls[0][1] == 'PermissionError'
+
+    def test_on_skip_none_is_default_silent(self, tmp_path, monkeypatch):
+        """on_skip=None（或未傳）時完全靜默，保持既有 caller 行為不變"""
+        import os
+        from core.gallery_scanner import fast_scan_directory
+
+        scan_root = tmp_path / "scan"
+        scan_root.mkdir()
+
+        def fake_scandir(path):
+            raise PermissionError(13, "Permission denied")
+
+        monkeypatch.setattr("core.gallery_scanner.os.scandir", fake_scandir)
+
+        # 不傳 on_skip — 不應拋，回傳空 list
+        results = fast_scan_directory(str(scan_root), {'.mp4'}, 0)
+        assert results == []
+
+    def test_on_skip_callback_exception_does_not_break_scan(self, tmp_path, monkeypatch):
+        """callback 本身拋例外不得中斷掃描（safety net）"""
+        import os
+        from core.gallery_scanner import fast_scan_directory
+
+        scan_root = tmp_path / "scan"
+        scan_root.mkdir()
+
+        def fake_scandir(path):
+            raise OSError(206, "long path")
+
+        monkeypatch.setattr("core.gallery_scanner.os.scandir", fake_scandir)
+
+        def angry_callback(p, e):
+            raise RuntimeError("callback boom")
+
+        # 不應把 RuntimeError 傳出來
+        results = fast_scan_directory(str(scan_root), {'.mp4'}, 0, on_skip=angry_callback)
+        assert results == []
+
+
 class TestCollectLongPaths:
     """spec-48a §a5 契約 1+2 — _collect_long_paths helper 行為"""
 
