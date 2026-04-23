@@ -690,8 +690,9 @@
                                 <button class="fetch-samples-btn"
                                         x-show="(currentLightboxVideo?.sample_images || []).length === 0 && !_fetchSamplesLoading"
                                         :disabled="!!_fetchSamplesFailed[currentLightboxVideo?.path]"
-                                        @click="fetchSamples(currentLightboxVideo)"
-                                        x-text="t('showcase.samples.fetch_btn')">
+                                        @click="fetchSamples(currentLightboxVideo)">
+                                    <i class="bi bi-cloud-download" aria-hidden="true"></i>
+                                    <span x-text="t('showcase.samples.fetch_btn')"></span>
                                 </button>
                                 <span x-show="_fetchSamplesLoading" x-text="t('showcase.samples.fetching')"></span>
                             </div>

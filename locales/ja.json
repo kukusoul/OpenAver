@@ -585,7 +585,7 @@
       "favorited": "お気に入り済み"
     },
     "samples": {
-      "fetch_btn": "☁️ 画像を取得",
+      "fetch_btn": "取得",
       "fetching": "取得中...",
       "success": "サンプル画像を取得しました",
       "fetch_failed": "画像の取得に失敗しました。後でもう一度お試しください",

@@ -2996,15 +2996,26 @@ class TestFetchSamplesButton:
         )
 
     def test_fetch_samples_btn_has_x_text_for_i18n(self):
-        """fetch-samples-btn 的 x-text 在同一個 button tag 上，且引用 showcase.samples.fetch_btn"""
+        """fetch-samples-btn 或其子元素的 x-text 引用 showcase.samples.fetch_btn。
+
+        b6fix2 將 x-text 從 button tag 移至內部 <span>，以防 Alpine 覆蓋 innerHTML
+        （否則 <i> icon 會消失）。搜尋範圍從 button 起始標籤擴展至 btn_region 完整區段。
+        """
         html = self._html()
-        tag = self._fetch_samples_btn_tag(html)
-        assert tag is not None, "fetch-samples-btn element 不存在，無法檢查 x-text"
-        assert 'x-text=' in tag, (
-            "fetch-samples-btn 缺少 x-text binding（應綁定 i18n key，不可 hardcode 文字）"
+        m = re.search(
+            r'<button\b[^>]*class="[^"]*fetch-samples-btn[^"]*"[^>]*>',
+            html,
+            re.DOTALL,
         )
-        assert 'showcase.samples.fetch_btn' in tag, (
-            "fetch-samples-btn 的 x-text 未引用 showcase.samples.fetch_btn i18n key"
+        assert m is not None, "fetch-samples-btn element 不存在，無法檢查 x-text"
+        close_tag_pos = html.find('</button>', m.end())
+        assert close_tag_pos > m.start(), "找不到 fetch-samples-btn 的 </button> 結束標籤"
+        btn_region = html[m.start():close_tag_pos + len('</button>')]
+        assert 'x-text=' in btn_region, (
+            "fetch-samples-btn 範圍內缺少 x-text binding（應綁定 i18n key，不可 hardcode 文字）"
+        )
+        assert 'showcase.samples.fetch_btn' in btn_region, (
+            "fetch-samples-btn 範圍內的 x-text 未引用 showcase.samples.fetch_btn i18n key"
         )
 
     def test_fetching_loading_span_exists_with_x_show(self):
@@ -3074,4 +3085,72 @@ class TestFetchSamplesButton:
         missing = required_keys - set(samples.keys())
         assert not missing, (
             f"locales/{locale}.json showcase.samples 缺少 key: {sorted(missing)}"
+        )
+
+    def test_fetch_samples_btn_has_bootstrap_icon(self):
+        """fetch-samples-btn 內含 Bootstrap Icon class（bi bi-cloud-download）。
+
+        b6 原始按鈕為裸文字，b6fix2 替換為 Bootstrap Icon。
+        靜態守衛確保 icon markup 不被移除（防止未來誤刪或改回 emoji）。
+        """
+        html = self._html()
+        m = re.search(
+            r'<button\b[^>]*class="[^"]*fetch-samples-btn[^"]*"[^>]*>',
+            html,
+            re.DOTALL,
+        )
+        assert m is not None, "fetch-samples-btn button element 不存在"
+
+        close_tag_pos = html.find('</button>', m.end())
+        assert close_tag_pos > m.start(), "找不到 fetch-samples-btn 的 </button> 結束標籤"
+        btn_region = html[m.start():close_tag_pos + len('</button>')]
+
+        assert 'bi bi-cloud-download' in btn_region, (
+            "fetch-samples-btn 範圍內缺少 Bootstrap Icon（bi bi-cloud-download）。\n"
+            "b6fix2 要求以 <i class=\"bi bi-cloud-download\"> 取代 emoji ☁️。\n"
+            "確認 showcase.html 的 fetch-samples-btn 已加入 <i class=\"bi bi-cloud-download\" aria-hidden=\"true\"></i>。"
+        )
+
+    def test_fetch_samples_btn_no_emoji_fallback(self):
+        """fetch-samples-btn 範圍內不含 ☁️ emoji（U+2601 + 可選 U+FE0F）。
+
+        b6 原始按鈕文字為 '☁️ 補抓劇照'（emoji 前綴）。
+        b6fix2 移除 emoji，改用 Bootstrap Icon，並更新 4 語系 locale label。
+        靜態守衛：直接掃 showcase.html 的 fetch-samples-btn button region 不含 ☁ 字元。
+        此測試範圍僅限 template；locale JSON 值的 emoji 移除由
+        test_fetch_btn_locale_no_emoji 負責驗證。
+        """
+        html = self._html()
+        m = re.search(
+            r'<button\b[^>]*class="[^"]*fetch-samples-btn[^"]*"[^>]*>',
+            html,
+            re.DOTALL,
+        )
+        assert m is not None, "fetch-samples-btn button element 不存在"
+
+        close_tag_pos = html.find('</button>', m.end())
+        assert close_tag_pos > m.start(), "找不到 fetch-samples-btn 的 </button> 結束標籤"
+        btn_region = html[m.start():close_tag_pos + len('</button>')]
+
+        assert '☁' not in btn_region, (
+            "fetch-samples-btn 範圍內仍含 ☁ emoji（U+2601）。\n"
+            "b6fix2 應移除 hardcode emoji，改以 Bootstrap Icon <i class=\"bi bi-cloud-download\"> 替代。"
+        )
+
+    @pytest.mark.parametrize("locale", ["zh_TW", "zh_CN", "en", "ja"])
+    def test_fetch_btn_locale_no_emoji(self, locale):
+        """4 語系 locale JSON 的 showcase.samples.fetch_btn 值不含 ☁ emoji（U+2601）。
+
+        b6fix2 同步更新 4 個語系 fetch_btn label，移除 emoji 前綴。
+        此守衛確保 locale JSON 本身的 value 不含 ☁，
+        與 test_fetch_samples_btn_no_emoji_fallback（掃 template）互補。
+        """
+        locale_path = LOCALES_ROOT / f"{locale}.json"
+        with locale_path.open(encoding="utf-8") as f:
+            data = json.load(f)
+        value = data.get("showcase", {}).get("samples", {}).get("fetch_btn", "")
+        assert "☁" not in value, (
+            f"locales/{locale}.json showcase.samples.fetch_btn 仍含 ☁ emoji（U+2601）。\n"
+            f"當前值：{value!r}\n"
+            "b6fix2 應將 emoji 前綴從所有 4 語系 locale 值中移除。"
         )

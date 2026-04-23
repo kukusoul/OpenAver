@@ -585,7 +585,7 @@
       "favorited": "Favorited"
     },
     "samples": {
-      "fetch_btn": "☁️ Fetch Stills",
+      "fetch_btn": "Fetch Stills",
       "fetching": "Fetching...",
       "success": "Stills fetched successfully",
       "fetch_failed": "Failed to fetch stills, please try again",

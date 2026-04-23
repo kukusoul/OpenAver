@@ -585,7 +585,7 @@
       "favorited": "已收藏"
     },
     "samples": {
-      "fetch_btn": "☁️ 補抓劇照",
+      "fetch_btn": "補劇照",
       "fetching": "抓取中...",
       "success": "劇照補抓完成",
       "fetch_failed": "補抓劇照失敗，請稍後再試",
