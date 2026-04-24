@@ -709,8 +709,8 @@ async def get_image(path: str = Query(..., description="圖片路徑")):
     except ValueError:
         local_path = path  # 無法轉換時使用原路徑
 
-    # 1. 解析 .. 和 symlink，防止路徑穿越攻擊
-    local_path = os.path.realpath(local_path)
+    # 1. 解析 .. 防止路徑穿越攻擊（normpath 純字串、不 syscall，相容 FUSE/WinFsp）
+    local_path = os.path.normpath(local_path)
 
     # 2. 副檔名白名單（只允許圖片格式）
     ext = os.path.splitext(local_path)[1].lower()
@@ -758,10 +758,10 @@ async def get_video(request: Request, path: str = Query(..., description="影片
     # 1. 轉換為 FS 路徑
     local_path = uri_to_fs_path(path)
 
-    # 2. 解析 .. 和 symlink，防止路徑穿越攻擊（必須在 ext 檢查前，避免 symlink 繞過）
-    local_path = os.path.realpath(local_path)
+    # 2. 解析 .. 防止路徑穿越攻擊（normpath 純字串、不 syscall，必須在 ext 檢查前）
+    local_path = os.path.normpath(local_path)
 
-    # 3. 副檔名白名單（用 realpath 解析後的真實路徑）
+    # 3. 副檔名白名單（用 normpath 解析後的路徑）
     #    使用 get_proxy_extensions() = user config ∩ SAFE_PROXY_EXTENSIONS
     config = load_config()
     allowed_extensions = get_proxy_extensions(config)
