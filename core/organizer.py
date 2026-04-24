@@ -151,6 +151,8 @@ FALLBACKS = {
     'title':  '未知標題',
     'date':   '未知日期',
     'year':   '未知年份',
+    'month':  '未知月份',
+    'day':    '未知日',
 }
 
 
@@ -166,6 +168,8 @@ def format_string(template: str, data: Dict[str, Any], use_fallback: bool = Fals
     - {maker}: 片商
     - {date}: 發行日期
     - {year}: 年份
+    - {month}: 月份（2位）
+    - {day}: 日（2位）
     - {suffix}: 版本後綴（Fix-1）
 
     Args:
@@ -199,6 +203,8 @@ def format_string(template: str, data: Dict[str, Any], use_fallback: bool = Fals
     date = data.get('date', '')
     result = result.replace('{date}', date or fb.get('date', ''))
     result = result.replace('{year}', date[:4] if date else fb.get('year', ''))
+    result = result.replace('{month}', date[5:7] if len(date) >= 7 else fb.get('month', ''))
+    result = result.replace('{day}',   date[8:10] if len(date) >= 10 else fb.get('day', ''))
 
     # 後綴（Fix-1，空值就是空字串，不需 fallback）
     result = result.replace('{suffix}', data.get('suffix', ''))
@@ -547,7 +553,8 @@ def organize_file(
             used_fallbacks.append('女優')
         if '{maker}' in folder_template and not format_data.get('maker'):
             used_fallbacks.append('片商')
-        if ('{date}' in folder_template or '{year}' in folder_template) and not format_data.get('date'):
+        if ('{date}' in folder_template or '{year}' in folder_template
+                or '{month}' in folder_template or '{day}' in folder_template) and not format_data.get('date'):
             used_fallbacks.append('日期')
         if '{title}' in folder_template and not format_data.get('title'):
             used_fallbacks.append('標題')

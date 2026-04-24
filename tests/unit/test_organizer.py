@@ -109,6 +109,90 @@ class TestFormatStringFallback:
         result = format_string("{actor}", {"actors": ["三上悠亞"]}, use_fallback=True)
         assert result == "三上悠亞"
 
+    def test_format_string_fallback_month(self):
+        result = format_string("{month}", {"date": ""}, use_fallback=True)
+        assert result == "未知月份"
+
+    def test_format_string_fallback_day(self):
+        result = format_string("{day}", {"date": ""}, use_fallback=True)
+        assert result == "未知日"
+
+    def test_format_string_no_fallback_month(self):
+        result = format_string("{month}", {"date": ""})  # use_fallback=False
+        assert result == ""
+
+    def test_format_string_no_fallback_day(self):
+        result = format_string("{day}", {"date": ""})  # use_fallback=False
+        assert result == ""
+
+
+class TestFormatStringDateVariables:
+    """format_string() {year}/{month}/{day}/{date} 變數展開測試"""
+
+    def test_full_iso_date_year(self):
+        """完整 ISO 日期：{year} = "2015"""
+        result = format_string("{year}", {"date": "2015-06-01"})
+        assert result == "2015"
+
+    def test_full_iso_date_month(self):
+        """完整 ISO 日期：{month} = "06"""
+        result = format_string("{month}", {"date": "2015-06-01"})
+        assert result == "06"
+
+    def test_full_iso_date_day(self):
+        """完整 ISO 日期：{day} = "01"""
+        result = format_string("{day}", {"date": "2015-06-01"})
+        assert result == "01"
+
+    def test_full_iso_date_date(self):
+        """完整 ISO 日期：{date} = "2015-06-01"""
+        result = format_string("{date}", {"date": "2015-06-01"})
+        assert result == "2015-06-01"
+
+    def test_partial_date_year_month_only(self):
+        """部分日期 "2015-06"：{year}="2015" / {month}="06"""
+        year_result = format_string("{year}", {"date": "2015-06"})
+        month_result = format_string("{month}", {"date": "2015-06"})
+        assert year_result == "2015"
+        assert month_result == "06"
+
+    def test_partial_date_day_fallback_folder(self):
+        """部分日期 "2015-06"：{day} 走 folder fallback = "未知日"""
+        result = format_string("{day}", {"date": "2015-06"}, use_fallback=True)
+        assert result == "未知日"
+
+    def test_partial_date_day_fallback_filename(self):
+        """部分日期 "2015-06"：{day} 走 filename fallback = """""
+        result = format_string("{day}", {"date": "2015-06"}, use_fallback=False)
+        assert result == ""
+
+    def test_year_only_month_fallback_folder(self):
+        """純年份 "2015"：{month} 走 folder fallback = "未知月份"""
+        result = format_string("{month}", {"date": "2015"}, use_fallback=True)
+        assert result == "未知月份"
+
+    def test_year_only_day_fallback_folder(self):
+        """純年份 "2015"：{day} 走 folder fallback = "未知日"""
+        result = format_string("{day}", {"date": "2015"}, use_fallback=True)
+        assert result == "未知日"
+
+    def test_empty_date_all_fallback_folder(self):
+        """空字串：{year}/{month}/{day}/{date} 全部走 folder fallback"""
+        assert format_string("{year}", {"date": ""}, use_fallback=True) == "未知年份"
+        assert format_string("{month}", {"date": ""}, use_fallback=True) == "未知月份"
+        assert format_string("{day}", {"date": ""}, use_fallback=True) == "未知日"
+        assert format_string("{date}", {"date": ""}, use_fallback=True) == "未知日期"
+
+    def test_filename_format_ymd_full_date(self):
+        """{year}-{month}-{day} + 完整 date → 展開 "2015-06-01"""
+        result = format_string("{year}-{month}-{day}", {"date": "2015-06-01"})
+        assert result == "2015-06-01"
+
+    def test_filename_format_dmy_full_date(self):
+        """{day}_{month}_{year} (DMY) + 完整 date → 展開 "01_06_2015"""
+        result = format_string("{day}_{month}_{year}", {"date": "2015-06-01"})
+        assert result == "01_06_2015"
+
 
 # ============ organize_file() 整合測試 ============
 
