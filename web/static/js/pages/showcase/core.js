@@ -695,6 +695,10 @@ function showcaseState() {
         _actressCoreMetadata() {
             var a = this.currentLightboxActress; if (!a) return '';
             var parts = [];
+            // T2: video_count 前置（CD-3）
+            if (typeof a.video_count === 'number') {
+                parts.push(a.video_count + window.t('showcase.unit.films'));
+            }
             if (a.age) parts.push(a.age + window.t('search.unit.age'));
             if (a.birth) parts.push(a.birth);
             if (a.height) parts.push(a.height);

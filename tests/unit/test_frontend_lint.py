@@ -3244,3 +3244,79 @@ class TestActressLightboxHeartRemoved:
         """showcase.css 不應再含 .actress-lb-header .btn-glass-circle 規則"""
         css = Path("web/static/css/pages/showcase.css").read_text(encoding="utf-8")
         assert '.actress-lb-header .btn-glass-circle' not in css, "orphan CSS should be removed"
+
+
+class TestActressCoreMetadataVideoCount:
+    """T2: _actressCoreMetadata() 加 video_count 前置 + i18n showcase.unit.films 改值"""
+
+    def _js(self):
+        return SHOWCASE_CORE_JS.read_text(encoding="utf-8")
+
+    def _extract_method_body(self, js, method_name):
+        """抓取 Alpine state method 函式主體（大括號平衡）。"""
+        pattern = re.compile(
+            r'(?:^|\n)\s*' + re.escape(method_name) + r'\s*\([^)]*\)\s*\{',
+            re.DOTALL,
+        )
+        m = pattern.search(js)
+        assert m is not None, f"showcase/core.js 找不到 {method_name} 方法"
+        start = m.end()
+        depth = 1
+        i = start
+        while i < len(js) and depth > 0:
+            c = js[i]
+            if c == '{':
+                depth += 1
+            elif c == '}':
+                depth -= 1
+            i += 1
+        return js[start:i - 1]
+
+    def test_video_count_pushed_first(self):
+        """_actressCoreMetadata 函數體前置 push video_count（在 age 之前）"""
+        js = self._js()
+        body = self._extract_method_body(js, '_actressCoreMetadata')
+        assert 'video_count' in body, \
+            "showcase/core.js _actressCoreMetadata 函數體缺少 video_count"
+        assert 'showcase.unit.films' in body, \
+            "showcase/core.js _actressCoreMetadata 函數體缺少 showcase.unit.films i18n key"
+
+        vc_push = re.search(r'parts\.push\([^)]*video_count[^)]*\)', body)
+        age_push = re.search(r'parts\.push\([^)]*\.age[^)]*\)', body)
+        assert vc_push is not None, \
+            "showcase/core.js _actressCoreMetadata 缺少 parts.push(...video_count...) 行"
+        assert age_push is not None, \
+            "showcase/core.js _actressCoreMetadata 缺少 parts.push(...age...) 行"
+        assert vc_push.start() < age_push.start(), \
+            "showcase/core.js _actressCoreMetadata video_count push 必須在 age push 之前（前置）"
+
+    def test_video_count_typeof_number_guard(self):
+        """_actressCoreMetadata 函數體含 typeof a.video_count === 'number' guard"""
+        js = self._js()
+        body = self._extract_method_body(js, '_actressCoreMetadata')
+        assert re.search(r"typeof\s+\w+\.video_count\s*===\s*['\"]number['\"]", body), \
+            "showcase/core.js _actressCoreMetadata 缺少 typeof a.video_count === 'number' guard"
+
+    def test_films_unit_zh_tw_value(self):
+        """locales/zh_TW.json showcase.unit.films == '部作品'"""
+        data = json.loads((LOCALES_ROOT / "zh_TW.json").read_text(encoding="utf-8"))
+        assert data["showcase"]["unit"]["films"] == "部作品", \
+            f"zh_TW.json showcase.unit.films 應為 '部作品'，目前 {data['showcase']['unit']['films']!r}"
+
+    def test_films_unit_zh_cn_value(self):
+        """locales/zh_CN.json showcase.unit.films == '部作品'"""
+        data = json.loads((LOCALES_ROOT / "zh_CN.json").read_text(encoding="utf-8"))
+        assert data["showcase"]["unit"]["films"] == "部作品", \
+            f"zh_CN.json showcase.unit.films 應為 '部作品'，目前 {data['showcase']['unit']['films']!r}"
+
+    def test_films_unit_ja_value(self):
+        """locales/ja.json showcase.unit.films == '作品'"""
+        data = json.loads((LOCALES_ROOT / "ja.json").read_text(encoding="utf-8"))
+        assert data["showcase"]["unit"]["films"] == "作品", \
+            f"ja.json showcase.unit.films 應為 '作品'，目前 {data['showcase']['unit']['films']!r}"
+
+    def test_films_unit_en_unchanged(self):
+        """locales/en.json showcase.unit.films == ' films'（保留前空格，不變）"""
+        data = json.loads((LOCALES_ROOT / "en.json").read_text(encoding="utf-8"))
+        assert data["showcase"]["unit"]["films"] == " films", \
+            f"en.json showcase.unit.films 應保留為 ' films'，目前 {data['showcase']['unit']['films']!r}"
