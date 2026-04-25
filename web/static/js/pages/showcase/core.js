@@ -145,6 +145,7 @@ function showcaseState() {
         actressLoading: false,          // 載入中
         actressLightboxIndex: -1,       // 指向 _filteredActresses 的索引
         currentLightboxActress: null,   // 當前 lightbox 女優；與 currentLightboxVideo 互斥
+        actressLightboxSource: null,    // T5: 'hero' | 'grid' | null — 進入路徑（CD-9）
         _actressChipsExpanded: { aliases: false, info: false },  // chips 展開狀態
         _addActressName: '',            // + 新增 input
         _addingActress: false,          // 新增 loading
@@ -595,6 +596,7 @@ function showcaseState() {
                 _killLightboxTimelines({ killOpen: false, killSwitch: true });
                 var direction = index > this.actressLightboxIndex ? 'next' : 'prev';
                 this._setActressLightboxIndex(index);
+                this.actressLightboxSource = 'grid';   // T5: 切換女優分支
                 var lbGen = ++this._lightboxGeneration;
                 var self = this;
                 this.$nextTick(function () {
@@ -612,6 +614,7 @@ function showcaseState() {
             }
 
             this._setActressLightboxIndex(index);
+            this.actressLightboxSource = 'grid';   // T5: 首次進入分支
             this.lightboxOpen = true;
             document.body.classList.add('overflow-hidden');
 
@@ -1388,6 +1391,7 @@ function showcaseState() {
             this._videoChipsExpanded = false;
             var lightboxEl = document.querySelector('.showcase-lightbox');
             if (lightboxEl) lightboxEl.classList.add('gsap-animating');
+            this.actressLightboxSource = 'hero';   // T5: hero card 路徑
             this.lightboxOpen = true;
             document.body.classList.add('overflow-hidden');
 
@@ -1442,6 +1446,7 @@ function showcaseState() {
             if (lbEl) lbEl.classList.remove('gsap-animating');
             this._lightboxAnimating = false;
             this.lightboxOpen = false;
+            this.actressLightboxSource = null;   // T5: reset 進入路徑
             document.body.classList.remove('overflow-hidden');
 
             // ★ Fly-back — 用快照的 flipId 在整個頁面搜尋，不依賴 mode 或活陣列

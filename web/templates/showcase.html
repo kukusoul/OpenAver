@@ -577,6 +577,7 @@
                             </div>
                             <div class="cover-actions">
                                 <button class="lb-action-btn"
+                                        x-show="actressLightboxSource === 'grid'"
                                         @click.stop="searchActressFilms(currentLightboxActress?.name)"
                                         :data-tooltip="t('showcase.actress.search_films')"
                                         :aria-label="t('showcase.actress.search_films')">

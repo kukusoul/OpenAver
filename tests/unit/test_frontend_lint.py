@@ -966,6 +966,78 @@ class TestShowcaseActressState:
             "showcase/core.js handleKeydown 缺少 this.nextActressLightbox() 呼叫"
 
 
+class TestActressLightboxSourceGuard:
+    """49a-T5: Actress Lightbox source state guard（CD-9 顯式 state 取代物件 identity 判斷）
+
+    驗證：
+    - init state 含 actressLightboxSource: null
+    - openHeroCardLightbox 函數體設 'hero'
+    - openActressLightbox 函數體至少 2 處設 'grid'（首次進入 + 切換女優分支）
+    - closeLightbox 函數體 reset null
+    - showcase.html camera button 含 x-show="actressLightboxSource === 'grid'"
+    """
+
+    def _js(self):
+        return SHOWCASE_CORE_JS.read_text(encoding="utf-8")
+
+    def _html(self):
+        return SHOWCASE_HTML.read_text(encoding="utf-8")
+
+    def _extract_method_body(self, js, method_name):
+        """抓取 Alpine state method（methodName(...) { ... }）函式主體，大括號平衡。"""
+        pattern = re.compile(
+            r'(?:^|\n)\s*' + re.escape(method_name) + r'\s*\([^)]*\)\s*\{',
+            re.DOTALL,
+        )
+        m = pattern.search(js)
+        assert m is not None, f"showcase/core.js 找不到 {method_name} 方法"
+        start = m.end()  # 位於 { 之後
+        depth = 1
+        i = start
+        while i < len(js) and depth > 0:
+            c = js[i]
+            if c == '{':
+                depth += 1
+            elif c == '}':
+                depth -= 1
+            i += 1
+        return js[start:i - 1]
+
+    def test_init_state_present(self):
+        """core.js Alpine state 含 actressLightboxSource: null（容忍空白）"""
+        js = self._js()
+        assert re.search(r'actressLightboxSource\s*:\s*null', js), \
+            "showcase/core.js 缺少 Alpine state 屬性 actressLightboxSource: null"
+
+    def test_open_hero_card_sets_hero(self):
+        """openHeroCardLightbox 函數體設 this.actressLightboxSource = 'hero'"""
+        js = self._js()
+        body = self._extract_method_body(js, 'openHeroCardLightbox')
+        assert re.search(r"this\.actressLightboxSource\s*=\s*['\"]hero['\"]", body), \
+            "showcase/core.js openHeroCardLightbox 函數體缺少 this.actressLightboxSource = 'hero'"
+
+    def test_open_actress_lightbox_sets_grid(self):
+        """openActressLightbox 函數體至少 2 處設 'grid'（首次進入 + 切換女優分支）"""
+        js = self._js()
+        body = self._extract_method_body(js, 'openActressLightbox')
+        matches = re.findall(r"this\.actressLightboxSource\s*=\s*['\"]grid['\"]", body)
+        assert len(matches) >= 2, \
+            f"showcase/core.js openActressLightbox 應至少 2 處設 'grid'（首次進入 + 切換女優），目前 {len(matches)} 處"
+
+    def test_close_resets_null(self):
+        """closeLightbox 函數體 reset this.actressLightboxSource = null"""
+        js = self._js()
+        body = self._extract_method_body(js, 'closeLightbox')
+        assert re.search(r"this\.actressLightboxSource\s*=\s*null", body), \
+            "showcase/core.js closeLightbox 函數體缺少 this.actressLightboxSource = null（reset）"
+
+    def test_camera_button_x_show_binding(self):
+        """showcase.html camera button 含 x-show=\"actressLightboxSource === 'grid'\""""
+        html = self._html()
+        assert "actressLightboxSource === 'grid'" in html, \
+            "showcase.html camera button 缺少 x-show=\"actressLightboxSource === 'grid'\" 綁定"
+
+
 class TestShowcasePreciseMatchState:
     """Phase 44b-T1: Showcase 精準匹配 Alpine state 守衛"""
 
