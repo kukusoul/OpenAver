@@ -487,3 +487,346 @@ class TestActressCrop:
         """缺少 path 參數 → FastAPI 自動 422"""
         resp = client.get("/api/actresses/actress-crop")
         assert resp.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# T7: POST /api/actresses/{name}/photo — 設定女優照片 (T3 新增)
+# ---------------------------------------------------------------------------
+
+class TestSetActressPhoto:
+    """POST /api/actresses/{name}/photo 測試"""
+
+    def _save_actress(self, client):
+        """Helper: 收藏 ACTRESS_NAME（photo_source='gfriends'，來自 MOCK_PROFILE）"""
+        with patch("web.routers.actress.get_cached_profile", return_value=MOCK_PROFILE), \
+             patch("web.routers.actress.get_actress_profile"), \
+             patch("web.routers.actress.download_actress_photo", return_value=True), \
+             patch("web.routers.actress.get_local_photo_path", return_value=None):
+            client.post("/api/actresses/favorite", json={"name": ACTRESS_NAME})
+
+    def _save_actress_with_source(self, client, photo_source):
+        """Helper: 收藏 ACTRESS_NAME，指定 photo_source"""
+        profile = {**MOCK_PROFILE, "photo_source": photo_source}
+        with patch("web.routers.actress.get_cached_profile", return_value=profile), \
+             patch("web.routers.actress.get_actress_profile"), \
+             patch("web.routers.actress.download_actress_photo", return_value=True), \
+             patch("web.routers.actress.get_local_photo_path", return_value=None):
+            client.post("/api/actresses/favorite", json={"name": ACTRESS_NAME})
+
+    def _save_video_with_cover(self, tmp_path):
+        """Helper: 在 DB 中儲存一筆含 cover_path 的 Video，回傳 (video_path, cover_path)"""
+        from core.database import VideoRepository, Video
+        video_path = str(tmp_path / "test_video.mp4")
+        cover_path = str(tmp_path / "cover.jpg")
+        # 建立假 cover 檔案
+        Path(cover_path).write_bytes(b"\xff\xd8\xff\xe0fake_cover")
+        video = Video(
+            path=video_path,
+            title="Test Video",
+            actresses=[ACTRESS_NAME],
+            cover_path=cover_path,
+        )
+        repo = VideoRepository()
+        repo.upsert(video)
+        return video_path, cover_path
+
+    # ---- 雲端 happy path ----
+
+    def test_set_actress_photo_cloud_success(self, client):
+        """POST /photo source=graphis + url，mock 下載成功，回 200 + photo_url 含 ?t="""
+        self._save_actress(client)
+
+        with patch("web.routers.actress.download_actress_photo", return_value=True):
+            resp = client.post(
+                f"/api/actresses/{ACTRESS_NAME}/photo",
+                json={"source": "graphis", "url": "https://example.com/photo.jpg"},
+            )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "photo_url" in data
+        assert "?t=" in data["photo_url"]
+        assert data["photo_source"] == "graphis"
+
+    # ---- local_crop happy path ----
+
+    def test_set_actress_photo_local_crop_success(self, client, tmp_db, tmp_path):
+        """POST /photo source=local_crop + video_path，mock crop 成功，回 200 + photo_source='local_crop'"""
+        self._save_actress(client)
+        video_path, cover_path = self._save_video_with_cover(tmp_path)
+        video_uri = f"file://{video_path}"
+        fake_jpeg = b"\xff\xd8\xff\xe0FAKE_CROP_JPEG"
+
+        with patch("web.routers.actress.crop_video_cover", return_value=fake_jpeg), \
+             patch("web.routers.actress.GFRIENDS_DIR") as mock_dir:
+            # mock GFRIENDS_DIR to write into tmp_path
+            mock_dir.__truediv__ = lambda self, other: tmp_path / other
+            mock_dir.mkdir = lambda **kw: None
+            mock_dir.glob = lambda pattern: []
+            resp = client.post(
+                f"/api/actresses/{ACTRESS_NAME}/photo",
+                json={"source": "local_crop", "video_path": video_uri},
+            )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["photo_source"] == "local_crop"
+        assert "?t=" in data["photo_url"]
+
+    # ---- 錯誤處理 ----
+
+    def test_set_actress_photo_actress_not_found(self, client):
+        """actress 不在 DB 時回 404 not_found"""
+        resp = client.post(
+            "/api/actresses/不存在女優XYZ/photo",
+            json={"source": "graphis", "url": "https://example.com/photo.jpg"},
+        )
+        assert resp.status_code == 404
+        assert resp.json()["error"] == "not_found"
+
+    def test_set_actress_photo_unknown_source(self, client):
+        """source='unknown_xyz' 回 400 unknown_source"""
+        self._save_actress(client)
+        resp = client.post(
+            f"/api/actresses/{ACTRESS_NAME}/photo",
+            json={"source": "unknown_xyz", "url": "https://example.com/photo.jpg"},
+        )
+        assert resp.status_code == 400
+        assert resp.json()["error"] == "unknown_source"
+
+    def test_set_actress_photo_cloud_missing_url(self, client):
+        """雲端 source 缺 url 回 400 url_required"""
+        self._save_actress(client)
+        resp = client.post(
+            f"/api/actresses/{ACTRESS_NAME}/photo",
+            json={"source": "graphis"},
+        )
+        assert resp.status_code == 400
+        assert resp.json()["error"] == "url_required"
+
+    def test_set_actress_photo_local_crop_missing_video_path(self, client):
+        """local_crop 缺 video_path 回 400 video_path_required"""
+        self._save_actress(client)
+        resp = client.post(
+            f"/api/actresses/{ACTRESS_NAME}/photo",
+            json={"source": "local_crop"},
+        )
+        assert resp.status_code == 400
+        assert resp.json()["error"] == "video_path_required"
+
+    def test_set_actress_photo_local_crop_video_not_found(self, client, tmp_path):
+        """video_path 對應影片不在 DB 回 404 video_or_cover_not_found"""
+        self._save_actress(client)
+        resp = client.post(
+            f"/api/actresses/{ACTRESS_NAME}/photo",
+            json={"source": "local_crop", "video_path": "file:///tmp/nonexistent_video.mp4"},
+        )
+        assert resp.status_code == 404
+        assert resp.json()["error"] == "video_or_cover_not_found"
+
+    def test_set_actress_photo_local_crop_no_cover(self, client, tmp_db, tmp_path):
+        """video 在 DB 但 cover_path 為空 → 404 video_or_cover_not_found"""
+        self._save_actress(client)
+        # 儲存 Video 但沒有 cover_path
+        from core.database import VideoRepository, Video
+        video_path = str(tmp_path / "no_cover_video.mp4")
+        video = Video(
+            path=video_path,
+            title="No Cover Video",
+            actresses=[ACTRESS_NAME],
+            cover_path="",  # 空
+        )
+        VideoRepository().upsert(video)
+        video_uri = f"file://{video_path}"
+
+        resp = client.post(
+            f"/api/actresses/{ACTRESS_NAME}/photo",
+            json={"source": "local_crop", "video_path": video_uri},
+        )
+        assert resp.status_code == 404
+        assert resp.json()["error"] == "video_or_cover_not_found"
+
+    def test_set_actress_photo_local_crop_failed(self, client, tmp_db, tmp_path):
+        """crop_video_cover 回 None 時回 500 crop_failed"""
+        self._save_actress(client)
+        video_path, cover_path = self._save_video_with_cover(tmp_path)
+        video_uri = f"file://{video_path}"
+
+        with patch("web.routers.actress.crop_video_cover", return_value=None):
+            resp = client.post(
+                f"/api/actresses/{ACTRESS_NAME}/photo",
+                json={"source": "local_crop", "video_path": video_uri},
+            )
+
+        assert resp.status_code == 500
+        assert resp.json()["error"] == "crop_failed"
+
+    def test_set_actress_photo_download_failed(self, client):
+        """download_actress_photo 回 False 時回 500 download_failed"""
+        self._save_actress(client)
+
+        with patch("web.routers.actress.download_actress_photo", return_value=False):
+            resp = client.post(
+                f"/api/actresses/{ACTRESS_NAME}/photo",
+                json={"source": "gfriends", "url": "https://example.com/photo.jpg"},
+            )
+
+        assert resp.status_code == 500
+        assert resp.json()["error"] == "download_failed"
+
+    # ---- DB 更新驗證 ----
+
+    def test_set_actress_photo_updates_db_photo_source(self, client):
+        """成功後 DB actress.photo_source 更新為 req.source"""
+        self._save_actress(client)  # photo_source='gfriends' 初始
+
+        with patch("web.routers.actress.download_actress_photo", return_value=True), \
+             patch("web.routers.actress.get_local_photo_path", return_value=None):
+            resp = client.post(
+                f"/api/actresses/{ACTRESS_NAME}/photo",
+                json={"source": "graphis", "url": "https://example.com/new_photo.jpg"},
+            )
+
+        assert resp.status_code == 200
+
+        # Re-fetch actress from DB to verify photo_source updated
+        with patch("web.routers.actress.get_local_photo_path", return_value=None):
+            get_resp = client.get(f"/api/actresses/{ACTRESS_NAME}")
+
+        assert get_resp.status_code == 200
+        actress_data = get_resp.json()["actress"]
+        assert actress_data["photo_source"] == "graphis"
+
+    # ---- cache-bust 驗證 ----
+
+    def test_set_actress_photo_response_has_cache_bust(self, client):
+        """回應 photo_url 含 ?t= 整數 timestamp"""
+        self._save_actress(client)
+
+        with patch("web.routers.actress.download_actress_photo", return_value=True):
+            resp = client.post(
+                f"/api/actresses/{ACTRESS_NAME}/photo",
+                json={"source": "minnano", "url": "https://example.com/photo.jpg"},
+            )
+
+        assert resp.status_code == 200
+        photo_url = resp.json()["photo_url"]
+        assert "?t=" in photo_url
+        # Extract timestamp and verify it's an integer
+        t_part = photo_url.split("?t=")[1]
+        assert t_part.isdigit(), f"timestamp should be integer, got: {t_part}"
+
+    # ---- 5a: 連續換圖整合測試 ----
+
+    def test_set_actress_photo_continuous_changes(self, client):
+        """連續換圖 cloud → local_crop → cloud，每次正確覆蓋 photo_source"""
+        self._save_actress(client)  # 初始 photo_source='gfriends'
+
+        # 1st: source=graphis with mock download True → photo_source='graphis'
+        with patch("web.routers.actress.download_actress_photo", return_value=True), \
+             patch("web.routers.actress.get_local_photo_path", return_value=None):
+            resp1 = client.post(
+                f"/api/actresses/{ACTRESS_NAME}/photo",
+                json={"source": "graphis", "url": "https://example.com/photo1.jpg"},
+            )
+        assert resp1.status_code == 200
+        assert resp1.json()["photo_source"] == "graphis"
+
+        # Verify DB via GET
+        with patch("web.routers.actress.get_local_photo_path", return_value=None):
+            get1 = client.get(f"/api/actresses/{ACTRESS_NAME}")
+        assert get1.json()["actress"]["photo_source"] == "graphis"
+
+        # 2nd: source=local_crop with mock crop → photo_source='local_crop'
+        fake_jpeg = b"\xff\xd8\xff\xe0FAKE_CROP"
+        # Use FS path video in DB (existing helper stores FS paths)
+        from core.database import VideoRepository, Video
+        import tempfile, os
+        with tempfile.TemporaryDirectory() as td:
+            cover_path = os.path.join(td, "cover.jpg")
+            video_path = os.path.join(td, "video.mp4")
+            Path(cover_path).write_bytes(b"\xff\xd8\xff\xe0fake_cover")
+            vid = Video(
+                path=video_path,
+                title="Continuous Test Video",
+                actresses=[ACTRESS_NAME],
+                cover_path=cover_path,
+            )
+            VideoRepository().upsert(vid)
+            video_uri = f"file://{video_path}"
+
+            with patch("web.routers.actress.crop_video_cover", return_value=fake_jpeg), \
+                 patch("web.routers.actress.GFRIENDS_DIR") as mock_dir:
+                mock_dir.__truediv__ = lambda self, other: Path(td) / other
+                mock_dir.mkdir = lambda **kw: None
+                mock_dir.glob = lambda pattern: []
+                resp2 = client.post(
+                    f"/api/actresses/{ACTRESS_NAME}/photo",
+                    json={"source": "local_crop", "video_path": video_uri},
+                )
+            assert resp2.status_code == 200
+            assert resp2.json()["photo_source"] == "local_crop"
+
+        # Verify DB via GET
+        with patch("web.routers.actress.get_local_photo_path", return_value=None):
+            get2 = client.get(f"/api/actresses/{ACTRESS_NAME}")
+        assert get2.json()["actress"]["photo_source"] == "local_crop"
+
+        # 3rd: source=gfriends → photo_source='gfriends'
+        with patch("web.routers.actress.download_actress_photo", return_value=True), \
+             patch("web.routers.actress.get_local_photo_path", return_value=None):
+            resp3 = client.post(
+                f"/api/actresses/{ACTRESS_NAME}/photo",
+                json={"source": "gfriends", "url": "https://example.com/photo3.jpg"},
+            )
+        assert resp3.status_code == 200
+        assert resp3.json()["photo_source"] == "gfriends"
+
+        # Verify DB via GET
+        with patch("web.routers.actress.get_local_photo_path", return_value=None):
+            get3 = client.get(f"/api/actresses/{ACTRESS_NAME}")
+        assert get3.json()["actress"]["photo_source"] == "gfriends"
+
+    # ---- 5b: Production-realistic — DB 存 file:/// URI，local_crop 仍能匹配 ----
+
+    def _save_video_with_uri_path(self, tmp_path):
+        """Helper: 在 DB 中儲存一筆含 file:/// URI cover_path 的 Video（模擬 production scanner）"""
+        from core.database import VideoRepository, Video
+        video_path = str(tmp_path / "uri_test_video.mp4")
+        cover_path = str(tmp_path / "uri_cover.jpg")
+        # 建立假 cover 檔案
+        Path(cover_path).write_bytes(b"\xff\xd8\xff\xe0fake_uri_cover")
+        # 模擬 scanner 用 to_file_uri 寫入（file:/// URI）
+        from core.path_utils import to_file_uri
+        video_uri = to_file_uri(video_path)
+        cover_uri = to_file_uri(cover_path)
+        video = Video(
+            path=video_uri,       # DB 存 file:/// URI（production 格式）
+            title="URI Test Video",
+            actresses=[ACTRESS_NAME],
+            cover_path=cover_uri,  # DB 存 file:/// URI（production 格式）
+        )
+        repo = VideoRepository()
+        repo.upsert(video)
+        return video_uri, cover_uri, video_path, cover_path
+
+    def test_set_actress_photo_local_crop_matches_uri_in_db(self, client, tmp_db, tmp_path):
+        """模擬 production：DB 存 file:/// URI，request 傳 file:/// URI，比對成功"""
+        self._save_actress(client)
+        video_uri, cover_uri, video_path, cover_path = self._save_video_with_uri_path(tmp_path)
+        fake_jpeg = b"\xff\xd8\xff\xe0FAKE_URI_CROP"
+
+        with patch("web.routers.actress.crop_video_cover", return_value=fake_jpeg), \
+             patch("web.routers.actress.GFRIENDS_DIR") as mock_dir:
+            mock_dir.__truediv__ = lambda self, other: tmp_path / other
+            mock_dir.mkdir = lambda **kw: None
+            mock_dir.glob = lambda pattern: []
+            resp = client.post(
+                f"/api/actresses/{ACTRESS_NAME}/photo",
+                json={"source": "local_crop", "video_path": video_uri},
+            )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["photo_source"] == "local_crop"
+        assert "?t=" in data["photo_url"]

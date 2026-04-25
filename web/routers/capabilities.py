@@ -928,6 +928,45 @@ _TOOLS: list[dict] = [
         },
         "_example_template": "curl -N '{base}/api/actresses/%E4%B8%89%E4%B8%8A%E6%82%A0%E4%BA%9C/photo-candidates'",
     },
+    {
+        "name": "set_actress_photo",
+        "description": (
+            "替換女優本機照片。接受雲端 URL（graphis/gfriends/wiki/minnano）或本機影片封面 crop（local_crop）。"
+            "⚠️ side effect：覆蓋本機照片檔案（先 glob 刪除舊副檔名再寫入新圖）。"
+            "可逆 — 隨時可再換；但舊檔案無備份。"
+            "執行前必須先確認用戶選擇的來源與 URL。"
+        ),
+        "method": "POST",
+        "path": "/api/actresses/{name}/photo",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "女優名稱（URL path parameter，需 URL encode）"},
+                "source": {
+                    "type": "string",
+                    "enum": ["graphis", "gfriends", "wiki", "minnano", "local_crop"],
+                    "description": "照片來源識別碼",
+                },
+                "url": {"type": "string", "description": "雲端照片 URL（source 為雲端來源時必填）"},
+                "video_path": {"type": "string", "description": "影片 file:/// URI（source=local_crop 時必填）"},
+                "crop_spec": {"type": "string", "description": "裁切規格，預設 v1（source=local_crop 時適用）"},
+            },
+            "required": ["name", "source"],
+        },
+        "output_schema": {
+            "photo_url": "string — 新照片路徑，含 ?t=timestamp cache-bust query",
+            "photo_source": "string — 實際使用的來源識別碼",
+        },
+        "side_effect": True,
+        "confirmation_required": True,
+        "idempotent": False,
+        "retry_safe": False,
+        "_example_template": (
+            "curl -X POST '{base}/api/actresses/%E4%B8%89%E4%B8%8A%E6%82%A0%E4%BA%9C/photo' "
+            "-H 'Content-Type: application/json' "
+            "-d '{{\"source\": \"graphis\", \"url\": \"https://example.com/photo.jpg\"}}'"
+        ),
+    },
 ]
 
 

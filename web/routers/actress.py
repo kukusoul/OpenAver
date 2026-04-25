@@ -14,6 +14,7 @@ import asyncio
 import json
 import random
 import re
+import time
 from typing import Optional, List
 from urllib.parse import quote
 
@@ -23,8 +24,9 @@ from pydantic import BaseModel
 from core.maker_mapping import load_prefix_mapping
 
 from core.database import ActressRepository, AliasRepository, VideoRepository, Actress, init_db
-from core.actress_photo import download_actress_photo, get_local_photo_path, delete_local_photo, crop_video_cover
-from core.path_utils import to_file_uri
+from core.actress_photo import download_actress_photo, get_local_photo_path, delete_local_photo, crop_video_cover, GFRIENDS_DIR
+from core.organizer import sanitize_filename
+from core.path_utils import to_file_uri, uri_to_fs_path
 from core.scrapers.actress.orchestrator import (
     get_cached_profile,
     get_actress_profile,
@@ -46,6 +48,13 @@ router = APIRouter(prefix="/api/actresses", tags=["actresses"])
 class FavoriteRequest(BaseModel):
     name: str
     makers: Optional[List[str]] = None
+
+
+class SetActressPhotoRequest(BaseModel):
+    source: str                          # "graphis"|"gfriends"|"wiki"|"minnano"|"local_crop"
+    url: Optional[str] = None            # 雲端來源：照片 URL（必填）
+    video_path: Optional[str] = None     # local_crop：影片 file:/// URI（必填）
+    crop_spec: Optional[str] = "v1"      # local_crop：裁切規格（預設 v1）
 
 
 # ---------------------------------------------------------------------------
@@ -418,14 +427,24 @@ async def list_photo_candidates(name: str):
                 _get_random_videos_with_covers, name, needed
             )
             for video in local_videos:
-                cover_path_str = str(video.cover_path)
-                encoded_path = quote(cover_path_str)
+                # Fix 1 (T2): cover_path 在 DB 存 file:/// URI，crop endpoint 需要 FS path
+                cover_fs_path = uri_to_fs_path(str(video.cover_path)) if video.cover_path else ""
+                if not cover_fs_path:
+                    # skip broken candidate，避免送空路徑的 URL
+                    continue
+                encoded_path = quote(cover_fs_path)
                 crop_url = f"/api/actresses/actress-crop?path={encoded_path}&spec=v1"
-                try:
-                    video_path_uri = to_file_uri(str(video.path))
-                except Exception as e:
-                    logger.warning("[actress] to_file_uri 轉換失敗 path=%s: %s", video.path, e)
-                    video_path_uri = str(video.path)
+                # Fix 2 (T2): video.path 在 DB 已是 file:/// URI（gallery_scanner.scan_file 透過 to_file_uri 寫入）
+                # 若萬一是 FS path（legacy / 異常），才包一次
+                video_path_str = str(video.path)
+                if video_path_str.startswith("file:///"):
+                    video_path_uri = video_path_str
+                else:
+                    try:
+                        video_path_uri = to_file_uri(video_path_str)
+                    except Exception as e:
+                        logger.warning("[actress] to_file_uri 轉換失敗 path=%s: %s", video.path, e)
+                        video_path_uri = video_path_str
                 event_data = json.dumps({
                     "source": "local_crop",
                     "video_path": video_path_uri,
@@ -451,13 +470,93 @@ async def list_photo_candidates(name: str):
 async def actress_crop(path: str, spec: str = "v1"):
     """
     對指定本機封面圖做 crop，回傳 JPEG bytes。
-    path: 本機 FS 路徑（URL-encoded）
+    path: 本機 FS 路徑（URL-encoded）；若傳入 file:/// URI 也接受（防禦性轉換）
     spec: crop 規格版本（預設 v1）
     """
-    result = await asyncio.to_thread(crop_video_cover, path, spec)
+    # Fix 4 (T2): 防禦性接受 URI 輸入，避免未來 caller 傳 file:/// URI 導致 Image.open 失敗
+    fs_path = uri_to_fs_path(path) if path.startswith("file:///") else path
+    result = await asyncio.to_thread(crop_video_cover, fs_path, spec)
     if result is None:
         return Response(b"", status_code=404)
     return Response(content=result, media_type="image/jpeg")
+
+
+# ---------------------------------------------------------------------------
+# 端點九：POST /api/actresses/{name}/photo — 設定女優照片
+# NOTE：必須定義在 GET /{name} 之前！
+# ---------------------------------------------------------------------------
+
+CLOUD_SOURCES = {"graphis", "gfriends", "wiki", "minnano"}
+
+
+@router.post("/{name}/photo")
+async def set_actress_photo(name: str, req: SetActressPhotoRequest):
+    """
+    設定女優照片。
+    - 雲端來源（graphis/gfriends/wiki/minnano）：下載並覆蓋本機照片
+    - local_crop：從影片封面 crop 後寫入 GFRIENDS_DIR
+    覆蓋時先 glob 刪舊副檔名，再寫入新圖。
+    更新 DB photo_source 欄位，回傳帶 cache-bust timestamp 的新 photo_url。
+    """
+    init_db()
+    repo = ActressRepository()
+    actress = repo.get_by_name(name)
+    if actress is None:
+        return JSONResponse(status_code=404, content={"error": "not_found"})
+
+    if req.source not in CLOUD_SOURCES and req.source != "local_crop":
+        return JSONResponse(status_code=400, content={"error": "unknown_source"})
+
+    if req.source in CLOUD_SOURCES:
+        if not req.url:
+            return JSONResponse(status_code=400, content={"error": "url_required"})
+        ok = await asyncio.to_thread(download_actress_photo, name, req.url, req.source)
+        if not ok:
+            return JSONResponse(status_code=500, content={"error": "download_failed"})
+
+    elif req.source == "local_crop":
+        if not req.video_path:
+            return JSONResponse(status_code=400, content={"error": "video_path_required"})
+        # file:/// URI → FS path（禁止手動 strip）
+        video_fs_path = uri_to_fs_path(req.video_path)
+        # 從 DB 取該影片的 cover_path
+        video_repo = VideoRepository()
+        videos = video_repo.get_videos_by_actress(name)
+        # Fix 3 (T3): v.path 在 DB 存 file:/// URI（gallery_scanner 用 to_file_uri 寫入），
+        # 比對前雙邊都正規化為 FS path，避免 URI vs FS path 永遠 fail
+        match = next(
+            (v for v in videos if uri_to_fs_path(str(v.path)) == video_fs_path),
+            None,
+        )
+        if match is None or not match.cover_path:
+            return JSONResponse(status_code=404, content={"error": "video_or_cover_not_found"})
+        # Fix 3 (T3): match.cover_path 也是 URI，傳給 crop_video_cover 前先轉 FS path
+        cover_fs_path = uri_to_fs_path(str(match.cover_path)) if match.cover_path else ""
+        if not cover_fs_path:
+            return JSONResponse(status_code=404, content={"error": "video_or_cover_not_found"})
+        # crop → bytes
+        crop_bytes = await asyncio.to_thread(
+            crop_video_cover, cover_fs_path, req.crop_spec or "v1"
+        )
+        if crop_bytes is None:
+            return JSONResponse(status_code=500, content={"error": "crop_failed"})
+        # glob 刪舊副檔名 + 寫入
+        safe = sanitize_filename(name)
+        GFRIENDS_DIR.mkdir(parents=True, exist_ok=True)
+        for old in GFRIENDS_DIR.glob(f"{safe}.*"):
+            old.unlink()
+        (GFRIENDS_DIR / f"{safe}.jpg").write_bytes(crop_bytes)
+
+    # 更新 photo_source + 回傳
+    actress.photo_source = req.source
+    repo.save(actress)
+
+    t = int(time.time())
+    photo_url = f"/api/actresses/photo/{quote(name)}?t={t}"
+    return JSONResponse(status_code=200, content={
+        "photo_url": photo_url,
+        "photo_source": req.source,
+    })
 
 
 # ---------------------------------------------------------------------------
