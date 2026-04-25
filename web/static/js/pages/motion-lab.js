@@ -1352,12 +1352,23 @@
                 gsap.set(el, { x: startX, y: startY, opacity: 0, scale: 0.5 });
 
                 var onBurstComplete = function () {
-                    // race token 棸查
+                    // race token 檢查（settle 開始前）
                     if (getRunId() !== runId) return;
-                    // P2-3: 標記已落定，允許 hover 互動
-                    el.dataset.pickerSettled = '1';
-                    var tl = self.playPickerFloat(el, params);
-                    if (tl) floatTimerSink.push(tl);
+                    // settle 歸位：把 GSAP transform 拉回 layout baseline (x=0, y=0)
+                    gsap.to(el, {
+                        x: 0,
+                        y: 0,
+                        duration: 0.25,
+                        ease: 'power2.out',
+                        onComplete: function () {
+                            // race token 再檢查（settle 進行中可能有新一輪 burst）
+                            if (getRunId() !== runId) return;
+                            // P2-3: 標記已落定，允許 hover 互動
+                            el.dataset.pickerSettled = '1';
+                            var tl = self.playPickerFloat(el, params);
+                            if (tl) floatTimerSink.push(tl);
+                        }
+                    });
                 };
 
                 if (usePhysics) {
