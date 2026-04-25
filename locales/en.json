@@ -544,7 +544,9 @@
       "add_tag": "Add Tag",
       "tag_placeholder": "Tag name",
       "tag_api_failed": "Failed to save tag, please try again",
-      "user_tags_label": "Custom Tags"
+      "user_tags_label": "Custom Tags",
+      "alias_label": "Aliases",
+      "alias_source_hint": "Synced from Scanner"
     },
     "gallery": {
       "prev": "Previous (←)",

@@ -3488,3 +3488,92 @@ class TestModeToggleFadeOutGuard:
         )
         assert pattern.search(body), \
             "toggleActressMode inline newEl fade-in 的 if 條件應同時涵蓋 newEl + gsap + prefersReducedMotion"
+
+
+class TestAliasLiveQueryGuard:
+    """49a-T3: Actress Lightbox 別名即時查 guard
+
+    驗證：
+    - _fetchLiveAliases 方法存在
+    - 200 分支以 Object.assign 覆蓋 aliases（CD-4 + §8.4 reactivity）
+    - 404 / error / timeout 保留 snapshot（catch + 不覆蓋 fallback）
+    """
+
+    def _js(self):
+        return SHOWCASE_CORE_JS.read_text(encoding="utf-8")
+
+    def _extract_method_body(self, js, method_name):
+        """抓取 Alpine state method 函式主體，大括號平衡（容忍 async 前綴）。"""
+        pattern = re.compile(
+            r'(?:^|\n)\s*(?:async\s+)?' + re.escape(method_name) + r'\s*\([^)]*\)\s*\{',
+            re.DOTALL,
+        )
+        m = pattern.search(js)
+        assert m is not None, f"showcase/core.js 找不到 {method_name} 方法"
+        start = m.end()
+        depth = 1
+        i = start
+        while i < len(js) and depth > 0:
+            c = js[i]
+            if c == '{':
+                depth += 1
+            elif c == '}':
+                depth -= 1
+            i += 1
+        return js[start:i - 1]
+
+    def test_fetch_live_aliases_method_exists(self):
+        """core.js 含 async _fetchLiveAliases 方法定義"""
+        js = self._js()
+        assert re.search(r'async\s+_fetchLiveAliases\s*\([^)]*\)\s*\{', js), \
+            "showcase/core.js 缺少 async _fetchLiveAliases(...) 方法定義"
+        # 必須呼叫 /api/actress-aliases/ 端點
+        body = self._extract_method_body(js, '_fetchLiveAliases')
+        assert "/api/actress-aliases/" in body, \
+            "_fetchLiveAliases 函數體缺少 /api/actress-aliases/ 端點呼叫"
+
+    def test_200_branch_uses_object_assign(self):
+        """200 分支用 Object.assign 覆蓋 currentLightboxActress.aliases（§8.4 Alpine reactivity）"""
+        js = self._js()
+        body = self._extract_method_body(js, '_fetchLiveAliases')
+        # 必須有 200 status 分支
+        assert re.search(r'(?:resp|response)\.status\s*===\s*200', body), \
+            "_fetchLiveAliases 缺少 resp.status === 200 分支"
+        # 必須用 Object.assign 建立新物件以觸發 Alpine deep watch（§8.4）
+        assert re.search(r'Object\.assign\s*\(', body), \
+            "_fetchLiveAliases 200 分支應用 Object.assign 建立新物件以觸發 Alpine reactivity（§8.4）"
+        # 覆蓋的目標必須是 aliases
+        assert re.search(r'aliases\s*:', body), \
+            "_fetchLiveAliases Object.assign 應指定 aliases 屬性"
+
+    def test_fallback_preserves_snapshot_on_error(self):
+        """error / timeout / 404 分支保留 snapshot（catch 區塊不覆蓋 aliases）"""
+        js = self._js()
+        body = self._extract_method_body(js, '_fetchLiveAliases')
+        # 必須有 try / catch 區塊（fallback contract）
+        assert re.search(r'\btry\s*\{', body), \
+            "_fetchLiveAliases 缺少 try 區塊（error fallback contract）"
+        assert re.search(r'\bcatch\s*\(', body), \
+            "_fetchLiveAliases 缺少 catch 區塊（error fallback contract）"
+        # 200 分支應用 if 包裹（亦即 404/其他狀態落入 implicit fallback：不執行覆蓋）
+        # 實作必須讓「非 200」 + 「catch」 不執行 Object.assign
+        # 用結構驗證：Object.assign 必須出現在 if (resp.status === 200) { ... } 區塊內
+        pattern = re.compile(
+            r'if\s*\(\s*(?:resp|response)\.status\s*===\s*200\s*\)\s*\{[^}]*?Object\.assign',
+            re.DOTALL,
+        )
+        assert pattern.search(body), \
+            "_fetchLiveAliases Object.assign 應位於 if (resp.status === 200) {...} 區塊內，避免非 200 分支誤覆蓋 snapshot"
+
+    def test_callsites_in_open_actress_and_hero(self):
+        """openActressLightbox（兩分支）+ openHeroCardLightbox 皆 fire-and-forget 呼叫 _fetchLiveAliases"""
+        js = self._js()
+        actress_body = self._extract_method_body(js, 'openActressLightbox')
+        # 至少 2 處（首次進入 + 切換女優）
+        actress_calls = re.findall(r'_fetchLiveAliases\s*\(', actress_body)
+        assert len(actress_calls) >= 2, \
+            f"openActressLightbox 應至少 2 處呼叫 _fetchLiveAliases（首次進入 + 切換女優），目前 {len(actress_calls)} 處"
+
+        hero_body = self._extract_method_body(js, 'openHeroCardLightbox')
+        assert re.search(r'_fetchLiveAliases\s*\(', hero_body), \
+            "openHeroCardLightbox 缺少 _fetchLiveAliases 呼叫"

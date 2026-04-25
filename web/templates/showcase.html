@@ -609,6 +609,10 @@
                             <!-- Row 3: Aliases chips +N -->
                             <div class="lb-chips-row"
                                  x-show="(currentLightboxActress?.aliases || []).length > 0">
+                                <!-- T3: alias label + tooltip -->
+                                <span class="lb-chips-label"
+                                      :title="t('showcase.lightbox.alias_source_hint')"
+                                      x-text="t('showcase.lightbox.alias_label')"></span>
                                 <template x-for="alias in _visibleAliases()" :key="alias">
                                     <span class="lb-tag" x-text="alias"></span>
                                 </template>

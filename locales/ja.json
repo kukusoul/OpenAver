@@ -544,7 +544,9 @@
       "add_tag": "タグを追加",
       "tag_placeholder": "タグ名",
       "tag_api_failed": "タグの保存に失敗しました",
-      "user_tags_label": "カスタムタグ"
+      "user_tags_label": "カスタムタグ",
+      "alias_label": "別名",
+      "alias_source_hint": "Scanner から同期"
     },
     "gallery": {
       "prev": "前の画像 (←)",

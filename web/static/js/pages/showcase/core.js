@@ -625,6 +625,8 @@ function showcaseState() {
                 var direction = index > this.actressLightboxIndex ? 'next' : 'prev';
                 this._setActressLightboxIndex(index);
                 this.actressLightboxSource = 'grid';   // T5: 切換女優分支
+                // T3: fire-and-forget 即時查 aliases
+                this._fetchLiveAliases(this.currentLightboxActress?.name, index);
                 var lbGen = ++this._lightboxGeneration;
                 var self = this;
                 this.$nextTick(function () {
@@ -645,6 +647,8 @@ function showcaseState() {
             this.actressLightboxSource = 'grid';   // T5: 首次進入分支
             this.lightboxOpen = true;
             document.body.classList.add('overflow-hidden');
+            // T3: fire-and-forget 即時查 aliases
+            this._fetchLiveAliases(this.currentLightboxActress?.name, index);
 
             var self = this;
             var lbGen = ++this._lightboxGeneration;
@@ -776,6 +780,36 @@ function showcaseState() {
 
         _aliasesOverflow() {
             return Math.max(0, (this.currentLightboxActress?.aliases || []).length - this._chipsLimit());
+        },
+
+        // 49a-T3: 開啟 Lightbox 時 async fetch 最新 aliases（Scanner SSOT）
+        // 200 才覆蓋 snapshot；404 / timeout / network error 保留 snapshot（fire-and-forget）
+        // §8.4 reactivity：用 Object.assign 建立新物件以觸發 Alpine deep watch
+        async _fetchLiveAliases(name, expectedIndex) {
+            if (!name) return;
+            var capturedName = name;
+            var self = this;
+            try {
+                var resp = await fetch('/api/actress-aliases/' + encodeURIComponent(capturedName), {
+                    signal: AbortSignal.timeout(3000)   // §8.5: Chrome 103+/Firefox 100+/Safari 15.4+
+                });
+                if (resp.status === 200) {
+                    var data = await resp.json();
+                    // Stale-check：lightbox 仍在 + 還是同一個女優 + (若指定) index 一致
+                    if (!self.lightboxOpen) return;
+                    if (self.currentLightboxActress?.name !== capturedName) return;
+                    if (expectedIndex !== null && expectedIndex !== undefined
+                        && self.actressLightboxIndex !== expectedIndex) return;
+                    var newAliases = (data && data.group && data.group.aliases) || [];
+                    self.currentLightboxActress = Object.assign({}, self.currentLightboxActress, {
+                        aliases: newAliases
+                    });
+                }
+                // 404 / 5xx → 保留 snapshot，靜默
+            } catch (e) {
+                // timeout / network error → 保留 snapshot，靜默
+                if (window.console && console.warn) console.warn('[T3] alias live fetch failed:', e);
+            }
         },
 
         _visibleInfoChips() {
@@ -1426,6 +1460,8 @@ function showcaseState() {
             this.actressLightboxSource = 'hero';   // T5: hero card 路徑
             this.lightboxOpen = true;
             document.body.classList.add('overflow-hidden');
+            // T3: fire-and-forget 即時查 aliases（hero card 路徑無 grid index）
+            this._fetchLiveAliases(this._matchedActress?.name, null);
 
             // B19: 進場動畫（fire-and-forget，generation-guarded）
             var lbGen = ++this._lightboxGeneration;
