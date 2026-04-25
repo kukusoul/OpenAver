@@ -768,32 +768,6 @@ _TOOLS: list[dict] = [
         "_example_template": "curl -X DELETE '{base}/api/actresses/%E4%B8%89%E4%B8%8A%E6%82%A0%E4%BA%9C'",
     },
     {
-        "name": "rescrape_actress",
-        "description": "強制重新抓取女優資料並覆蓋 DB + 照片。⚠️ 此操作會覆蓋現有 DB 資料並刪除舊照片後重新下載，不可逆。必須先讓用戶確認再執行。",
-        "method": "POST",
-        "path": "/api/actresses/{name}/rescrape",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "name": {
-                    "type": "string",
-                    "description": "女優名（URL path parameter，需 URL encode）",
-                },
-            },
-            "required": ["name"],
-        },
-        "output_schema": {
-            "success": "boolean",
-            "actress": "Actress — 更新後的完整女優資料",
-            "photo_downloaded": "boolean — 新照片是否成功下載",
-        },
-        "side_effect": True,
-        "confirmation_required": True,
-        "idempotent": False,
-        "retry_safe": False,
-        "_example_template": "curl -X POST '{base}/api/actresses/%E4%B8%89%E4%B8%8A%E6%82%A0%E4%BA%9C/rescrape'",
-    },
-    {
         "name": "alias_crud_read",
         "description": (
             "列出所有別名組或查詢單一別名組。"

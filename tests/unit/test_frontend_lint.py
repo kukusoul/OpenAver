@@ -810,10 +810,10 @@ class TestShowcaseActressState:
             "showcase/core.js 缺少 Alpine state 屬性 _addDropdownOpen"
 
     def test_state_has_rescraping(self):
-        """_rescraping 出現於 Alpine state"""
+        """_rescraping 不在 Alpine state（49b-T5 已刪除 rescrape dead code）"""
         js = self._js()
-        assert "_rescraping" in js, \
-            "showcase/core.js 缺少 Alpine state 屬性 _rescraping"
+        assert "_rescraping" not in js, \
+            "showcase/core.js 仍含 _rescraping state（49b-T5 應已移除）"
 
     def test_state_has_video_chips_expanded(self):
         """_videoChipsExpanded 出現於 Alpine state"""
@@ -2140,10 +2140,10 @@ class TestShowcaseActressCRUD:
             "showcase/core.js 缺少 addFavoriteActress() 方法（[+ 新增] 女優 CRUD）"
 
     def test_rescrape_actress_method(self):
-        """core.js 含 rescrapeActress() 方法"""
+        """core.js 不含 rescrapeActress()（49b-T5 已刪除 dead code）"""
         js = self._js()
-        assert "rescrapeActress" in js, \
-            "showcase/core.js 缺少 rescrapeActress() 方法（[🔄 重新抓取] 女優 CRUD）"
+        assert "rescrapeActress" not in js, \
+            "showcase/core.js 仍含 rescrapeActress() 方法（49b-T5 應已刪除）"
 
     def test_remove_actress_method(self):
         """core.js 含 removeActress() 方法"""
@@ -2189,6 +2189,43 @@ class TestShowcaseActressCRUD:
         count = html.count("searchActressFilms(")
         assert count >= 2, \
             f"showcase.html searchActressFilms() handler 出現次數不足（期望 >=2，實際 {count}）"
+
+
+class TestRescrapeRemoved:
+    """Phase 49b-T5: rescrape dead code 守衛 — 確認已完全移除"""
+
+    CORE_JS = Path(__file__).parents[2] / 'web' / 'static' / 'js' / 'pages' / 'showcase' / 'core.js'
+    SHOWCASE_HTML = Path(__file__).parents[2] / 'web' / 'templates' / 'showcase.html'
+
+    def _js(self):
+        return self.CORE_JS.read_text(encoding='utf-8')
+
+    def _html(self):
+        return self.SHOWCASE_HTML.read_text(encoding='utf-8')
+
+    def test_rescrape_actress_not_in_js(self):
+        """core.js 不含 rescrapeActress（49b-T5 dead code 已刪除）"""
+        js = self._js()
+        assert "rescrapeActress" not in js, \
+            "showcase/core.js 仍含 rescrapeActress（49b-T5 應已完全移除）"
+
+    def test_rescraping_state_not_in_js(self):
+        """core.js 不含 _rescraping state（49b-T5 dead code 已刪除）"""
+        js = self._js()
+        assert "_rescraping" not in js, \
+            "showcase/core.js 仍含 _rescraping state（49b-T5 應已完全移除）"
+
+    def test_rescrape_url_not_in_js(self):
+        """core.js 不含 /rescrape fetch call（49b-T5 dead code 已刪除）"""
+        js = self._js()
+        assert "/rescrape" not in js, \
+            "showcase/core.js 仍含 /rescrape fetch call（49b-T5 應已完全移除）"
+
+    def test_rescrape_not_in_html(self):
+        """showcase.html 不含 rescrape 相關 handler（49b-T5 dead code 已刪除）"""
+        html = self._html()
+        assert "rescrape" not in html, \
+            "showcase.html 仍含 rescrape 相關 handler（49b-T5 應已完全移除）"
 
 
 class TestShowcaseActressCardFooter:
@@ -2269,9 +2306,6 @@ class TestShowcaseActressI18n:
         "showcase.actress.addDuplicate",
         "showcase.actress.addNotFound",
         "showcase.actress.addTimeout",
-        "showcase.actress.rescrape",
-        "showcase.actress.rescrapeSuccess",
-        "showcase.actress.rescrapeError",
         "showcase.actress.remove",
         "showcase.actress.removeConfirm",
         "showcase.actress.removeSuccess",

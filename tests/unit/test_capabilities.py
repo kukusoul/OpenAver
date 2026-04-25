@@ -50,7 +50,6 @@ EXPECTED_TOOL_NAMES = {
     "favorite_actress",
     "get_actress",
     "unfavorite_actress",
-    "rescrape_actress",
     "list_actresses",
     "alias_crud_read",
     "alias_crud_write",
@@ -104,9 +103,9 @@ class TestCapabilitiesEndpoint:
         data = client.get("/api/capabilities").json()
         assert "retry_hint" in data["error_format"]
 
-    def test_tools_count_is_30(self, client):
+    def test_tools_count_is_29(self, client):
         data = client.get("/api/capabilities").json()
-        assert len(data["tools"]) == 30
+        assert len(data["tools"]) == 29
 
     def test_all_tool_names_present(self, client):
         data = client.get("/api/capabilities").json()

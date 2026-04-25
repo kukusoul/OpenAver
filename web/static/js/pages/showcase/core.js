@@ -151,7 +151,6 @@ function showcaseState() {
         _addActressName: '',            // + 新增 input
         _addingActress: false,          // 新增 loading
         _addDropdownOpen: false,        // + 新增 popover 開關
-        _rescraping: false,             // 重新抓取 loading
         _videoChipsExpanded: false,     // 影片 tag chips +N 展開（T4 使用）
 
         // User Tags 狀態 (T4)
@@ -900,40 +899,6 @@ function showcaseState() {
                 this.showToast(window.t('showcase.actress.addTimeout'), 'error');
             } finally {
                 this._favoriteHeartLoading = false;
-            }
-        },
-
-        async rescrapeActress() {
-            if (this._rescraping || !this.currentLightboxActress) return;
-            this._rescraping = true;
-            const name = this.currentLightboxActress.name;
-            try {
-                const resp = await fetch(`/api/actresses/${encodeURIComponent(name)}/rescrape`, {
-                    method: 'POST',
-                });
-                const data = await resp.json();
-                if (data.success && data.actress) {
-                    // 先更新 _actresses 陣列（不論 lightbox 是否切換，grid 資料都要刷新）
-                    const idx = _actresses.findIndex(a => a.name === name);
-                    if (idx >= 0) {
-                        Object.assign(_actresses[idx], data.actress);
-                        this.applyActressFilterAndSort();
-                    }
-                    // stale guard：只在 lightbox 仍顯示同一位女優時更新 lightbox
-                    if (this.currentLightboxActress?.name === name) {
-                        Object.assign(this.currentLightboxActress, data.actress);
-                        if (this.currentLightboxActress.photo_url) {
-                            this.currentLightboxActress.photo_url += '?t=' + Date.now();
-                        }
-                    }
-                    this.showToast(window.t('showcase.actress.rescrapeSuccess'), 'success');
-                } else {
-                    this.showToast(window.t('showcase.actress.rescrapeError') || data.error || 'Error', 'error');
-                }
-            } catch (e) {
-                this.showToast(window.t('showcase.actress.rescrapeError') || 'Error', 'error');
-            } finally {
-                this._rescraping = false;
             }
         },
 
