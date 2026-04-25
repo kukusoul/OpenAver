@@ -673,6 +673,8 @@ function showcaseState() {
             if (this.actressLightboxIndex <= 0) return;
             var newIdx = this.actressLightboxIndex - 1;
             this._setActressLightboxIndex(newIdx);
+            // P2 Codex: 方向鍵切換也要 fetch live alias，否則 SSOT 心智模型在切換時破功
+            this._fetchLiveAliases(this.currentLightboxActress?.name, newIdx);
 
             var lbGen = ++this._lightboxGeneration;
             var self = this;
@@ -698,6 +700,8 @@ function showcaseState() {
             if (this.actressLightboxIndex >= _filteredActresses.length - 1) return;
             var newIdx = this.actressLightboxIndex + 1;
             this._setActressLightboxIndex(newIdx);
+            // P2 Codex: 方向鍵切換也要 fetch live alias，否則 SSOT 心智模型在切換時破功
+            this._fetchLiveAliases(this.currentLightboxActress?.name, newIdx);
 
             var lbGen = ++this._lightboxGeneration;
             var self = this;
@@ -1075,25 +1079,31 @@ function showcaseState() {
                     && self._matchedActress.is_favorite !== false
                     && coverSrc;
 
-                if (canMainFlow) {
-                    // 主流程：ghost fly
-                    window.GhostFly?.playActressToHeroCard?.(fromRect, heroCardEl, {
-                        coverSrc: coverSrc,
-                        onComplete: function () {
-                            self._ghostFlyInFlight = false;
-                        },
-                        onFallback: function () {
-                            self._ghostFlyInFlight = false;
-                        }
-                    });
-                } else {
-                    // 降級流程：來源圖 pulse + 保留搜尋結果（搜尋欄 / empty state 已自動處理）
+                // 降級 helper：來源圖 pulse + 釋放 flag（搜尋欄 / empty state 已自動處理）
+                var doFallback = function () {
                     self._ghostFlyInFlight = false;
                     if (fromEl) {
                         var pulseTarget = fromEl.closest('.actress-card')?.querySelector('.actress-card-photo img')
                             || fromEl.closest('.showcase-lightbox')?.querySelector('.lightbox-cover img');
                         window.ShowcaseAnimations?.playSourcePulse?.(pulseTarget);
                     }
+                };
+
+                if (canMainFlow) {
+                    // P1 Codex: explicit availability check — optional chaining 缺失時 silent no-op，
+                    // onComplete/onFallback 都不會被呼叫，flag 永久 true → camera button 永久 disabled。
+                    if (typeof window.GhostFly?.playActressToHeroCard !== 'function') {
+                        doFallback();
+                        return;
+                    }
+                    // 主流程：ghost fly（已驗證存在，直接呼叫強化 callback 契約）
+                    window.GhostFly.playActressToHeroCard(fromRect, heroCardEl, {
+                        coverSrc: coverSrc,
+                        onComplete: function () { self._ghostFlyInFlight = false; },
+                        onFallback: function () { self._ghostFlyInFlight = false; }
+                    });
+                } else {
+                    doFallback();
                 }
             } catch (e) {
                 // §8.3 防禦：任何 throw 都釋放 flag 防卡死
@@ -1297,6 +1307,20 @@ function showcaseState() {
             if (num === this.page) return;
             var direction = num > this.page ? 'next' : 'prev';
             this._animatePageChange(direction, num);
+        },
+
+        /**
+         * 49a-T4 / Codex P2: 開啟隱藏 select 的 native picker
+         * 隱藏 select 用 .click() 在主流瀏覽器只 dispatch event 不會開 picker；
+         * showPicker() (Chrome 99+/FF 98+/Safari 16.4+) 才會真的彈出。
+         * 失敗（不支援 / non-user-gesture SecurityError）fallback 回 .click()。
+         */
+        openPagePicker(selectEl) {
+            if (!selectEl) return;
+            if (typeof selectEl.showPicker === 'function') {
+                try { selectEl.showPicker(); return; } catch (e) { /* fall through */ }
+            }
+            selectEl.click();
         },
 
         // --- 資料處理 (M2a 基本實作，M4 完整化) ---

@@ -889,8 +889,8 @@
                     </template>
                 </span>
             </template>
-            <!-- 女優模式 -->
-            <template x-if="showFavoriteActresses">
+            <!-- 女優模式（搜尋無結果時整個 pill 隱藏，依 plan-49a TASK-T4 邊界條件 #7 / Codex P2） -->
+            <template x-if="showFavoriteActresses && (!actressSearch || filteredActressCount > 0)">
                 <span class="footer-count">
                     <i class="bi bi-person-circle"></i>
                     <template x-if="!actressSearch">
@@ -922,7 +922,7 @@
                         :aria-label="t('showcase.nav.prev_page')"
                         :title="t('showcase.nav.prev_page')">‹</button>
                 <span class="pager-current"
-                      @click="$refs.pageSelectFooter.click()"
+                      @click="openPagePicker($refs.pageSelectFooter)"
                       :title="t('showcase.shortcut.pagination')">
                     <b x-text="page"></b>/<b x-text="totalPages"></b>
                 </span>

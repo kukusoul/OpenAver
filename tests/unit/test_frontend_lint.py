@@ -3576,6 +3576,17 @@ class TestAliasLiveQueryGuard:
         assert re.search(r'_fetchLiveAliases\s*\(', hero_body), \
             "openHeroCardLightbox 缺少 _fetchLiveAliases 呼叫"
 
+    def test_prev_next_actress_lightbox_refetch_aliases(self):
+        """Codex P2: prev/nextActressLightbox 在切換 index 後也須呼叫 _fetchLiveAliases，
+        否則方向鍵切換時 SSOT 心智模型破功（看到 stale snapshot）。"""
+        js = self._js()
+        for method in ('prevActressLightbox', 'nextActressLightbox'):
+            body = self._extract_method_body(js, method)
+            assert re.search(r'_fetchLiveAliases\s*\(', body), (
+                f"{method} 缺少 _fetchLiveAliases 呼叫（Codex P2 fix）— "
+                "方向鍵切換時不重抓 alias，違反 T3 SSOT 設計"
+            )
+
 
 GHOST_FLY_JS = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "shared" / "ghost-fly.js"
 
@@ -3636,6 +3647,36 @@ class TestGhostFlyInFlightGuard:
             "showcase.html grid camera button 缺少 searchActressFilms(actress.name, $el) 呼叫"
         assert "searchActressFilms(currentLightboxActress?.name, $el)" in html, \
             "showcase.html lightbox camera button 缺少 searchActressFilms(currentLightboxActress?.name, $el) 呼叫"
+
+    def test_search_actress_films_explicit_ghost_fly_availability_check(self):
+        """Codex P1: searchActressFilms 主流程前需 explicit check window.GhostFly?.playActressToHeroCard
+        是 function。optional chaining 缺失時 silent no-op，flag 永久 true → camera button 永久 disabled。
+        """
+        js = self._js()
+        body = self._extract_method_body(js, 'searchActressFilms')
+        assert re.search(
+            r"typeof\s+window\.GhostFly\??\.?playActressToHeroCard\s*!==\s*['\"]function['\"]",
+            body,
+        ), (
+            "searchActressFilms 缺少 explicit GhostFly availability check（Codex P1 fix）— "
+            "optional chaining 在缺失時 silent no-op，flag 卡死所有 camera button"
+        )
+
+    def _extract_method_body(self, js, name):
+        """共用 brace-counting 提取方法體（避免依賴外部 helper class）"""
+        m = re.search(r'(?:async\s+)?' + re.escape(name) + r'\s*\([^)]*\)\s*\{', js)
+        if not m:
+            return ''
+        start = m.end() - 1
+        depth = 0
+        for i, ch in enumerate(js[start:], start):
+            if ch == '{':
+                depth += 1
+            elif ch == '}':
+                depth -= 1
+                if depth == 0:
+                    return js[start:i + 1]
+        return ''
 
 
 # ============================================================================
@@ -3737,6 +3778,28 @@ class TestT4FooterStructure:
         assert ".footer-center" in css, "showcase.css 缺少 .footer-center 規則"
         assert ".footer-right" in css, "showcase.css 缺少 .footer-right 規則"
         assert ".footer-pager" in css, "showcase.css 缺少 .footer-pager 規則"
+
+    def test_open_page_picker_uses_show_picker(self):
+        """Codex P2: openPagePicker method 必須優先嘗試 showPicker()，再 fallback 到 .click()。
+        隱藏 select 用 .click() 在主流瀏覽器只 dispatch event 不會開 native picker（AC-7 fail）。
+        並驗證 pager-current @click 走的是 openPagePicker（不是直接 .click()）。
+        """
+        # JS method 端
+        js = SHOWCASE_CORE_JS.read_text(encoding="utf-8")
+        assert re.search(r'openPagePicker\s*\(', js), \
+            "showcase/core.js 缺少 openPagePicker method 定義"
+        # 必須含 showPicker 嘗試
+        assert re.search(r'showPicker', js), \
+            "openPagePicker 缺少 showPicker() 嘗試（必要時才能開啟 native page picker）"
+        # HTML 端：pager-current 應呼叫 openPagePicker，不是直接 .click()
+        html = self._html()
+        idx = html.find('class="pager-current"')
+        assert idx >= 0, "showcase.html 缺少 .pager-current"
+        snippet = html[idx:idx + 400]
+        assert 'openPagePicker' in snippet, (
+            "pager-current @click 應呼叫 openPagePicker（而非 $refs.pageSelectFooter.click()）— "
+            "Codex P2 fix"
+        )
 
     def test_css_responsive_hides_left_and_center(self):
         """showcase.css responsive @media (max-width: 640px) 隱藏 footer-left + footer-center"""
