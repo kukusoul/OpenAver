@@ -2049,8 +2049,7 @@
                                  @mouseleave="onPickerHoverOut(i)"
                                  @click="onPickerSelect(i)">
                                 <img :src="c.img" class="picker-candidate-img" :alt="c.source">
-                                <div class="picker-source-badge" x-text="c.source"></div>
-                                <div class="picker-tooltip">點擊替換</div>
+                                <div class="picker-source-badge"><i class="bi bi-check-circle-fill picker-check-icon"></i><span x-text="c.source"></span></div>
                             </div>
                         </template>
                         <div x-show="_pickerCandidates.length === 0 && _pickerOpen" class="picker-empty">
@@ -2196,6 +2195,9 @@
     padding: 2rem 1rem;
 }
 
+/* Picker tab：候選卡 1 row 溢出 lightbox 邊界（fix3 需求 1） */
+.motion-lab-preview.picker-preview-wrap { overflow: visible; }
+
 /* 模擬 .lightbox-content：置中卡片，無 backdrop */
 .picker-mock-lightbox {
     position: relative;
@@ -2292,15 +2294,17 @@
 .picker-candidates-area {
     position: relative;
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;            /* 改：原 wrap → nowrap，6 卡強制 1 row */
     gap: 0.75rem;
     min-height: 100px;
-    justify-content: flex-start;
+    justify-content: center;      /* 改：原 flex-start → center，溢出對稱左右 */
+    overflow: visible;            /* 新增：避免父 overflow 截斷 */
 }
 
 .picker-candidate-card {
     position: relative;
     width: 100px;
+    flex: 0 0 100px;  /* fix3: 防止 flex container 把 6 卡 shrink 到 lightbox 寬度（Codex P1）*/
     cursor: pointer;
     border-radius: 6px;
     overflow: hidden;
@@ -2308,6 +2312,10 @@
     will-change: transform;
     /* CSS transition: none — GSAP 管理，避免 C21 幽靈動畫 */
     transition: none;
+    /* fix3: 預設 opacity:0 避免 Alpine render 後、GSAP set 起點前的 1-frame paint
+       讓用戶誤看到「先到落點再跳回中央射出」的雙重出現 bug。
+       GSAP burst 起點 set 為 opacity:0.5 即接手顯示。 */
+    opacity: 0;
 }
 
 .picker-candidate-img {
@@ -2328,23 +2336,23 @@
     font-size: 0.65rem;
     text-align: center;
     padding: 2px 4px;
+    transition: background 0.15s;
 }
 
-.picker-tooltip {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: rgba(0, 0, 0, 0.85);
-    color: #fff;
-    font-size: 0.7rem;
-    padding: 2px 8px;
-    border-radius: 3px;
+/* fix3 需求 2：hover 時 badge 變綠 + 顯 check icon */
+.picker-check-icon {
     opacity: 0;
+    margin-right: 3px;
+    font-size: 0.6rem;
     transition: opacity 0.15s;
-    pointer-events: none;
 }
-.picker-candidate-card:hover .picker-tooltip { opacity: 1; }
+.picker-candidate-card:hover .picker-source-badge {
+    background: var(--accent-success, #22c55e);
+    color: #fff;
+}
+.picker-candidate-card:hover .picker-check-icon {
+    opacity: 1;
+}
 
 .picker-empty {
     width: 100%;
