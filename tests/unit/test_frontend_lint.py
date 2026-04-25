@@ -4070,3 +4070,76 @@ class TestPickerIntegrationGuard:
             ".actress-picker-area 缺少 position: relative"
         assert "@keyframes spin" in css, \
             "showcase.css 缺少 @keyframes spin 動畫"
+
+    # ----------------------------------------------------------------------
+    # 49b-T4e: select-and-replace flow guards
+    # ----------------------------------------------------------------------
+
+    def _picker_select_body(self):
+        """Extract _onPickerSelect method body (until next method or class boundary)."""
+        js = self._core_js()
+        m = re.search(
+            r"async\s+_onPickerSelect\s*\([^)]*\)\s*\{(.*?)\n\s{8}\},",
+            js, re.DOTALL,
+        )
+        assert m, "core.js 找不到 _onPickerSelect 方法定義"
+        return m.group(1)
+
+    def test_picker_select_makes_post_request(self):
+        """_onPickerSelect 必須 POST 至 /api/actresses/{name}/photo"""
+        body = self._picker_select_body()
+        assert "fetch(" in body, "_onPickerSelect 缺少 fetch() 呼叫"
+        assert "/api/actresses/" in body, \
+            "_onPickerSelect fetch URL 缺少 /api/actresses/"
+        assert "/photo" in body, \
+            "_onPickerSelect fetch URL 缺少 /photo"
+        assert "'POST'" in body or '"POST"' in body, \
+            "_onPickerSelect 缺少 method: 'POST'"
+
+    def test_picker_select_race_lock(self):
+        """_onPickerSelect 開頭必須有 race lock（檢查 + 設定 _pickerSelected）"""
+        body = self._picker_select_body()
+        assert re.search(r"if\s*\(\s*this\._pickerSelected\s*\)\s*return", body), \
+            "_onPickerSelect 缺少 if (this._pickerSelected) return; race guard"
+        assert re.search(r"this\._pickerSelected\s*=\s*true", body), \
+            "_onPickerSelect 缺少 this._pickerSelected = true; lock 設定"
+
+    def test_picker_select_captures_actress_name(self):
+        """_onPickerSelect 必須在 await 前 capture name 並做 stale 比對"""
+        body = self._picker_select_body()
+        assert "capturedName" in body, \
+            "_onPickerSelect 缺少 capturedName 快照變數"
+        assert "currentLightboxActress" in body, \
+            "_onPickerSelect 缺少 currentLightboxActress 參考"
+        # post-await stale 比對
+        assert re.search(r"currentLightboxActress.*?!==\s*capturedName", body, re.DOTALL) \
+            or re.search(r"name\s*!==\s*capturedName", body), \
+            "_onPickerSelect 缺少 post-await stale-name 比對"
+
+    def test_picker_select_uses_burst_picker_animations(self):
+        """_onPickerSelect 必須呼叫 BurstPicker.playPickerFlipReplace + playPickerExitAll"""
+        body = self._picker_select_body()
+        assert "playPickerFlipReplace" in body, \
+            "_onPickerSelect 缺少 BurstPicker.playPickerFlipReplace 呼叫"
+        assert "playPickerExitAll" in body, \
+            "_onPickerSelect 缺少 BurstPicker.playPickerExitAll 呼叫"
+        assert "typeof window.BurstPicker" in body, \
+            "_onPickerSelect 缺少 typeof window.BurstPicker 防禦性 guard"
+
+    def test_picker_select_reduced_motion_check(self):
+        """_onPickerSelect 必須尊重 prefers-reduced-motion"""
+        body = self._picker_select_body()
+        assert "prefers-reduced-motion" in body, \
+            "_onPickerSelect 缺少 prefers-reduced-motion 偵測"
+        assert "matchMedia" in body, \
+            "_onPickerSelect 缺少 window.matchMedia 呼叫"
+
+    def test_picker_select_uses_i18n_toasts(self):
+        """_onPickerSelect 必須使用 i18n key（picker.replaced + picker.error）"""
+        body = self._picker_select_body()
+        assert "showcase.actress.picker.replaced" in body, \
+            "_onPickerSelect 缺少 showcase.actress.picker.replaced i18n key"
+        assert "showcase.actress.picker.error" in body, \
+            "_onPickerSelect 缺少 showcase.actress.picker.error i18n key"
+        assert "showToast(" in body, \
+            "_onPickerSelect 缺少 showToast() 呼叫"

@@ -2316,14 +2316,115 @@ function showcaseState() {
         },
 
         /**
-         * 選中卡片 — T4cd stub（僅鎖定 + 關閉 picker）
-         * T4e 將實作 POST /photo + FlipReplace + ExitAll + cache-bust + toast
+         * 選中卡片 — T4e 完整流程
+         * Race lock → POST /photo → Alpine 狀態同步 → FlipReplace + ExitAll → cache-bust src 同步 → toast
          */
         async _onPickerSelect(candidate, i) {
+            // AC-13 race lock：第一次 click 鎖定，其餘忽略
             if (this._pickerSelected) return;
             this._pickerSelected = true;
-            // T4e implements POST /photo + FlipReplace + ExitAll + cache-bust + toast
-            this._closePicker();
+
+            // 41d captured-reference pattern：在 await 前抓快照，await 後比對偵測 lightbox 切換
+            const capturedName = this.currentLightboxActress?.name;
+            if (!capturedName) {
+                this._pickerSelected = false;
+                return;
+            }
+
+            // DOM 節點解析：必須在 await 前取得（await 後可能已被 close/重繪）
+            const grid = this.$refs.pickerGrid;
+            const allCards = grid ? Array.from(grid.querySelectorAll('.picker-candidate-card')) : [];
+            const selectedCard = allCards[i] || null;
+            const otherCards = allCards.filter((_, j) => j !== i);
+            const coverImg = this.$el.querySelector('.lightbox-cover img');
+
+            // Reduced-motion 偵測（系統層 + simulator）
+            const reduceMotion = (typeof window.matchMedia === 'function' &&
+                                  window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+            try {
+                const body = {
+                    source: candidate.source,
+                    url: candidate.full_url,
+                    video_path: candidate.video_path || null,
+                    crop_spec: 'v1',
+                };
+                const resp = await fetch(`/api/actresses/${encodeURIComponent(capturedName)}/photo`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                });
+                if (!resp.ok) throw new Error('replace_failed_' + resp.status);
+                const data = await resp.json();
+
+                // Stale check：await 期間用戶切換了 lightbox actress
+                if (!this.currentLightboxActress || this.currentLightboxActress.name !== capturedName) {
+                    // 仍同步背景 _actresses 陣列，但不再動 UI / 動畫
+                    this._syncActressesArray(capturedName, data);
+                    this._pickerSelected = false;
+                    return;
+                }
+
+                // Alpine 反應性：用 Object.assign 整體覆蓋以確保 nested 物件 reactivity
+                this.currentLightboxActress = Object.assign({}, this.currentLightboxActress, {
+                    photo_url: data.photo_url,
+                    photo_source: data.photo_source,
+                });
+                this._syncActressesArray(capturedName, data);
+
+                // Reduced-motion 或 BurstPicker 未載入 → 直接更新 src + 關閉
+                if (reduceMotion || typeof window.BurstPicker === 'undefined') {
+                    if (coverImg && data.photo_url) {
+                        coverImg.src = data.photo_url;
+                    }
+                    this._closePicker();
+                    this.showToast(window.t('showcase.actress.picker.replaced'), 'success');
+                    return;
+                }
+
+                // 完整動畫：FlipReplace（await）→ src 同步至 backend persistent URL → ExitAll（fire-and-forget）
+                try {
+                    if (selectedCard && coverImg) {
+                        await window.BurstPicker.playPickerFlipReplace(selectedCard, coverImg, _PICKER_PARAMS);
+                        // FlipReplace 內部以 selectedImg.src 作為 ghost / 新 cover src（candidate 來源 URL）。
+                        // 動畫完成後覆蓋為後端 persistent endpoint（含 ?t= cache-bust），確保刷新後 cover 仍正確。
+                        if (data.photo_url) {
+                            coverImg.src = data.photo_url;
+                        }
+                    } else if (coverImg && data.photo_url) {
+                        coverImg.src = data.photo_url;
+                    }
+                    if (otherCards.length > 0) {
+                        window.BurstPicker.playPickerExitAll(otherCards, _PICKER_PARAMS);
+                    }
+                } catch (animErr) {
+                    // 動畫失敗不應阻塞 success 路徑
+                    console.warn('[Picker] animation error', animErr);
+                    if (coverImg && data.photo_url) coverImg.src = data.photo_url;
+                }
+
+                this._closePicker();
+                this.showToast(window.t('showcase.actress.picker.replaced'), 'success');
+
+            } catch (e) {
+                this._pickerSelected = false;  // 失敗時解除鎖定
+                this._closePicker();
+                this.showToast(window.t('showcase.actress.picker.error'), 'error');
+            }
+        },
+
+        /**
+         * Helper: 換照片成功後同步 _actresses 陣列對應 entry
+         */
+        _syncActressesArray(name, data) {
+            if (typeof _actresses === 'undefined' || !_actresses) return;
+            const idx = _actresses.findIndex(a => a.name === name);
+            if (idx >= 0 && data && data.photo_url) {
+                _actresses[idx] = Object.assign({}, _actresses[idx], {
+                    photo_url: data.photo_url,
+                    photo_source: data.photo_source,
+                });
+            }
         },
 
         /**
