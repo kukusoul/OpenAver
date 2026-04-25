@@ -646,7 +646,7 @@
                         <div class="actress-picker-area"
                              x-show="_pickerOpen"
                              @click.stop
-                             @click.outside="_pickerOpen && _closePicker()">
+                             @click.outside="_pickerOpen && _cancelPicker()">
                             <div class="picker-current-source"
                                  x-show="_pickerCurrentSource">
                                 <span x-text="t('showcase.actress.picker.current_source').replace('{source}', t('showcase.actress.picker.source_' + _pickerCurrentSource) || _pickerCurrentSource)"></span>

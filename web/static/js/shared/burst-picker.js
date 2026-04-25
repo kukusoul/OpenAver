@@ -184,22 +184,27 @@
          * Hover out：縮回原始尺寸（float 由 caller 重啟）
          * @param {Element} el
          * @param {object} params - pickerParams
+         * @returns {Promise<void>} resolves 當縮回動畫完成（caller 應 await 後再 restart float，
+         *   避免 playPickerFloat 的 killTweensOf 殺掉縮回 tween 導致卡片停在放大狀態）
          */
         playPickerHoverOut: function (el, params) {
             // P2-3: burst 飛行中不接受 hover out
-            if (!el || el.dataset.pickerSettled !== '1') return;
+            if (!el || el.dataset.pickerSettled !== '1') return Promise.resolve();
             gsap.killTweensOf(el);
 
             if (shouldSkip(params)) {
                 gsap.set(el, { scale: 1, boxShadow: 'none' });
-                return;
+                return Promise.resolve();
             }
 
-            gsap.to(el, {
-                scale: 1,
-                boxShadow: 'none',
-                duration: 0.2,
-                ease: 'power2.out'
+            return new Promise(function (resolve) {
+                gsap.to(el, {
+                    scale: 1,
+                    boxShadow: 'none',
+                    duration: 0.2,
+                    ease: 'power2.out',
+                    onComplete: resolve
+                });
             });
         },
 
@@ -337,34 +342,38 @@
          * @param {object} params - pickerParams
          */
         playPickerExitAll: function (els, params) {
-            if (!els || !els.length) return;
+            if (!els || !els.length) return Promise.resolve();
             gsap.killTweensOf(els);
 
             if (shouldSkip(params)) {
                 gsap.set(els, { opacity: 0 });
-                return;
+                return Promise.resolve();
             }
 
             var exitGravity = params.exitGravity || 1200;
             var usePhysics = (typeof Physics2DPlugin !== 'undefined');
 
-            if (usePhysics) {
-                gsap.to(els, {
-                    physics2D: { velocity: 0, angle: 90, gravity: exitGravity },
-                    opacity: 0,
-                    stagger: 0.03,
-                    duration: 0.8,
-                    ease: 'none'
-                });
-            } else {
-                gsap.to(els, {
-                    y: '+=300',
-                    opacity: 0,
-                    stagger: 0.03,
-                    duration: 0.5,
-                    ease: 'power2.in'
-                });
-            }
+            return new Promise(function (resolve) {
+                if (usePhysics) {
+                    gsap.to(els, {
+                        physics2D: { velocity: 0, angle: 90, gravity: exitGravity },
+                        opacity: 0,
+                        stagger: 0.03,
+                        duration: 0.8,
+                        ease: 'none',
+                        onComplete: resolve
+                    });
+                } else {
+                    gsap.to(els, {
+                        y: '+=300',
+                        opacity: 0,
+                        stagger: 0.03,
+                        duration: 0.5,
+                        ease: 'power2.in',
+                        onComplete: resolve
+                    });
+                }
+            });
         },
 
         /**

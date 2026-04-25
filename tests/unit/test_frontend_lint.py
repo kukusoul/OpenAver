@@ -4143,3 +4143,108 @@ class TestPickerIntegrationGuard:
             "_onPickerSelect 缺少 showcase.actress.picker.error i18n key"
         assert "showToast(" in body, \
             "_onPickerSelect 缺少 showToast() 呼叫"
+
+    # ----------------------------------------------------------------------
+    # 49b-T4 Codex review fixes
+    # ----------------------------------------------------------------------
+
+    def test_picker_close_lightbox_teardown(self):
+        """closeLightbox 必須先檢查 _pickerOpen 並呼叫 _closePicker（避免 SSE/timer 洩漏）"""
+        js = self._core_js()
+        m = re.search(
+            r"closeLightbox\s*\(\s*\)\s*\{(.*?)\n\s{8}\},",
+            js, re.DOTALL,
+        )
+        assert m, "core.js 找不到 closeLightbox 方法定義"
+        body = m.group(1)
+        assert "_pickerOpen" in body, \
+            "closeLightbox 缺少 _pickerOpen guard（picker teardown）"
+        assert "_closePicker" in body, \
+            "closeLightbox 缺少 _closePicker() 呼叫（picker teardown）"
+
+    def test_picker_cancel_uses_reverse_all(self):
+        """_cancelPicker 必須存在且呼叫 BurstPicker.playPickerReverseAll"""
+        js = self._core_js()
+        assert "_cancelPicker" in js, \
+            "core.js 缺少 _cancelPicker 方法（Esc / outside-click 取消路徑）"
+        m = re.search(
+            r"_cancelPicker\s*\([^)]*\)\s*\{(.*?)\n\s{8}\},",
+            js, re.DOTALL,
+        )
+        assert m, "core.js _cancelPicker 方法定義格式無法解析"
+        body = m.group(1)
+        assert "playPickerReverseAll" in body, \
+            "_cancelPicker 缺少 BurstPicker.playPickerReverseAll 呼叫"
+
+    def test_picker_cancel_locks_selection_immediately(self):
+        """Codex P2: _cancelPicker 必須在 await 前設 _pickerSelected = true，
+        防止 reverse 動畫期間（300ms）卡片仍可被點擊觸發 _onPickerSelect。
+        """
+        js = self._core_js()
+        m = re.search(
+            r"_cancelPicker\s*\([^)]*\)\s*\{(.*?)\n\s{8}\},",
+            js, re.DOTALL,
+        )
+        assert m, "core.js _cancelPicker 方法定義格式無法解析"
+        body = m.group(1)
+        # interaction lock 必須在 await playPickerReverseAll 之前
+        lock_idx = body.find("_pickerSelected = true")
+        await_idx = body.find("playPickerReverseAll")
+        assert lock_idx >= 0, \
+            "_cancelPicker 缺少 _pickerSelected = true（reverse 動畫期間防 click 鎖）"
+        assert await_idx > lock_idx, \
+            "_cancelPicker 必須先設 _pickerSelected = true，再 await playPickerReverseAll"
+
+    def test_picker_hover_out_awaits_before_float_restart(self):
+        """Codex P2: _onPickerHoverOut 必須 async，await playPickerHoverOut 後才 restart float。
+        否則 playPickerFloat 內 killTweensOf 會殺掉同步啟動的 hover-out 縮回 tween，
+        卡片停留在放大/glow 狀態。
+        """
+        js = self._core_js()
+        # _onPickerHoverOut 必須是 async function
+        m = re.search(
+            r"async\s+_onPickerHoverOut\s*\([^)]*\)\s*\{(.*?)\n\s{8}\},",
+            js, re.DOTALL,
+        )
+        assert m, "_onPickerHoverOut 必須宣告為 async function（Codex P2 修正）"
+        body = m.group(1)
+        # 必須有 await playPickerHoverOut
+        assert re.search(r"await\s+window\.BurstPicker\.playPickerHoverOut", body), \
+            "_onPickerHoverOut 缺少 await playPickerHoverOut（縮回完成前不能 restart float）"
+        # await 後仍呼叫 playPickerFloat
+        await_idx = body.find("await window.BurstPicker.playPickerHoverOut")
+        float_idx = body.find("playPickerFloat")
+        assert await_idx >= 0 and float_idx > await_idx, \
+            "_onPickerHoverOut 必須先 await playPickerHoverOut 完成，再呼叫 playPickerFloat restart"
+
+    def test_burst_picker_hover_out_returns_promise(self):
+        """Codex P2: burst-picker.js playPickerHoverOut 必須回傳 Promise（caller 才能 await）"""
+        with open("web/static/js/shared/burst-picker.js", "r", encoding="utf-8") as f:
+            burst_js = f.read()
+        m = re.search(
+            r"playPickerHoverOut:\s*function\s*\([^)]*\)\s*\{(.*?)\n\s{8}\},",
+            burst_js, re.DOTALL,
+        )
+        assert m, "burst-picker.js 找不到 playPickerHoverOut 方法定義"
+        body = m.group(1)
+        # 必須回傳 Promise 或 Promise.resolve
+        assert re.search(r"return\s+(new\s+Promise|Promise\.resolve)", body), \
+            "playPickerHoverOut 必須回傳 Promise（new Promise(...) 或 Promise.resolve()）"
+        # Promise 必須包 onComplete callback
+        assert "onComplete" in body or "onComplete:" in body, \
+            "playPickerHoverOut 動畫分支應使用 onComplete: resolve 將 tween 完成事件接到 Promise"
+
+    def test_burst_picker_exit_all_returns_promise(self):
+        """Codex P1 (already covered by T4cd-fix): playPickerExitAll 必須回傳 Promise。
+        本測試額外明確檢查，避免未來 refactor 退回 fire-and-forget 而 _onPickerSelect 無法 await。
+        """
+        with open("web/static/js/shared/burst-picker.js", "r", encoding="utf-8") as f:
+            burst_js = f.read()
+        m = re.search(
+            r"playPickerExitAll:\s*function\s*\([^)]*\)\s*\{(.*?)\n\s{8}\},",
+            burst_js, re.DOTALL,
+        )
+        assert m, "burst-picker.js 找不到 playPickerExitAll 方法定義"
+        body = m.group(1)
+        assert re.search(r"return\s+(new\s+Promise|Promise\.resolve)", body), \
+            "playPickerExitAll 必須回傳 Promise（避免 _closePicker 立即 reset 清空 _candidates）"

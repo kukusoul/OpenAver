@@ -654,17 +654,17 @@ function motionLabPage() {
             }
         },
 
-        onPickerHoverOut(i) {
+        async onPickerHoverOut(i) {
             if (!this.$refs || !this.$refs.pickerCandidatesArea) return;
             const cards = this.$refs.pickerCandidatesArea.querySelectorAll('.picker-candidate-card');
             const el = cards[i];
             if (!el || el.dataset.pickerSettled !== '1') return;  // guard: burst mid-flight には何もしない
-            if (typeof window.BurstPicker !== 'undefined') {
-                window.BurstPicker.playPickerHoverOut(el, this.pickerParams);
-                // Restart float for this card
-                const tl = window.BurstPicker.playPickerFloat(el, this.pickerParams);
-                if (tl) this._pickerFloatTimers.push(tl);
-            }
+            if (typeof window.BurstPicker === 'undefined') return;
+            // Codex P2 fix：等 hover-out 縮回完成後再 restart float（避免 killTweensOf 殺掉縮回 tween）
+            await window.BurstPicker.playPickerHoverOut(el, this.pickerParams);
+            if (!el.isConnected) return;
+            const tl = window.BurstPicker.playPickerFloat(el, this.pickerParams);
+            if (tl) this._pickerFloatTimers.push(tl);
         },
 
         onPickerSelect(i) {

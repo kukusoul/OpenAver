@@ -1603,6 +1603,11 @@ function showcaseState() {
                 this.lightboxCloseTimer = null;
             }
 
+            // 49b T4 fix: 若 picker 開啟中，先關閉 picker（避免 SSE/timer 洩漏到隱藏狀態）
+            if (this._pickerOpen) {
+                this._closePicker();
+            }
+
             this.addingLbTag = false;    // 關閉 lightbox 時重置 user tag 輸入框
             this._fetchSamplesFailed = {};
 
@@ -2306,13 +2311,22 @@ function showcaseState() {
         },
 
         /**
-         * Hover out：縮回原始尺寸
+         * Hover out：縮回原始尺寸 → 等待縮回完成後 restart float
+         * Codex P2 fix：playPickerFloat 內 killTweensOf 會殺掉同步啟動的 hover-out tween，
+         * 必須 await playPickerHoverOut 完成後再 startfloat，否則卡片停留在放大/glow 狀態。
          */
-        _onPickerHoverOut(el, i) {
+        async _onPickerHoverOut(el, i) {
             if (this._pickerSelected) return;
-            if (typeof window.BurstPicker !== 'undefined') {
-                window.BurstPicker.playPickerHoverOut(el, _PICKER_PARAMS);
-            }
+            if (typeof window.BurstPicker === 'undefined') return;
+            // Capture the card so a later mutation (cancel/select clearing _candidates) can't break us
+            const targetEl = el;
+            await window.BurstPicker.playPickerHoverOut(targetEl, _PICKER_PARAMS);
+            // Stale-check：hover-out 動畫期間若 picker 已關閉 / 已選中，不重啟 float
+            if (this._pickerSelected || !this._pickerOpen) return;
+            // 同樣防護：卡片可能已被 reset 從 DOM 移除
+            if (!targetEl.isConnected) return;
+            const tl = window.BurstPicker.playPickerFloat(targetEl, _PICKER_PARAMS);
+            if (tl) this._pickerFloatTweens.push(tl);
         },
 
         /**
@@ -2365,12 +2379,15 @@ function showcaseState() {
                     return;
                 }
 
-                // Alpine 反應性：用 Object.assign 整體覆蓋以確保 nested 物件 reactivity
-                this.currentLightboxActress = Object.assign({}, this.currentLightboxActress, {
-                    photo_url: data.photo_url,
-                    photo_source: data.photo_source,
-                });
+                // Sync via _syncActressesArray (in-place mutation propagates to currentLightboxActress
+                // since it shares the _actresses[idx] reference per line 208-209).
                 this._syncActressesArray(capturedName, data);
+                // Defensive: if currentLightboxActress somehow holds a different object (e.g. cache),
+                // also mutate it in place to ensure :src / photo_source bindings update.
+                if (this.currentLightboxActress && this.currentLightboxActress.name === capturedName) {
+                    this.currentLightboxActress.photo_url = data.photo_url;
+                    this.currentLightboxActress.photo_source = data.photo_source;
+                }
 
                 // Reduced-motion 或 BurstPicker 未載入 → 直接更新 src + 關閉
                 if (reduceMotion || typeof window.BurstPicker === 'undefined') {
@@ -2395,7 +2412,7 @@ function showcaseState() {
                         coverImg.src = data.photo_url;
                     }
                     if (otherCards.length > 0) {
-                        window.BurstPicker.playPickerExitAll(otherCards, _PICKER_PARAMS);
+                        await window.BurstPicker.playPickerExitAll(otherCards, _PICKER_PARAMS);
                     }
                 } catch (animErr) {
                     // 動畫失敗不應阻塞 success 路徑
@@ -2420,10 +2437,10 @@ function showcaseState() {
             if (typeof _actresses === 'undefined' || !_actresses) return;
             const idx = _actresses.findIndex(a => a.name === name);
             if (idx >= 0 && data && data.photo_url) {
-                _actresses[idx] = Object.assign({}, _actresses[idx], {
-                    photo_url: data.photo_url,
-                    photo_source: data.photo_source,
-                });
+                // In-place mutation: keeps _filteredActresses / paginatedActresses / currentLightboxActress
+                // (which share the same object reference) all in sync
+                _actresses[idx].photo_url = data.photo_url;
+                _actresses[idx].photo_source = data.photo_source;
             }
         },
 
@@ -2438,6 +2455,33 @@ function showcaseState() {
             }
             clearTimeout(this._pickerTimeoutTimer);
             this._pickerTimeoutTimer = null;
+            this._resetPicker();
+            this._fadeMetadataPanel(false);
+        },
+
+        /**
+         * 取消 picker（Esc / outside-click）— 播放 reverse 動畫後關閉
+         * 與 _closePicker() 區別：本方法走 motion-lab T1 reverse 視覺，封閉性更佳
+         */
+        async _cancelPicker() {
+            if (!this._pickerOpen || this._pickerSelected) return;  // 已選中走 _closePicker；避免重入
+            // Codex P2 fix：reverse 動畫期間（300ms）卡片仍可見，必須鎖住 _onPickerSelect 不被觸發
+            this._pickerSelected = true;
+            // 鎖住 SSE/timer 不再觸發
+            this._pickerRunId++;
+            if (this._pickerSSE) { this._pickerSSE.close(); this._pickerSSE = null; }
+            clearTimeout(this._pickerTimeoutTimer);
+            this._pickerTimeoutTimer = null;
+            // 抓現有候選卡，播 reverse 動畫
+            const grid = this.$refs?.pickerGrid;
+            const cards = grid ? Array.from(grid.querySelectorAll('.picker-candidate-card')) : [];
+            const coverImg = this.$el?.querySelector?.('.lightbox-cover img');
+            if (cards.length > 0 && typeof window.BurstPicker !== 'undefined' && window.BurstPicker.playPickerReverseAll) {
+                await new Promise((resolve) => {
+                    window.BurstPicker.playPickerReverseAll(cards, coverImg, _PICKER_PARAMS, resolve);
+                });
+            }
+            // 動畫完成後 reset 狀態（含解除 _pickerSelected lock）+ 淡入 metadata
             this._resetPicker();
             this._fadeMetadataPanel(false);
         },
@@ -2461,7 +2505,7 @@ function showcaseState() {
         _fadeMetadataPanel(out) {
             const meta = this.$el?.querySelector?.('.actress-lightbox-meta');
             if (!meta || typeof gsap === 'undefined') return;
-            const rows = meta.querySelectorAll(':not(.actress-lb-header)');
+            const rows = meta.querySelectorAll(':scope > :not(.actress-lb-header)');
             if (rows.length === 0) return;
             gsap.to(rows, {
                 opacity: out ? 0 : 1,
@@ -2477,7 +2521,7 @@ function showcaseState() {
 
             // 49b T4cd: Picker 開啟時，Esc 優先關閉 picker（不冒泡到 lightbox close）
             if (e.key === 'Escape' && this._pickerOpen) {
-                this._closePicker();
+                this._cancelPicker();
                 e.preventDefault();
                 e.stopPropagation();
                 return;
