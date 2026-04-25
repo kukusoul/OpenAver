@@ -139,7 +139,8 @@
                     const cards = grid.querySelectorAll('.picker-candidate-card');
                     const newCard = cards[myIndex];
                     if (newCard) {
-                        const coverEl = this.$el.querySelector('.lightbox-cover img');
+                        // 跟 /showcase 一致：用 $refs，避免 @click handler 內 $el 變按鈕
+                        const coverEl = this.$refs.coverImg;
                         window.BurstPicker.playPickerBurst([newCard], coverEl, _PICKER_PARAMS, {
                             streamMode: 'instant',
                             floatTimerSink: this._pickerFloatTweens,

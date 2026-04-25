@@ -2266,7 +2266,9 @@ function showcaseState() {
                         const cards = grid.querySelectorAll('.picker-candidate-card');
                         const newCard = cards[myIndex];
                         if (newCard) {
-                            const coverEl = this.$el.querySelector('.lightbox-cover img');
+                            // 用 $refs.pickerCoverImg 而非 $el.querySelector：在 @click handler 內
+                            // $el 是按鈕本身、不是 component root，querySelector 會 miss → cards 留 opacity:0
+                            const coverEl = this.$refs.pickerCoverImg;
                             if (coverEl) {
                                 window.BurstPicker.playPickerBurst([newCard], coverEl, _PICKER_PARAMS, {
                                     streamMode: 'instant',
@@ -2355,7 +2357,7 @@ function showcaseState() {
             const allCards = grid ? Array.from(grid.querySelectorAll('.picker-candidate-card')) : [];
             const selectedCard = allCards[i] || null;
             const otherCards = allCards.filter((_, j) => j !== i);
-            const coverImg = this.$el.querySelector('.lightbox-cover img');
+            const coverImg = this.$refs.pickerCoverImg;
 
             // Reduced-motion 偵測（系統層 + simulator）
             const reduceMotion = (typeof window.matchMedia === 'function' &&
