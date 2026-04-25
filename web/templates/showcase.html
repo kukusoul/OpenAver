@@ -527,7 +527,9 @@
                             <!-- Search films overlay (44c-T7) -->
                             <div class="actress-card-overlay">
                                 <button class="btn-glass-circle"
-                                        @click.stop="searchActressFilms(actress.name)"
+                                        @click.stop="searchActressFilms(actress.name, $el)"
+                                        :disabled="_ghostFlyInFlight"
+                                        :class="{ 'opacity-50 cursor-not-allowed': _ghostFlyInFlight }"
                                         :title="t('showcase.actress.search_films')">
                                     <i class="bi bi-camera-reels"></i>
                                 </button>
@@ -578,7 +580,9 @@
                             <div class="cover-actions">
                                 <button class="lb-action-btn"
                                         x-show="actressLightboxSource === 'grid'"
-                                        @click.stop="searchActressFilms(currentLightboxActress?.name)"
+                                        @click.stop="searchActressFilms(currentLightboxActress?.name, $el)"
+                                        :disabled="_ghostFlyInFlight"
+                                        :class="{ 'opacity-50 cursor-not-allowed': _ghostFlyInFlight }"
                                         :data-tooltip="t('showcase.actress.search_films')"
                                         :aria-label="t('showcase.actress.search_films')">
                                     <i class="bi bi-camera-reels"></i>

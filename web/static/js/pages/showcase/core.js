@@ -146,6 +146,7 @@ function showcaseState() {
         actressLightboxIndex: -1,       // 指向 _filteredActresses 的索引
         currentLightboxActress: null,   // 當前 lightbox 女優；與 currentLightboxVideo 互斥
         actressLightboxSource: null,    // T5: 'hero' | 'grid' | null — 進入路徑（CD-9）
+        _ghostFlyInFlight: false,       // T7: 跨模式 ghost fly 並發保護 flag（CD-13）
         _actressChipsExpanded: { aliases: false, info: false },  // chips 展開狀態
         _addActressName: '',            // + 新增 input
         _addingActress: false,          // 新增 loading
@@ -971,29 +972,145 @@ function showcaseState() {
             }
         },
 
-        // --- 44c T7: Search actress films ---
-        searchActressFilms(actressName) {
+        // --- 44c T7: Search actress films（49a-T7：跨模式 Ghost Fly 動畫）---
+        async searchActressFilms(actressName, fromEl) {
             if (!actressName) return;
-            if (this.lightboxOpen) this.closeLightbox();
+            if (this._ghostFlyInFlight) return;   // CD-13: 連點保護
+            var self = this;
             var wasActressMode = this.showFavoriteActresses;
-            if (wasActressMode) {
-                this.showFavoriteActresses = false;
-                this.actressSearch = '';
-            }
-            this.search = actressName;
-            this._animateFilter();
-            this._checkPreciseActressMatch(actressName, 'metadata');
-            if (wasActressMode) {
-                var self = this;
+
+            // §8.3: 用 IIFE try/catch 包住主流程，避免 unhandled rejection；
+            //       任何 throw 也會 reset _ghostFlyInFlight 防卡死。
+            try {
+                // 捕獲來源 rect / coverSrc（必須在 closeLightbox / state 變更前）
+                var fromRect = null;
+                var coverSrc = null;
+                if (wasActressMode && fromEl) {
+                    var fromImg = fromEl.closest('.actress-card')?.querySelector('.actress-card-photo img')
+                        || fromEl.closest('.showcase-lightbox')?.querySelector('.lightbox-cover img');
+                    if (fromImg) {
+                        fromRect = fromImg.getBoundingClientRect();
+                        coverSrc = fromImg.src;
+                    }
+                }
+
+                if (this.lightboxOpen) this.closeLightbox();
+                if (wasActressMode) {
+                    this.showFavoriteActresses = false;
+                    this.actressSearch = '';
+                }
+                this.search = actressName;
+                this._animateFilter();
+
+                // 非女優模式 / 無 fromEl / 無 coverSrc → fallback 走原有同步行為
+                if (!wasActressMode || !fromRect || !coverSrc) {
+                    this._checkPreciseActressMatch(actressName, 'metadata');
+                    if (wasActressMode) {
+                        var gen0 = ++this._animGeneration;
+                        this.$nextTick(function () {
+                            if (self._animGeneration !== gen0) return;
+                            window.ShowcaseAnimations?.playModeCrossfade?.('actress', self.mode);
+                            if (self.mode === 'grid') {
+                                var grid0 = self._getActiveGrid();
+                                window.ShowcaseAnimations?.playEntry?.(grid0);
+                            }
+                        });
+                    }
+                    return;
+                }
+
+                // === Ghost Fly 主流程 ===
+                this._ghostFlyInFlight = true;
                 var gen = ++this._animGeneration;
+
+                // 淡出女優 grid（T1 playModeCrossfade 的 fade-out 部分）
+                window.ShowcaseAnimations?.playModeCrossfade?.('actress', null, null, {
+                    onOldFadeComplete: function () {}
+                });
+                // 影片 grid 淡入（$nextTick 後）
                 this.$nextTick(function () {
                     if (self._animGeneration !== gen) return;
-                    window.ShowcaseAnimations?.playModeCrossfade?.('actress', self.mode);
-                    if (self.mode === 'grid') {
-                        var grid = self._getActiveGrid();
-                        window.ShowcaseAnimations?.playEntry?.(grid);
+                    var newEl = document.querySelector('.showcase-grid');
+                    if (newEl && typeof gsap !== 'undefined') {
+                        gsap.fromTo(newEl, { opacity: 0 }, { opacity: 1, duration: 0.2, ease: 'power2.out', clearProps: 'opacity' });
                     }
+                    window.ShowcaseAnimations?.playEntry?.(self._getActiveGrid());
                 });
+
+                // ⚠️ Gotcha：_checkPreciseActressMatch 依搜尋詞守衛 return（不重設 _isPreciseActressMatch），
+                //     所以 await 前先手動 reset false，避免讀到上一次搜尋的殘留 true。
+                self._isPreciseActressMatch = false;
+
+                await self._checkPreciseActressMatch(actressName, 'metadata');
+
+                // _animGeneration 比對：若 stale（多次點擊），中止主流程
+                if (self._animGeneration !== gen) {
+                    self._ghostFlyInFlight = false;
+                    return;
+                }
+
+                // 等 hero card DOM render（最多 500ms 輪詢）
+                var heroCardEl = null;
+                var TIMEOUT = 500;
+                var elapsed = 0;
+                var interval = 30;
+                await new Promise(function (resolve) {
+                    var checker = setInterval(function () {
+                        elapsed += interval;
+                        var hero = document.querySelector('.hero-card');
+                        if (hero && hero.getBoundingClientRect().width > 0) {
+                            heroCardEl = hero;
+                            clearInterval(checker);
+                            resolve();
+                        } else if (elapsed >= TIMEOUT) {
+                            clearInterval(checker);
+                            resolve();
+                        }
+                    }, interval);
+                });
+
+                // 再次 stale 檢查
+                if (self._animGeneration !== gen) {
+                    self._ghostFlyInFlight = false;
+                    return;
+                }
+
+                // CD-12: 降級條件（5 條件全通過才走主流程）
+                var canMainFlow = heroCardEl
+                    && self._isPreciseActressMatch
+                    && self._matchedActress
+                    && self._matchedActress.is_favorite !== false
+                    && coverSrc;
+
+                if (canMainFlow) {
+                    // 主流程：ghost fly
+                    window.GhostFly?.playActressToHeroCard?.(fromRect, heroCardEl, {
+                        coverSrc: coverSrc,
+                        onComplete: function () {
+                            self._ghostFlyInFlight = false;
+                        },
+                        onFallback: function () {
+                            self._ghostFlyInFlight = false;
+                        }
+                    });
+                } else {
+                    // 降級流程：來源圖 pulse + 保留搜尋結果（搜尋欄 / empty state 已自動處理）
+                    self._ghostFlyInFlight = false;
+                    if (fromEl && typeof gsap !== 'undefined') {
+                        var pulseTarget = fromEl.closest('.actress-card')?.querySelector('.actress-card-photo img')
+                            || fromEl.closest('.showcase-lightbox')?.querySelector('.lightbox-cover img');
+                        if (pulseTarget) {
+                            gsap.to(pulseTarget, {
+                                scale: 1.05, duration: 0.1, yoyo: true, repeat: 1,
+                                ease: 'power2.inOut'
+                            });
+                        }
+                    }
+                }
+            } catch (e) {
+                // §8.3 防禦：任何 throw 都釋放 flag 防卡死
+                self._ghostFlyInFlight = false;
+                console.warn('[T7][searchActressFilms]', e);
             }
         },
 

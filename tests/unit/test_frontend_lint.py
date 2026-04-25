@@ -3338,9 +3338,9 @@ class TestModeToggleFadeOutGuard:
         return SHOWCASE_ANIMATIONS_JS.read_text(encoding="utf-8")
 
     def _extract_method_body(self, js, method_name):
-        """抓取 Alpine state method（methodName(...) { ... }）函式主體，大括號平衡。"""
+        """抓取 Alpine state method（methodName(...) { ... }）函式主體，大括號平衡（容忍 async 前綴）。"""
         pattern = re.compile(
-            r'(?:^|\n)\s*' + re.escape(method_name) + r'\s*\([^)]*\)\s*\{',
+            r'(?:^|\n)\s*(?:async\s+)?' + re.escape(method_name) + r'\s*\([^)]*\)\s*\{',
             re.DOTALL,
         )
         m = pattern.search(js)
@@ -3429,7 +3429,9 @@ class TestModeToggleFadeOutGuard:
             f"toggleActressMode 函數體 _animGeneration 出現次數應 ≥ 2 (外 gen + 內 gen2)，實際 {count}"
 
     def test_old_caller_backward_compat(self):
-        """舊 caller (searchActressFilms / switchMode) 內 playModeCrossfade 呼叫保持 ≤3-arg，不含 onOldFadeComplete"""
+        """switchMode 內 playModeCrossfade 呼叫不含 onOldFadeComplete（保持影片模式內切換行為不變）。
+        searchActressFilms 自 T7 起為 async 並使用 onOldFadeComplete 觸發 ghost fly fade-out，
+        故僅驗證 switchMode 路徑不退化。"""
         js = self._core_js()
         search_body = self._extract_method_body(js, 'searchActressFilms')
         switch_body = self._extract_method_body(js, 'switchMode')
@@ -3438,9 +3440,7 @@ class TestModeToggleFadeOutGuard:
             "searchActressFilms 應仍呼叫 playModeCrossfade"
         assert 'playModeCrossfade' in switch_body, \
             "switchMode 應仍呼叫 playModeCrossfade"
-        # 兩處都不該帶 onOldFadeComplete（保持原 2-arg 行為）
-        assert 'onOldFadeComplete' not in search_body, \
-            "searchActressFilms 內 playModeCrossfade 呼叫不應帶 onOldFadeComplete（T1 範圍外，T7 處理）"
+        # switchMode 不該帶 onOldFadeComplete（保持原 2/3-arg 行為）
         assert 'onOldFadeComplete' not in switch_body, \
             "switchMode 內 playModeCrossfade 呼叫不應帶 onOldFadeComplete（保持影片模式內切換行為不變）"
 
@@ -3577,3 +3577,64 @@ class TestAliasLiveQueryGuard:
         hero_body = self._extract_method_body(js, 'openHeroCardLightbox')
         assert re.search(r'_fetchLiveAliases\s*\(', hero_body), \
             "openHeroCardLightbox 缺少 _fetchLiveAliases 呼叫"
+
+
+GHOST_FLY_JS = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "shared" / "ghost-fly.js"
+
+
+class TestGhostFlyInFlightGuard:
+    """49a-T7: 女優 → 影片跨模式 Ghost Fly 動畫並發保護 guard
+
+    驗證：
+    - core.js 初始化物件含 _ghostFlyInFlight: false（CD-13 並發 flag）
+    - ghost-fly.js 新增 playActressToHeroCard 方法（CD-11）
+    - searchActressFilms 為 async 並接受第二參數 fromEl
+    - showcase.html 兩個 camera button（grid + lightbox）皆綁 :disabled="_ghostFlyInFlight"
+    """
+
+    def _js(self):
+        return SHOWCASE_CORE_JS.read_text(encoding="utf-8")
+
+    def _ghost_js(self):
+        return GHOST_FLY_JS.read_text(encoding="utf-8")
+
+    def _html(self):
+        return SHOWCASE_HTML.read_text(encoding="utf-8")
+
+    def test_ghost_fly_in_flight_state_present(self):
+        """core.js Alpine state 含 _ghostFlyInFlight: false（CD-13 並發 flag）"""
+        js = self._js()
+        assert re.search(r'_ghostFlyInFlight\s*:\s*false', js), \
+            "showcase/core.js 缺少 Alpine state 屬性 _ghostFlyInFlight: false"
+
+    def test_play_actress_to_hero_card_method_exists(self):
+        """ghost-fly.js 含 playActressToHeroCard 方法定義（CD-11）"""
+        js = self._ghost_js()
+        assert re.search(r'playActressToHeroCard\s*:\s*function', js), \
+            "ghost-fly.js 缺少 playActressToHeroCard: function 方法定義"
+
+    def test_search_actress_films_is_async_with_from_el(self):
+        """searchActressFilms 為 async 且簽名含第二個參數 fromEl"""
+        js = self._js()
+        assert re.search(
+            r'async\s+searchActressFilms\s*\(\s*actressName\s*,\s*fromEl\s*\)',
+            js,
+        ), "showcase/core.js searchActressFilms 應為 async 且簽名為 (actressName, fromEl)"
+
+    def test_camera_buttons_disabled_binding(self):
+        """showcase.html 兩個 camera button (grid L529 + lightbox L579) 皆綁 :disabled=\"_ghostFlyInFlight\""""
+        html = self._html()
+        # 計算 :disabled="_ghostFlyInFlight" 出現次數，應 ≥ 2
+        matches = re.findall(r':disabled\s*=\s*"_ghostFlyInFlight"', html)
+        assert len(matches) >= 2, \
+            f"showcase.html 至少 2 個 camera button 應綁 :disabled=\"_ghostFlyInFlight\"（grid + lightbox），目前 {len(matches)} 處"
+
+    def test_camera_buttons_pass_el_to_search(self):
+        """showcase.html 兩個 camera button 呼叫 searchActressFilms 時皆傳入 $el 參數"""
+        html = self._html()
+        # grid camera: searchActressFilms(actress.name, $el)
+        # lightbox camera: searchActressFilms(currentLightboxActress?.name, $el)
+        assert "searchActressFilms(actress.name, $el)" in html, \
+            "showcase.html grid camera button 缺少 searchActressFilms(actress.name, $el) 呼叫"
+        assert "searchActressFilms(currentLightboxActress?.name, $el)" in html, \
+            "showcase.html lightbox camera button 缺少 searchActressFilms(currentLightboxActress?.name, $el) 呼叫"

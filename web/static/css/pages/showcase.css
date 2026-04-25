@@ -572,6 +572,11 @@
     transition: none !important;
 }
 
+/* 49a-T7: hero card glow pulse / scale settle 期間關掉 CSS transition（C21） */
+.hero-card.gsap-animating {
+    transition: none !important;
+}
+
 /* Close Button */
 .lightbox-close {
     position: absolute;
