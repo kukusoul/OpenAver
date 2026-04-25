@@ -84,6 +84,26 @@ function motionLabPage() {
             pageStagger: 0.02,
         },
 
+        // Photo Picker 沙盒 state
+        pickerParams: {
+            velocity: 400,
+            angleStart: 20,
+            angleEnd: 160,
+            gravity: 600,
+            friction: 0.04,
+            floatAmplY: 8,
+            floatAmplRot: 2.5,
+            floatDuration: 1.5,
+            hoverScale: 1.12,
+            exitGravity: 1200,
+            streamMode: 'stagger',
+            streamInterval: 300,
+        },
+        _pickerOpen: false,
+        _pickerCandidates: [],
+        _pickerFloatTimers: [],
+        _pickerRunId: 0,
+
         init() {
             this.fetchVideos();
             // 鍵盤 ←/→ 快捷鍵
@@ -569,6 +589,115 @@ function motionLabPage() {
                         gsap.set(stagingImgEl, { clearProps: 'opacity' });
                     }
                 }
+            }
+        },
+
+        // ===== Photo Picker 沙盒 methods =====
+
+        onResetPicker() {
+            // 遞增 runId：使所有飛行中的 async callback 失效
+            this._pickerRunId++;
+            // Kill 所有 float timers
+            this._pickerFloatTimers.forEach(function (t) {
+                if (t && typeof t.kill === 'function') t.kill();
+            });
+            this._pickerFloatTimers = [];
+            // 重置 state
+            this._pickerOpen = false;
+            this._pickerCandidates = [];
+            // 清除候選卡 GSAP 殘留
+            if (typeof gsap !== 'undefined' && this.$refs && this.$refs.pickerCandidatesArea) {
+                const cards = this.$refs.pickerCandidatesArea.querySelectorAll('.picker-candidate-card');
+                if (cards.length) {
+                    gsap.killTweensOf(cards);
+                    gsap.set(cards, { clearProps: 'all' });
+                }
+            }
+        },
+
+        onPickerBurst() {
+            this.onResetPicker();
+            this._pickerOpen = true;
+            // 填入 6 筆假候選（prototype 硬寫）
+            this._pickerCandidates = [
+                { img: '/static/img/picker-demo/cand-1.jpg', source: 'Graphis' },
+                { img: '/static/img/picker-demo/cand-2.jpg', source: 'Wiki' },
+                { img: '/static/img/picker-demo/cand-3.jpg', source: 'Minnano' },
+                { img: '/static/img/picker-demo/cand-4.jpg', source: 'gfriends' },
+                { img: '/static/img/showcase/sc-3.jpg', source: '本機' },
+                { img: '/static/img/showcase/sc-7.jpg', source: '本機' },
+            ];
+            const runId = this._pickerRunId;
+            const self = this;
+            this.$nextTick(function () {
+                if (self._pickerRunId !== runId) return;
+                if (!self.$refs || !self.$refs.pickerCandidatesArea || !self.$refs.pickerCoverImg) return;
+                const cards = Array.from(self.$refs.pickerCandidatesArea.querySelectorAll('.picker-candidate-card'));
+                const cover = self.$refs.pickerCoverImg;
+                if (typeof window.MotionLab !== 'undefined') {
+                    window.MotionLab.playPickerBurst(cards, cover, self.pickerParams, {
+                        streamMode: self.pickerParams.streamMode,
+                        streamInterval: self.pickerParams.streamInterval,
+                        floatTimerSink: self._pickerFloatTimers,
+                        runId: runId,
+                        getRunId: function () { return self._pickerRunId; }
+                    });
+                }
+            });
+        },
+
+        onPickerHoverIn(i) {
+            if (!this.$refs || !this.$refs.pickerCandidatesArea) return;
+            const cards = this.$refs.pickerCandidatesArea.querySelectorAll('.picker-candidate-card');
+            const el = cards[i];
+            if (!el) return;
+            // kill float timer for this card (by pausing — we'll restart on hover out)
+            if (typeof window.MotionLab !== 'undefined') {
+                window.MotionLab.playPickerHoverIn(el, this.pickerParams);
+            }
+        },
+
+        onPickerHoverOut(i) {
+            if (!this.$refs || !this.$refs.pickerCandidatesArea) return;
+            const cards = this.$refs.pickerCandidatesArea.querySelectorAll('.picker-candidate-card');
+            const el = cards[i];
+            if (!el || el.dataset.pickerSettled !== '1') return;  // guard: burst mid-flight には何もしない
+            if (typeof window.MotionLab !== 'undefined') {
+                window.MotionLab.playPickerHoverOut(el, this.pickerParams);
+                // Restart float for this card
+                const tl = window.MotionLab.playPickerFloat(el, this.pickerParams);
+                if (tl) this._pickerFloatTimers.push(tl);
+            }
+        },
+
+        onPickerSelect(i) {
+            if (!this._pickerOpen) return;
+            if (!this.$refs || !this.$refs.pickerCandidatesArea || !this.$refs.pickerCoverImg) return;
+            const allCards = Array.from(this.$refs.pickerCandidatesArea.querySelectorAll('.picker-candidate-card'));
+            const selectedEl = allCards[i];
+            const otherEls = allCards.filter(function (_, idx) { return idx !== i; });
+            const cover = this.$refs.pickerCoverImg;
+            const self = this;
+            const runId = this._pickerRunId;
+            const candidate = this._pickerCandidates[i];
+            // Kill all float timers before selection
+            this._pickerFloatTimers.forEach(function (t) {
+                if (t && typeof t.kill === 'function') t.kill();
+            });
+            this._pickerFloatTimers = [];
+            if (typeof window.MotionLab !== 'undefined') {
+                // Simultaneously exit other cards + flip selected card to cover
+                window.MotionLab.playPickerExitAll(otherEls, self.pickerParams);
+                window.MotionLab.playPickerFlipReplace(selectedEl, cover, self.pickerParams, function () {
+                    if (self._pickerRunId !== runId) return;
+                    // cover.src 已由 playPickerFlipReplace ghost-fly onComplete 替換，勿重複 cache-bust
+                    console.log('[Picker] 已更換封面：', candidate ? candidate.img : '(unknown)');
+                    self._pickerOpen = false;
+                    self._pickerCandidates = [];
+                });
+            } else {
+                this._pickerOpen = false;
+                this._pickerCandidates = [];
             }
         },
 
