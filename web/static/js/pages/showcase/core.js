@@ -1647,7 +1647,9 @@ function showcaseState() {
             this._fetchSamplesFailed = {};
 
             // ★ C11: fly-back — 必須在 generation++ / lightboxOpen = false 之前捕獲
-            var closingIndex = this.lightboxIndex;
+            var closingIndex = this.showFavoriteActresses
+                ? this.actressLightboxIndex
+                : this.lightboxIndex;
             var lbEl = document.querySelector('.showcase-lightbox');
             var lbImg = lbEl ? lbEl.querySelector('.lightbox-cover img') : null;
             var flybackFromRect = lbImg ? lbImg.getBoundingClientRect() : null;
