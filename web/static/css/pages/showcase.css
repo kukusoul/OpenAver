@@ -1897,14 +1897,39 @@
     align-self: center;
 }
 
-/* ── 49b T4cd: Actress Photo Picker ─────────────────────────────── */
-.actress-picker-area {
-    position: relative;
-    margin-top: 12px;
+/* ── 49b T4cd / 49c T2: Actress Photo Picker (z-axis overlay) ───── */
+.actress-picker-overlay {
+    position: fixed;
+    z-index: 1100;
+    pointer-events: auto;
     padding: 12px;
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
-    background: rgba(0, 0, 0, 0.3);
     border-radius: 6px;
+    /* top / left / width 由 JS _positionPickerOverlay() 寫入 inline style；
+       mobile (<640px) 由下方 @media 覆寫為 bottom-sheet。
+       display 由 Alpine x-show 控制。 */
+}
+
+/* 候選卡 grid：壓回 cover 下緣 -38px overlap（對齊 motion-lab .picker-candidates-area） */
+.actress-picker-overlay .picker-candidates-grid {
+    margin-top: -38px;
+    position: relative;
+    z-index: 5;
+    overflow: visible;
+}
+
+/* 演員名 chip：浮 overlay 左上（對齊 motion-lab .picker-name-row 開啟態規格） */
+.actress-picker-overlay .picker-name-chip {
+    position: absolute;
+    top: 1.5rem;
+    left: 1.5rem;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    color: #fff;
+    padding: 4px 12px;
+    border-radius: 4px;
+    z-index: 10;
+    pointer-events: none;
 }
 
 .picker-current-source {
@@ -2052,6 +2077,28 @@
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.2s;
+}
+
+/* 49c T2 / CD-5: 窄螢幕 (<640px) bottom-sheet，覆寫 desktop inline style（!important 雙保險） */
+@media (max-width: 639px) {
+    .actress-picker-overlay {
+        position: fixed;
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        top: auto !important;
+        width: 100% !important;
+        z-index: 1100;
+        background: var(--surface-2);
+        border-top: 1px solid var(--stroke-default);
+        padding: 0.75rem 1rem;
+        border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+        max-height: 50vh;
+        overflow-y: auto;
+    }
+    .actress-picker-overlay .picker-candidates-grid {
+        margin-top: 0;
+    }
 }
 
 @keyframes spin {
