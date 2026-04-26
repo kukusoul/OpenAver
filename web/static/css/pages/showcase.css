@@ -1918,21 +1918,6 @@
     justify-content: center;   /* 49c Codex F1 fix：對齊 motion-lab .picker-candidates-area，nowrap + visible 下兩側對稱溢出 */
 }
 
-/* 演員名 chip：浮 overlay 左上（對齊 motion-lab .picker-name-row 開啟態規格） */
-.actress-picker-overlay .picker-name-chip {
-    position: absolute;
-    top: 1.5rem;
-    left: 1.5rem;
-    background: rgba(0, 0, 0, 0.5);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    color: #fff;
-    padding: 4px 12px;
-    border-radius: 4px;
-    z-index: 10;
-    pointer-events: none;
-}
-
 /* 49c Codex F2 fix：來源 chip 在 overlay 內浮右上（對齊 motion-lab 規格），覆寫全域 flow 規則 */
 .actress-picker-overlay .picker-current-source {
     position: absolute;

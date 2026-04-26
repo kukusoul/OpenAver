@@ -802,9 +802,6 @@
                  x-show="currentLightboxActress && _pickerOpen"
                  @click.stop
                  @click.outside="currentLightboxActress && _pickerOpen && _cancelPicker()">
-                <!-- Name chip 浮左上（49c T1 新增；CSS 與 absolute 定位由 T2 設） -->
-                <div class="picker-name-chip"
-                     x-text="currentLightboxActress?.name"></div>
                 <!-- 以下沿用原內部 children，class 不變 -->
                 <div class="picker-current-source"
                      x-show="_pickerCurrentSource">
