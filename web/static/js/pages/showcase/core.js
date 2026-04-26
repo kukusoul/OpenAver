@@ -88,6 +88,8 @@ function _killLightboxTimelines(options) {
 function showcaseState() {
     // 49b T4cd: Picker 動畫參數（T1 fix2 定案，2026-04-25）
     // 供 BurstPicker.playPickerBurst/Float/HoverIn/HoverOut/ExitAll 使用
+    // 49c.T4 [TBD]: overlay layout 落地後 timing 校正窗口在 T6 CDP；
+    //   候選方向見 plan-49c.md §T4（arcDuration / floatAmplY / exitGravity）
     const _PICKER_PARAMS = {
         arcOvershoot: 1.4,    // back.out 彈性係數（burst 爆射）
         arcDuration:  0.6,    // burst 飛行時間（秒）
