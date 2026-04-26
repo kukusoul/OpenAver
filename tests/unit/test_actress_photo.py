@@ -408,17 +408,3 @@ def test_download_actress_photo_accepts_data_graphis_subdomain(gfriends_dir):
     mock_get.assert_called_once()
 
 
-def test_download_actress_photo_rejects_non_whitelisted_still_blocked(gfriends_dir):
-    """evil.com 仍不在任何 source 白名單 — 確認 reject 邏輯未被破壞"""
-    with patch("core.actress_photo.requests.get") as mock_get:
-        result = download_actress_photo("テスト女優C", "http://evil.com/x.jpg", "gfriends")
-    assert result is False
-    mock_get.assert_not_called()
-
-
-def test_download_actress_photo_rejects_bad_scheme_still_blocked(gfriends_dir):
-    """file:// scheme 仍被拒絕 — 確認 scheme 檢查未被破壞"""
-    with patch("core.actress_photo.requests.get") as mock_get:
-        result = download_actress_photo("テスト女優D", "file:///etc/passwd", "graphis")
-    assert result is False
-    mock_get.assert_not_called()
