@@ -2036,7 +2036,7 @@ body.sidebar-collapsed .showcase-footer {
     padding: 4px 6px;
     background: rgba(0, 0, 0, 0.7);
     font-size: 0.7em;
-    color: #fff;
+    color: var(--text-inverse);
     text-align: center;
     white-space: nowrap;
     overflow: hidden;
@@ -2051,8 +2051,8 @@ body.sidebar-collapsed .showcase-footer {
 }
 
 .picker-candidate-card:hover .picker-source-badge {
-    background: var(--accent-success, #22c55e);
-    color: #fff;
+    background: var(--color-success);
+    color: var(--text-inverse);
 }
 
 .picker-candidate-card:hover .picker-check-icon {
@@ -2114,7 +2114,7 @@ body.sidebar-collapsed .showcase-footer {
     border: 1px solid rgba(255, 255, 255, 0.2);
     border-radius: 4px;
     cursor: pointer;
-    color: #fff;
+    color: var(--text-inverse);
     transition: all 0.15s;
 }
 

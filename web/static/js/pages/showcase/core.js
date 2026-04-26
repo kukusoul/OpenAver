@@ -2552,7 +2552,7 @@ function showcaseState() {
             if (!meta || typeof gsap === 'undefined') return;
             const rows = meta.querySelectorAll(':scope > :not(.actress-lb-header)');
             if (rows.length === 0) return;
-            gsap.to(rows, {
+            OpenAver.motion.playFadeTo(rows, {
                 opacity: out ? 0 : 1,
                 duration: 0.2,
                 ease: 'power2.out'
