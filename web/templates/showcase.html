@@ -982,8 +982,7 @@
                     <b x-text="page"></b>/<b x-text="totalPages"></b>
                 </span>
                 <select class="page-select" x-ref="pageSelectFooter"
-                        x-model.number="page"
-                        @change="goToPage(page)"
+                        @change="goToPage($event.target.value)"
                         tabindex="-1"
                         aria-hidden="true"
                         style="position:absolute;opacity:0;pointer-events:none;width:1px;height:1px">
