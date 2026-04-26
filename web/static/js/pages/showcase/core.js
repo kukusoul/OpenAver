@@ -175,6 +175,7 @@ function showcaseState() {
         _pickerRunId: 0,
         _pickerSSE: null,
         _pickerTimeoutTimer: null,
+        _pickerResizeHandler: null,
 
         // User Tags 狀態 (T4)
         addingLbTag: false,
@@ -1603,6 +1604,8 @@ function showcaseState() {
                 this.lightboxCloseTimer = null;
             }
 
+            // 49c T3: detach resize listener（雙保險，即使 _pickerOpen 為 false 也清乾淨）
+            this._detachPickerResizeListener();
             // 49b T4 fix: 若 picker 開啟中，先關閉 picker（避免 SSE/timer 洩漏到隱藏狀態）
             if (this._pickerOpen) {
                 this._closePicker();
@@ -2216,6 +2219,7 @@ function showcaseState() {
             if (this._pickerOpen) {
                 this._resetPicker();
             }
+            this._detachPickerResizeListener();
 
             this._pickerOpen = true;
             this._pickerLoading = true;
@@ -2223,11 +2227,57 @@ function showcaseState() {
 
             // metadata 淡出（Row 1 actress-lb-header 保留）
             this._fadeMetadataPanel(true);
+            await this.$nextTick();
+            this._positionPickerOverlay();
+            this._attachPickerResizeListener();
 
             this._pickerRunId++;
             const runId = this._pickerRunId;
 
             this._startPickerSSE(name, runId);
+        },
+
+        /**
+         * 49c T3: 動態定位 picker overlay — desktop 走 fixed-position 對齊 cover-area 下緣
+         * mobile (<640px) 主動清除 inline style 讓 @media bottom-sheet 接管
+         */
+        _positionPickerOverlay() {
+            const overlayEl = this.$refs.pickerArea;
+            if (!overlayEl) return;
+            if (window.innerWidth < 640) {
+                overlayEl.style.top   = '';
+                overlayEl.style.left  = '';
+                overlayEl.style.width = '';
+                return;
+            }
+            const coverArea = this.$refs.pickerCoverArea;
+            if (!coverArea) return;
+            const rect = coverArea.getBoundingClientRect();
+            overlayEl.style.top   = rect.bottom + 'px';
+            overlayEl.style.left  = rect.left   + 'px';
+            overlayEl.style.width = rect.width  + 'px';
+        },
+
+        /**
+         * 49c T3: window resize listener attach（picker 開啟時）
+         * 雙保險 guard：已 attach 則 early return，避免 double-attach 造成 listener leak
+         */
+        _attachPickerResizeListener() {
+            if (this._pickerResizeHandler) return;
+            this._pickerResizeHandler = () => {
+                if (this._pickerOpen) this._positionPickerOverlay();
+            };
+            window.addEventListener('resize', this._pickerResizeHandler);
+        },
+
+        /**
+         * 49c T3: window resize listener detach（picker 關閉 / lightbox teardown）
+         * null-guard 容許重複呼叫；4 個 detach path 任一順序皆安全
+         */
+        _detachPickerResizeListener() {
+            if (!this._pickerResizeHandler) return;
+            window.removeEventListener('resize', this._pickerResizeHandler);
+            this._pickerResizeHandler = null;
         },
 
         /**
@@ -2465,6 +2515,7 @@ function showcaseState() {
             this._pickerTimeoutTimer = null;
             this._resetPicker();
             this._fadeMetadataPanel(false);
+            this._detachPickerResizeListener();
         },
 
         /**
@@ -2483,7 +2534,7 @@ function showcaseState() {
             // 抓現有候選卡，播 reverse 動畫
             const grid = this.$refs?.pickerGrid;
             const cards = grid ? Array.from(grid.querySelectorAll('.picker-candidate-card')) : [];
-            const coverImg = this.$el?.querySelector?.('.lightbox-cover img');
+            const coverImg = this.$refs.pickerCoverImg;
             if (cards.length > 0 && typeof window.BurstPicker !== 'undefined' && window.BurstPicker.playPickerReverseAll) {
                 await new Promise((resolve) => {
                     window.BurstPicker.playPickerReverseAll(cards, coverImg, _PICKER_PARAMS, resolve);
@@ -2492,6 +2543,7 @@ function showcaseState() {
             // 動畫完成後 reset 狀態（含解除 _pickerSelected lock）+ 淡入 metadata
             this._resetPicker();
             this._fadeMetadataPanel(false);
+            this._detachPickerResizeListener();
         },
 
         /**
