@@ -2083,13 +2083,18 @@
 
 /* 49c T5fix.B：tablet 兩行 wrap (768–1279px) */
 @media (min-width: 768px) and (max-width: 1279px) {
+    /* 49c Codex T5fix.B follow-up：強制 3 column 防 1024 5+1 / 1180-1279 6 卡單行
+     * 違反「tablet 兩行」contract（flex-wrap 在大寬度不會 wrap）。grid 明確契約。
+     */
     .actress-picker-overlay .picker-candidates-grid {
-        flex-wrap: wrap;
+        display: grid;
+        grid-template-columns: repeat(3, 140px);
+        justify-content: center;
         gap: 16px;
     }
     .actress-picker-overlay .picker-candidate-card {
         width: 140px;
-        flex: 0 0 140px;
+        flex: none;        /* grid 不需 flex */
     }
 }
 
