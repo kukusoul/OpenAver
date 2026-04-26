@@ -211,17 +211,24 @@ def test_crop_video_cover_spec_v1_dimensions():
 # Test 8: cache hit — 不重複 open
 # -------------------------------------------------------------------
 def test_crop_video_cover_cache_hit():
-    """相同 (path, spec) 第二次呼叫直接回 cache，不呼叫 Image.open"""
+    """相同 (path, mtime, spec) 第二次呼叫直接回 cache，不呼叫 Image.open"""
+    from unittest.mock import MagicMock, patch
     import core.actress_photo as _mod
 
     _mod._CROP_CACHE.clear()
     fake_bytes = b"CACHED_JPEG"
-    _mod._CROP_CACHE[("/some/cover.jpg", "v1")] = fake_bytes
+
+    # cache key 現在包含 mtime；mock os.stat 回傳固定 mtime=1000.0
+    fake_stat = MagicMock()
+    fake_stat.st_mtime = 1000.0
+    cache_key = ("/some/cover.jpg", 1000.0, "v1")
+    _mod._CROP_CACHE[cache_key] = fake_bytes
 
     mock_pil = MagicMock()
 
-    with patch.dict("sys.modules", {"PIL": mock_pil, "PIL.Image": mock_pil.Image}):
-        result = _mod.crop_video_cover("/some/cover.jpg", "v1")
+    with patch("os.stat", return_value=fake_stat):
+        with patch.dict("sys.modules", {"PIL": mock_pil, "PIL.Image": mock_pil.Image}):
+            result = _mod.crop_video_cover("/some/cover.jpg", "v1")
 
     assert result == fake_bytes
     # PIL.Image.open 不應被呼叫
@@ -308,8 +315,10 @@ def test_crop_video_cover_happy_path(tmp_path):
 
     assert result is not None
     assert result == fake_bytes
-    # 結果應被 cache
-    assert _mod._CROP_CACHE[(str(fake_cover), "v1")] == fake_bytes
+    # 結果應被 cache（key 包含真實 mtime）
+    import os
+    mtime = os.stat(str(fake_cover)).st_mtime
+    assert _mod._CROP_CACHE[(str(fake_cover), mtime, "v1")] == fake_bytes
 
 
 # -------------------------------------------------------------------
@@ -320,6 +329,56 @@ def test_crop_video_cover_unknown_spec_returns_none():
     from core.actress_photo import crop_video_cover
     result = crop_video_cover("/fake/path.jpg", crop_spec="v99")
     assert result is None
+
+
+# -------------------------------------------------------------------
+# Test 13: LRU eviction — 超過 maxsize 時 evict 最舊的 entry
+# -------------------------------------------------------------------
+def test_crop_cache_lru_eviction():
+    """超過 maxsize 時 evict 最舊的 entry，且 cache 大小維持在 maxsize 以內"""
+    import core.actress_photo as _mod
+
+    _mod._CROP_CACHE.clear()
+    original_max = _mod._CROP_CACHE_MAXSIZE
+    _mod._CROP_CACHE_MAXSIZE = 3
+    try:
+        _mod._cache_put(("a", 0.0, "v1"), b"a")
+        _mod._cache_put(("b", 0.0, "v1"), b"b")
+        _mod._cache_put(("c", 0.0, "v1"), b"c")
+        # 加第 4 個，"a" 應被 evict（最早寫入）
+        _mod._cache_put(("d", 0.0, "v1"), b"d")
+        assert ("a", 0.0, "v1") not in _mod._CROP_CACHE, "最舊的 'a' 應被 evict"
+        assert ("d", 0.0, "v1") in _mod._CROP_CACHE, "最新的 'd' 應在 cache"
+        assert len(_mod._CROP_CACHE) == 3, "cache 大小應維持在 maxsize=3"
+    finally:
+        _mod._CROP_CACHE_MAXSIZE = original_max
+        _mod._CROP_CACHE.clear()
+
+
+# -------------------------------------------------------------------
+# Test 14: LRU semantics — get 命中後 move_to_end，evict 順序變更
+# -------------------------------------------------------------------
+def test_crop_cache_lru_get_bumps_recency():
+    """get 命中應延長 entry 壽命：put a/b/c → get a → put d → evict b 而非 a"""
+    import core.actress_photo as _mod
+
+    _mod._CROP_CACHE.clear()
+    original_max = _mod._CROP_CACHE_MAXSIZE
+    _mod._CROP_CACHE_MAXSIZE = 3
+    try:
+        _mod._cache_put(("a", 0.0, "v1"), b"a")
+        _mod._cache_put(("b", 0.0, "v1"), b"b")
+        _mod._cache_put(("c", 0.0, "v1"), b"c")
+        # get "a" → 提升為最近使用
+        assert _mod._cache_get(("a", 0.0, "v1")) == b"a"
+        # 加第 4 個 → 應 evict "b"（現在最舊）而非 "a"
+        _mod._cache_put(("d", 0.0, "v1"), b"d")
+        assert ("a", 0.0, "v1") in _mod._CROP_CACHE, "get 後 'a' 應延壽"
+        assert ("b", 0.0, "v1") not in _mod._CROP_CACHE, "現最舊的 'b' 應被 evict"
+        assert len(_mod._CROP_CACHE) == 3
+    finally:
+        _mod._CROP_CACHE_MAXSIZE = original_max
+        _mod._CROP_CACHE.clear()
 
 
 # ===================================================================
