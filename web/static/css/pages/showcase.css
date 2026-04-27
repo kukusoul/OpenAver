@@ -722,7 +722,7 @@
     display: flex;
     justify-content: center;
     align-items: flex-end;
-    padding-bottom: 20px;
+    padding-bottom: 24px;
     gap: 12px;
     background: linear-gradient(to top, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.2) 60%, transparent 100%);
     border-radius: 0 0 var(--radius-sm) var(--radius-sm);
@@ -1280,7 +1280,7 @@ body.sidebar-collapsed .showcase-footer {
 .footer-count {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 4px; /* micro: icon + 數字緊鄰，charter §4 micro 子網格 */
     white-space: nowrap;
 }
 
@@ -1386,7 +1386,7 @@ body.sidebar-collapsed .showcase-footer {
     font-size: 0.8125rem;
     font-family: var(--font-mono);
     color: var(--text-secondary);
-    padding: 0 6px;
+    padding: 0 8px;
     cursor: pointer;
     user-select: none;
     transition: color var(--duration-fast) var(--ease-out);
@@ -1427,6 +1427,7 @@ body.sidebar-collapsed .showcase-footer {
         display: none;
     }
     .showcase-container {
+        /* layout 對齊 fixed footer 真實渲染高度 (charter §4 例外) */
         padding-bottom: 44px;
     }
 }
@@ -1758,6 +1759,7 @@ body.sidebar-collapsed .showcase-footer {
 
 /* + 新增按鈕 — dashed border */
 .lb-tag-add-btn {
+    /* chip optical 6px (charter §4 micro chip 級例外保留) */
     padding: 1px 6px;
     font-size: 0.7rem;
     line-height: 1.4;
