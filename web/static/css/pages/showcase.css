@@ -26,8 +26,8 @@
 
     /* Acrylic 毛玻璃效果（Fluent Design 2 - Heavy Glass）*/
     background: var(--bg-header); /* color-mix 85% transparency */
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
+    backdrop-filter: blur(var(--fluent-blur));
+    -webkit-backdrop-filter: blur(var(--fluent-blur));
 
     /* Border */
     border-bottom: 1px solid var(--border-light);
@@ -517,8 +517,8 @@
 
     /* Smoke Backdrop — 匹配 gallery_generator.py 舊版風格 */
     background: rgba(0, 0, 0, 0.6);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(var(--fluent-blur));
+    -webkit-backdrop-filter: blur(var(--fluent-blur));
 
     /* 初始隱藏 */
     opacity: 0;
@@ -591,8 +591,8 @@
     border: none;
     border-radius: 50%;
     background: rgba(0, 0, 0, 0.3);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(var(--fluent-blur-light));
+    -webkit-backdrop-filter: blur(var(--fluent-blur-light));
     color: var(--text-inverse);
     font-size: 1.25rem;
     cursor: pointer;
@@ -742,13 +742,13 @@
     border: 1px solid rgba(255,255,255,0.4);
     border-radius: 50%;
     background: rgba(255,255,255,0.15);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(var(--fluent-blur-light));
+    -webkit-backdrop-filter: blur(var(--fluent-blur-light));
     color: white;
     font-size: 1.125rem;
     cursor: pointer;
     display: flex; align-items: center; justify-content: center;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    box-shadow: var(--fluent-shadow-8);
     transition: background var(--duration-fast) var(--ease-out),
                 border-color var(--duration-fast) var(--ease-out),
                 transform var(--duration-fast) var(--ease-out),
@@ -759,7 +759,7 @@
     background: rgba(255,255,255,0.3);
     border-color: rgba(255,255,255,0.6);
     transform: scale(1.08);
-    box-shadow: 0 6px 16px rgba(0,0,0,0.4);
+    box-shadow: var(--fluent-shadow-16);
 }
 
 .lb-action-btn:active {
@@ -822,8 +822,8 @@
     border: none;
     border-radius: 50%;
     background: rgba(0, 0, 0, 0.3);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(var(--fluent-blur-light));
+    -webkit-backdrop-filter: blur(var(--fluent-blur-light));
     color: var(--text-inverse);
     font-size: 1.5rem;
     cursor: pointer;
@@ -1248,8 +1248,8 @@
 
     /* 背景 - 使用 Design System token */
     background: var(--bg-header);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(var(--fluent-blur-light));
+    -webkit-backdrop-filter: blur(var(--fluent-blur-light));
     border-top: 1px solid var(--stroke-subtle);
 
     /* 間距 */
@@ -1331,7 +1331,7 @@ body.sidebar-collapsed .showcase-footer {
     background: var(--surface-1);
     border: 1px solid var(--stroke-default);
     border-radius: var(--radius-sm);
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    box-shadow: var(--fluent-shadow-2);
 
     font-family: var(--font-mono);
     font-size: 0.75rem;
@@ -1494,8 +1494,8 @@ body.sidebar-collapsed .showcase-footer {
     align-items: center;
     justify-content: center;
     background: rgba(0, 0, 0, 0.85);
-    backdrop-filter: blur(4px);
-    -webkit-backdrop-filter: blur(4px);
+    backdrop-filter: blur(var(--fluent-blur));
+    -webkit-backdrop-filter: blur(var(--fluent-blur));
 
     /* 初始隱藏 */
     opacity: 0;
@@ -1877,10 +1877,10 @@ body.sidebar-collapsed .showcase-footer {
 
 .mode-toggle-btn.active {
     background: rgba(255, 255, 255, 0.15);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(var(--fluent-blur-light));
+    -webkit-backdrop-filter: blur(var(--fluent-blur-light));
     color: var(--text-primary);
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+    box-shadow: var(--fluent-shadow-2);
 }
 
 .mode-toggle-btn:not(.active):hover {
