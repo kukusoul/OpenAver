@@ -2790,6 +2790,12 @@ class TestShowcaseAnimationsFluent:
         assert "params.easing || 'fluent-decel'" in scope, \
             "playEntry default ease 應為 'fluent-decel'（charter §5 進場）"
 
+    # === T2.3 — playFlipReorder → fluent (standard) ===
+    def test_play_flip_reorder_default_fluent(self):
+        scope = self._scoped("playFlipReorder", 1500)
+        assert "params.ease || 'fluent'" in scope, \
+            "playFlipReorder default ease 應為 'fluent'（charter §5 standard 互動）"
+
     # === showcaseSettle 招牌曲線白名單 — 不動 ===
     def test_showcase_settle_whitelist_preserved(self):
         """showcaseSettle 是 charter §5 white-list 招牌曲線，必須保留"""

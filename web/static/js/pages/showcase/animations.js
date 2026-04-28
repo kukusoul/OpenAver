@@ -214,7 +214,7 @@
             gsap.killTweensOf(cards);
 
             var dur = params.duration || 0.5;
-            var ease = params.ease || 'power2.inOut';
+            var ease = params.ease || 'fluent';
 
             // 計算 delta 並收集需要動畫的卡片
             var tweens = [];
