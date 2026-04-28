@@ -372,8 +372,8 @@
 
             return gsap.from(gridEl, {
                 opacity: 0,
-                duration: 0.25,
-                ease: 'power1.out'
+                duration: OpenAver.motion.DURATION.fast,
+                ease: 'fluent-decel'
             });
         },
 
