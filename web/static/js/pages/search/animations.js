@@ -284,7 +284,7 @@
             // 快速 crossfade（opacity 0→1，0.15s）
             return gsap.fromTo(imgEl,
                 { opacity: 0 },
-                { opacity: 1, duration: 0.15, ease: 'power2.out' }
+                { opacity: 1, duration: 0.15, ease: 'fluent' }
             );
         },
 
