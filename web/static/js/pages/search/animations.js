@@ -923,8 +923,8 @@
                 {
                     opacity: 1,
                     x: 0,
-                    duration: 0.22,
-                    ease: 'power2.out',
+                    duration: OpenAver.motion.DURATION.fast,
+                    ease: 'fluent',
                     clearProps: 'transform,opacity',
                     onComplete: function () {
                         imgEl.classList.remove('gsap-animating');
