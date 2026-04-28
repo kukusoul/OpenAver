@@ -4718,23 +4718,21 @@ class TestSettingsCssHardcoded:
         )
 
     def test_no_hardcoded_blur_px_in_settings_css(self):
-        """settings.css 不應出現 hardcoded blur(Npx)（須用 token 或 CSS 變數）
+        """settings.css 不應出現 hardcoded blur(Npx)（須用 var(--fluent-blur*) 三階）
 
-        守住未來修改不引入硬編碼 blur。（當前 settings.css 無 blur，此 guard 守住零基線）
+        涵蓋 filter: 與 backdrop-filter:（含 -webkit- 前綴）— 都是 §1 玻璃三階規則。
         """
         css = self._css()
         lines = css.split("\n")
         violations = []
         for i, line in enumerate(lines, 1):
             stripped = line.strip()
-            # 跳過純註釋行
             if stripped.startswith("/*") or stripped.startswith("//") or stripped.startswith("*"):
                 continue
-            # .settings-header backdrop-filter 使用 blur()，但那是 backdrop-filter 非 filter
-            # 只守 filter: blur(Npx) 形式（非 backdrop-filter）
-            if re.search(r"(?<!backdrop-)filter\s*:[^;]*blur\(\d+px\)", line):
+            if re.search(r"blur\(\s*\d+px", line):
                 violations.append(f"L{i}: {line.strip()}")
         assert not violations, (
-            "settings.css 出現 hardcoded filter: blur(Npx)（請改用 CSS 變數）：\n"
+            "settings.css 出現 hardcoded blur(Npx) 違規（涵蓋 filter / backdrop-filter，"
+            "請改用 var(--fluent-blur) (overlay 30px) / var(--fluent-blur-light) (floating 12px)）：\n"
             + "\n".join(violations)
         )
