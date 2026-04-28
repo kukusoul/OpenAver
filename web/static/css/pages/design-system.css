@@ -2530,3 +2530,124 @@
     font-size: 0.65rem;
     color: oklch(100% 0 0 / 0.65);
 }
+
+/* ==================== §4 Spacing 三層標籤 ==================== */
+
+.ds-spacing-layer-table {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: var(--space-3, 0.75rem);
+    margin-top: 1rem;
+}
+
+.ds-spacing-layer {
+    border: 1px solid var(--border-light);
+    border-radius: var(--fluent-radius-lg);
+    overflow: hidden;
+}
+
+.ds-spacing-layer-header {
+    padding: 0.5rem 1rem;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: oklch(100% 0 0);
+}
+
+.ds-layer-layout { background: var(--color-primary); }
+.ds-layer-micro { background: var(--color-secondary); }
+.ds-layer-stroke { background: var(--accent); }
+
+.ds-spacing-layer-body {
+    padding: 0.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    background: var(--bg-card);
+}
+
+.ds-spacing-layer-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    font-size: 0.8rem;
+}
+
+.ds-layer-tag {
+    font-size: 0.65rem;
+    font-weight: 700;
+    padding: 1px 5px;
+    border-radius: var(--fluent-radius-sm);
+    flex-shrink: 0;
+    align-self: center;
+}
+
+.ds-layer-tag-ok { background: color-mix(in oklch, var(--color-success) 15%, transparent); color: var(--color-success); }
+.ds-layer-tag-ban { background: color-mix(in oklch, var(--color-error) 15%, transparent); color: var(--color-error); }
+.ds-layer-tag-note { background: color-mix(in oklch, var(--color-warning) 15%, transparent); color: var(--color-warning); }
+.ds-layer-tag-example { background: color-mix(in oklch, var(--color-base-content) 10%, transparent); color: var(--text-secondary); }
+
+/* ==================== §6 5 檢查點 pass/fail 對照 ==================== */
+
+.ds-checkpoint-label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 1.25rem 0 0.5rem;
+    padding-left: 0.5rem;
+    border-left: 3px solid var(--accent);
+}
+
+.ds-checkpoint-pair {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-4, 1rem);
+    margin-bottom: 0.75rem;
+}
+
+.ds-checkpoint-fail {
+    border: 2px dashed var(--color-error);
+    border-radius: var(--fluent-radius-lg);
+    padding: 0.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    background: color-mix(in oklch, var(--color-error) 4%, transparent);
+}
+
+.ds-checkpoint-pass {
+    border: 2px solid var(--color-success);
+    border-radius: var(--fluent-radius-lg);
+    padding: 0.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    background: color-mix(in oklch, var(--color-success) 4%, transparent);
+}
+
+.ds-cpf-title {
+    font-size: 0.8rem;
+    font-weight: 700;
+}
+
+.ds-checkpoint-fail .ds-cpf-title { color: var(--color-error); }
+.ds-checkpoint-pass .ds-cpf-title { color: var(--color-success); }
+
+.ds-cpf-demo {
+    flex: 1;
+    min-height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.ds-cpf-code {
+    font-size: 0.7rem;
+    padding: 2px 6px;
+    border-radius: var(--fluent-radius-sm);
+    background: color-mix(in oklch, var(--color-base-content) 8%, transparent);
+    color: var(--text-muted);
+    word-break: break-all;
+}

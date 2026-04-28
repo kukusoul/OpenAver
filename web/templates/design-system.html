@@ -442,6 +442,65 @@
                 <p class="ds-note">💡 Dark theme 陰影深度加倍（opacity: 0.24/0.28），自動跟隨主題切換</p>
             </div>
 
+            <!-- §4 Spacing 三層分明 -->
+            <div class="ds-subsection">
+                <h3>§4 Spacing 三層分明</h3>
+                <p class="ds-desc">ui-conventions §4：三層分類，嚴格對號入座。</p>
+                <div class="ds-spacing-layer-table">
+                    <div class="ds-spacing-layer">
+                        <div class="ds-spacing-layer-header ds-layer-layout">Layout 8pt grid</div>
+                        <div class="ds-spacing-layer-body">
+                            <div class="ds-spacing-layer-row">
+                                <span class="ds-layer-tag ds-layer-tag-ok">允許值</span>
+                                <code>8px · 16px · 24px · 32px · 48px · 64px</code>
+                            </div>
+                            <div class="ds-spacing-layer-row">
+                                <span class="ds-layer-tag ds-layer-tag-ban">禁止</span>
+                                <code>6px（改 8px 或加 optical 註釋）</code>
+                            </div>
+                            <div class="ds-spacing-layer-row">
+                                <span class="ds-layer-tag ds-layer-tag-example">用途</span>
+                                <span>元件間距、section padding、card gap</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="ds-spacing-layer">
+                        <div class="ds-spacing-layer-header ds-layer-micro">Micro 2–4px</div>
+                        <div class="ds-spacing-layer-body">
+                            <div class="ds-spacing-layer-row">
+                                <span class="ds-layer-tag ds-layer-tag-ok">允許值</span>
+                                <code>2px · 4px</code>
+                            </div>
+                            <div class="ds-spacing-layer-row">
+                                <span class="ds-layer-tag ds-layer-tag-note">例外</span>
+                                <code>6px chip optical 例外須加 /* optical §4 micro chip */ 註釋</code>
+                            </div>
+                            <div class="ds-spacing-layer-row">
+                                <span class="ds-layer-tag ds-layer-tag-example">用途</span>
+                                <span>icon gap、badge padding、chip 內距</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="ds-spacing-layer">
+                        <div class="ds-spacing-layer-header ds-layer-stroke">Stroke 1–3px</div>
+                        <div class="ds-spacing-layer-body">
+                            <div class="ds-spacing-layer-row">
+                                <span class="ds-layer-tag ds-layer-tag-ok">允許值</span>
+                                <code>1px · 2px · 3px</code>
+                            </div>
+                            <div class="ds-spacing-layer-row">
+                                <span class="ds-layer-tag ds-layer-tag-ban">禁止</span>
+                                <code>border: 2px solid red（不走 token）</code>
+                            </div>
+                            <div class="ds-spacing-layer-row">
+                                <span class="ds-layer-tag ds-layer-tag-example">用途</span>
+                                <span>border / outline / separator 線條粗細</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Spacing Scale 展示 -->
             <div class="ds-subsection">
                 <h3>Spacing Scale</h3>
@@ -976,6 +1035,91 @@
                                 </div>
                             </div>
                         </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- §6 5 檢查點 pass/fail 對照 -->
+            <div class="ds-subsection">
+                <h3>§6 5 檢查點 pass/fail 對照</h3>
+                <p class="ds-desc">ui-conventions §6：每次 PR 前確認這 5 點。左欄為違規示範（紅虛線），右欄為正確寫法（綠實線）。</p>
+
+                <!-- 1. Radius -->
+                <div class="ds-checkpoint-label">1. Radius — 用 token，不硬編碼 px</div>
+                <div class="ds-checkpoint-pair">
+                    <div class="ds-checkpoint-fail">
+                        <span class="ds-cpf-title">✗ 違規</span>
+                        <div class="ds-cpf-demo" style="border-radius: 3px; background: var(--surface-1); padding: 0.75rem; text-align: center;">border-radius: 3px</div>
+                        <code class="ds-cpf-code">border-radius: 3px</code>
+                    </div>
+                    <div class="ds-checkpoint-pass">
+                        <span class="ds-cpf-title">✓ 正確</span>
+                        <div class="ds-cpf-demo" style="border-radius: var(--fluent-radius-md); background: var(--surface-1); padding: 0.75rem; text-align: center;">fluent-radius-md</div>
+                        <code class="ds-cpf-code">border-radius: var(--fluent-radius-md)</code>
+                    </div>
+                </div>
+
+                <!-- 2. Surface -->
+                <div class="ds-checkpoint-label">2. Surface — 用 surface token，不寫 hardcoded rgba</div>
+                <div class="ds-checkpoint-pair">
+                    <div class="ds-checkpoint-fail">
+                        <span class="ds-cpf-title">✗ 違規</span>
+                        <div class="ds-cpf-demo" style="background: rgba(255,255,255,0.5); padding: 0.75rem; text-align: center; border-radius: var(--fluent-radius-md);">rgba(255,255,255,0.5)</div>
+                        <code class="ds-cpf-code">background: rgba(255,255,255,0.5)</code>
+                    </div>
+                    <div class="ds-checkpoint-pass">
+                        <span class="ds-cpf-title">✓ 正確</span>
+                        <div class="ds-cpf-demo" style="background: var(--surface-1); padding: 0.75rem; text-align: center; border-radius: var(--fluent-radius-md);">var(--surface-1)</div>
+                        <code class="ds-cpf-code">background: var(--surface-1)</code>
+                    </div>
+                </div>
+
+                <!-- 3. Stroke -->
+                <div class="ds-checkpoint-label">3. Stroke — 1px + stroke token，不任意加粗或用色彩硬編碼</div>
+                <div class="ds-checkpoint-pair">
+                    <div class="ds-checkpoint-fail">
+                        <span class="ds-cpf-title">✗ 違規</span>
+                        <div class="ds-cpf-demo" style="border: 2px solid red; padding: 0.75rem; text-align: center; border-radius: var(--fluent-radius-md);">2px solid red</div>
+                        <code class="ds-cpf-code">border: 2px solid red</code>
+                    </div>
+                    <div class="ds-checkpoint-pass">
+                        <span class="ds-cpf-title">✓ 正確</span>
+                        <div class="ds-cpf-demo" style="border: 1px solid var(--stroke-default); padding: 0.75rem; text-align: center; border-radius: var(--fluent-radius-md);">1px stroke-default</div>
+                        <code class="ds-cpf-code">border: 1px solid var(--stroke-default)</code>
+                    </div>
+                </div>
+
+                <!-- 4. Shadow -->
+                <div class="ds-checkpoint-label">4. Shadow — 用 Fluent token，不寫裸 rgba</div>
+                <div class="ds-checkpoint-pair">
+                    <div class="ds-checkpoint-fail">
+                        <span class="ds-cpf-title">✗ 違規</span>
+                        <div class="ds-cpf-demo" style="box-shadow: 0 4px 8px rgba(0,0,0,0.5); padding: 0.75rem; text-align: center; border-radius: var(--fluent-radius-md); background: var(--surface-1);">0 4px 8px rgba(0,0,0,0.5)</div>
+                        <code class="ds-cpf-code">box-shadow: 0 4px 8px rgba(0,0,0,0.5)</code>
+                    </div>
+                    <div class="ds-checkpoint-pass">
+                        <span class="ds-cpf-title">✓ 正確</span>
+                        <div class="ds-cpf-demo" style="box-shadow: var(--fluent-shadow-8); padding: 0.75rem; text-align: center; border-radius: var(--fluent-radius-md); background: var(--surface-1);">fluent-shadow-8</div>
+                        <code class="ds-cpf-code">box-shadow: var(--fluent-shadow-8)</code>
+                    </div>
+                </div>
+
+                <!-- 5. Hover / Focus -->
+                <div class="ds-checkpoint-label">5. Hover / Focus — 必須有 focus-ring，不可缺少可訪問性樣式</div>
+                <div class="ds-checkpoint-pair">
+                    <div class="ds-checkpoint-fail">
+                        <span class="ds-cpf-title">✗ 違規</span>
+                        <div class="ds-cpf-demo" style="padding: 0.75rem; text-align: center;">
+                            <button style="padding: 0.4rem 1rem; border-radius: var(--fluent-radius-md); border: 1px solid var(--stroke-default); background: var(--surface-1); outline: none; cursor: default;">無 focus-ring</button>
+                        </div>
+                        <code class="ds-cpf-code">outline: none（無任何補充）</code>
+                    </div>
+                    <div class="ds-checkpoint-pass">
+                        <span class="ds-cpf-title">✓ 正確</span>
+                        <div class="ds-cpf-demo" style="padding: 0.75rem; text-align: center;">
+                            <button class="ds-focus-demo-btn" style="padding: 0.4rem 1rem; border-radius: var(--fluent-radius-md); border: 1px solid var(--stroke-default); background: var(--surface-1); cursor: default; outline: 2px solid var(--accent); outline-offset: 4px; box-shadow: 0 0 0 4px var(--glow-primary);">有 focus-ring</button>
+                        </div>
+                        <code class="ds-cpf-code">outline: 2px solid var(--accent); outline-offset: 4px; box-shadow: 0 0 0 4px var(--glow-primary)</code>
                     </div>
                 </div>
             </div>
