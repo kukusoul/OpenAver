@@ -458,8 +458,9 @@
 #settings-components .select {
     /* §6 Checkpoint 1 Radius */
     border-radius: var(--fluent-radius-md);         /* 4px */
-    /* §6 Checkpoint 2 Surface */
-    background: var(--surface-1);
+    /* §6 Checkpoint 2 Surface — 用 background-color 不用 background shorthand，
+       否則會把 DaisyUI v5 .select 的 background-image gradient chevron 殺掉 */
+    background-color: var(--surface-1);
     /* §6 Checkpoint 3 Stroke — width/style only，不固定 color（保留 DaisyUI variant 顏色機制）*/
     border-width: 1px;
     border-style: solid;
