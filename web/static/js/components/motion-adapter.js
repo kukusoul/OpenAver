@@ -161,6 +161,18 @@
         },
 
         /**
+         * 清除元素 inline GSAP props（替代直接呼叫 `gsap.set(el, { clearProps })`）。
+         * 用於 timeline.kill() 後同步重置 transform/opacity 等殘留，防連點 stutter。
+         * 不觸發動畫，純 sync prop 重置。
+         * @param {Element} element
+         * @param {string} props - GSAP clearProps 字串（如 'transform,opacity'）
+         */
+        clearProps: function (element, props) {
+            if (!element || typeof gsap === 'undefined') return;
+            gsap.set(element, { clearProps: props });
+        },
+
+        /**
          * @private 在 context 內執行動畫（確保 ctx.revert() 能回收）
          * 如果沒傳 ctx，動畫仍會播放，只是不受 context 管理
          */

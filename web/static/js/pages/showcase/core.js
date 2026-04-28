@@ -1673,11 +1673,11 @@ function showcaseState() {
             if (lbEl) lbEl.classList.remove('gsap-animating');
             // Phase 50.x cleanup: kill timeline 後 clearProps 確保下次 open 從乾淨狀態起
             // (timeline.kill() 不觸發 onInterrupt，需在此補做；防連點關開累積 stutter)
-            if (lbEl && typeof gsap !== 'undefined') {
+            if (lbEl && window.OpenAver && window.OpenAver.motion) {
                 var _lbContent = lbEl.querySelector('.lightbox-content');
                 var _lbCoverImg = lbEl.querySelector('.lightbox-cover img');
-                if (_lbContent) gsap.set(_lbContent, { clearProps: 'transform,opacity' });
-                if (_lbCoverImg) gsap.set(_lbCoverImg, { clearProps: 'transform,opacity' });
+                window.OpenAver.motion.clearProps(_lbContent, 'transform,opacity');
+                window.OpenAver.motion.clearProps(_lbCoverImg, 'transform,opacity');
             }
             this._lightboxAnimating = false;
             this.lightboxOpen = false;
