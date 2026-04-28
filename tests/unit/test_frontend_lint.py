@@ -2960,6 +2960,19 @@ class TestShowcaseAnimationsFluent:
         assert "showcaseLightboxOpen" in scope, \
             "showcase/animations.js playLightboxOpen delegate 應傳 timelineId: 'showcaseLightboxOpen'（保留 killLightboxAnimations 行為）"
 
+    def test_search_play_lightbox_open_delegates_to_ghost_fly(self):
+        """Phase 51 T4.3: SearchAnimations.playLightboxOpen 改 delegate GhostFly.playLightboxOpen
+        （不傳 timelineId，沿用預設 'lightboxOpen' 維持 grid-mode.js kill 路徑）"""
+        search_js = Path("web/static/js/pages/search/animations.js").read_text(encoding="utf-8")
+        idx = search_js.find("playLightboxOpen: function")
+        assert idx > 0, "找不到 search/animations.js playLightboxOpen"
+        scope = search_js[idx : idx + 800]
+        assert "GhostFly.playLightboxOpen" in scope, \
+            "search/animations.js playLightboxOpen 應 delegate window.GhostFly.playLightboxOpen（Phase 51 T4.3）"
+        # 不應傳 'showcaseLightboxOpen' timelineId（search 沿用預設 'lightboxOpen'）
+        assert "showcaseLightboxOpen" not in scope, \
+            "search delegate 不應傳 timelineId 'showcaseLightboxOpen'（會破壞 grid-mode.js kill 路徑）"
+
     def test_play_lightbox_open_clearprops_cleanup(self):
         """onComplete + onInterrupt 補 clearProps 防連點殘留（CD-51-14 共同契約，實作於 ghost-fly.js）"""
         scope = self._ghost_fly_scoped("playLightboxOpen", 4500)
@@ -3015,9 +3028,14 @@ class TestGhostFlyGuards:
             "showcase/animations.js playLightboxOpen 應 delegate 至 GhostFly（skipCover 透過 options 透傳）"
 
     def test_skip_cover_supported_in_search_animations(self):
-        """search/animations.js playLightboxOpen 支援 skipCover"""
-        js = Path("web/static/js/pages/search/animations.js").read_text(encoding="utf-8")
-        assert "skipCover" in js
+        """playLightboxOpen 支援 skipCover — Phase 51 T4.3 起共用實作於 ghost-fly.js，
+        search delegate 透傳 options（含 skipCover）"""
+        ghost_fly_js = Path("web/static/js/shared/ghost-fly.js").read_text(encoding="utf-8")
+        assert "skipCover" in ghost_fly_js, \
+            "ghost-fly.js playLightboxOpen 共用實作應支援 opts.skipCover"
+        search_js = Path("web/static/js/pages/search/animations.js").read_text(encoding="utf-8")
+        assert "GhostFly.playLightboxOpen" in search_js, \
+            "search/animations.js playLightboxOpen 應 delegate 至 GhostFly（skipCover 透過 options 透傳）"
 
     def test_ghost_fly_fallback_exists_in_search_animations(self):
         """search/animations.js 委派函式有 GhostFly fallback"""

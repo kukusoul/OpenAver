@@ -784,61 +784,13 @@
          * @returns {gsap.core.Timeline|null}
          */
         playLightboxOpen: function (lightboxEl, options) {
-            options = options || {};
-
-            if (!lightboxEl) return null;
-            if (typeof gsap === 'undefined') return null;
-            if (shouldSkip()) return null;
-
-            var content = lightboxEl.querySelector('.lightbox-content');
-            var coverImg = lightboxEl.querySelector('.lightbox-cover img');
-
-            // C4: 清除舊動畫
-            gsap.killTweensOf(lightboxEl);
-            if (content) gsap.killTweensOf(content);
-            if (coverImg) gsap.killTweensOf(coverImg);
-
-            // C21: 暫時關掉 CSS transition
-            if (!lightboxEl.classList.contains('gsap-animating')) {
-                lightboxEl.classList.add('gsap-animating');
-            }
-
-            var tl = gsap.timeline({
-                id: 'lightboxOpen',
-                onComplete: function () {
-                    lightboxEl.classList.remove('gsap-animating');
-                    if (typeof options.onComplete === 'function') options.onComplete();
-                },
-                onInterrupt: function () {
-                    lightboxEl.classList.remove('gsap-animating');
-                }
-            });
-
-            // 1. Backdrop fade-in
-            tl.fromTo(lightboxEl,
-                { opacity: 0 },
-                { opacity: 1, duration: 0.16, ease: 'power2.out' }
-            );
-
-            // 2. Content card scale pop-in
-            if (content) {
-                tl.fromTo(content,
-                    { scale: 0.95, opacity: 0, transformOrigin: 'center center' },
-                    { scale: 1, opacity: 1, duration: 0.18, ease: 'power2.out', transformOrigin: 'center center' },
-                    0.03
-                );
-            }
-
-            // 3. Cover image slide-up fade-in（ghost fly 時跳過）
-            if (coverImg && !options.skipCover) {
-                tl.fromTo(coverImg,
-                    { y: 12, opacity: 0 },
-                    { y: 0, opacity: 1, duration: 0.16, ease: 'power2.out' },
-                    '-=0.08'
-                );
-            }
-
-            return tl;
+            // Phase 51 Phase 4 (T4.3): delegate to GhostFly.playLightboxOpen 共用實作。
+            // 不傳 timelineId，沿用預設 'lightboxOpen'，維持 grid-mode.js 既有
+            // gsap.getById('lightboxOpen')?.kill() 的 kill 路徑不變。
+            // CD-51-14：共用實作採 showcase 版完整 cleanup 契約（onComplete/onInterrupt
+            // 各對 content/coverImg 做 clearProps），對 search 為正向行為改善
+            // （防連點殘留 stutter）。
+            return window.GhostFly ? window.GhostFly.playLightboxOpen(lightboxEl, options) : null;
         },
 
         /**
