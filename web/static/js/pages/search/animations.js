@@ -581,7 +581,7 @@
                         // target settle: micro scale pulse
                         gsap.fromTo(targetCardEl,
                             { scale: 1.02 },
-                            { scale: 1, duration: 0.18, ease: 'power2.out' }
+                            { scale: 1, duration: 0.18, ease: 'fluent' }
                         );
                     }
                 }
