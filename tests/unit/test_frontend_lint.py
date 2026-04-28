@@ -4828,3 +4828,108 @@ class TestHelpCssHardcoded:
             "50% 圓形 badge 語義值免除；var fallback 內的 px 允許）：\n"
             + "\n".join(violations)
         )
+
+
+class TestDesignSystemCssHardcoded:
+    """Phase 52 T1.4.7: design-system.css hardcoded 硬編碼守衛（防未來回潮）
+
+    design-system 是 demo 頁，§6 fail 樣本 HTML 內含 hardcoded 值是有意展示（inline style）。
+    守衛只掃 CSS 層（design-system.css），不掃 HTML。
+    """
+
+    def _css(self):
+        return Path("web/static/css/pages/design-system.css").read_text(encoding="utf-8")
+
+    def test_no_hardcoded_blur_px_in_design_system_css(self):
+        """design-system.css 不應出現 hardcoded blur(Npx)（須用 var(--fluent-blur*) 三階）
+
+        涵蓋 filter: 與 backdrop-filter:（含 -webkit- 前綴）— 都是 §2 玻璃三階規則。
+        允許例外：
+        - 純註釋行（/* / // / * 開頭）
+        """
+        lines = self._css().split("\n")
+        violations = []
+        for i, line in enumerate(lines, 1):
+            stripped = line.strip()
+            # 跳過純註釋行
+            if stripped.startswith("/*") or stripped.startswith("//") or stripped.startswith("*"):
+                continue
+            if re.search(r"blur\(\s*\d+px", line):
+                violations.append(f"L{i}: {stripped}")
+        assert not violations, (
+            "design-system.css 出現 hardcoded blur(Npx) 違規（涵蓋 filter / backdrop-filter，"
+            "請改用 var(--fluent-blur) (overlay 30px) / var(--fluent-blur-light) (floating 12px) / "
+            "var(--fluent-blur-heavy) (canvas 60px)）：\n"
+            + "\n".join(violations)
+        )
+
+    def test_no_hardcoded_border_radius_px_in_design_system_css(self):
+        """design-system.css border-radius 不應出現數字 px 硬編碼（應改用 var(--fluent-radius-*)）
+
+        允許例外：
+        - border-radius: 50%（圓形 badge 語義，比例值不是像素）
+        - border-radius: 999px（radius-pill 白名單，語義 pill 值）
+        - border-radius: 0px（歸零語義值）
+        - var(--fluent-radius-*, Npx) 的 fallback px 值（在 var() 內部，不算裸硬編碼）
+        - 純註釋行（/* / // / * 開頭）
+        """
+        lines = self._css().split("\n")
+        violations = []
+        for i, line in enumerate(lines, 1):
+            stripped = line.strip()
+            # 跳過純註釋行
+            if stripped.startswith("/*") or stripped.startswith("//") or stripped.startswith("*"):
+                continue
+            # 抓 border-radius: Npx（排除 50%/999px/0px 語義值）
+            if not re.search(r"border-radius\s*:[^;]*\d+px", line):
+                continue
+            # 允許 50% 圓形、999px pill、0px 歸零
+            if re.search(r"border-radius\s*:\s*(50%|999px|0px)", line):
+                continue
+            # 允許：Npx 只出現在 var(--..., Npx) fallback 內
+            line_without_var = re.sub(r"var\([^)]*\)", "", line)
+            if re.search(r"border-radius\s*:[^;]*\d+px", line_without_var):
+                violations.append(f"L{i}: {stripped}")
+        assert not violations, (
+            "design-system.css border-radius 殘留 px 硬編碼（應改用 var(--fluent-radius-*)；"
+            "50% / 999px / 0px 語義值免除；var fallback 內的 px 允許）：\n"
+            + "\n".join(violations)
+        )
+
+    def test_no_hardcoded_box_shadow_raw_rgba_in_design_system_css(self):
+        """design-system.css box-shadow 不應出現裸 rgba(數字) 硬編碼（須用 Fluent token）
+
+        允許例外：
+        - rgba(var(--...), ...) — var() 包裝，token 化間接引用（如 ds-glow-rgb）
+        - 純註釋行（/* / // / * 開頭）
+        - inset dual-layer：inset 0 Npx Npx rgba(...) — §2 dual-layer 修法後仍允許 dual-layer
+          內的 rgba（.btn.state-active 的 inset dual-layer 是有意展示，含 var() 不在此排除）
+
+        注意：此 test 只排除「box-shadow: 0 Npx Npx rgba(純數字)」模式，
+        rgba(var(...)) 因為 pattern 要求第一個字元非數字所以不命中。
+        """
+        lines = self._css().split("\n")
+        violations = []
+        for i, line in enumerate(lines, 1):
+            stripped = line.strip()
+            # 跳過純註釋行
+            if stripped.startswith("/*") or stripped.startswith("//") or stripped.startswith("*"):
+                continue
+            # 只看 box-shadow 行
+            if "box-shadow" not in line:
+                continue
+            # 匹配裸 rgba(數字, ...) — 第一個參數是純數字（非 var()）
+            if not re.search(r"\brgba\(\s*\d", line):
+                continue
+            # 允許：inset-only dual-layer（§2 dual-layer 示範，全為 inset 值不影響外部陰影）
+            # 方法：先移除 rgba(...) 內容再以逗號分割，判斷每個 term 是否都有 inset 前綴
+            shadow_value = re.sub(r"box-shadow\s*:", "", line).strip().rstrip(";")
+            shadow_no_rgba = re.sub(r"rgba\([^)]*\)", "RGBA", shadow_value)
+            if all(t.strip().startswith("inset") for t in shadow_no_rgba.split(",") if t.strip()):
+                continue
+            violations.append(f"L{i}: {stripped}")
+        assert not violations, (
+            "design-system.css box-shadow 殘留裸 rgba() 硬編碼（應改用 var(--fluent-shadow-*)；"
+            "rgba(var(--ds-glow-rgb), ...) 不在此範疇因 pattern 不命中）：\n"
+            + "\n".join(violations)
+        )
