@@ -5669,8 +5669,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 body.fluent-canvas:not(.ds-page) {
   background: radial-gradient(ellipse 100% 60% at 50% -10%, rgba(var(--ds-glow-rgb), 0.10), transparent), radial-gradient(ellipse 70% 50% at 100% 100%, oklch(55% 0.12 85 / 0.06), transparent), var(--bg-body);
-  backdrop-filter: blur(var(--fluent-blur-heavy));
-  -webkit-backdrop-filter: blur(var(--fluent-blur-heavy));
 }
 body.fluent-canvas:not(.ds-page) .main-content {
   background-color: transparent;
