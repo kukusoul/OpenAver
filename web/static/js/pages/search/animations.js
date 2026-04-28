@@ -1069,9 +1069,9 @@
                 {
                     opacity: 1,
                     y: 0,
-                    duration: options.duration || 0.35,
+                    duration: options.duration || OpenAver.motion.DURATION.medium,
                     stagger: options.stagger || 0.03,
-                    ease: options.ease || 'power2.out',
+                    ease: options.ease || 'fluent-decel',
                     clearProps: 'transform,opacity'
                 }
             );
