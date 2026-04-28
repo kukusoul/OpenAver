@@ -2796,6 +2796,17 @@ class TestShowcaseAnimationsFluent:
         assert "params.ease || 'fluent'" in scope, \
             "playFlipReorder default ease 應為 'fluent'（charter §5 standard 互動）"
 
+    # === T2.5 — playModeCrossfade ===
+    def test_play_mode_crossfade_old_fluent_accel(self):
+        scope = self._scoped("playModeCrossfade", 2000)
+        assert "ease: 'fluent-accel'" in scope, \
+            "playModeCrossfade old fade-out 應為 'fluent-accel'（離場）"
+
+    def test_play_mode_crossfade_new_fluent_decel(self):
+        scope = self._scoped("playModeCrossfade", 2000)
+        assert "ease: 'fluent-decel'" in scope, \
+            "playModeCrossfade new fade-in 應為 'fluent-decel'（進場）"
+
     # === T2.4 — playFlipFilter (main + onEnter ×2 + onLeave) ===
     def test_play_flip_filter_main_fluent(self):
         scope = self._scoped("playFlipFilter", 2000)

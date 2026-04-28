@@ -380,7 +380,7 @@
                     tl.to(oldEl, {
                         opacity: 0,
                         duration: 0.15,
-                        ease: 'power2.in',
+                        ease: 'fluent-accel',
                         clearProps: 'opacity',
                         onComplete: function () { callbacks.onOldFadeComplete(); }
                     });
@@ -392,7 +392,7 @@
             if (newEl) {
                 tl.fromTo(newEl,
                     { opacity: 0 },
-                    { opacity: 1, duration: 0.2, ease: 'power2.out', clearProps: 'opacity' }
+                    { opacity: 1, duration: 0.2, ease: 'fluent-decel', clearProps: 'opacity' }
                 );
             }
             return tl;
