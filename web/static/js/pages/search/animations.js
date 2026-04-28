@@ -410,8 +410,8 @@
                 return null;
             }
 
-            var dur = 0.6;
-            var ease = 'power3.out';
+            var dur = OpenAver.motion.DURATION.emphasis;
+            var ease = 'fluent-decel';
             var skipCover = options.skipCover === true;
 
             var tl = gsap.timeline({ id: 'searchDetailEntry' });
