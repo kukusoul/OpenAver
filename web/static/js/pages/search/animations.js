@@ -1014,8 +1014,8 @@
             }
             return gsap.to(barEl, {
                 width: percent + '%',
-                duration: 0.3,
-                ease: 'power2.out',
+                duration: OpenAver.motion.DURATION.medium,
+                ease: 'fluent',
                 overwrite: 'auto'
             });
         },
