@@ -710,7 +710,7 @@
                 return null;
             }
 
-            var dur = options.duration || 0.8;
+            var dur = options.duration || OpenAver.motion.DURATION.emphasis;
             var scaleVal = options.scale || 1.06;
             var ease = options.ease || 'settle';
             var rowCount = options.rows || 3;
