@@ -652,8 +652,8 @@
             if (!flipState) return;
             if (typeof Flip === 'undefined') return;
             if (shouldSkip()) return;
-            var dur = options.duration || 0.4;
-            var ease = options.ease || 'power2.out';
+            var dur = options.duration || OpenAver.motion.DURATION.medium;
+            var ease = options.ease || 'fluent-decel';
             Flip.from(flipState, {
                 duration: dur,
                 ease: ease
