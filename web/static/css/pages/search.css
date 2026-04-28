@@ -953,23 +953,45 @@
         var(--fluent-shadow-2);
 }
 
-/* 個案豁免：dashed transparent btn 與 link btn 自有設計語言，不套 dual-layer shadow（視覺衝突）*/
-/* tag-add-btn (.search-container .tag-add-btn 也是 .btn) 自有 dashed border + transparent，dual-layer 內框高光與 dashed pattern 衝突 */
+/* 個案豁免：dashed transparent btn / link btn / tag inline icon-only btn 自有設計語言，不套 dual-layer shadow（視覺衝突）*/
+/* tag-add-btn 自有 dashed border + transparent；tag-confirm / tag-cancel 自有 border:none + transparent + 純文字 ✓/✕ */
 /* btn-link 自有 link 樣式（無 box），dual-layer shadow 打破 link 語義 */
 .search-container .btn.tag-add-btn,
+.search-container .btn.tag-confirm,
+.search-container .btn.tag-cancel,
 .search-container .btn-link {
     box-shadow: none;
     background: transparent;
+    transform: none;
     /* radius 對齊保留 */
 }
+/* tag-add-btn restore base dashed border（被 .search-container .btn 的 border-style: solid override 蓋掉）*/
+.search-container .btn.tag-add-btn {
+    border-style: dashed;
+    border-color: var(--text-muted);
+}
+/* tag-confirm / tag-cancel restore base border:none */
+.search-container .btn.tag-confirm,
+.search-container .btn.tag-cancel {
+    border: none;
+}
 .search-container .btn.tag-add-btn:hover:not(:disabled),
+.search-container .btn.tag-confirm:hover:not(:disabled),
+.search-container .btn.tag-cancel:hover:not(:disabled),
 .search-container .btn-link:hover:not(:disabled) {
     box-shadow: none;
     transform: none;
 }
+/* tag-add-btn hover 保留原 border-color: accent + color: accent */
+.search-container .btn.tag-add-btn:hover:not(:disabled) {
+    border-color: var(--accent);
+    color: var(--accent);
+}
 .search-container .btn.tag-add-btn:focus-visible,
+.search-container .btn.tag-confirm:focus-visible,
+.search-container .btn.tag-cancel:focus-visible,
 .search-container .btn-link:focus-visible {
-    /* 仍保留 focus glow（focus 是 a11y 必需）但移除 dual-layer shadow */
+    /* 保留 focus glow（a11y 必需）但移除 dual-layer shadow */
     box-shadow: 0 0 0 4px var(--glow-primary);
 }
 
