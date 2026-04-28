@@ -2772,6 +2772,32 @@ class TestMotionAdapterFluentDefaults:
             "motion-adapter.js 殘留 power* default ease — 未完成 fluent 角色化"
 
 
+class TestShowcaseAnimationsFluent:
+    """Phase 50.2.2-2.8: showcase/animations.js 各動畫 ease → charter §5 fluent 角色"""
+
+    def _js(self):
+        return Path("web/static/js/pages/showcase/animations.js").read_text(encoding="utf-8")
+
+    def _scoped(self, fn_name, length=1500):
+        js = self._js()
+        idx = js.find(fn_name + ":")
+        assert idx > 0, f"找不到 {fn_name}"
+        return js[idx : idx + length]
+
+    # === T2.2 — playEntry → fluent-decel ===
+    def test_play_entry_default_fluent_decel(self):
+        scope = self._scoped("playEntry", 800)
+        assert "params.easing || 'fluent-decel'" in scope, \
+            "playEntry default ease 應為 'fluent-decel'（charter §5 進場）"
+
+    # === showcaseSettle 招牌曲線白名單 — 不動 ===
+    def test_showcase_settle_whitelist_preserved(self):
+        """showcaseSettle 是 charter §5 white-list 招牌曲線，必須保留"""
+        js = self._js()
+        assert 'CustomEase.create("showcaseSettle"' in js, \
+            "showcaseSettle 招牌曲線（white-list）不應被誤刪"
+
+
 class TestGhostFlyGuards:
     """T8: Ghost Fly 架構守衛"""
 

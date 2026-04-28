@@ -153,7 +153,7 @@
 
             var dur = params.duration || 0.5;
             var staggerVal = params.stagger || 0.04;
-            var ease = params.easing || 'power3.out';
+            var ease = params.easing || 'fluent-decel';
 
             // Viewport 分流：fold 以下卡片瞬間顯示
             var viewportH = window.innerHeight;
