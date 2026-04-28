@@ -478,7 +478,7 @@
 
             var self = this;
             var dur = 0.38;
-            var ease = 'power2.inOut';
+            var ease = 'fluent';
 
             // C4: 清除 ghost 舊動畫（re-entrant safety）
             gsap.killTweensOf(ghost);
@@ -555,7 +555,7 @@
             gsap.set(targetImg, { opacity: 0 });
 
             var dur = 0.38;
-            var ease = 'power2.inOut';
+            var ease = 'fluent';
 
             // C4: 清除 ghost 舊動畫
             gsap.killTweensOf(ghost);
