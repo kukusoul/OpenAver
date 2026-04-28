@@ -2922,29 +2922,49 @@ class TestShowcaseAnimationsFluent:
     # 理由：playLightboxOpen 與 ghost-fly playGridToLightbox (0.38s power2.inOut, CD-3 觀察項)
     # 並行播放，需保留 power 系曲線族避免節奏錯位。fluent-decel (0,0,0,1) 起步快終端慢
     # 與 ghost-fly power2.inOut 終端慢視覺重疊，造成「最後一小段卡」。
+    #
+    # Phase 51 Phase 4 (T4.1/T4.2): playLightboxOpen 實作搬到 shared/ghost-fly.js
+    # 共用化（CD-51-14/15/16）；showcase/animations.js 與 search/animations.js 改 delegate。
+    # 三 guard 改檢查 ghost-fly.js 的共用實作。
+    GHOST_FLY_JS = Path("web/static/js/shared/ghost-fly.js")
+
+    def _ghost_fly_scoped(self, fn_name, length=4500):
+        js = self.GHOST_FLY_JS.read_text(encoding="utf-8")
+        idx = js.find(fn_name + ":")
+        assert idx > 0, f"找不到 {fn_name} in ghost-fly.js"
+        return js[idx : idx + length]
+
     def test_play_lightbox_open_three_power_out(self):
-        """三段（backdrop / content / cover）ease 為 power2.out（white-list 例外）"""
-        scope = self._scoped("playLightboxOpen", 4500)
+        """三段（backdrop / content / cover）ease 為 power2.out（white-list 例外）— 共用實作於 ghost-fly.js"""
+        scope = self._ghost_fly_scoped("playLightboxOpen", 4500)
         assert scope.count("ease: 'power2.out'") >= 3, \
-            "playLightboxOpen backdrop+content+cover 三段 ease 應為 'power2.out'（×3，charter §5 white-list 例外，與 ghost-fly 並行段）"
+            "ghost-fly.js playLightboxOpen backdrop+content+cover 三段 ease 應為 'power2.out'（×3，charter §5 white-list 例外，與 ghost-fly 並行段）"
 
     def test_play_lightbox_open_no_fluent_decel_in_three_phases(self):
-        """三段不應誤用 fluent-decel（與 ghost-fly power2.inOut 終端視覺重疊）"""
-        scope = self._scoped("playLightboxOpen", 4500)
+        """三段不應誤用 fluent-decel（與 ghost-fly power2.inOut 終端視覺重疊）— 共用實作於 ghost-fly.js"""
+        scope = self._ghost_fly_scoped("playLightboxOpen", 4500)
         assert "ease: 'fluent-decel'" not in scope, \
-            "playLightboxOpen 不應使用 'fluent-decel'（與 ghost-fly playGridToLightbox 並行段視覺重疊；white-list 例外用 power2.out）"
+            "ghost-fly.js playLightboxOpen 不應使用 'fluent-decel'（與 playGridToLightbox 並行段視覺重疊；white-list 例外用 power2.out）"
 
     def test_play_lightbox_open_white_list_comment_present(self):
-        """white-list 例外註解必須留存（避免後續清 hardcoded duration 時誤改）"""
-        scope = self._scoped("playLightboxOpen", 4500)
+        """white-list 例外註解必須留存（避免後續清 hardcoded duration 時誤改）— 共用實作於 ghost-fly.js"""
+        scope = self._ghost_fly_scoped("playLightboxOpen", 4500)
         assert "white-list" in scope or "ghost-fly" in scope, \
-            "playLightboxOpen 應有 charter §5 white-list / ghost-fly 並行段註解，標明 power2.out 為刻意保留"
+            "ghost-fly.js playLightboxOpen 應有 §5 white-list / ghost-fly 並行段註解，標明 power2.out 為刻意保留"
+
+    def test_showcase_play_lightbox_open_delegates_to_ghost_fly(self):
+        """Phase 51 T4.2: ShowcaseAnimations.playLightboxOpen 改 delegate GhostFly.playLightboxOpen"""
+        scope = self._scoped("playLightboxOpen", 800)
+        assert "GhostFly.playLightboxOpen" in scope, \
+            "showcase/animations.js playLightboxOpen 應 delegate window.GhostFly.playLightboxOpen（Phase 51 T4.2）"
+        assert "showcaseLightboxOpen" in scope, \
+            "showcase/animations.js playLightboxOpen delegate 應傳 timelineId: 'showcaseLightboxOpen'（保留 killLightboxAnimations 行為）"
 
     def test_play_lightbox_open_clearprops_cleanup(self):
-        """onComplete + onInterrupt 補 clearProps 防連點殘留（Phase 50.x cleanup）"""
-        scope = self._scoped("playLightboxOpen", 4500)
+        """onComplete + onInterrupt 補 clearProps 防連點殘留（CD-51-14 共同契約，實作於 ghost-fly.js）"""
+        scope = self._ghost_fly_scoped("playLightboxOpen", 4500)
         assert scope.count("clearProps: 'transform,opacity'") >= 4, \
-            "playLightboxOpen onComplete + onInterrupt 應各有 content + coverImg 兩處 clearProps（共 4 處）"
+            "ghost-fly.js playLightboxOpen onComplete + onInterrupt 應各有 content + coverImg 兩處 clearProps（共 4 處）"
 
     # === T2.4 — playFlipFilter (main + onEnter ×2 + onLeave) ===
     def test_play_flip_filter_main_fluent(self):
@@ -2984,9 +3004,15 @@ class TestGhostFlyGuards:
         assert "ghost-fly.js" in html
 
     def test_skip_cover_supported_in_showcase_animations(self):
-        """showcase/animations.js playLightboxOpen 支援 skipCover"""
-        js = Path("web/static/js/pages/showcase/animations.js").read_text(encoding="utf-8")
-        assert "skipCover" in js
+        """playLightboxOpen 支援 skipCover — Phase 51 T4.2 起共用實作於 ghost-fly.js，
+        showcase delegate 透過 Object.assign 將 options.skipCover 透傳"""
+        ghost_fly_js = Path("web/static/js/shared/ghost-fly.js").read_text(encoding="utf-8")
+        assert "skipCover" in ghost_fly_js, \
+            "ghost-fly.js playLightboxOpen 共用實作應支援 opts.skipCover"
+        showcase_js = Path("web/static/js/pages/showcase/animations.js").read_text(encoding="utf-8")
+        # Showcase delegate 用 Object.assign 透傳 options（含 skipCover），無需顯式提及
+        assert "GhostFly.playLightboxOpen" in showcase_js, \
+            "showcase/animations.js playLightboxOpen 應 delegate 至 GhostFly（skipCover 透過 options 透傳）"
 
     def test_skip_cover_supported_in_search_animations(self):
         """search/animations.js playLightboxOpen 支援 skipCover"""
