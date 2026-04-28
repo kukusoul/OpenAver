@@ -2472,3 +2472,61 @@
     color: var(--accent);
     display: inline-block;
 }
+
+/* ==================== §2 三階 token 標籤 ==================== */
+
+.ds-token-label {
+    font-size: 0.7rem;
+    padding: 1px 5px;
+    border-radius: var(--fluent-radius-sm);
+    background: color-mix(in oklch, var(--color-primary) 12%, transparent);
+    color: var(--color-primary);
+    font-weight: 600;
+    display: inline-block;
+}
+
+/* ==================== §3 Overlay Role Swatches ==================== */
+
+.ds-overlay-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: var(--space-3, 0.75rem);
+    margin-top: 1rem;
+}
+
+.ds-overlay-swatch {
+    height: 100px;
+    border-radius: var(--fluent-radius-lg);
+    position: relative;
+    overflow: hidden;
+    border: 1px solid var(--border-light);
+    display: flex;
+    align-items: flex-end;
+}
+
+.ds-overlay-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 0.5rem;
+    width: 100%;
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.6), transparent);
+}
+
+.ds-overlay-token {
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: oklch(100% 0 0);
+    font-family: monospace;
+}
+
+.ds-overlay-alpha {
+    font-size: 0.65rem;
+    color: oklch(100% 0 0 / 0.75);
+    font-family: monospace;
+}
+
+.ds-overlay-usage {
+    font-size: 0.65rem;
+    color: oklch(100% 0 0 / 0.65);
+}

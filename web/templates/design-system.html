@@ -322,6 +322,49 @@
                     <small>Small Text - 0.875rem</small>
                 </div>
             </div>
+
+            <!-- §3 Overlay 角色色 -->
+            <div class="ds-subsection">
+                <h3>§3 Overlay 角色色（4 階 + Phase 51 letterbox）</h3>
+                <p class="ds-desc">ui-conventions §3：遮罩用角色色 token，不寫 hardcoded rgba。</p>
+                <div class="ds-overlay-grid">
+                    <div class="ds-overlay-swatch" style="background: var(--overlay-gallery);">
+                        <div class="ds-overlay-info">
+                            <span class="ds-overlay-token">--overlay-gallery</span>
+                            <span class="ds-overlay-alpha">rgba(0,0,0,0.85)</span>
+                            <span class="ds-overlay-usage">sample gallery 暗幕</span>
+                        </div>
+                    </div>
+                    <div class="ds-overlay-swatch" style="background: var(--overlay-modal);">
+                        <div class="ds-overlay-info">
+                            <span class="ds-overlay-token">--overlay-modal</span>
+                            <span class="ds-overlay-alpha">rgba(0,0,0,0.6)</span>
+                            <span class="ds-overlay-usage">lightbox backdrop</span>
+                        </div>
+                    </div>
+                    <div class="ds-overlay-swatch" style="background: var(--overlay-gradient);">
+                        <div class="ds-overlay-info">
+                            <span class="ds-overlay-token">--overlay-gradient</span>
+                            <span class="ds-overlay-alpha">rgba(0,0,0,0.55)</span>
+                            <span class="ds-overlay-usage">card hover 漸層 bottom</span>
+                        </div>
+                    </div>
+                    <div class="ds-overlay-swatch" style="background: var(--overlay-control);">
+                        <div class="ds-overlay-info">
+                            <span class="ds-overlay-token">--overlay-control</span>
+                            <span class="ds-overlay-alpha">rgba(0,0,0,0.45)</span>
+                            <span class="ds-overlay-usage">浮在媒體上的控制按鈕</span>
+                        </div>
+                    </div>
+                    <div class="ds-overlay-swatch" style="background: var(--overlay-letterbox);">
+                        <div class="ds-overlay-info">
+                            <span class="ds-overlay-token">--overlay-letterbox</span>
+                            <span class="ds-overlay-alpha">rgba(0,0,0,0.2)</span>
+                            <span class="ds-overlay-usage">媒體封面 letterbox 黑邊</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </section>
 
         <!-- 區塊 2: Fluent Design Tokens (accent-bar 樣式) -->
@@ -513,7 +556,7 @@
                             <span class="ds-material-class">body.fluent-canvas</span>
                             <span class="ds-material-desc">Mica 氛圍背景 — 全頁底層漸層 + noise overlay</span>
                             <div class="ds-material-tokens">
-                                <code>--ds-glow-rgb: 90, 200, 250</code>
+                                <code class="ds-token-label">--fluent-blur-heavy (60px)</code>
                                 <code>radial-gradient + noise 0.025 opacity</code>
                             </div>
                         </div>
@@ -529,10 +572,10 @@
                         <div class="ds-material-info">
                             <span class="ds-material-name">Toolbar (Shell)</span>
                             <span class="ds-material-class">.fluent-toolbar</span>
-                            <span class="ds-material-desc">工具列標準 Acrylic — 輕量毛玻璃，背景透出氛圍層</span>
+                            <span class="ds-material-desc">工具列標準 Acrylic — Overlay 階毛玻璃，背景透出氛圍層</span>
                             <div class="ds-material-tokens">
-                                <code>blur: 16px, saturate: 130%</code>
-                                <code>bg: var(--bg-header)</code>
+                                <code class="ds-token-label">--fluent-blur (30px)</code>
+                                <code>saturate: 130% · bg: var(--bg-header)</code>
                             </div>
                         </div>
                     </div>
@@ -547,7 +590,7 @@
                         <div class="ds-material-info">
                             <span class="ds-material-name">Surface Elevation</span>
                             <span class="ds-material-class">inset highlight + shadow</span>
-                            <span class="ds-material-desc">卡片材質邊界感 — 頂部 1px 高光線 + Fluent 陰影，無 blur</span>
+                            <span class="ds-material-desc">卡片材質邊界感 — 頂部 1px 高光線 + Fluent 陰影，無 blur（floating-control 用 <code class="ds-token-label">--fluent-blur-light (12px)</code>）</span>
                             <div class="ds-material-tokens">
                                 <code>inset 0 1px 0 oklch(base-content 8%)</code>
                                 <code>+ var(--fluent-shadow-4)</code>
