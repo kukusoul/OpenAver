@@ -38,7 +38,7 @@
     background: #f59e0b;
     color: #1c1c1e;
     padding: 0.1rem 0.4rem;
-    border-radius: 4px;
+    border-radius: var(--fluent-radius-md);
     letter-spacing: 0.05em;
     text-transform: uppercase;
 }
@@ -50,7 +50,7 @@
 
 .motion-lab-tab {
     padding: 0.35rem 0.75rem;
-    border-radius: 6px;
+    border-radius: var(--fluent-radius-lg);
     font-size: 0.8rem;
     font-weight: 500;
     border: 1px solid transparent;
@@ -120,7 +120,7 @@
 .control-select {
     font-size: 0.75rem;
     padding: 0.2rem 0.4rem;
-    border-radius: 4px;
+    border-radius: var(--fluent-radius-md);
     border: 1px solid var(--border-light);
     background: var(--bg-primary);
     color: var(--text-primary);
@@ -143,7 +143,7 @@
     padding: 0.3rem 0.65rem;
     font-size: 0.75rem;
     font-weight: 500;
-    border-radius: 5px;
+    border-radius: var(--fluent-radius-md);
     border: 1px solid var(--border-light);
     background: var(--bg-primary);
     color: var(--text-primary);
@@ -201,7 +201,7 @@
     height: 44px;
     background: var(--bg-secondary);
     border: 1px solid var(--border-light);
-    border-radius: 10px;
+    border-radius: var(--radius-md);
     display: flex;
     align-items: center;
     padding: 0 1rem;
@@ -243,7 +243,7 @@
 
 /* av-card-preview 與 search 頁保持一致結構 */
 .motion-lab-grid .av-card-preview {
-    border-radius: 8px;
+    border-radius: var(--fluent-radius-xl);
     overflow: hidden;
     background: var(--bg-secondary);
     border: 1px solid var(--border-light);
@@ -265,7 +265,7 @@
 .staging-anchor .av-card-preview {
     min-width: 280px;
     position: relative;
-    border-radius: 8px;
+    border-radius: var(--fluent-radius-xl);
     background: var(--bg-secondary);
     border: 1px solid var(--border-light);
     pointer-events: auto;   /* staging card 本身可正常互動與動畫渲染 */
@@ -299,7 +299,7 @@
     background: var(--accent-primary);
     color: #fff;
     padding: 0.1rem 0.4rem;
-    border-radius: 4px;
+    border-radius: var(--fluent-radius-md);
 }
 
 .motion-lab-grid .av-card-preview:hover {
@@ -1476,8 +1476,7 @@
              x-show="tab === 'staging' && stagingOverlayVisible">
             <div class="av-card-preview rotating-border-spotlight"
                  :class="{ active: stagingRunning && !params.reducedMotionSim }"
-                 x-ref="stagingCard"
-                 style="border-radius: 8px;">
+                 x-ref="stagingCard">
                 <div class="av-card-preview-img">
                     <img x-ref="stagingImg"
                          :src="stagingCurrentCover || ''"
@@ -1930,7 +1929,7 @@
             <!-- Demo 2: Cover-Actions Reveal -->
             <div>
                 <h5 style="color: var(--text-primary); font-weight: 600; margin: 0 0 1rem;">Cover-Actions Reveal — Gradient Overlay + Glass Buttons</h5>
-                <div class="lightbox-cover" style="position: relative; width: 280px; aspect-ratio: 3/2; overflow: hidden; border-radius: 8px; background: #444; cursor: pointer; display: block;">
+                <div class="lightbox-cover css-anim-cover-mock">
                     <div style="width: 100%; height: 100%; background: linear-gradient(135deg, #3a3a4a 0%, #555566 50%, #3a3a4a 100%);"></div>
                     <div class="cover-actions">
                         <button class="lb-action-btn" data-tooltip="返回詳情" type="button">
@@ -2153,6 +2152,18 @@
     to { transform: rotate(360deg); }
 }
 
+/* Cover-Actions Reveal demo mock cover（T1.5.3：inline style → class） */
+.css-anim-cover-mock {
+    position: relative;
+    width: 280px;
+    aspect-ratio: 3/2;
+    overflow: hidden;
+    border-radius: var(--fluent-radius-xl);
+    background: var(--color-base-300);
+    cursor: pointer;
+    display: block;
+}
+
 /* Stream-in Skeleton */
 .skeleton-cover {
     width: 100%;
@@ -2180,7 +2191,7 @@
 /* Hero Slot: hero-card 邊框提示 */
 .hero-card {
     border: 2px solid var(--accent-primary);
-    border-radius: 8px;
+    border-radius: var(--fluent-radius-xl);
 }
 
 .hero-card .av-card-preview-footer {
@@ -2261,7 +2272,7 @@
     color: #fff;
     font-size: 0.7rem;
     padding: 3px 8px;
-    border-radius: 4px;
+    border-radius: var(--fluent-radius-md);
     backdrop-filter: blur(var(--fluent-blur-light));
     -webkit-backdrop-filter: blur(var(--fluent-blur-light));
 }
@@ -2306,7 +2317,7 @@
     width: 100px;
     flex: 0 0 100px;  /* fix3: 防止 flex container 把 6 卡 shrink 到 lightbox 寬度（Codex P1）*/
     cursor: pointer;
-    border-radius: 6px;
+    border-radius: var(--fluent-radius-lg);
     overflow: hidden;
     border: 1px solid var(--border-primary, var(--stroke-default));
     will-change: transform;
@@ -2392,7 +2403,7 @@
     -webkit-backdrop-filter: blur(var(--fluent-blur-light));
     color: #fff;
     padding: 4px 12px;
-    border-radius: 4px;
+    border-radius: var(--fluent-radius-md);
     z-index: 10;
     pointer-events: none;
 }
