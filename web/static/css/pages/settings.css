@@ -89,7 +89,7 @@
     /* 2. Folder Layers Row - 垂直堆疊 */
     #settings-components .folder-layers-row {
         flex-direction: column;
-        gap: 12px;
+        gap: var(--space-2); /* 8px，對齊同區塊 .settings-form-row gap: 8px（L72）*/
     }
 
     #settings-components .folder-separator {
@@ -152,7 +152,7 @@
 
     /* API Key Alert - 縮小 padding */
     #settings-components .api-key-alert {
-        padding: 10px 12px;
+        padding: var(--space-2) var(--space-4); /* 8px 16px（§4 8pt grid）*/
         font-size: 0.75rem;
     }
 
@@ -305,7 +305,7 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 6px;
+    gap: 6px; /* optical 6px (CD-5: source badge optical spacing) */
 }
 
 /* 覆蓋 theme.css 的 .settings-form-group .settings-hint { margin-left: 48px } */
@@ -316,7 +316,7 @@
 /* 預設：淡出（未啟用狀態）*/
 #settings-components .source-badge {
     opacity: 0.35;
-    transition: opacity 0.2s ease, text-decoration 0.2s ease;
+    transition: opacity var(--fluent-duration-fast) var(--fluent-ease-standard), text-decoration var(--fluent-duration-fast) var(--fluent-ease-standard);
     font-weight: 500;
     letter-spacing: 0.01em;
     border: 1px solid color-mix(in oklch, var(--color-base-content) 20%, transparent);
