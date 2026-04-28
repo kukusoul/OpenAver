@@ -626,7 +626,7 @@
             if (typeof gsap === 'undefined') return null;
             if (shouldSkip()) return null;
             var dur = (typeof options.duration === 'number') ? options.duration : 0.2;
-            var ease = options.ease || 'power2.out';
+            var ease = options.ease || 'fluent-decel';
             return gsap.fromTo(el,
                 { opacity: 0 },
                 { opacity: 1, duration: dur, ease: ease, clearProps: 'opacity' }
@@ -650,7 +650,7 @@
                 duration: dur,
                 yoyo: true,
                 repeat: 1,
-                ease: 'power2.inOut'
+                ease: 'fluent'
             });
         }
     };

@@ -2820,6 +2820,18 @@ class TestShowcaseAnimationsFluent:
             "playSampleGallerySwitch ease 應為 'fluent'（charter §5 standard 互動切換）"
         assert "power2.out" not in scope, "playSampleGallerySwitch 殘留 power2.out"
 
+    # === T2.8 — playContainerFadeIn / playSourcePulse ===
+    def test_play_container_fade_in_default_fluent_decel(self):
+        scope = self._scoped("playContainerFadeIn", 800)
+        assert "options.ease || 'fluent-decel'" in scope, \
+            "playContainerFadeIn default ease 應為 'fluent-decel'（charter §5 進場）"
+
+    def test_play_source_pulse_fluent(self):
+        scope = self._scoped("playSourcePulse", 800)
+        assert "ease: 'fluent'" in scope, \
+            "playSourcePulse ease 應為 'fluent'（charter §5 standard yoyo pulse）"
+        assert "power2.inOut" not in scope, "playSourcePulse 殘留 power2.inOut"
+
     # === playHeroCardAppear — 女優專屬白名單，不動 ===
     def test_hero_card_appear_whitelist_not_touched(self):
         """playHeroCardAppear 為女優專屬（plan D10 white-list），ease 不被本 phase 改"""
