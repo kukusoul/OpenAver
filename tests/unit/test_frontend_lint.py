@@ -4933,3 +4933,111 @@ class TestDesignSystemCssHardcoded:
             "rgba(var(--ds-glow-rgb), ...) 不在此範疇因 pattern 不命中）：\n"
             + "\n".join(violations)
         )
+
+
+class TestMotionLabHtmlHardcoded:
+    """T1.5.6: 確認 motion_lab.html <style> 區塊內無 hardcoded 視覺值（blur / hex / radius / transition）
+
+    掃描策略：僅掃 <style>...</style> block 內容，不掃 HTML style="..." 屬性
+    （demo 區大量合法 inline style 用於展示，不納入守衛範疇）
+    """
+
+    def _style_blocks(self) -> str:
+        """提取 motion_lab.html 所有 <style> block 內容合併"""
+        html = MOTION_LAB_HTML.read_text(encoding="utf-8")
+        blocks = re.findall(r"<style[^>]*>(.*?)</style>", html, re.DOTALL)
+        return "\n".join(blocks)
+
+    def test_no_hardcoded_blur_px_in_motion_lab_html(self):
+        """motion_lab.html <style> 區塊不含 hardcoded blur(Npx)（須用 var(--fluent-blur-*)）"""
+        css = self._style_blocks()
+        matches = re.findall(r"blur\(\d+px\)", css)
+        assert not matches, (
+            f"motion_lab.html <style> 仍有 hardcoded blur(Npx)，請改用 var(--fluent-blur-light/overlay/heavy)：{matches}"
+        )
+
+    def test_no_hardcoded_hex_color_in_motion_lab_html(self):
+        """motion_lab.html <style> 區塊不含裸 hardcoded hex color（#xxx / #xxxxxx）
+
+        允許例外：
+        - var(..., #fff) 形式的 CSS fallback 值（在 var() 內部，pattern 不命中）
+        """
+        css = self._style_blocks()
+        lines = css.split("\n")
+        violations = []
+        for i, line in enumerate(lines, 1):
+            stripped = line.strip()
+            # 跳過純註釋行
+            if stripped.startswith("/*") or stripped.startswith("//") or stripped.startswith("*"):
+                continue
+            # 找裸 hex（不在 var() 內部）：pattern 尋找 # 後接 3/4/6/8 hex digits，
+            # 但排除 var(..., #xxx) 形式（前方有逗號 + 空格）
+            # 實作：先移除 var( ... ) 內容再搜尋
+            line_no_var_fallback = re.sub(r"var\([^)]*\)", "", line)
+            if re.search(r"#[0-9a-fA-F]{3,8}\b", line_no_var_fallback):
+                violations.append(f"L{i}: {stripped}")
+        assert not violations, (
+            "motion_lab.html <style> 殘留裸 hex 硬編碼（應改用 token；var() 內 fallback 除外）：\n"
+            + "\n".join(violations)
+        )
+
+    def test_no_hardcoded_border_radius_px_in_motion_lab_html(self):
+        """motion_lab.html <style> 區塊 border-radius 不應含裸 px 數字硬編碼
+
+        允許例外：
+        - border-radius: 50%（圓形語義，比例值不是像素）
+        - var(--fluent-radius-*, Npx) 的 fallback px 值（在 var() 內部）
+        """
+        css = self._style_blocks()
+        lines = css.split("\n")
+        violations = []
+        for i, line in enumerate(lines, 1):
+            stripped = line.strip()
+            if stripped.startswith("/*") or stripped.startswith("//") or stripped.startswith("*"):
+                continue
+            if "border-radius" not in line:
+                continue
+            # 允許 50%
+            if re.search(r"border-radius\s*:\s*50%", line):
+                continue
+            # 移除 var() 內容再搜尋
+            line_no_var = re.sub(r"var\([^)]*\)", "", line)
+            if re.search(r"border-radius\s*:[^;]*\d+px", line_no_var):
+                violations.append(f"L{i}: {stripped}")
+        assert not violations, (
+            "motion_lab.html <style> border-radius 殘留裸 px 硬編碼（應改用 var(--fluent-radius-*)；"
+            "50% 及 var() 內 fallback 除外）：\n"
+            + "\n".join(violations)
+        )
+
+    def test_no_hardcoded_transition_duration_in_motion_lab_html(self):
+        """motion_lab.html <style> 區塊 transition 不應含裸數字秒數硬編碼
+
+        允許例外（留 Phase 2 處理，已標記白名單）：
+        - .picker-source-badge transition: background 0.15s
+        - .picker-check-icon transition: opacity 0.15s
+        這兩處屬 Picker demo 的細節 transition，Phase 1 不改動，Phase 2 統一處理。
+        """
+        css = self._style_blocks()
+        lines = css.split("\n")
+        violations = []
+        # Phase 2 whitelist：picker demo 兩處細節 transition（已知，留 Phase 2 處理）
+        phase2_whitelist = {
+            "transition: background 0.15s;",
+            "transition: opacity 0.15s;",
+        }
+        for i, line in enumerate(lines, 1):
+            stripped = line.strip()
+            if stripped.startswith("/*") or stripped.startswith("//") or stripped.startswith("*"):
+                continue
+            # Phase 2 whitelist
+            if stripped in phase2_whitelist:
+                continue
+            if "transition:" in line:
+                if re.search(r"transition:[^;]*\b0?\.\d+s\b", line) and "var(--" not in line:
+                    violations.append(f"L{i}: {stripped}")
+        assert not violations, (
+            "motion_lab.html <style> transition 殘留裸數字秒數（應改用 var(--fluent-duration-*)；"
+            "picker 兩處 0.15s 已列 Phase 2 whitelist）：\n"
+            + "\n".join(violations)
+        )
