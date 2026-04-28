@@ -4736,3 +4736,95 @@ class TestSettingsCssHardcoded:
             "請改用 var(--fluent-blur) (overlay 30px) / var(--fluent-blur-light) (floating 12px)）：\n"
             + "\n".join(violations)
         )
+
+
+class TestHelpCssHardcoded:
+    """Phase 52 T1.3.3: help.css hardcoded 硬編碼守衛（防未來回潮）"""
+
+    def _css(self):
+        return Path("web/static/css/pages/help.css").read_text(encoding="utf-8")
+
+    def _is_design_intent_line(self, line: str) -> bool:
+        """判斷該行是否為 dim override block 內的 design-intent 固定色（允許例外）"""
+        return "design-intent:" in line
+
+    def test_no_hardcoded_oklch_in_help_css(self):
+        """help.css 不應出現裸 oklch(數字) 硬編碼值
+
+        允許例外：
+        - 純白 oklch(100% 0 0)（charter §3 接受的純色）
+        - 純黑 oklch(0% 0 0)（charter §3 接受的純色）
+        - dim override block 內含 design-intent 標記的固定色（terminal box 設計意圖）
+        - 純註釋行（/* / // / * 開頭）
+        """
+        lines = self._css().split("\n")
+        violations = []
+        for i, line in enumerate(lines, 1):
+            stripped = line.strip()
+            # 跳過純註釋行
+            if stripped.startswith("/*") or stripped.startswith("//") or stripped.startswith("*"):
+                continue
+            # 跳過 dim override block 內的 design-intent 固定色
+            if self._is_design_intent_line(line):
+                continue
+            # 允許純白 / 純黑
+            if re.search(r"oklch\(100%\s+0\s+0\)", line):
+                continue
+            if re.search(r"oklch\(0%\s+0\s+0\)", line):
+                continue
+            # 抓裸 oklch(數字...) 違規（允許 color-mix 內引用，但裸 oklch 數字值違規）
+            if re.search(r"\boklch\(\s*\d", line):
+                violations.append(f"L{i}: {stripped}")
+        assert not violations, (
+            "help.css 殘留裸 oklch 數字硬編碼（應改用 token，純白/純黑/dim design-intent 除外）：\n"
+            + "\n".join(violations)
+        )
+
+    def test_no_hardcoded_rgba_in_help_css(self):
+        """help.css 不應出現 hardcoded rgba(數字) 值（須改用 token 或 color-mix）
+
+        允許例外：
+        - 純註釋行（/* / // / * 開頭）
+        """
+        lines = self._css().split("\n")
+        violations = []
+        for i, line in enumerate(lines, 1):
+            stripped = line.strip()
+            # 跳過純註釋行
+            if stripped.startswith("/*") or stripped.startswith("//") or stripped.startswith("*"):
+                continue
+            if re.search(r"\brgba\(\s*\d", line):
+                violations.append(f"L{i}: {stripped}")
+        assert not violations, (
+            "help.css 出現 hardcoded rgba() 違規（應改用 token 或 color-mix(in oklch, ...)）：\n"
+            + "\n".join(violations)
+        )
+
+    def test_no_hardcoded_border_radius_px_in_help_css(self):
+        """help.css border-radius 不應出現數字 px 硬編碼（應改用 var(--fluent-radius-*)）
+
+        允許例外：
+        - border-radius: 50%（圓形 badge 語義，比例值不是像素）
+        - var(--fluent-radius-*, Npx) 的 fallback px 值（在 var() 內部，不算裸硬編碼）
+        - 純註釋行（/* / // / * 開頭）
+        """
+        lines = self._css().split("\n")
+        violations = []
+        for i, line in enumerate(lines, 1):
+            stripped = line.strip()
+            # 跳過純註釋行
+            if stripped.startswith("/*") or stripped.startswith("//") or stripped.startswith("*"):
+                continue
+            # 抓 border-radius: Npx（排除 50% 等比例值）
+            if not re.search(r"border-radius\s*:[^;]*\d+px", line):
+                continue
+            # 允許：Npx 只出現在 var(--..., Npx) fallback 內（屬於合法 token 用法）
+            # 去除 var(--...) 區塊後再判斷是否殘留裸 Npx
+            line_without_var = re.sub(r"var\([^)]*\)", "", line)
+            if re.search(r"border-radius\s*:[^;]*\d+px", line_without_var):
+                violations.append(f"L{i}: {stripped}")
+        assert not violations, (
+            "help.css border-radius 殘留 px 硬編碼（應改用 var(--fluent-radius-md/lg)；"
+            "50% 圓形 badge 語義值免除；var fallback 內的 px 允許）：\n"
+            + "\n".join(violations)
+        )
