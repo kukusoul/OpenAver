@@ -4191,35 +4191,6 @@ class TestGridPerPageGuard:
             "grid mode 下 perPage=0 必須降級為 120（this.perPage = 120）"
         )
 
-    def test_guard2_dropdown_all_has_mode_condition(self):
-        """Guard 2: 「全部」dropdown item 必須有 mode 條件"""
-        content = self.SHOWCASE_HTML.read_text(encoding='utf-8')
-        lines = content.split('\n')
-
-        # 找到包含 perPage = 0 或 perPage == 0 的行（全部選項）
-        perpage0_lines = []
-        for i, line in enumerate(lines):
-            if re.search(r'perPage\s*==?\s*0', line):
-                perpage0_lines.append((i, line))
-
-        assert perpage0_lines, "找不到 perPage=0 的 dropdown item"
-
-        # 至少有一行（全部選項的元素）包含 mode 相關條件
-        # 檢查該行及前後 2 行的上下文
-        found_mode_guard = False
-        for line_idx, _ in perpage0_lines:
-            context_start = max(0, line_idx - 2)
-            context_end = min(len(lines), line_idx + 3)
-            context = '\n'.join(lines[context_start:context_end])
-            if re.search(r"mode\s*[!=]==?\s*['\"]grid['\"]", context):
-                found_mode_guard = True
-                break
-
-        assert found_mode_guard, (
-            "F2 違規：showcase.html 的「全部」dropdown item (perPage=0) 缺少 mode 條件 — "
-            "grid mode 下「全部」選項必須 disabled 或隱藏"
-        )
-
     def test_guard3_restoreState_has_grid_perPage0_guard(self):
         """Guard 3: restoreState 必須含 grid+perPage=0 降級邏輯"""
         content = self.CORE_JS.read_text(encoding='utf-8')
@@ -4244,6 +4215,63 @@ class TestGridPerPageGuard:
         assert has_grid_check and has_downgrade, (
             "F2 違規：switchMode() 缺少 grid+perPage=0 降級 — "
             "切到 grid 時若 perPage=0 必須降級為 120"
+        )
+
+
+class TestShowcasePerPageRemoval:
+    """T3.2 (CD-52-3): showcase toolbar perPage selector 已移除守衛
+
+    禁止 perPageOpen / onPerPageChange 等已移除符號回歸。
+    settings 的 items_per_page UI 不在此守衛範圍。
+    """
+
+    SHOWCASE_HTML = PROJECT_ROOT / 'web' / 'templates' / 'showcase.html'
+    SHOWCASE_CORE_JS = PROJECT_ROOT / 'web' / 'static' / 'js' / 'pages' / 'showcase' / 'core.js'
+    LOCALE_ZH_TW = PROJECT_ROOT / 'locales' / 'zh_TW.json'
+
+    def test_showcase_html_no_perPageOpen(self):
+        """showcase.html 不再含 perPageOpen state binding（toolbar dropdown 已刪）"""
+        content = self.SHOWCASE_HTML.read_text(encoding='utf-8')
+        assert 'perPageOpen' not in content, (
+            "T3.2 違規：showcase.html 不應再含 perPageOpen — "
+            "toolbar perPage dropdown 已於 T3.2 (CD-52-3) 移除"
+        )
+
+    def test_showcase_html_no_onPerPageChange(self):
+        """showcase.html 不再含 onPerPageChange handler 呼叫"""
+        content = self.SHOWCASE_HTML.read_text(encoding='utf-8')
+        assert 'onPerPageChange' not in content, (
+            "T3.2 違規：showcase.html 不應再含 onPerPageChange — "
+            "toolbar perPage dropdown 已於 T3.2 (CD-52-3) 移除"
+        )
+
+    def test_showcase_core_js_no_perPageOpen_state(self):
+        """core.js 不再含 perPageOpen: state property"""
+        content = self.SHOWCASE_CORE_JS.read_text(encoding='utf-8')
+        assert 'perPageOpen:' not in content, (
+            "T3.2 違規：showcase/core.js 不應再含 perPageOpen state property — "
+            "toolbar perPage dropdown 已於 T3.2 (CD-52-3) 移除"
+        )
+
+    def test_showcase_core_js_no_onPerPageChange_method(self):
+        """core.js 不再含 onPerPageChange() method"""
+        content = self.SHOWCASE_CORE_JS.read_text(encoding='utf-8')
+        assert 'onPerPageChange()' not in content, (
+            "T3.2 違規：showcase/core.js 不應再含 onPerPageChange() method — "
+            "toolbar perPage dropdown 已於 T3.2 (CD-52-3) 移除"
+        )
+
+    def test_locale_zh_tw_no_per_page_keys(self):
+        """zh_TW.json 不再含 showcase.toolbar.per_page_prefix 與 showcase.per_page 段"""
+        content = self.LOCALE_ZH_TW.read_text(encoding='utf-8')
+        assert 'per_page_prefix' not in content, (
+            "T3.2 違規：zh_TW.json 不應再含 per_page_prefix — "
+            "showcase toolbar perPage 已於 T3.2 (CD-52-3) 移除"
+        )
+        # 檢查 showcase.per_page 段（注意避開 settings.gallery.items_per_page_label / help.other_per_page）
+        assert '"per_page":' not in content, (
+            "T3.2 違規：zh_TW.json 不應再含 showcase.per_page 段（含 \"all\": \"全部\"） — "
+            "showcase toolbar perPage 已於 T3.2 (CD-52-3) 移除"
         )
 
 

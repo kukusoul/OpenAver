@@ -124,7 +124,6 @@ function showcaseState() {
         // Toolbar Dropdown 狀態
         sortOpen: false,
         modeOpen: false,
-        perPageOpen: false,
 
         search: '',
         sort: 'date',         // M2a 先用硬編碼，M4 才從 config/localStorage 恢復
@@ -317,16 +316,16 @@ function showcaseState() {
             const urlNum = (key) => { const v = urlParams.get(key); return v !== null && v !== '' ? v : undefined; };
             this.sort = urlParams.get('sort') || state.sort || defaultSort;
             this.order = urlParams.get('order') || state.order || defaultOrder;
-            const rawPerPage = parseInt(urlNum('perPage') ?? state.perPage ?? defaultPerPage);
-            this.perPage = Number.isNaN(rawPerPage) ? defaultPerPage : rawPerPage;
+            // T3.2 (CD-52-3): perPage 只從 cfg.items_per_page，URL params + localStorage 不再參與
+            // 既有 user 的 localStorage state.perPage / URL ?perPage=N 被 silently 忽略（CD-52-4）
+            this.perPage = defaultPerPage;
             this.page = parseInt(urlNum('page') ?? state.page ?? 1) || 1;
             this.search = urlParams.get('search') || state.search || '';
             this.mode = urlParams.get('mode') || state.mode || 'grid';
             if (!['grid', 'table', 'list'].includes(this.mode)) this.mode = 'grid';
-            // F2: grid + perPage=0 組合降級 + 持久化修正值
+            // F2: grid + perPage=0 組合降級（settings 若存 items_per_page=0 之防呆）
             if (this.mode === 'grid' && this.perPage === 0) {
                 this.perPage = 120;
-                this.saveState();
             }
             // ★ 44a: 女優模式 — 只從 localStorage，不加 URL params（避免汙染 shareable link）
             this.showFavoriteActresses = state.showFavoriteActresses === true;  // 嚴格 === true
@@ -339,7 +338,7 @@ function showcaseState() {
             const state = {
                 sort: this.sort,
                 order: this.order,
-                perPage: this.perPage,
+                // T3.2 (CD-52-3): perPage 不再寫入 localStorage（每次 init 重讀 cfg.items_per_page）
                 page: this.page,
                 search: this.search,
                 mode: this.mode,
@@ -354,7 +353,7 @@ function showcaseState() {
             if (this.search) params.set('search', this.search);
             if (this.sort !== 'date') params.set('sort', this.sort);
             if (this.order !== 'desc') params.set('order', this.order);
-            if (this.perPage !== 90) params.set('perPage', this.perPage);
+            // T3.2 (CD-52-3): perPage 不再寫入 URL params（每次 init 重讀 cfg.items_per_page）
             if (this.page !== 1) params.set('page', this.page);
             if (this.mode !== 'grid') params.set('mode', this.mode);
 
@@ -1269,21 +1268,6 @@ function showcaseState() {
                 var gen = ++this._animGeneration;
                 this.$nextTick(() => { requestAnimationFrame(() => {
                     if (this._animGeneration !== gen) return;  // stale
-                    var grid = document.querySelector('.showcase-grid');
-                    window.ShowcaseAnimations?.playEntry?.(grid);
-                }); });
-            }
-        },
-
-        onPerPageChange() {
-            this.page = 1;
-            this.updatePagination();
-            this.saveState();  // M2c: 持久化狀態
-            // B17: 切換每頁數量後播放進場動畫
-            if (this.mode === 'grid') {
-                var gen = ++this._animGeneration;
-                this.$nextTick(() => { requestAnimationFrame(() => {
-                    if (this._animGeneration !== gen) return;
                     var grid = document.querySelector('.showcase-grid');
                     window.ShowcaseAnimations?.playEntry?.(grid);
                 }); });

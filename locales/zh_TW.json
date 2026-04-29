@@ -462,8 +462,7 @@
     },
     "toolbar": {
       "sort_prefix": "排序",
-      "mode_prefix": "模式",
-      "per_page_prefix": "每頁"
+      "mode_prefix": "模式"
     },
     "sort": {
       "date": "日期",
@@ -501,9 +500,6 @@
       "videos_count": " 部",
       "films": "部作品",
       "actresses": "位女優"
-    },
-    "per_page": {
-      "all": "全部"
     },
     "status": {
       "total_prefix": "共",
