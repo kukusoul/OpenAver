@@ -45,7 +45,7 @@
     font-size: 0.85rem;
     padding: 0.15rem 0.3rem;
     border-radius: var(--fluent-radius-md);
-    transition: color 0.15s, background 0.15s;
+    transition: color var(--fluent-duration-fast) var(--fluent-ease-standard), background var(--fluent-duration-fast) var(--fluent-ease-standard);
 }
 
 .terminal-copy-btn:hover {

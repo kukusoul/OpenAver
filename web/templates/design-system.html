@@ -2113,8 +2113,7 @@
                 <h3>Hero Terminal</h3>
                 <p class="ds-desc">
                     來源：<code>help.html</code> Hero Card 右欄的 AI 整合入口指令框。
-                    <strong>固定深色背景（<code>oklch(20% 0.01 250)</code>），不隨 Light / Dark theme 切換</strong>，
-                    確保終端外觀在任何主題下一致。
+                    <strong>背景使用 <code>var(--surface-2)</code> 跟隨主題；<code>[data-theme="dim"]</code> override 固定深色（<code>oklch(20% 0.01 250)</code>）確保 dim 模式終端外觀一致</strong>。
                     右上角有複製按鈕，點擊後圖示切換為 ✓，1.5 秒後自動復原。
                 </p>
 
@@ -2130,7 +2129,7 @@
                         </button>
                     </div>
                     <small style="color: var(--text-muted); display: block; margin-top: 0.5rem;">
-                        ↑ Light 與 Dark 模式下皆呈現相同的深色終端外觀
+                        ↑ Light 模式下跟隨 <code>var(--surface-2)</code>；Dim 模式 override 固定深色終端外觀
                     </small>
                 </div>
 
@@ -2147,8 +2146,8 @@
                 <div class="ds-note" style="margin-top: 1rem;">
                     <strong>技術細節：</strong>
                     <ul style="margin-top: 0.5rem; padding-left: 1.5rem;">
-                        <li><code>.hero-terminal</code>：背景硬編碼 <code>oklch(20% 0.01 250)</code>，不受 <code>[data-theme]</code> 影響</li>
-                        <li><code>.terminal-prompt</code>：低飽和青綠 <code>oklch(55% 0.15 160)</code>，<code>user-select: none</code></li>
+                        <li><code>.hero-terminal</code>：背景 <code>var(--surface-2)</code>，<code>[data-theme="dim"] .hero-terminal</code> override 為固定深色 <code>oklch(20% 0.01 250)</code>（design-intent）</li>
+                        <li><code>.terminal-prompt</code>：青綠 <code>var(--color-success)</code>（iOS Green，與 <code>.workflow-arrow</code>/<code>.workflow-step-num</code> 統一動作指引色），<code>user-select: none</code></li>
                         <li><code>.terminal-copy-btn</code>：絕對定位右上角，<code>:hover</code> 有背景高亮</li>
                         <li>此頁 CSS 由局部 <code>&lt;style&gt;</code> 提供；production 版定義見 <code>help.css</code> 行 17–52</li>
                     </ul>

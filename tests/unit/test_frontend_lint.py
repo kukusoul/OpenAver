@@ -4829,6 +4829,28 @@ class TestHelpCssHardcoded:
             + "\n".join(violations)
         )
 
+    def test_no_hardcoded_transition_duration_in_help_css(self):
+        """help.css 所有 transition 不應有硬編碼數字秒數（須用 var(--fluent-duration-*)）
+
+        Pattern: transition 值含 0.Xs 或 .Xs 數字字面，且不含 var(--
+        允許：comments（// 或 /* 開頭行）中的說明文字
+        """
+        lines = self._css().split("\n")
+        violations = []
+        for i, line in enumerate(lines, 1):
+            stripped = line.strip()
+            # 跳過純註釋行
+            if stripped.startswith("/*") or stripped.startswith("//") or stripped.startswith("*"):
+                continue
+            if "transition:" in line:
+                # 尋找硬編碼數字秒數（0.Xs 或 .Xs），且不含 var(--
+                if re.search(r"transition:[^;]*\b0?\.\d+s\b", line) and "var(--" not in line:
+                    violations.append(f"L{i}: {line.strip()}")
+        assert not violations, (
+            "help.css transition 殘留硬編碼數字秒數（應改用 var(--fluent-duration-*)）：\n"
+            + "\n".join(violations)
+        )
+
 
 class TestDesignSystemCssHardcoded:
     """Phase 52 T1.4.7: design-system.css hardcoded 硬編碼守衛（防未來回潮）
@@ -5011,12 +5033,17 @@ class TestMotionLabHtmlHardcoded:
         )
 
     def test_no_hardcoded_transition_duration_in_motion_lab_html(self):
-        """motion_lab.html <style> 區塊 transition 不應含裸數字秒數硬編碼
+        """motion_lab.html <style> 區塊 transition 不應含裸數字秒數或非 fluent 前綴 alias 硬編碼
 
         允許例外（留 Phase 2 處理，已標記白名單）：
         - .picker-source-badge transition: background 0.15s
         - .picker-check-icon transition: opacity 0.15s
         這兩處屬 Picker demo 的細節 transition，Phase 1 不改動，Phase 2 統一處理。
+
+        非 fluent 前綴 alias 規則：
+        - 禁止 var(--duration-*) — 應改用 var(--fluent-duration-*)
+        - 禁止 var(--ease-*) — 應改用 var(--fluent-ease-*)
+        這些 alias 已在 theme.css 定義，但 motion_lab 的 <style> 應直接用 canonical token。
         """
         css = self._style_blocks()
         lines = css.split("\n")
@@ -5034,10 +5061,17 @@ class TestMotionLabHtmlHardcoded:
             if stripped in phase2_whitelist:
                 continue
             if "transition:" in line:
+                # 1. 裸數字秒數（不含任何 var(-- 前綴）
                 if re.search(r"transition:[^;]*\b0?\.\d+s\b", line) and "var(--" not in line:
                     violations.append(f"L{i}: {stripped}")
+                    continue
+                # 2. 非 fluent 前綴 alias：var(--duration-*) 或 var(--ease-*)
+                #    （直接命中即是 alias，fluent 前綴版本為 var(--fluent-duration-*) 不命中此 pattern）
+                if re.search(r"var\(--(?:duration|ease)-", line):
+                    violations.append(f"L{i}: {stripped}")
         assert not violations, (
-            "motion_lab.html <style> transition 殘留裸數字秒數（應改用 var(--fluent-duration-*)；"
+            "motion_lab.html <style> transition 殘留裸數字秒數或非 fluent 前綴 alias\n"
+            "（應改用 var(--fluent-duration-*) / var(--fluent-ease-*)；"
             "picker 兩處 0.15s 已列 Phase 2 whitelist）：\n"
             + "\n".join(violations)
         )
