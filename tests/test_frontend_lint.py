@@ -5086,3 +5086,73 @@ class TestGhostFlyPlayLightboxOpen:
         js = self.GHOST_FLY_JS.read_text(encoding='utf-8')
         assert 'timelineId' in js, \
             "ghost-fly.js playLightboxOpen 缺少 timelineId opt — CD-51-16 介面未植入"
+
+
+class TestT36ToastI18nKeys:
+    """T3.6 (CD-52-11): alert→toast 改寫後新 i18n keys 必須存在於 zh_TW.json"""
+
+    LOCALE_FILE = PROJECT_ROOT / "locales" / "zh_TW.json"
+
+    REQUIRED_KEYS = [
+        # scanner.toast (6)
+        "scanner.toast.desktop_only",
+        "scanner.toast.folder_already_added",
+        "scanner.toast.copy_path_failed",
+        "scanner.toast.generate_error",
+        "scanner.toast.nfo_update_error",
+        "scanner.toast.jellyfin_update_error",
+        # scanner.copy_fail_modal (3)
+        "scanner.copy_fail_modal.title",
+        "scanner.copy_fail_modal.body",
+        "scanner.copy_fail_modal.close",
+        # settings.toast (1)
+        "settings.toast.desktop_only",
+        # search.toast (4)
+        "search.toast.no_valid_files",
+        "search.toast.desktop_only",
+        "search.toast.load_failed",
+        "search.toast.translate_failed",
+    ]
+
+    def test_all_t36_keys_exist_in_zh_tw(self):
+        import json
+        data = json.loads(self.LOCALE_FILE.read_text(encoding="utf-8"))
+
+        def get_nested(d, dotted):
+            cur = d
+            for part in dotted.split("."):
+                if not isinstance(cur, dict) or part not in cur:
+                    return None
+                cur = cur[part]
+            return cur if isinstance(cur, str) else None
+
+        missing = [k for k in self.REQUIRED_KEYS if get_nested(data, k) is None]
+        assert not missing, f"T3.6 違規：zh_TW.json 缺 i18n keys：{missing}"
+
+
+class TestScannerCopyFailModal:
+    """T3.6: scanner.html copyFailModal markup + scanner.js 三 method + escape ladder"""
+
+    SCANNER_JS = PROJECT_ROOT / "web" / "static" / "js" / "pages" / "scanner.js"
+    SCANNER_HTML = PROJECT_ROOT / "web" / "templates" / "scanner.html"
+
+    def test_scanner_js_has_copy_fail_modal_methods(self):
+        content = self.SCANNER_JS.read_text(encoding="utf-8")
+        assert "openCopyFailModal" in content, \
+            "T3.6: openCopyFailModal method 應存在（取代 L728 truncated alert）"
+        assert "closeCopyFailModal" in content, \
+            "T3.6: closeCopyFailModal method 應存在"
+        assert "copyFailModalOpen" in content, \
+            "T3.6: copyFailModalOpen state 應存在"
+
+    def test_scanner_html_has_copy_fail_modal_markup(self):
+        content = self.SCANNER_HTML.read_text(encoding="utf-8")
+        assert "copy_fail_modal.title" in content, \
+            "T3.6: scanner.html 應有 copy_fail_modal markup（i18n key）"
+        assert "copy-fail-pre" in content, \
+            "T3.6: scanner.html copyFailModal 應含 .copy-fail-pre class"
+
+    def test_scanner_html_escape_ladder_includes_copy_fail_modal(self):
+        content = self.SCANNER_HTML.read_text(encoding="utf-8")
+        assert "copyFailModalOpen && closeCopyFailModal" in content, \
+            "T3.6: scanner.html root @keydown.escape.window 應串接 copyFailModal 的 close"

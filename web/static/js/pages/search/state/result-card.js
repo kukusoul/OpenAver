@@ -137,7 +137,7 @@ window.SearchStateMixin_ResultCard = {
             await this._translateWithAILogic();
         } catch (error) {
             console.error('[Translate] 翻譯失敗:', error);
-            alert('翻譯失敗，請重試');
+            this.showToast(window.t('search.toast.translate_failed'), 'error');
         } finally {
             this.isTranslating = false;
         }

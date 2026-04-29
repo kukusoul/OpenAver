@@ -215,3 +215,20 @@
 .mini-terminal-body.filter-warn .log-error {
     display: none !important;
 }
+
+/* TASK-52.3.6: copy fail modal pre block (clipboard fail fallback dump) */
+.copy-fail-pre {
+    max-height: 50vh;
+    overflow-y: auto;
+    user-select: text;
+    white-space: pre-wrap;
+    word-break: break-all;
+    font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+    font-size: 0.85em;
+    padding: 0.75rem;
+    margin: 0.75rem 0;
+    background: var(--surface-1);
+    border: 1px solid var(--stroke-default);
+    border-radius: var(--fluent-radius-md);
+    color: var(--text-default, currentColor);
+}

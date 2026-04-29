@@ -60,6 +60,10 @@ function scannerPage() {
     _deleteAliasGroupLoading: false,
     _pendingDeleteAliasGroupName: null,
 
+    // ===== T3.6: Copy Logs Fail Modal =====
+    copyFailModalOpen: false,
+    copyFailDump: '',
+
     // ===== T7b: State Machine =====
     state: 'idle',  // 'idle' | 'generating' | 'nfoUpdating' | 'done' | 'error'
 
@@ -467,7 +471,7 @@ function scannerPage() {
     async selectFolder() {
         if (typeof window.pywebview === 'undefined' || !window.pywebview.api) {
             this.toggleManualInput();
-            alert('此功能需要在桌面應用程式中使用');
+            this.showToast(window.t('scanner.toast.desktop_only'), 'info');
             return;
         }
 
@@ -494,7 +498,7 @@ function scannerPage() {
             this.directories.push(folderPath);
             this.configDirty = true;
         } else {
-            alert('此資料夾已在列表中');
+            this.showToast(window.t('scanner.toast.folder_already_added'), 'warning');
         }
     },
 
@@ -512,7 +516,7 @@ function scannerPage() {
         if (!path) return;
 
         if (this.directories.includes(path)) {
-            alert('此資料夾已在列表中');
+            this.showToast(window.t('scanner.toast.folder_already_added'), 'warning');
             return;
         }
 
@@ -725,8 +729,19 @@ function scannerPage() {
         navigator.clipboard.writeText(text).then(() => {
             this.showToast(`已複製 ${this.logEntries.length} 筆日誌`, 'success');
         }).catch(() => {
-            alert('複製失敗，日誌內容：\n\n' + text.substring(0, 500) + '...');
+            this.openCopyFailModal(text);
         });
+    },
+
+    // T3.6: Copy Logs Fail Modal — fluent-modal <pre> dump fallback
+    openCopyFailModal(text) {
+        this.copyFailDump = text || '';
+        this.copyFailModalOpen = true;
+    },
+
+    closeCopyFailModal() {
+        this.copyFailModalOpen = false;
+        this.copyFailDump = '';
     },
 
     confirmClearAll() {
@@ -848,7 +863,8 @@ function scannerPage() {
         } catch (e) {
             this.state = 'error';
             localStorage.setItem('avlist_generating', 'false');
-            alert('發生錯誤: ' + e.message);
+            console.error('[Scanner] generate error:', e);
+            this.showToast(window.t('scanner.toast.generate_error'), 'error', 4000);
         }
     },
 
@@ -925,7 +941,8 @@ function scannerPage() {
         } catch (e) {
             this.state = 'error';
             localStorage.setItem('avlist_generating', 'false');
-            alert('發生錯誤: ' + e.message);
+            console.error('[Scanner] runNfoUpdate error:', e);
+            this.showToast(window.t('scanner.toast.nfo_update_error'), 'error', 4000);
         }
     },
 
@@ -1001,7 +1018,8 @@ function scannerPage() {
         } catch (e) {
             this.state = 'error';
             localStorage.setItem('avlist_generating', 'false');
-            alert('發生錯誤: ' + e.message);
+            console.error('[Scanner] runJellyfinImageUpdate error:', e);
+            this.showToast(window.t('scanner.toast.jellyfin_update_error'), 'error', 4000);
         }
     },
 
@@ -1212,7 +1230,11 @@ function scannerPage() {
         navigator.clipboard.writeText(this.outputPath).then(() => {
             this.showToast('已複製: ' + this.outputPath, 'success');
         }).catch(() => {
-            alert('複製失敗，路徑：' + this.outputPath);
+            this.showToast(
+                window.t('scanner.toast.copy_path_failed').replace('{path}', this.outputPath),
+                'error',
+                4000
+            );
         });
     },
 
