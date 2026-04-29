@@ -1752,6 +1752,31 @@ class TestNoAlertInSearchJs:
             "若沒守衛，clipboard API 不存在時 .catch() 完全不會觸發。"
         )
 
+    def test_all_clipboard_writetext_files_have_availability_guard(self):
+        """T3.7: 全 web/static/js 任何使用 navigator.clipboard.writeText 的檔案
+        必須同時含 ?. optional chaining 守衛形式（navigator.clipboard?.writeText）。
+
+        此守衛防止未來新檔案再犯同類 pre-existing bug（HTTP / 舊 WebView
+        clipboard undefined 時 sync TypeError 跳過 .catch chain）。
+        既知合法檔（截至 T3.7）：scanner.js（×2 + ×2 guards）、help.js、
+        result-card.js、showcase/core.js — 全部含 ?. 守衛形式。
+        """
+        js_root = Path(__file__).parent.parent.parent / "web" / "static" / "js"
+        offenders = []
+        for js_file in js_root.rglob("*.js"):
+            text = js_file.read_text(encoding="utf-8")
+            if "navigator.clipboard.writeText" not in text:
+                continue
+            if "navigator.clipboard?.writeText" not in text:
+                offenders.append(str(js_file.relative_to(js_root)))
+        assert not offenders, (
+            f"以下檔案使用 navigator.clipboard.writeText 但缺 ?. 守衛形式："
+            f"{offenders}。"
+            "請改寫成 if (!navigator.clipboard?.writeText) { ...fallback...; return; } "
+            "或 navigator.clipboard?.writeText ? ... : fallback 三元，"
+            "避免 clipboard undefined 時 sync TypeError 跳過 .catch。"
+        )
+
 
 class TestNavigateLoadMore:
     """T3b 守衛：navigate() 在最後一片時 await loadMore + state-first slide"""
