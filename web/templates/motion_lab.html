@@ -756,6 +756,11 @@
                     @click="tab = 'picker'; onResetStaging(); onResetHero()">
                 Photo Picker
             </button>
+            <button class="motion-lab-tab"
+                    :class="{ active: tab === 'ease-roles' }"
+                    @click="tab = 'ease-roles'; onResetStaging(); onResetHero(); onResetPicker()">
+                §5 Ease 角色
+            </button>
         </div>
     </div>
 
@@ -811,10 +816,13 @@
         <div class="control-group">
             <span class="control-label">Ease</span>
             <select class="control-select" x-model="params.easing">
-                <option value="back.out(1.2)">back.out(1.2)</option>
-                <option value="power3.out">power3.out</option>
-                <option value="elastic.out(1,0.3)">elastic.out(1,0.3)</option>
-                <option value="power2.inOut">power2.inOut</option>
+                <option value="fluent">fluent（standard，互動）</option>
+                <option value="fluent-decel">fluent-decel（enter，進場）</option>
+                <option value="fluent-accel">fluent-accel（exit，離場）</option>
+                <option value="back.out(1.2)">back.out(1.2)（pre-charter，已禁用）</option>
+                <option value="power3.out">power3.out（pre-charter，已禁用）</option>
+                <option value="elastic.out(1,0.3)">elastic.out(1,0.3)（pre-charter，已禁用）</option>
+                <option value="power2.inOut">power2.inOut（pre-charter；白名單：Burst Picker FLIP）</option>
                 <option value="none">none</option>
             </select>
         </div>
@@ -1385,6 +1393,16 @@
                    x-model.number="pickerParams.streamInterval">
             <span class="control-value" x-text="pickerParams.streamInterval + 'ms'"></span>
         </div>
+
+        <!-- ===== §5 Ease Roles 控制項 ===== -->
+        <div class="control-divider"></div>
+
+        <button class="control-btn primary"
+                x-show="tab === 'ease-roles'"
+                x-cloak
+                @click="onPlayEaseRoles($refs)">
+            <i class="bi bi-play-fill"></i> Play Ease Roles
+        </button>
     </div>
 
     <!-- 預覽區 -->
@@ -2142,6 +2160,44 @@
             </div>
         </div>
 
+        <!-- ===== §5 Ease Roles 並排對比 ===== -->
+        <div x-show="tab === 'ease-roles'" x-cloak class="ease-roles-panel">
+            <h5 class="ease-roles-title">§5 Ease 角色對比</h5>
+            <p class="ease-roles-desc">三條曲線同步播放，Standard S 曲線 ／ Enter 慢起快停 ／ Exit 快起慢停</p>
+            <div class="ease-roles-track">
+                <div class="ease-role-item">
+                    <div class="ease-role-label">
+                        <span class="ease-role-name">Standard</span>
+                        <code class="ease-role-code">fluent</code>
+                        <code class="ease-role-bezier">cubic-bezier(0.33, 0, 0.67, 1)</code>
+                    </div>
+                    <div class="ease-role-lane">
+                        <div class="ease-role-box" x-ref="easeBox0"></div>
+                    </div>
+                </div>
+                <div class="ease-role-item">
+                    <div class="ease-role-label">
+                        <span class="ease-role-name">Enter（進場）</span>
+                        <code class="ease-role-code">fluent-decel</code>
+                        <code class="ease-role-bezier">cubic-bezier(0, 0, 0, 1)</code>
+                    </div>
+                    <div class="ease-role-lane">
+                        <div class="ease-role-box" x-ref="easeBox1"></div>
+                    </div>
+                </div>
+                <div class="ease-role-item">
+                    <div class="ease-role-label">
+                        <span class="ease-role-name">Exit（離場）</span>
+                        <code class="ease-role-code">fluent-accel</code>
+                        <code class="ease-role-bezier">cubic-bezier(1, 0, 1, 1)</code>
+                    </div>
+                    <div class="ease-role-lane">
+                        <div class="ease-role-box" x-ref="easeBox2"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
     </div>
 
 </div>
@@ -2422,6 +2478,94 @@
 /* C21 配套：ghost-fly 飛行期間停用 cover-img CSS transition */
 .picker-cover-img.gsap-animating {
     transition: none !important;
+}
+
+/* ===== §5 Ease Roles 並排對比面板 ===== */
+.ease-roles-panel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.25rem;
+    padding: 2rem 1.5rem;
+    width: 100%;
+}
+
+.ease-roles-title {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.ease-roles-desc {
+    margin: 0;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    text-align: center;
+}
+
+.ease-roles-track {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    width: min(640px, 90vw);
+}
+
+.ease-role-item {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.ease-role-label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    min-width: 200px;
+}
+
+.ease-role-name {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.ease-role-code {
+    font-size: 0.75rem;
+    color: var(--accent-primary);
+    background: var(--surface-1);
+    border-radius: var(--fluent-radius-sm);
+    padding: 0.1rem 0.35rem;
+    width: fit-content;
+}
+
+.ease-role-bezier {
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    background: transparent;
+    padding: 0;
+}
+
+.ease-role-lane {
+    flex: 1;
+    height: 80px;
+    background: var(--surface-1);
+    border-radius: var(--radius-md);
+    position: relative;
+    overflow: hidden;
+    border: 1px solid var(--stroke-subtle);
+}
+
+.ease-role-box {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 80px;
+    height: 48px;
+    background: var(--accent-secondary);
+    border-radius: var(--fluent-radius-md);
+    opacity: 0.85;
 }
 
 </style>

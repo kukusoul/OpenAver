@@ -7,7 +7,7 @@ function motionLabPage() {
             duration: 0.6,
             stagger: 0.05,
             clipRevealDur: 0.5,
-            easing: 'back.out(1.2)',
+            easing: 'fluent',
             flipMode: 'Flip',
             reducedMotionSim: false,
             speed: 0.5,
@@ -164,6 +164,12 @@ function motionLabPage() {
                     window.MotionLab.playClipPathReveal(gridEl, this.params);
                 }
             }
+        },
+
+        onPlayEaseRoles(refs) {
+            if (typeof window.MotionLab === 'undefined') return;
+            const boxEls = [refs.easeBox0, refs.easeBox1, refs.easeBox2];
+            window.MotionLab.playEaseRolesDemo(boxEls, this.params);
         },
 
         async onDetailEntry() {

@@ -5075,3 +5075,52 @@ class TestMotionLabHtmlHardcoded:
             "picker 兩處 0.15s 已列 Phase 2 whitelist）：\n"
             + "\n".join(violations)
         )
+
+
+# ─── 52-T2.1: §5 Ease Roles Demo 守衛 ────────────────────────────────────────
+MOTION_LAB_HTML_T2 = Path(__file__).parent.parent.parent / "web" / "templates" / "motion_lab.html"
+MOTION_LAB_JS_T2 = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "motion-lab.js"
+
+
+class TestMotionLabT2EaseRoles:
+    """52-T2.1: 守衛 §5 Ease Roles 並排 demo 必要元素"""
+
+    def _html(self) -> str:
+        return MOTION_LAB_HTML_T2.read_text(encoding="utf-8")
+
+    def _js(self) -> str:
+        return MOTION_LAB_JS_T2.read_text(encoding="utf-8")
+
+    def test_html_contains_fluent_decel(self):
+        """motion_lab.html 含 fluent-decel 字樣（Ease Roles select 選項或 demo panel）"""
+        assert "fluent-decel" in self._html(), \
+            "motion_lab.html 缺少 fluent-decel（§5 Ease Roles select / demo panel 未加入）"
+
+    def test_html_contains_fluent_accel(self):
+        """motion_lab.html 含 fluent-accel 字樣（Ease Roles select 選項或 demo panel）"""
+        assert "fluent-accel" in self._html(), \
+            "motion_lab.html 缺少 fluent-accel（§5 Ease Roles select / demo panel 未加入）"
+
+    def test_html_has_ease_roles_tab(self):
+        """motion_lab.html tab bar 含 ease-roles tab button"""
+        assert "ease-roles" in self._html(), \
+            "motion_lab.html tab bar 缺少 ease-roles tab（§5 Ease Roles tab 未加入）"
+
+    def test_js_has_play_ease_roles_demo(self):
+        """motion-lab.js 含 playEaseRolesDemo 函式"""
+        assert "playEaseRolesDemo" in self._js(), \
+            "motion-lab.js 缺少 playEaseRolesDemo（§5 Ease Roles demo 函式未加入）"
+
+    def test_js_no_bare_back_out_in_stream(self):
+        """motion-lab.js playCardStreamIn 不含裸 power2.out / power3.out（已改 fluent-decel）"""
+        js = self._js()
+        # 找到 playCardStreamIn 區塊（到下一個函式前）
+        start = js.find("playCardStreamIn:")
+        assert start != -1, \
+            "playCardStreamIn 函式不見了；如果是重命名請更新此守衛"
+        end = js.find("\n        /**", start + 1)
+        block = js[start:end] if end != -1 else js[start:]
+        assert "power3.out" not in block, \
+            "playCardStreamIn 仍含 power3.out（應改為 fluent-decel）"
+        assert "power2.out" not in block, \
+            "playCardStreamIn 仍含 power2.out（應改為 fluent-decel）"

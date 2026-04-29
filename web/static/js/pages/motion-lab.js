@@ -79,7 +79,7 @@
             }
 
             var dur = params.duration || 0.6;
-            var ease = params.easing || 'back.out(1.2)';
+            var ease = params.easing || 'fluent';
             var staggerVal = params.stagger || 0.05;
 
             // viewport 分流：可視卡片 → burst 動畫，fold 以下 → 瞬間顯示
@@ -166,7 +166,7 @@
 
             var dur = params.clipRevealDur || 0.5;
             var speed = params.speed || 1;
-            var ease = params.easing || 'power3.out';
+            var ease = params.easing || 'fluent-decel';
 
             // C6: 禁止旋轉，使用 clip-path 展開
             // 速度同步：與 burst timeline 的 timeScale 保持一致
@@ -271,7 +271,7 @@
             }
 
             var dur = params.duration || 0.6;
-            var ease = params.easing || 'power3.out';
+            var ease = params.easing || 'fluent-decel';
             var detailSpeed = params.detailSpeed || 1;
 
             // skipCover: ghost transition 已處理封面動畫，只播 info 進場
@@ -559,7 +559,7 @@
 
             var dur = (params.duration || 0.6) * 0.5;
             var xFrom = direction === 'next' ? 40 : -40;
-            var ease = params.easing || 'power3.out';
+            var ease = params.easing || 'fluent-decel';
             var detailSpeed = params.detailSpeed || 1;
 
             return gsap.fromTo(containerEl,
@@ -631,14 +631,14 @@
             if (style === 'fadeScale') {
                 return gsap.fromTo(imgEl,
                     { opacity: 0, scale: 0.92 },
-                    { opacity: 1, scale: 1, duration: 0.3, ease: 'power2.out' }
+                    { opacity: 1, scale: 1, duration: 0.3, ease: 'fluent-decel' }
                 );
             }
 
             if (style === 'fadeUp') {
                 return gsap.fromTo(imgEl,
                     { opacity: 0, y: 20 },
-                    { opacity: 1, y: 0, duration: 0.35, ease: 'power3.out' }
+                    { opacity: 1, y: 0, duration: 0.35, ease: 'fluent-decel' }
                 );
             }
 
@@ -646,14 +646,14 @@
                 // C6: clip-path 展開，無旋轉、無位移
                 return gsap.fromTo(imgEl,
                     { clipPath: 'inset(100% 0 0 0)' },
-                    { clipPath: 'inset(0% 0% 0% 0%)', duration: 0.4, ease: 'power2.out' }
+                    { clipPath: 'inset(0% 0% 0% 0%)', duration: 0.4, ease: 'fluent-decel' }
                 );
             }
 
             // 未知 style 降級為 fadeScale
             return gsap.fromTo(imgEl,
                 { opacity: 0, scale: 0.92 },
-                { opacity: 1, scale: 1, duration: 0.3, ease: 'power2.out' }
+                { opacity: 1, scale: 1, duration: 0.3, ease: 'fluent-decel' }
             );
         },
 
@@ -699,7 +699,7 @@
             }
 
             var dur = options.duration || options.burstDuration || 0.6;
-            var ease = options.ease || options.burstEase || 'back.out(1.2)';
+            var ease = options.ease || options.burstEase || 'back.out(1.2)'; // §5 white-list: Burst Picker
             var staggerVal = options.stagger || 0.05;
             var batchZ = ((options.batchZ || 0) * 10) + 100;
 
@@ -1287,6 +1287,52 @@
             });
 
             return tl;
+        },
+
+        /**
+         * §5 Ease Roles 並排對比 Demo
+         * 三個 box 同時以 fluent / fluent-decel / fluent-accel 播放，讓開發者直觀比較三角色差異。
+         * C4: killTweensOf(boxEls)
+         * C6: 不使用旋轉
+         * C23: shouldSkip reduced-motion guard
+         * @param {Element[]} boxEls - 三個 .ease-role-box DOM 元素陣列
+         * @param {object} params - Alpine 傳入的 params 物件（含 reducedMotionSim）
+         */
+        playEaseRolesDemo: function (boxEls, params) {
+            params = params || {};
+
+            if (!boxEls || boxEls.length < 3 || boxEls.some(function (el) { return !el; })) return;
+
+            // C4: 清除舊動畫
+            gsap.killTweensOf(boxEls);
+
+            // P3 #1: 動態計算 targetX，避免 box 在窄 viewport 跑出 lane 邊界
+            // lane.offsetWidth − box width(80px) − start left(12px) − gutter(12px)
+            var lane = boxEls[0].parentElement;
+            var targetX = lane ? Math.max(0, lane.offsetWidth - 80 - 24) : 200;
+
+            // CSS .ease-role-box 用 transform: translateY(-50%) 做垂直居中。
+            // GSAP 寫 inline transform for x 會覆蓋 CSS transform，必須補 yPercent: -50
+            // 一起寫進 GSAP 的 transform cache，否則動畫期間 box 會掉到 lane 底邊被裁切。
+            // C23: reduced-motion 降級 — 直接跳最終狀態（P2 #2: 改為跳 targetX，非 clearProps）
+            if (shouldSkip(params)) {
+                gsap.set(boxEls, { x: targetX, yPercent: -50 });
+                return;
+            }
+
+            // 重播前清乾淨 leftover transform / will-change / opacity，再回起點
+            gsap.set(boxEls, { clearProps: 'all' });
+            gsap.set(boxEls, { x: 0, yPercent: -50 });
+
+            var dur = window.OpenAver && window.OpenAver.motion && window.OpenAver.motion.DURATION
+                ? window.OpenAver.motion.DURATION.emphasis
+                : 0.5;
+
+            // 三條同時觸發（Standard / Enter / Exit）
+            // yPercent 已在 gsap.set 寫進 transform cache，tween 只動 x 會自動保留 yPercent
+            gsap.to(boxEls[0], { x: targetX, duration: dur, ease: 'fluent' });
+            gsap.to(boxEls[1], { x: targetX, duration: dur, ease: 'fluent-decel' });
+            gsap.to(boxEls[2], { x: targetX, duration: dur, ease: 'fluent-accel' });
         },
     };
 
