@@ -162,7 +162,11 @@
       "scrape_complete": "Batch organize complete: {success} succeeded, {failed} failed",
       "scrape_complete_dup": "Batch organize complete: {success} succeeded, {failed} failed, {duplicate} duplicates",
       "no_search_results": "No search results for this file",
-      "scrape_failed": "Failed to organize {filename}"
+      "scrape_failed": "Failed to organize {filename}",
+      "no_valid_files": "No valid video files (could not identify number)",
+      "desktop_only": "This feature requires the desktop app",
+      "load_failed": "Load failed. Please try again.",
+      "translate_failed": "Translation failed. Please try again."
     },
     "duplicate": {
       "title": "Duplicate File",
@@ -175,6 +179,9 @@
   },
   "settings": {
     "page_title": "Settings",
+    "toast": {
+      "desktop_only": "This feature requires the desktop app"
+    },
     "header": {
       "title": "Settings",
       "font_size_prefix": "Font size",
@@ -300,6 +307,11 @@
       "discard": "Discard",
       "save": "Save Changes"
     },
+    "reset_modal": {
+      "title": "Reset all settings",
+      "body": "Are you sure you want to reset all settings? This will delete all custom settings and cannot be undone.",
+      "confirm": "Reset"
+    },
     "status": {
       "loading_models": "Loading models...",
       "connecting": "Connecting...",
@@ -335,6 +347,19 @@
   },
   "scanner": {
     "page_title": "Scanner",
+    "toast": {
+      "desktop_only": "This feature requires the desktop app",
+      "folder_already_added": "This folder is already in the list",
+      "copy_path_failed": "Copy failed: {path}",
+      "generate_error": "Generation failed. Check the log for details.",
+      "nfo_update_error": "NFO update failed. Check the log for details.",
+      "jellyfin_update_error": "Jellyfin image update failed. Check the log for details."
+    },
+    "copy_fail_modal": {
+      "title": "Copy logs failed",
+      "body": "Clipboard write failed. Please select the text below manually and press Ctrl+C to copy:",
+      "close": "Close"
+    },
     "drag_overlay": {
       "hint": "Drop to add folder"
     },
@@ -429,7 +454,13 @@
       "confirm": "Confirm",
       "delete_group_title": "Delete this alias group",
       "delete_alias_title": "Remove this alias",
-      "error_conflict": "Alias conflict"
+      "error_conflict": "Alias conflict",
+      "delete_group_modal": {
+        "title": "Delete Alias Group",
+        "body": "Are you sure you want to delete the alias group for \"{name}\"? This cannot be undone.",
+        "cancel": "Cancel",
+        "confirm": "Delete"
+      }
     },
     "dirty_modal": {
       "title": "Unsaved Changes",
@@ -582,6 +613,12 @@
       "addNotFound": "Actress not found",
       "addTimeout": "Scrape timed out, please try again",
       "remove": "Remove Favorite",
+      "remove_modal": {
+        "title": "Remove from favorites",
+        "body": "Remove \"{name}\" from your favorites? This cannot be undone.",
+        "cancel": "Cancel",
+        "confirm": "Remove"
+      },
       "removeConfirm": "Remove {name}?",
       "removeSuccess": "Removed from favorites",
       "empty": "No favorite actresses yet",

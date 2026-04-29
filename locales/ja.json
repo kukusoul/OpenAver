@@ -162,7 +162,11 @@
       "scrape_complete": "一括整理完了：成功 {success}、失敗 {failed}",
       "scrape_complete_dup": "一括整理完了：成功 {success}、失敗 {failed}、重複 {duplicate}",
       "no_search_results": "このファイルの検索結果がありません",
-      "scrape_failed": "{filename} の整理に失敗しました"
+      "scrape_failed": "{filename} の整理に失敗しました",
+      "no_valid_files": "有効な動画ファイルがありません（番号を識別できません）",
+      "desktop_only": "この機能はデスクトップアプリで使用する必要があります",
+      "load_failed": "読み込みに失敗しました。もう一度お試しください",
+      "translate_failed": "翻訳に失敗しました。もう一度お試しください"
     },
     "duplicate": {
       "title": "ファイルが重複しています",
@@ -175,6 +179,9 @@
   },
   "settings": {
     "page_title": "設定",
+    "toast": {
+      "desktop_only": "この機能はデスクトップアプリで使用する必要があります"
+    },
     "header": {
       "title": "設定",
       "font_size_prefix": "フォントサイズ",
@@ -300,6 +307,11 @@
       "discard": "保存しない",
       "save": "変更を保存"
     },
+    "reset_modal": {
+      "title": "すべての設定をリセット",
+      "body": "すべての設定をリセットしてもよろしいですか？この操作はすべてのカスタム設定を削除し、元に戻せません。",
+      "confirm": "リセットを確認"
+    },
     "status": {
       "loading_models": "モデル読込中...",
       "connecting": "接続中...",
@@ -335,6 +347,19 @@
   },
   "scanner": {
     "page_title": "リスト生成",
+    "toast": {
+      "desktop_only": "この機能はデスクトップアプリで使用する必要があります",
+      "folder_already_added": "このフォルダはすでにリストにあります",
+      "copy_path_failed": "コピーに失敗しました：{path}",
+      "generate_error": "生成に失敗しました。ログを確認してください",
+      "nfo_update_error": "NFO 補完に失敗しました。ログを確認してください",
+      "jellyfin_update_error": "Jellyfin 画像補完に失敗しました。ログを確認してください"
+    },
+    "copy_fail_modal": {
+      "title": "ログのコピーに失敗",
+      "body": "クリップボードへの書き込みに失敗しました。以下のテキストを選択して Ctrl+C でコピーしてください：",
+      "close": "閉じる"
+    },
     "drag_overlay": {
       "hint": "フォルダを追加するにはドロップ"
     },
@@ -429,7 +454,13 @@
       "confirm": "確認",
       "delete_group_title": "この名前グループを削除",
       "delete_alias_title": "このエイリアスを削除",
-      "error_conflict": "エイリアスの競合"
+      "error_conflict": "エイリアスの競合",
+      "delete_group_modal": {
+        "title": "エイリアスグループを削除",
+        "body": "「{name}」のエイリアスグループ全体を削除してもよろしいですか？この操作は元に戻せません。",
+        "cancel": "キャンセル",
+        "confirm": "削除を確認"
+      }
     },
     "dirty_modal": {
       "title": "未保存の変更",
@@ -582,6 +613,12 @@
       "addNotFound": "女優が見つかりませんでした",
       "addTimeout": "スクレイピングがタイムアウトしました。後でもう一度お試しください",
       "remove": "お気に入りを解除",
+      "remove_modal": {
+        "title": "お気に入りから削除",
+        "body": "お気に入りから「{name}」を削除してもよろしいですか？この操作は元に戻せません。",
+        "cancel": "キャンセル",
+        "confirm": "削除を確認"
+      },
       "removeConfirm": "{name} を削除しますか？",
       "removeSuccess": "お気に入りから削除しました",
       "empty": "お気に入り女優がいません",

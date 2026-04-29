@@ -162,7 +162,11 @@
       "scrape_complete": "批量整理完成：成功 {success}，失败 {failed}",
       "scrape_complete_dup": "批量整理完成：成功 {success}，失败 {failed}，重复 {duplicate}",
       "no_search_results": "此文件没有搜索结果",
-      "scrape_failed": "{filename} 整理失败"
+      "scrape_failed": "{filename} 整理失败",
+      "no_valid_files": "无有效视频文件（无法识别番号）",
+      "desktop_only": "此功能需要在桌面应用程序中使用",
+      "load_failed": "加载失败，请重试",
+      "translate_failed": "翻译失败，请重试"
     },
     "duplicate": {
       "title": "文件重复",
@@ -175,6 +179,9 @@
   },
   "settings": {
     "page_title": "设置",
+    "toast": {
+      "desktop_only": "此功能需要在桌面应用程序中使用"
+    },
     "header": {
       "title": "设置",
       "font_size_prefix": "字体大小",
@@ -300,6 +307,11 @@
       "discard": "不保存",
       "save": "保存更改"
     },
+    "reset_modal": {
+      "title": "重置所有设置",
+      "body": "确定要重置所有设置吗？此操作将删除所有自定义设置，无法复原。",
+      "confirm": "确认重置"
+    },
     "status": {
       "loading_models": "加载模型中...",
       "connecting": "连接中...",
@@ -335,6 +347,19 @@
   },
   "scanner": {
     "page_title": "列表生成",
+    "toast": {
+      "desktop_only": "此功能需要在桌面应用程序中使用",
+      "folder_already_added": "此文件夹已在列表中",
+      "copy_path_failed": "复制失败，路径：{path}",
+      "generate_error": "生成失败，请查看日志",
+      "nfo_update_error": "NFO 补齐失败，请查看日志",
+      "jellyfin_update_error": "Jellyfin 图片补齐失败，请查看日志"
+    },
+    "copy_fail_modal": {
+      "title": "复制日志失败",
+      "body": "clipboard 写入失败，请手动选取以下文字按 Ctrl+C 复制：",
+      "close": "关闭"
+    },
     "drag_overlay": {
       "hint": "放开以添加文件夹"
     },
@@ -429,7 +454,13 @@
       "confirm": "确认加入",
       "delete_group_title": "删除此女优别名组",
       "delete_alias_title": "移除此别名",
-      "error_conflict": "别名冲突"
+      "error_conflict": "别名冲突",
+      "delete_group_modal": {
+        "title": "删除别名组",
+        "body": "确定要删除「{name}」的整笔别名组吗？此操作无法复原。",
+        "cancel": "取消",
+        "confirm": "确认删除"
+      }
     },
     "dirty_modal": {
       "title": "尚未保存的更改",
@@ -582,6 +613,12 @@
       "addNotFound": "找不到此女优",
       "addTimeout": "抓取超时，请稍后再试",
       "remove": "移除收藏",
+      "remove_modal": {
+        "title": "移除收藏",
+        "body": "确定要从收藏移除「{name}」吗？此操作无法复原。",
+        "cancel": "取消",
+        "confirm": "确认移除"
+      },
       "removeConfirm": "确认移除 {name}？",
       "removeSuccess": "已从收藏移除",
       "empty": "尚未收藏任何女优",
