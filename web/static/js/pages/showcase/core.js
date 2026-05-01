@@ -271,6 +271,8 @@ function showcaseState() {
                         if (this.lightboxCloseTimer) clearTimeout(this.lightboxCloseTimer);  // F2: cleanup delayed clear timer
                         if (this.toastTimer) clearTimeout(this.toastTimer);
                         if (this.lightboxOpen) document.body.classList.remove('overflow-hidden');
+                        this._resetPicker();                                  // 53a-T1: 清場 picker 狀態
+                        window.GhostFly?.cleanupStaleGhosts?.();              // 53a-T1: 移除殘留 ghost（沿 v0.8.1 T4 optional-chaining pattern）
                     }
                 });
             }
