@@ -2369,6 +2369,9 @@ function showcaseState() {
          */
         _onPickerHoverIn(el, i) {
             if (this._pickerSelected) return;
+            // 飛行中（pickerSettled !== '1'）不觸發 hover scale-up，避免 burst 尾段
+            // killTweensOf 凍結卡片於中途位置
+            if (!el || el.dataset.pickerSettled !== '1') return;
             if (typeof window.BurstPicker !== 'undefined') {
                 window.BurstPicker.playPickerHoverIn(el, _PICKER_PARAMS);
             }

@@ -1981,8 +1981,13 @@ body.sidebar-collapsed .showcase-footer {
 }
 
 .actress-picker-overlay .picker-candidates-grid {
-    display: flex;
-    flex-wrap: nowrap;               /* desktop ≥1280 預設單行 */
+    /* desktop ≥1280：grid 6 固定 col 取代 flex justify-content:center
+     * 理由：flex+center 在 SSE 逐筆 append 時每加一張卡 layout 重排，
+     * 已飛行中的卡 burst 目標位置漂移（位置 3→1 的位移現象）。
+     * grid 6 固定 track 從第 1 張就鎖定每 slot 座標，後到的卡填下一 col、不擾動既有卡。
+     */
+    display: grid;
+    grid-template-columns: repeat(6, 150px);
     justify-content: center;
     gap: 20px;
     overflow-x: visible;             /* 覆寫全域 overflow-x: auto */
@@ -1995,7 +2000,7 @@ body.sidebar-collapsed .showcase-footer {
     aspect-ratio: 4 / 5;             /* 188px tall on 150 wide */
     height: auto;                    /* 覆寫全域 height: 140px */
     border-radius: var(--radius-md);
-    flex: 0 0 150px;                 /* 覆寫全域 flex: 0 0 100px */
+    flex: none;                      /* grid 不需 flex，覆寫全域 flex: 0 0 100px */
 }
 
 .actress-picker-overlay .picker-candidate-img {
