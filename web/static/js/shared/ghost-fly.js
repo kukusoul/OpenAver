@@ -174,7 +174,7 @@
          * Lightbox → Grid ghost fly-back
          * @param {DOMRect} fromRect - lightbox 封面的 bounding rect（lightboxOpen = false 前捕獲）
          * @param {Element} targetCardEl - 目標 grid 卡片元素
-         * @param {object} [options] - { coverSrc }
+         * @param {object} [options] - { coverSrc, fromImg }
          * @returns {null} fire-and-forget
          */
         playLightboxToGrid: function (fromRect, targetCardEl, options) {
@@ -184,6 +184,10 @@
             if (window.OpenAver && window.OpenAver.prefersReducedMotion) return null;
 
             if (!fromRect.width || fromRect.width === 0) return null;
+
+            // 隱藏 lightbox 大圖，避免 ghost 縮回過程與原位大圖疊圖（lightbox CSS fade-out 250ms）
+            var fromImg = options.fromImg || document.querySelector('.lightbox-cover img');
+            if (fromImg) gsap.set(fromImg, { opacity: 0 });
 
             // 判斷目標卡片是否在 viewport 內
             var targetImg = targetCardEl.querySelector('.av-card-preview-img img, .actress-card-photo img');
