@@ -1981,8 +1981,14 @@ body.sidebar-collapsed .showcase-footer {
 }
 
 .actress-picker-overlay .picker-candidates-grid {
-    display: flex;
-    flex-wrap: nowrap;               /* desktop ≥1280 預設單行 */
+    /* desktop ≥1280：grid N 固定 col 取代 flex justify-content:center
+     * --picker-cols 由 JS 在 SSE 收齊後依實際 count 設（_burstAllPickerCandidates）
+     * fallback 6（首次 burst 前 / partial 階段）。
+     * tablet/mobile 由 media query 自行覆蓋為 repeat(3, ...)，不引用此 var，
+     * 因此 desktop→tablet resize 時 inline var 不會洩漏蓋掉媒體查詢規則。
+     */
+    display: grid;
+    grid-template-columns: repeat(var(--picker-cols, 6), 150px);
     justify-content: center;
     gap: 20px;
     overflow-x: visible;             /* 覆寫全域 overflow-x: auto */
@@ -1995,7 +2001,7 @@ body.sidebar-collapsed .showcase-footer {
     aspect-ratio: 4 / 5;             /* 188px tall on 150 wide */
     height: auto;                    /* 覆寫全域 height: 140px */
     border-radius: var(--radius-md);
-    flex: 0 0 150px;                 /* 覆寫全域 flex: 0 0 100px */
+    flex: none;                      /* grid 不需 flex，覆寫全域 flex: 0 0 100px */
 }
 
 .actress-picker-overlay .picker-candidate-img {

@@ -50,6 +50,7 @@
         <a href="#ds-feedback">Feedback</a>
         <a href="#ds-showcase-elements">Showcase Elements</a>
         <a href="#ds-search-elements">Search Elements</a>
+        <a href="#ds-notif-center">Notification Center</a>
     </nav>
 
     <!-- 右側內容 -->
@@ -3059,6 +3060,136 @@
                 </p>
             </div>
 
+        </section>
+
+        <!-- Notification Center (53b-T1 demo) -->
+        <section id="ds-notif-center" class="ds-section glass"
+                 x-data="{
+                     demoDrawerOpen: true,  /* TODO 53b-T4: 接 toggle，本 demo 永遠展開 */
+                     demoItemsFull: [],
+                     demoItems: [],
+                     fakeDataMode: 'has_items',
+                     init() {
+                         var now = Date.now() / 1000;
+                         this.demoItemsFull = [
+                             { id: '1', level: 'error',   title_key: 'notif.scanner_failed',                 message: '掃描中斷：找不到資料夾', timestamp: now - 120 },
+                             { id: '2', level: 'warn',    title_key: 'notif.batch_enrich_done_with_errors',  message: '補完 48 部，2 部失敗',    timestamp: now - 300 },
+                             { id: '3', level: 'success', title_key: 'notif.scanner_done',                   message: '完成 1247 部',            timestamp: now - 600 },
+                             { id: '4', level: 'info',    title_key: 'notif.batch_enrich_started',           message: '共 50 部',                timestamp: now - 660 }
+                         ];
+                         this.demoItems = [...this.demoItemsFull];
+                     },
+                     toggleFakeData() {
+                         this.fakeDataMode = this.fakeDataMode === 'has_items' ? 'empty' : 'has_items';
+                         this.demoItems = this.fakeDataMode === 'has_items' ? [...this.demoItemsFull] : [];
+                     },
+                     clearAll() { this.demoItems = []; this.fakeDataMode = 'empty'; }
+                 }">
+            <h2>Notification Center</h2>
+            <p class="ds-note">53b-T1 靜態 demo — 鈴鐺 4 狀態 + 抽屜 4 嚴重度通知樣本。實際 poll / 已讀邏輯 / anchor 定位 / focus trap 在 T2-T5 接入 base.html。</p>
+
+            <!-- Subsection 1: 鈴鐺 4 狀態並排 -->
+            <div class="ds-subsection">
+                <h3>Bell States</h3>
+                <p class="ds-desc">鈴鐺 4 狀態（idle / info / warn / error），DaisyUI semantic color 自動跟主題（CD-53B-9）。</p>
+                <div class="flex items-center gap-6">
+                    <div class="flex flex-col items-center gap-1">
+                        <button class="btn btn-ghost btn-sm" type="button" aria-label="idle bell">
+                            <i class="bi bi-bell text-xl"></i>
+                        </button>
+                        <span class="text-xs text-base-content/60">idle</span>
+                    </div>
+                    <div class="flex flex-col items-center gap-1">
+                        <div class="relative inline-flex">
+                            <button class="btn btn-ghost btn-sm" type="button" aria-label="info bell">
+                                <i class="bi bi-bell-fill text-info text-xl"></i>
+                            </button>
+                            <span class="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-info"></span>
+                        </div>
+                        <span class="text-xs text-base-content/60">INFO</span>
+                    </div>
+                    <div class="flex flex-col items-center gap-1">
+                        <div class="relative inline-flex">
+                            <button class="btn btn-ghost btn-sm" type="button" aria-label="warn bell">
+                                <i class="bi bi-bell-fill text-warning text-xl"></i>
+                            </button>
+                            <span class="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-warning"></span>
+                        </div>
+                        <span class="text-xs text-base-content/60">WARN</span>
+                    </div>
+                    <div class="flex flex-col items-center gap-1">
+                        <div class="relative inline-flex">
+                            <button class="btn btn-ghost btn-sm" type="button" aria-label="error bell">
+                                <i class="bi bi-bell-fill text-error text-xl"></i>
+                            </button>
+                            <span class="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-error"></span>
+                        </div>
+                        <span class="text-xs text-base-content/60">ERROR</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Subsection 2: 抽屜展開靜態樣本 -->
+            <div class="ds-subsection">
+                <h3>Drawer (Expanded Sample)</h3>
+                <p class="ds-desc">抽屜展開狀態，4 個嚴重度通知樣本。實際 anchor 定位 / 開關動畫 / focus trap 在 T4 接入。</p>
+                <div class="relative min-h-[360px]">
+                    <div class="w-80 bg-base-100 border border-base-300 rounded-xl shadow-lg">
+                        <div class="flex items-center justify-between px-4 py-2 border-b border-base-300">
+                            <span class="font-semibold text-sm" x-text="window.t('notif.title')"></span>
+                            <button class="btn btn-ghost btn-xs" type="button"
+                                    @click="clearAll()"
+                                    x-text="window.t('notif.clear_all')"></button>
+                        </div>
+                        <template x-if="demoItems.length === 0">
+                            <div class="p-6 text-center text-sm text-base-content/60"
+                                 x-text="window.t('notif.empty')"></div>
+                        </template>
+                        <template x-for="item in demoItems" :key="item.id">
+                            <div class="px-4 py-3 border-b border-base-200 last:border-b-0 hover:bg-base-200">
+                                <div class="flex items-start gap-2">
+                                    <span class="text-xs mt-0.5"
+                                          :class="{
+                                              'text-info':    item.level==='info',
+                                              'text-success': item.level==='success',
+                                              'text-warning': item.level==='warn',
+                                              'text-error':   item.level==='error'
+                                          }">●</span>
+                                    <div class="flex-1 min-w-0">
+                                        <div class="text-sm font-medium" x-text="window.t(item.title_key)"></div>
+                                        <div class="text-xs text-base-content/60" x-text="item.message"></div>
+                                        <div class="text-xs text-base-content/40 mt-1"
+                                             x-text="new Date(item.timestamp * 1000).toLocaleString('zh-TW')"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Subsection 3: 互動 -->
+            <div class="ds-subsection">
+                <h3>Demo Controls</h3>
+                <p class="ds-desc">切換假資料 / 全部清空（demo 階段為 no-op：直接清空 demoItems，T5 才接 confirm）。</p>
+                <div class="flex items-center gap-3">
+                    <button class="btn btn-sm" type="button" @click="toggleFakeData()">
+                        切換假資料（目前：<span x-text="fakeDataMode === 'has_items' ? '有通知' : '空抽屜'"></span>）
+                    </button>
+                    <button class="btn btn-sm btn-ghost" type="button" @click="clearAll()">
+                        清空（demo no-op）
+                    </button>
+                </div>
+            </div>
+
+            <!-- 技術細節 -->
+            <div class="ds-note">
+                <strong>技術細節：</strong>
+                嚴重度顏色用 DaisyUI semantic（<code>bg-info</code> / <code>bg-success</code> / <code>bg-warning</code> / <code>bg-error</code>），跟主題自動切換（CD-53B-9）。
+                抽屜 panel 用 <code>bg-base-100</code> + <code>shadow-lg</code> + <code>rounded-xl</code>，T4 整合 base.html 時再對齊 §2 玻璃階。
+                T1 demo <strong>不引入</strong> <code>@alpinejs/anchor</code>、<code>@alpinejs/focus</code>、<code>x-collapse</code>，皆留 T4 / T5 處理。
+                <br><strong>Demo Controls 文案 i18n 例外</strong>：「切換假資料 / 有通知 / 空抽屜 / 清空 (demo no-op)」為 design-system 內部開發者用文案，沿 ds-desc 中文慣例不抽 i18n。
+            </div>
         </section>
     </div>
 </div>

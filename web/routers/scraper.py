@@ -22,6 +22,7 @@ from core.path_utils import to_file_uri, uri_to_fs_path
 from core.scraper import search_jav
 from core.logger import get_logger
 from core.config import load_config
+from web.routers.notifications import emit_notification as _emit_notif
 
 logger = get_logger(__name__)
 
@@ -234,71 +235,99 @@ async def batch_enrich_endpoint(request: BatchEnrichRequest):
     async def event_generator():
         success_count = 0
         failed_count = 0
+        # 53b-T3: 補完開始通知
+        _emit_notif(
+            "info", "notif.batch_enrich_started",
+            message=f"共 {total} 部",
+            task_type="batch_enrich",
+        )
         # scraper cache：只對 refresh_full 生效（100% 需要 scraper data）
         # fill_missing 由 enrich_single 內部判斷是否需要打外站，不 pre-fetch
         # value 為 dict（成功）或 {}（search_jav 回 None，負向 cache）
         scraper_cache: dict = {}
 
-        for idx, item in enumerate(deduped_items, start=1):
-            effective_source = item.source or request.source or "auto"
-            effective_lang = item.javbus_lang or request.javbus_lang
+        try:
+            for idx, item in enumerate(deduped_items, start=1):
+                effective_source = item.source or request.source or "auto"
+                effective_lang = item.javbus_lang or request.javbus_lang
 
-            # progress 事件
-            yield f"data: {json.dumps({'type': 'progress', 'current': idx, 'total': total, 'number': item.number})}\n\n"
+                # progress 事件
+                yield f"data: {json.dumps({'type': 'progress', 'current': idx, 'total': total, 'number': item.number})}\n\n"
 
-            try:
-                loop = asyncio.get_running_loop()
+                try:
+                    loop = asyncio.get_running_loop()
 
-                # scraper cache（只對 refresh_full pre-fetch）
-                cached_data = None
-                if request.mode == "refresh_full":
-                    cache_key = (item.number.upper(), effective_source, effective_lang)
-                    if cache_key not in scraper_cache:
-                        fetched = await loop.run_in_executor(
-                            None,
-                            lambda n=item.number, es=effective_source, el=effective_lang: search_jav(
-                                n,
-                                source=es,
-                                proxy_url=proxy_url,
-                                primary_source=primary_source,
-                                javbus_lang=el,
-                            ),
-                        )
-                        # 負向 cache：search_jav 回 None → 存 {}（空 dict falsy）
-                        # enrich_single 收到 {} 時 `is None` 為 False（不再搜），
-                        # `not scraper_data` 為 True（回錯誤）
-                        scraper_cache[cache_key] = fetched if fetched else {}
-                    cached_data = scraper_cache[cache_key]
+                    # scraper cache（只對 refresh_full pre-fetch）
+                    cached_data = None
+                    if request.mode == "refresh_full":
+                        cache_key = (item.number.upper(), effective_source, effective_lang)
+                        if cache_key not in scraper_cache:
+                            fetched = await loop.run_in_executor(
+                                None,
+                                lambda n=item.number, es=effective_source, el=effective_lang: search_jav(
+                                    n,
+                                    source=es,
+                                    proxy_url=proxy_url,
+                                    primary_source=primary_source,
+                                    javbus_lang=el,
+                                ),
+                            )
+                            # 負向 cache：search_jav 回 None → 存 {}（空 dict falsy）
+                            # enrich_single 收到 {} 時 `is None` 為 False（不再搜），
+                            # `not scraper_data` 為 True（回錯誤）
+                            scraper_cache[cache_key] = fetched if fetched else {}
+                        cached_data = scraper_cache[cache_key]
 
-                result = await loop.run_in_executor(
-                    None,
-                    lambda i=item, sd=cached_data: enrich_single(
-                        file_path=i.file_path,
-                        number=i.number,
-                        mode=request.mode,
-                        write_nfo=request.write_nfo,
-                        write_cover=request.write_cover,
-                        write_extrafanart=request.write_extrafanart,
-                        overwrite_existing=request.overwrite_existing,
-                        proxy_url=proxy_url,
-                        primary_source=primary_source,
-                        source=effective_source if effective_source != "auto" else None,
-                        javbus_lang=effective_lang,
-                        scraper_data=sd,
-                    ),
-                )
-                from dataclasses import asdict
-                result_dict = asdict(result)
-                if result.success:
-                    success_count += 1
-                else:
+                    result = await loop.run_in_executor(
+                        None,
+                        lambda i=item, sd=cached_data: enrich_single(
+                            file_path=i.file_path,
+                            number=i.number,
+                            mode=request.mode,
+                            write_nfo=request.write_nfo,
+                            write_cover=request.write_cover,
+                            write_extrafanart=request.write_extrafanart,
+                            overwrite_existing=request.overwrite_existing,
+                            proxy_url=proxy_url,
+                            primary_source=primary_source,
+                            source=effective_source if effective_source != "auto" else None,
+                            javbus_lang=effective_lang,
+                            scraper_data=sd,
+                        ),
+                    )
+                    from dataclasses import asdict
+                    result_dict = asdict(result)
+                    if result.success:
+                        success_count += 1
+                    else:
+                        failed_count += 1
+                    yield f"data: {json.dumps({'type': 'result-item', 'number': item.number, 'file_path': item.file_path, **result_dict})}\n\n"
+                except Exception:
+                    logger.exception("batch_enrich item %s 失敗", item.number)
                     failed_count += 1
-                yield f"data: {json.dumps({'type': 'result-item', 'number': item.number, 'file_path': item.file_path, **result_dict})}\n\n"
-            except Exception:
-                logger.exception("batch_enrich item %s 失敗", item.number)
-                failed_count += 1
-                yield f"data: {json.dumps({'type': 'result-item', 'number': item.number, 'file_path': item.file_path, 'success': False, 'error': 'enrich 處理失敗，請查閱日誌'})}\n\n"
+                    yield f"data: {json.dumps({'type': 'result-item', 'number': item.number, 'file_path': item.file_path, 'success': False, 'error': 'enrich 處理失敗，請查閱日誌'})}\n\n"
 
-        yield f"data: {json.dumps({'type': 'done', 'summary': {'total': total, 'success': success_count, 'failed': failed_count}})}\n\n"
+            yield f"data: {json.dumps({'type': 'done', 'summary': {'total': total, 'success': success_count, 'failed': failed_count}})}\n\n"
+            # 53b-T3: 補完完成通知
+            if failed_count > 0:
+                _emit_notif(
+                    "warn", "notif.batch_enrich_done_with_errors",
+                    message=f"補完 {success_count} 部，{failed_count} 部失敗",
+                    task_type="batch_enrich",
+                )
+            else:
+                _emit_notif(
+                    "success", "notif.batch_enrich_done",
+                    message=f"補完 {success_count} 部",
+                    task_type="batch_enrich",
+                )
+        except Exception:
+            logger.exception("[notif] batch_enrich 失敗")
+            _emit_notif(
+                "error", "notif.batch_enrich_failed",
+                message="批次補完中斷，請查閱日誌",
+                task_type="batch_enrich",
+            )
+            raise
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")

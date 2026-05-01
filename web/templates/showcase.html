@@ -512,6 +512,7 @@
         <!-- Lightbox (M3a) -->
         <div class="showcase-lightbox"
              :class="{ 'show': lightboxOpen }"
+             x-trap.inert="lightboxOpen && !sampleGalleryOpen && !removeActressModalOpen"
              @click="handleLightboxBackdropClick($event)">
 
             <div class="lightbox-content" @click.stop>
@@ -797,7 +798,10 @@
                         </div>
                     </template>
                 </div>
-                <div x-show="_pickerLoading && _candidates.length === 0" class="picker-loading">
+                <!-- Method B（defer-burst）：loading 條件改用 _pickerBurstFired，避免第 1 張 candidate
+                     到達就隱藏 spinner、但 cards 仍 opacity:0（CSS 預設）造成空白 picker（cloud SSE
+                     可達 5s）。Empty 與 refresh 同步用 _pickerBurstFired 為基準。 -->
+                <div x-show="_pickerLoading && !_pickerBurstFired" class="picker-loading">
                     <i class="bi bi-hourglass-split"></i>
                     <span x-text="t('showcase.actress.picker.loading')"></span>
                 </div>
@@ -807,7 +811,7 @@
                     <p class="picker-empty-hint" x-text="t('showcase.actress.picker.empty_hint')"></p>
                 </div>
                 <button class="picker-refresh-btn"
-                        x-show="_candidates.length > 0"
+                        x-show="_pickerBurstFired"
                         @click.stop="openActressPicker()"
                         :disabled="_pickerLoading"
                         :title="t('showcase.actress.change_photo')"

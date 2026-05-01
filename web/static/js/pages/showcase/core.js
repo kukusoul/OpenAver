@@ -3,6 +3,18 @@
  * M2a: 基本骨架 + API 載入 + Image Grid 渲染
  */
 
+// 53a codex F3: $persist 對 localStorage 壞 JSON 沒 try/catch（會在 Alpine init 階段拋錯炸整頁），
+// 必須在 Alpine.data 註冊前先清掃壞值，讓 $persist fallback 走預設物件
+(function _safeCleanShowcaseState() {
+    try {
+        var raw = localStorage.getItem('showcase_state');
+        if (raw !== null) JSON.parse(raw);
+    } catch (e) {
+        try { localStorage.removeItem('showcase_state'); } catch (_) { /* storage unavailable */ }
+        console.warn('[Showcase] cleared corrupt showcase_state from localStorage:', e);
+    }
+})();
+
 // F1: 大陣列移出 Alpine reactive scope — Alpine 不追蹤
 var _videos = [];
 var _filteredVideos = [];
@@ -100,6 +112,19 @@ function showcaseState() {
     };
 
     return {
+        // 53a-T2: 持久化容器（$persist 自動同步 localStorage 的 'showcase_state' key）
+        // sort/order/actressSort/actressOrder 用 null sentinel，讓 restoreState 走 URL > _persisted > config > fallback 優先序
+        _persistedShowcase: this.$persist({
+            sort: null,
+            order: null,
+            page: 1,
+            search: '',
+            mode: 'grid',
+            showFavoriteActresses: false,
+            actressSort: null,
+            actressOrder: null,
+        }).as('showcase_state'),
+
         // --- 狀態變數 ---
         loading: true,
         error: '',           // 錯誤訊息（API 失敗時顯示）
@@ -175,6 +200,7 @@ function showcaseState() {
         _pickerRunId: 0,
         _pickerSSE: null,
         _pickerTimeoutTimer: null,
+        _pickerBurstFired: false,        // SSE 收齊後一次 burst（防 done/timeout/error 重複觸發）
 
         // T3.3: Remove Actress fluent-modal 狀態
         removeActressModalOpen: false,
@@ -270,6 +296,8 @@ function showcaseState() {
                         if (this.lightboxCloseTimer) clearTimeout(this.lightboxCloseTimer);  // F2: cleanup delayed clear timer
                         if (this.toastTimer) clearTimeout(this.toastTimer);
                         if (this.lightboxOpen) document.body.classList.remove('overflow-hidden');
+                        this._resetPicker();                                  // 53a-T1: 清場 picker 狀態
+                        window.GhostFly?.cleanupStaleGhosts?.();              // 53a-T1: 移除殘留 ghost（沿 v0.8.1 T4 optional-chaining pattern）
                     }
                 });
             }
@@ -304,21 +332,15 @@ function showcaseState() {
             // 必須保留 numeric 0 讓下方 grid+perPage=0→120 降級邏輯有機會觸發。
             const defaultPerPage = cfg.items_per_page ?? 90;
 
-            // 2. 從 localStorage 恢復（優先於 config）
-            const saved = localStorage.getItem('showcase_state');
-            let state = {};
-            if (saved) {
-                try {
-                    state = JSON.parse(saved);
-                } catch (e) {
-                    console.warn('[Showcase] Failed to parse localStorage:', e);
-                }
-            }
+            // 2. 從 _persistedShowcase（$persist 自動讀的 localStorage 'showcase_state'）取
+            //    53a-T2: 取代手寫 localStorage.getItem + JSON.parse，格式向後相容
+            const state = this._persistedShowcase || {};
 
             // 3. 從 URL params 恢復（最高優先）
             const urlParams = new URLSearchParams(window.location.search);
 
-            // 4. 優先序：URL > localStorage > config > fallback
+            // 4. 優先序：URL > _persistedShowcase > config > fallback
+            //    sort/order/actressSort/actressOrder 在 _persisted 用 null sentinel，新用戶會透下到 config
             //    urlNum: 取 URL 數值參數，空字串視為無值（避免 parseInt("") → NaN）
             const urlNum = (key) => { const v = urlParams.get(key); return v !== null && v !== '' ? v : undefined; };
             this.sort = urlParams.get('sort') || state.sort || defaultSort;
@@ -334,7 +356,7 @@ function showcaseState() {
             if (this.mode === 'grid' && this.perPage === 0) {
                 this.perPage = 120;
             }
-            // ★ 44a: 女優模式 — 只從 localStorage，不加 URL params（避免汙染 shareable link）
+            // ★ 44a: 女優模式 — 只從 _persistedShowcase，不加 URL params（避免汙染 shareable link）
             this.showFavoriteActresses = state.showFavoriteActresses === true;  // 嚴格 === true
             this.actressSort = state.actressSort || 'video_count';
             this.actressOrder = state.actressOrder || 'desc';
@@ -342,18 +364,16 @@ function showcaseState() {
 
         // --- 狀態持久化 (M2c) ---
         saveState() {
-            const state = {
-                sort: this.sort,
-                order: this.order,
-                // T3.2 (CD-52-3): perPage 不再寫入 localStorage（每次 init 重讀 cfg.items_per_page）
-                page: this.page,
-                search: this.search,
-                mode: this.mode,
-                showFavoriteActresses: this.showFavoriteActresses,  // ★ 44a
-                actressSort: this.actressSort,                      // ★ 44a
-                actressOrder: this.actressOrder,                    // ★ 44a
-            };
-            localStorage.setItem('showcase_state', JSON.stringify(state));
+            // 53a-T2: 寫入 reactive _persistedShowcase，$persist 自動同步 localStorage 'showcase_state'
+            // T3.2 (CD-52-3): perPage 不寫入（每次 init 重讀 cfg.items_per_page）
+            this._persistedShowcase.sort = this.sort;
+            this._persistedShowcase.order = this.order;
+            this._persistedShowcase.page = this.page;
+            this._persistedShowcase.search = this.search;
+            this._persistedShowcase.mode = this.mode;
+            this._persistedShowcase.showFavoriteActresses = this.showFavoriteActresses;  // ★ 44a
+            this._persistedShowcase.actressSort = this.actressSort;                      // ★ 44a
+            this._persistedShowcase.actressOrder = this.actressOrder;                    // ★ 44a
 
             // 同步到 URL（方便分享連結）
             const params = new URLSearchParams();
@@ -1700,7 +1720,7 @@ function showcaseState() {
                 this.$nextTick(function () {
                     var cardEl = document.querySelector('[data-flip-id="' + CSS.escape(flybackFlipId) + '"]');
                     if (cardEl) {
-                        window.GhostFly.playLightboxToGrid(flybackFromRect, cardEl, { coverSrc: flybackCoverSrc });
+                        window.GhostFly.playLightboxToGrid(flybackFromRect, cardEl, { coverSrc: flybackCoverSrc, fromImg: lbImg });
                     }
                 });
             }
@@ -2288,12 +2308,49 @@ function showcaseState() {
         },
 
         /**
+         * SSE 收齊（done / timeout / error）後一次 burst 全部候選卡。
+         * 對齊 motion-lab 模式：所有卡同時從封面 stagger 爆射，partial 也視覺置中。
+         */
+        async _burstAllPickerCandidates(runId) {
+            if (this._pickerRunId !== runId) return;
+            if (this._candidates.length === 0) return;
+            if (this._pickerBurstFired) return;     // 防 done/timeout/error 重複觸發
+            this._pickerBurstFired = true;
+
+            await this.$nextTick();
+            if (this._pickerRunId !== runId) return;
+
+            const grid = this.$refs.pickerGrid;
+            const coverEl = this.$refs.pickerCoverImg;
+            if (!grid || !coverEl || typeof window.BurstPicker === 'undefined') return;
+
+            const cards = Array.from(grid.querySelectorAll('.picker-candidate-card'));
+            if (!cards.length) return;
+
+            // 依實際 count 縮 grid 至 N col 使 partial 視覺置中。
+            // 用 CSS custom property --picker-cols（desktop rule 引用 fallback 6），
+            // tablet/mobile media query 自有 repeat(3, ...) 不引用此 var，故 desktop→tablet
+            // resize 不會被 inline var 洩漏蓋掉媒體查詢規則。
+            grid.style.setProperty('--picker-cols', cards.length);
+
+            window.BurstPicker.playPickerBurst(cards, coverEl, _PICKER_PARAMS, {
+                streamMode: 'stagger',
+                streamInterval: 80,                  // 6×80ms = 480ms 全到位，cascade 但快
+                floatTimerSink: this._pickerFloatTweens,
+                runId: runId,
+                getRunId: () => this._pickerRunId
+            });
+        },
+
+        /**
          * 啟動 EventSource，處理 candidate / done / error 事件 + 3s no-event timeout
+         * 候選卡先收進 _candidates（保持 opacity:0），SSE 收齊後一次 burst 全部 → 視覺對稱。
          */
         _startPickerSSE(name, runId) {
             const url = `/api/actresses/${encodeURIComponent(name)}/photo-candidates`;
             const sse = new EventSource(url);
             this._pickerSSE = sse;
+            this._pickerBurstFired = false;
 
             const scheduleTimeout = () => {
                 clearTimeout(this._pickerTimeoutTimer);
@@ -2301,42 +2358,16 @@ function showcaseState() {
                     if (this._pickerRunId !== runId) return;
                     sse.close();
                     this._pickerLoading = false;
+                    this._burstAllPickerCandidates(runId);
                 }, 3000);
             };
             scheduleTimeout();
 
-            sse.addEventListener('candidate', async (e) => {
+            sse.addEventListener('candidate', (e) => {
                 if (this._pickerRunId !== runId) { sse.close(); return; }
                 try {
                     const candidate = JSON.parse(e.data);
-                    // ⚠️ Race fix：必須在 push 後同步 capture myIndex，再 await。
-                    // 否則 SSE 一次連發多筆（local_crop 緊接 yield）時，所有 handler 在
-                    // await $nextTick 後 resume 看到的 _candidates.length 都是 N（最終值），
-                    // 會全部 pick cards[N-1]，導致中間 candidate 沒有 burst（停留 opacity: 0）。
                     this._candidates = [...this._candidates, candidate];
-                    const myIndex = this._candidates.length - 1;
-                    await this.$nextTick();
-                    if (this._pickerRunId !== runId) return;
-
-                    const grid = this.$refs.pickerGrid;
-                    if (grid && typeof window.BurstPicker !== 'undefined') {
-                        const cards = grid.querySelectorAll('.picker-candidate-card');
-                        const newCard = cards[myIndex];
-                        if (newCard) {
-                            // 用 $refs.pickerCoverImg 而非 $el.querySelector：在 @click handler 內
-                            // $el 是按鈕本身、不是 component root，querySelector 會 miss → cards 留 opacity:0
-                            const coverEl = this.$refs.pickerCoverImg;
-                            if (coverEl) {
-                                window.BurstPicker.playPickerBurst([newCard], coverEl, _PICKER_PARAMS, {
-                                    streamMode: 'instant',
-                                    streamInterval: 300,
-                                    floatTimerSink: this._pickerFloatTweens,
-                                    runId: runId,
-                                    getRunId: () => this._pickerRunId
-                                });
-                            }
-                        }
-                    }
                 } catch (err) {
                     console.warn('[Picker] Failed to parse candidate:', err);
                 }
@@ -2349,6 +2380,7 @@ function showcaseState() {
                 this._pickerSSE = null;
                 this._pickerLoading = false;
                 clearTimeout(this._pickerTimeoutTimer);
+                this._burstAllPickerCandidates(runId);
             });
 
             sse.onerror = () => {
@@ -2360,6 +2392,9 @@ function showcaseState() {
                     if (typeof this.showToast === 'function') {
                         this.showToast(window.t('showcase.actress.picker.error'), 'error');
                     }
+                } else {
+                    // 已收到部分候選，仍 burst 給用戶選
+                    this._burstAllPickerCandidates(runId);
                 }
             };
         },
@@ -2369,6 +2404,9 @@ function showcaseState() {
          */
         _onPickerHoverIn(el, i) {
             if (this._pickerSelected) return;
+            // 飛行中（pickerSettled !== '1'）不觸發 hover scale-up，避免 burst 尾段
+            // killTweensOf 凍結卡片於中途位置
+            if (!el || el.dataset.pickerSettled !== '1') return;
             if (typeof window.BurstPicker !== 'undefined') {
                 window.BurstPicker.playPickerHoverIn(el, _PICKER_PARAMS);
             }
@@ -2560,8 +2598,12 @@ function showcaseState() {
             this._pickerSelected = false;
             this._candidates = [];
             this._pickerCurrentSource = null;
+            this._pickerBurstFired = false;
             this._pickerFloatTweens.forEach(t => t && t.kill && t.kill());
             this._pickerFloatTweens = [];
+            // 清掉 _burstAllPickerCandidates 設的 --picker-cols（防下輪 count 不同殘留）
+            const grid = this.$refs?.pickerGrid;
+            if (grid) grid.style.removeProperty('--picker-cols');
         },
 
         /**

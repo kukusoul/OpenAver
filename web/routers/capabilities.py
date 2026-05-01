@@ -941,6 +941,65 @@ _TOOLS: list[dict] = [
             "-d '{{\"source\": \"graphis\", \"url\": \"https://example.com/photo.jpg\"}}'"
         ),
     },
+    {
+        "name": "get_notifications",
+        "description": "查詢 OpenAver 最近發生的事件通知（最多 10 筆），包含掃描開始/完成/失敗、批次補完等事件。可用來確認後台任務是否成功執行。只讀，不修改任何資料。",
+        "method": "GET",
+        "path": "/api/notifications",
+        "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+        },
+        "output_schema": {
+            "items": "[Notification] — 通知列表，最多 10 筆，最新的排前面；每筆含 id/timestamp/level/title_key/message/task_type/is_read",
+            "unread_count": "integer — 未讀通知數量",
+            "highest_unread_level": "string | null — 未讀中最高嚴重度（info/success/warn/error），無未讀時為 null",
+        },
+        "side_effect": False,
+        "confirmation_required": False,
+        "retry_safe": True,
+        "_example_template": "curl '{base}/api/notifications'",
+    },
+    {
+        "name": "mark_notifications_read",
+        "description": "把所有通知標記為已讀。無破壞性：不刪除任何通知，只更新已讀記錄。下次查詢時 unread_count 會變 0。",
+        "method": "POST",
+        "path": "/api/notifications/read",
+        "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+        },
+        "output_schema": {
+            "ok": "boolean",
+            "marked_count": "integer — 本次標記為已讀的通知數量",
+        },
+        "side_effect": True,
+        "confirmation_required": False,
+        "retry_safe": True,
+        "_example_template": "curl -X POST '{base}/api/notifications/read'",
+    },
+    {
+        "name": "clear_notifications",
+        "description": "清空所有通知記錄（包含已讀和未讀）。此操作不可逆，清空後記錄永久消失（重啟前）。AI 呼叫前必須向用戶確認。",
+        "method": "DELETE",
+        "path": "/api/notifications",
+        "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+        },
+        "output_schema": {
+            "ok": "boolean",
+            "cleared_count": "integer — 刪除的通知筆數",
+        },
+        "side_effect": True,
+        "confirmation_required": True,
+        "idempotent": True,
+        "retry_safe": True,
+        "_example_template": "curl -X DELETE '{base}/api/notifications'",
+    },
 ]
 
 

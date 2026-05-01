@@ -57,6 +57,9 @@ EXPECTED_TOOL_NAMES = {
     "fetch_samples",
     "list_actress_photo_candidates",
     "set_actress_photo",
+    "get_notifications",
+    "mark_notifications_read",
+    "clear_notifications",
 }
 
 REQUIRED_TOOL_FIELDS = [
@@ -103,9 +106,9 @@ class TestCapabilitiesEndpoint:
         data = client.get("/api/capabilities").json()
         assert "retry_hint" in data["error_format"]
 
-    def test_tools_count_is_29(self, client):
+    def test_tools_count_is_32(self, client):
         data = client.get("/api/capabilities").json()
-        assert len(data["tools"]) == 29
+        assert len(data["tools"]) == 32
 
     def test_all_tool_names_present(self, client):
         data = client.get("/api/capabilities").json()

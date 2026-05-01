@@ -178,7 +178,7 @@ window.SearchStateMixin_GridMode = {
                 var grid = document.querySelector('.search-grid');
                 var cardEl = grid ? grid.querySelector('[data-slot="' + closingIndex + '"]') : null;
                 if (cardEl) {
-                    window.GhostFly.playLightboxToGrid(flybackFromRect, cardEl, { coverSrc: flybackCoverSrc });
+                    window.GhostFly.playLightboxToGrid(flybackFromRect, cardEl, { coverSrc: flybackCoverSrc, fromImg: lbImg });
                 }
             });
         }
