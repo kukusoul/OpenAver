@@ -43,6 +43,7 @@ from core.config import load_config
 from core.scraper import smart_search
 from pydantic import BaseModel
 from core.logger import get_logger
+from web.routers.notifications import emit_notification as _emit_notif
 
 logger = get_logger(__name__)
 
@@ -83,6 +84,8 @@ def generate_avlist() -> Generator[str, None, None]:
     """產生影片列表（SSE 串流）- 使用 SQLite 儲存"""
 
     try:
+        # 53b-T3: 掃描開始通知
+        _emit_notif("info", "notif.scanner_started", task_type="scanner_generate")
         # 載入設定
         config = load_config()
         gallery_config = config.get('gallery', {})
@@ -138,6 +141,7 @@ def generate_avlist() -> Generator[str, None, None]:
         total_inserted = 0
         total_updated = 0
         total_deleted = 0
+        scan_error_count = 0
         session_added_paths = []  # 追蹤本次新增/變更的影片路徑
         long_paths: list[str] = []  # a5: Windows 長路徑收集（只在 win32 填充）
 
@@ -249,6 +253,7 @@ def generate_avlist() -> Generator[str, None, None]:
                     except Exception as e:
                         logger.exception("掃描檔案失敗: %s", file_info.get('path', ''))
                         yield _sse_event({"type": "log", "level": "warn", "message": f"  [{i}] 掃描發生錯誤，已跳過"})
+                        scan_error_count += 1
 
                 # 批次寫入
                 if videos_to_upsert:
@@ -382,6 +387,20 @@ def generate_avlist() -> Generator[str, None, None]:
         _jellyfin_cache_result = None
         _jellyfin_cache_time = 0
 
+        # 53b-T3: 掃描完成通知
+        if scan_error_count > 0:
+            _emit_notif(
+                "warn", "notif.scanner_done_with_errors",
+                message=f"完成 {len(all_videos)} 部，{scan_error_count} 部失敗",
+                task_type="scanner_generate",
+            )
+        else:
+            _emit_notif(
+                "success", "notif.scanner_done",
+                message=f"完成 {len(all_videos)} 部",
+                task_type="scanner_generate",
+            )
+
         yield _sse_event({
             "type": "done",
             "video_count": len(all_videos),
@@ -401,6 +420,12 @@ def generate_avlist() -> Generator[str, None, None]:
         # global 已在 try 區塊宣告，此處直接賦值即可
         _jellyfin_cache_result = None
         _jellyfin_cache_time = 0
+        # 53b-T3: 掃描失敗通知（不洩漏 str(e) 到前端）
+        _emit_notif(
+            "error", "notif.scanner_failed",
+            message="掃描中斷，請查閱日誌",
+            task_type="scanner_generate",
+        )
         yield _sse_event({"type": "error", "message": "產生影片列表失敗"})
 
 
