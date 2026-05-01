@@ -270,6 +270,7 @@ def generate_avlist() -> Generator[str, None, None]:
                 })
             except Exception as e:
                 logger.exception("掃描資料夾失敗: %s", directory)
+                scan_error_count += 1
                 yield _sse_event({"type": "log", "level": "error", "message": "掃描發生錯誤，已跳過此資料夾"})
 
         # 建立「當前設定資料夾」URI 集合，用於過濾 DB 記錄

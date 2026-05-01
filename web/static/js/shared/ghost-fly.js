@@ -189,12 +189,17 @@
             var fromImg = options.fromImg || document.querySelector('.lightbox-cover img');
             if (fromImg) gsap.set(fromImg, { opacity: 0 });
 
+            function abort() {
+                if (fromImg) gsap.set(fromImg, { opacity: 1 });
+                return null;
+            }
+
             // 判斷目標卡片是否在 viewport 內
             var targetImg = targetCardEl.querySelector('.av-card-preview-img img, .actress-card-photo img');
-            if (!targetImg) return null;
+            if (!targetImg) return abort();
 
             var toRect = targetImg.getBoundingClientRect();
-            if (!toRect || toRect.width === 0) return null;
+            if (!toRect || toRect.width === 0) return abort();
 
             var viewportH = window.innerHeight;
             var viewportW = window.innerWidth;
@@ -205,7 +210,7 @@
 
             if (!inViewport) {
                 // 退化：直接 fade-out（不強制 scroll）
-                return null;
+                return abort();
             }
 
             var coverSrc = options.coverSrc || targetImg.src;
