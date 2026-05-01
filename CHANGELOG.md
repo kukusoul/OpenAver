@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.3] - 2026-05-02
+
+本版帶來兩個獨立升級包：53a 補齊四個 Alpine 官方插件（焦點鎖、切頁狀態保留、平滑展開、指向交叉偵測），同時修正 showcase 切頁殘留動畫鬼影；53b 新增全站通知中心（sidebar 鈴鐺 + 抽屜），讓 Scanner 掃描與批次補完的開始/完成/失敗事件即時可見，從任何頁面甚至跨裝置都能查閱，不再需要停在 Scanner 頁面等待。
+
+*This release includes two upgrade packs: 53a adds four official Alpine plugins (focus trap, persistent state, smooth collapse, intersection observer) and fixes animation ghost on page leave; 53b adds a global Notification Center (sidebar bell + drawer) for real-time visibility of Scanner and batch-enrich events across all pages and devices.*
+
+### Added
+
+#### 🔔 53b — 通知中心（Notification Center）
+- **sidebar 鈴鐺 + 通知抽屜**：help 上方常駐鈴鐺 icon，有未讀事件時亮彩色點（資訊藍 / 成功綠 / 警告黃 / 錯誤紅），點開抽屜從右側滑出顯示最近 10 筆事件記錄
+- **後端 buffer**：deque maxlen=10，RLock thread-safe，`emit_notification()` helper 供任意 router 呼叫
+- **Scanner / Batch-enrich 接入**：掃描開始（info）/ 完成（success）/ 部分失敗（warn）/ 中斷（error）四種狀態通知；批次補完同樣三段接入
+- **跨裝置一致**：通知 buffer 存在後端程序記憶體，電腦跑掃描、手機打開也能看到同一份記錄
+- **3 個 REST 端點**：GET /api/notifications（查詢）/ POST /api/notifications/read（標已讀）/ DELETE /api/notifications（清空）
+- **i18n 14 個 notif.* key**（zh_TW.json）；其他語系 milestone 補齊
+- **Capabilities 3 個新 tool**：get_notifications / mark_notifications_read / clear_notifications（含 side_effect / confirmation_required 安全標記）
+- **Unit test 5 + Integration test 6**：buffer 邏輯與 API 端點完整覆蓋
+
+#### 🔌 53a — Alpine 輕量升級包
+- **Alpine 釘版 3.15.12**：persist / collapse / focus / intersect / anchor 5 個插件統一版本，不再使用 3.x.x 浮動版
+- **showcase Lightbox 焦點鎖**（x-trap.inert）：Lightbox 開啟時 Tab 鍵只在燈箱內循環，背景對螢幕閱讀器標記 aria-hidden
+- **showcase_state 改 $persist**：篩選條件、排序、模式切頁後自動保留（升級後舊的 localStorage 值仍可讀取）
+- **settings 摺疊展開動畫**（x-collapse）：進階刮削設定 / 進階顯示選項展開收合從硬切換改為平滑高度動畫
+- **scanner 女優別名管理**：header 整列可點擊展開（不只圖示）
+
+### Fixed
+
+- **showcase 切頁不殘留鬼影**：頁面離開時補呼叫 `_resetPicker()` + `GhostFly.cleanupStaleGhosts()`，快速切頁後不出現浮動圖片殘像
+- **Ghost-fly lightbox 關閉疊圖**：關閉反向動畫期間隱藏 lightbox 大圖，避免新舊動畫疊圖
+- **Photo picker burst 修正**：hover 凍結 + desktop layout reflow + 改 method B defer-burst（partial 置中 + loading 完整覆蓋）
+- **scanner 通知 early return 修正**：directories 未設定時 early return 不再殘留孤兒 "掃描開始" 通知
+- **鈴鐺 icon 對齊**：nav-link--bell 改用 -webkit-fill-available 消除 button UA fit-content 造成的 2.5px 右偏
+
 ## [0.8.2] - 2026-04-29
 
 本版把 ui-conventions 套用到剩餘 5 頁（scanner / settings / help / design-system / motion-lab），並把幾條與「軟體靈魂」對不上的舊互動清掉：原生 `confirm()` / `alert()` 替換成風格一致的 fluent-modal 與 toast，showcase toolbar per-page 下拉移除（Settings 為唯一真理來源）。對使用者而言視覺更整齊、確認對話更貼近主視覺、複製失敗時用得到完整訊息（不再只看到截斷 500 字）。
