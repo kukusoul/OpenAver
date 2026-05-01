@@ -390,7 +390,7 @@
                             <i class="bi bi-chevron-down" :class="{ 'rotate-180': expanded }"></i>
                         </span>
                     </button>
-                    <div x-show="expanded" x-transition class="collapsible-content" id="scraperAdvanced">
+                    <div x-show="expanded" x-collapse class="collapsible-content" id="scraperAdvanced">
 
                     <!-- 版本標記 -->
                     <div class="settings-form-row">
@@ -619,7 +619,7 @@
                             <i class="bi bi-chevron-down" :class="{ 'rotate-180': expanded }"></i>
                         </span>
                     </button>
-                    <div x-show="expanded" x-transition class="collapsible-content" id="galleryAdvanced">
+                    <div x-show="expanded" x-collapse class="collapsible-content" id="galleryAdvanced">
                     <div class="settings-form-row">
                         <label class="row-label">{{ t('settings.gallery.default_mode_label') }}</label>
                         <select class="select select-bordered select-sm" id="avlistMode"
