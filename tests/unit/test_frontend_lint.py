@@ -910,23 +910,24 @@ class TestShowcaseActressState:
             "showcase/core.js _setLightboxIndex 缺少 this._videoChipsExpanded = false（reset chips）"
 
     # --- saveState / restoreState ---
+    # 53a-T2 後改用 $persist：saveState 逐欄寫入 this._persistedShowcase.X = this.X
     def test_save_state_includes_actress_mode(self):
-        """saveState 內含 showFavoriteActresses key"""
+        """saveState 內含 _persistedShowcase.showFavoriteActresses 寫入"""
         js = self._js()
-        assert "showFavoriteActresses: this.showFavoriteActresses" in js, \
-            "showcase/core.js saveState() 缺少 showFavoriteActresses key"
+        assert "_persistedShowcase.showFavoriteActresses = this.showFavoriteActresses" in js, \
+            "showcase/core.js saveState() 缺少 _persistedShowcase.showFavoriteActresses 寫入"
 
     def test_save_state_includes_actress_sort(self):
-        """saveState 內含 actressSort key"""
+        """saveState 內含 _persistedShowcase.actressSort 寫入"""
         js = self._js()
-        assert "actressSort: this.actressSort" in js, \
-            "showcase/core.js saveState() 缺少 actressSort key"
+        assert "_persistedShowcase.actressSort = this.actressSort" in js, \
+            "showcase/core.js saveState() 缺少 _persistedShowcase.actressSort 寫入"
 
     def test_save_state_includes_actress_order(self):
-        """saveState 內含 actressOrder key"""
+        """saveState 內含 _persistedShowcase.actressOrder 寫入"""
         js = self._js()
-        assert "actressOrder: this.actressOrder" in js, \
-            "showcase/core.js saveState() 缺少 actressOrder key"
+        assert "_persistedShowcase.actressOrder = this.actressOrder" in js, \
+            "showcase/core.js saveState() 缺少 _persistedShowcase.actressOrder 寫入"
 
     def test_restore_state_restores_actress_mode(self):
         """restoreState 內含 showFavoriteActresses 還原邏輯"""

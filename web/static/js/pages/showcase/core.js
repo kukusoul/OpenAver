@@ -3,6 +3,18 @@
  * M2a: 基本骨架 + API 載入 + Image Grid 渲染
  */
 
+// 53a codex F3: $persist 對 localStorage 壞 JSON 沒 try/catch（會在 Alpine init 階段拋錯炸整頁），
+// 必須在 Alpine.data 註冊前先清掃壞值，讓 $persist fallback 走預設物件
+(function _safeCleanShowcaseState() {
+    try {
+        var raw = localStorage.getItem('showcase_state');
+        if (raw !== null) JSON.parse(raw);
+    } catch (e) {
+        try { localStorage.removeItem('showcase_state'); } catch (_) { /* storage unavailable */ }
+        console.warn('[Showcase] cleared corrupt showcase_state from localStorage:', e);
+    }
+})();
+
 // F1: 大陣列移出 Alpine reactive scope — Alpine 不追蹤
 var _videos = [];
 var _filteredVideos = [];
