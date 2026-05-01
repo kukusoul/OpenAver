@@ -28,13 +28,15 @@ case "$MODE" in
         "$TAILWIND_CLI" -i "$INPUT_CSS" -o "$OUTPUT_CSS" --watch
         ;;
     prod)
-        echo "Building CSS in production mode (minify)..."
-        "$TAILWIND_CLI" -i "$INPUT_CSS" -o "$OUTPUT_CSS" --minify
+        # 不 minify 進 git — readable 多行版方便 review diff / grep / blame。
+        # 真要 minify 在部署 pipeline 做（GitHub Actions 等），不進版控。
+        echo "Building CSS (readable multi-line, no minify)..."
+        "$TAILWIND_CLI" -i "$INPUT_CSS" -o "$OUTPUT_CSS"
         ;;
     *)
         echo "Usage: $0 [dev|prod]"
         echo "  dev  - Development mode with watch (default)"
-        echo "  prod - Production mode with minify"
+        echo "  prod - One-shot build, readable multi-line output"
         exit 1
         ;;
 esac
