@@ -100,6 +100,19 @@ function showcaseState() {
     };
 
     return {
+        // 53a-T2: 持久化容器（$persist 自動同步 localStorage 的 'showcase_state' key）
+        // sort/order/actressSort/actressOrder 用 null sentinel，讓 restoreState 走 URL > _persisted > config > fallback 優先序
+        _persistedShowcase: this.$persist({
+            sort: null,
+            order: null,
+            page: 1,
+            search: '',
+            mode: 'grid',
+            showFavoriteActresses: false,
+            actressSort: null,
+            actressOrder: null,
+        }).as('showcase_state'),
+
         // --- 狀態變數 ---
         loading: true,
         error: '',           // 錯誤訊息（API 失敗時顯示）
@@ -307,21 +320,15 @@ function showcaseState() {
             // 必須保留 numeric 0 讓下方 grid+perPage=0→120 降級邏輯有機會觸發。
             const defaultPerPage = cfg.items_per_page ?? 90;
 
-            // 2. 從 localStorage 恢復（優先於 config）
-            const saved = localStorage.getItem('showcase_state');
-            let state = {};
-            if (saved) {
-                try {
-                    state = JSON.parse(saved);
-                } catch (e) {
-                    console.warn('[Showcase] Failed to parse localStorage:', e);
-                }
-            }
+            // 2. 從 _persistedShowcase（$persist 自動讀的 localStorage 'showcase_state'）取
+            //    53a-T2: 取代手寫 localStorage.getItem + JSON.parse，格式向後相容
+            const state = this._persistedShowcase || {};
 
             // 3. 從 URL params 恢復（最高優先）
             const urlParams = new URLSearchParams(window.location.search);
 
-            // 4. 優先序：URL > localStorage > config > fallback
+            // 4. 優先序：URL > _persistedShowcase > config > fallback
+            //    sort/order/actressSort/actressOrder 在 _persisted 用 null sentinel，新用戶會透下到 config
             //    urlNum: 取 URL 數值參數，空字串視為無值（避免 parseInt("") → NaN）
             const urlNum = (key) => { const v = urlParams.get(key); return v !== null && v !== '' ? v : undefined; };
             this.sort = urlParams.get('sort') || state.sort || defaultSort;
@@ -337,7 +344,7 @@ function showcaseState() {
             if (this.mode === 'grid' && this.perPage === 0) {
                 this.perPage = 120;
             }
-            // ★ 44a: 女優模式 — 只從 localStorage，不加 URL params（避免汙染 shareable link）
+            // ★ 44a: 女優模式 — 只從 _persistedShowcase，不加 URL params（避免汙染 shareable link）
             this.showFavoriteActresses = state.showFavoriteActresses === true;  // 嚴格 === true
             this.actressSort = state.actressSort || 'video_count';
             this.actressOrder = state.actressOrder || 'desc';
@@ -345,18 +352,16 @@ function showcaseState() {
 
         // --- 狀態持久化 (M2c) ---
         saveState() {
-            const state = {
-                sort: this.sort,
-                order: this.order,
-                // T3.2 (CD-52-3): perPage 不再寫入 localStorage（每次 init 重讀 cfg.items_per_page）
-                page: this.page,
-                search: this.search,
-                mode: this.mode,
-                showFavoriteActresses: this.showFavoriteActresses,  // ★ 44a
-                actressSort: this.actressSort,                      // ★ 44a
-                actressOrder: this.actressOrder,                    // ★ 44a
-            };
-            localStorage.setItem('showcase_state', JSON.stringify(state));
+            // 53a-T2: 寫入 reactive _persistedShowcase，$persist 自動同步 localStorage 'showcase_state'
+            // T3.2 (CD-52-3): perPage 不寫入（每次 init 重讀 cfg.items_per_page）
+            this._persistedShowcase.sort = this.sort;
+            this._persistedShowcase.order = this.order;
+            this._persistedShowcase.page = this.page;
+            this._persistedShowcase.search = this.search;
+            this._persistedShowcase.mode = this.mode;
+            this._persistedShowcase.showFavoriteActresses = this.showFavoriteActresses;  // ★ 44a
+            this._persistedShowcase.actressSort = this.actressSort;                      // ★ 44a
+            this._persistedShowcase.actressOrder = this.actressOrder;                    // ★ 44a
 
             // 同步到 URL（方便分享連結）
             const params = new URLSearchParams();
