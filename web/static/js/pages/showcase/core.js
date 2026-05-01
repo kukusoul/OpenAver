@@ -175,6 +175,7 @@ function showcaseState() {
         _pickerRunId: 0,
         _pickerSSE: null,
         _pickerTimeoutTimer: null,
+        _pickerBurstFired: false,        // SSE 收齊後一次 burst（防 done/timeout/error 重複觸發）
 
         // T3.3: Remove Actress fluent-modal 狀態
         removeActressModalOpen: false,
@@ -2288,12 +2289,49 @@ function showcaseState() {
         },
 
         /**
+         * SSE 收齊（done / timeout / error）後一次 burst 全部候選卡。
+         * 對齊 motion-lab 模式：所有卡同時從封面 stagger 爆射，partial 也視覺置中。
+         */
+        async _burstAllPickerCandidates(runId) {
+            if (this._pickerRunId !== runId) return;
+            if (this._candidates.length === 0) return;
+            if (this._pickerBurstFired) return;     // 防 done/timeout/error 重複觸發
+            this._pickerBurstFired = true;
+
+            await this.$nextTick();
+            if (this._pickerRunId !== runId) return;
+
+            const grid = this.$refs.pickerGrid;
+            const coverEl = this.$refs.pickerCoverImg;
+            if (!grid || !coverEl || typeof window.BurstPicker === 'undefined') return;
+
+            const cards = Array.from(grid.querySelectorAll('.picker-candidate-card'));
+            if (!cards.length) return;
+
+            // 依實際 count 縮 grid 至 N col 使 partial 視覺置中。
+            // 用 CSS custom property --picker-cols（desktop rule 引用 fallback 6），
+            // tablet/mobile media query 自有 repeat(3, ...) 不引用此 var，故 desktop→tablet
+            // resize 不會被 inline var 洩漏蓋掉媒體查詢規則。
+            grid.style.setProperty('--picker-cols', cards.length);
+
+            window.BurstPicker.playPickerBurst(cards, coverEl, _PICKER_PARAMS, {
+                streamMode: 'stagger',
+                streamInterval: 80,                  // 6×80ms = 480ms 全到位，cascade 但快
+                floatTimerSink: this._pickerFloatTweens,
+                runId: runId,
+                getRunId: () => this._pickerRunId
+            });
+        },
+
+        /**
          * 啟動 EventSource，處理 candidate / done / error 事件 + 3s no-event timeout
+         * 候選卡先收進 _candidates（保持 opacity:0），SSE 收齊後一次 burst 全部 → 視覺對稱。
          */
         _startPickerSSE(name, runId) {
             const url = `/api/actresses/${encodeURIComponent(name)}/photo-candidates`;
             const sse = new EventSource(url);
             this._pickerSSE = sse;
+            this._pickerBurstFired = false;
 
             const scheduleTimeout = () => {
                 clearTimeout(this._pickerTimeoutTimer);
@@ -2301,42 +2339,16 @@ function showcaseState() {
                     if (this._pickerRunId !== runId) return;
                     sse.close();
                     this._pickerLoading = false;
+                    this._burstAllPickerCandidates(runId);
                 }, 3000);
             };
             scheduleTimeout();
 
-            sse.addEventListener('candidate', async (e) => {
+            sse.addEventListener('candidate', (e) => {
                 if (this._pickerRunId !== runId) { sse.close(); return; }
                 try {
                     const candidate = JSON.parse(e.data);
-                    // ⚠️ Race fix：必須在 push 後同步 capture myIndex，再 await。
-                    // 否則 SSE 一次連發多筆（local_crop 緊接 yield）時，所有 handler 在
-                    // await $nextTick 後 resume 看到的 _candidates.length 都是 N（最終值），
-                    // 會全部 pick cards[N-1]，導致中間 candidate 沒有 burst（停留 opacity: 0）。
                     this._candidates = [...this._candidates, candidate];
-                    const myIndex = this._candidates.length - 1;
-                    await this.$nextTick();
-                    if (this._pickerRunId !== runId) return;
-
-                    const grid = this.$refs.pickerGrid;
-                    if (grid && typeof window.BurstPicker !== 'undefined') {
-                        const cards = grid.querySelectorAll('.picker-candidate-card');
-                        const newCard = cards[myIndex];
-                        if (newCard) {
-                            // 用 $refs.pickerCoverImg 而非 $el.querySelector：在 @click handler 內
-                            // $el 是按鈕本身、不是 component root，querySelector 會 miss → cards 留 opacity:0
-                            const coverEl = this.$refs.pickerCoverImg;
-                            if (coverEl) {
-                                window.BurstPicker.playPickerBurst([newCard], coverEl, _PICKER_PARAMS, {
-                                    streamMode: 'instant',
-                                    streamInterval: 300,
-                                    floatTimerSink: this._pickerFloatTweens,
-                                    runId: runId,
-                                    getRunId: () => this._pickerRunId
-                                });
-                            }
-                        }
-                    }
                 } catch (err) {
                     console.warn('[Picker] Failed to parse candidate:', err);
                 }
@@ -2349,6 +2361,7 @@ function showcaseState() {
                 this._pickerSSE = null;
                 this._pickerLoading = false;
                 clearTimeout(this._pickerTimeoutTimer);
+                this._burstAllPickerCandidates(runId);
             });
 
             sse.onerror = () => {
@@ -2360,6 +2373,9 @@ function showcaseState() {
                     if (typeof this.showToast === 'function') {
                         this.showToast(window.t('showcase.actress.picker.error'), 'error');
                     }
+                } else {
+                    // 已收到部分候選，仍 burst 給用戶選
+                    this._burstAllPickerCandidates(runId);
                 }
             };
         },
@@ -2563,8 +2579,12 @@ function showcaseState() {
             this._pickerSelected = false;
             this._candidates = [];
             this._pickerCurrentSource = null;
+            this._pickerBurstFired = false;
             this._pickerFloatTweens.forEach(t => t && t.kill && t.kill());
             this._pickerFloatTweens = [];
+            // 清掉 _burstAllPickerCandidates 設的 --picker-cols（防下輪 count 不同殘留）
+            const grid = this.$refs?.pickerGrid;
+            if (grid) grid.style.removeProperty('--picker-cols');
         },
 
         /**

@@ -1981,13 +1981,14 @@ body.sidebar-collapsed .showcase-footer {
 }
 
 .actress-picker-overlay .picker-candidates-grid {
-    /* desktop ≥1280：grid 6 固定 col 取代 flex justify-content:center
-     * 理由：flex+center 在 SSE 逐筆 append 時每加一張卡 layout 重排，
-     * 已飛行中的卡 burst 目標位置漂移（位置 3→1 的位移現象）。
-     * grid 6 固定 track 從第 1 張就鎖定每 slot 座標，後到的卡填下一 col、不擾動既有卡。
+    /* desktop ≥1280：grid N 固定 col 取代 flex justify-content:center
+     * --picker-cols 由 JS 在 SSE 收齊後依實際 count 設（_burstAllPickerCandidates）
+     * fallback 6（首次 burst 前 / partial 階段）。
+     * tablet/mobile 由 media query 自行覆蓋為 repeat(3, ...)，不引用此 var，
+     * 因此 desktop→tablet resize 時 inline var 不會洩漏蓋掉媒體查詢規則。
      */
     display: grid;
-    grid-template-columns: repeat(6, 150px);
+    grid-template-columns: repeat(var(--picker-cols, 6), 150px);
     justify-content: center;
     gap: 20px;
     overflow-x: visible;             /* 覆寫全域 overflow-x: auto */

@@ -4783,33 +4783,31 @@ class TestPickerIntegrationGuard:
         assert re.search(r"return\s+(new\s+Promise|Promise\.resolve)", body), \
             "playPickerExitAll 必須回傳 Promise（避免 _closePicker 立即 reset 清空 _candidates）"
 
-    def test_picker_sse_handler_captures_index_before_await(self):
-        """SSE candidate handler 必須在 push 後同步 capture myIndex，再 await $nextTick。
-        否則一次連發多筆 candidate（local_crop 緊接 yield）時，所有 handler resume 後
-        看到的 _candidates.length 都是最終值，會全部 pick cards[N-1]，導致中間 candidate
-        沒有 burst（停留 opacity:0 從 CSS 預設），用戶看不到那幾張卡。
+    def test_picker_sse_candidate_handler_is_sync_push_only(self):
+        """Method B（defer-burst）：candidate handler 只做同步 push，不 await、不 burst。
+        Burst 延後到 SSE done / timeout / error 後由 _burstAllPickerCandidates 一次觸發，
+        對齊 motion-lab 模式（partial 也視覺置中、burst 飛行不受滑鼠干擾）。
+
+        舊 race-fix（myIndex capture-before-await）在 defer-burst 下已不適用：candidate
+        handler 不再呼叫 playPickerBurst，連 await $nextTick 都不需要。
         """
         js = self._core_js()
-        # 抓 _startPickerSSE 內 candidate handler 區塊
+        # 抓 _startPickerSSE 內 candidate handler 區塊（同步 callback，無 async）
         m = re.search(
-            r"sse\.addEventListener\(\s*['\"]candidate['\"]\s*,\s*async\s*\(?[^)]*\)?\s*=>\s*\{(.*?)\}\s*\)\s*;",
+            r"sse\.addEventListener\(\s*['\"]candidate['\"]\s*,\s*\(?[^)]*\)?\s*=>\s*\{(.*?)\}\s*\)\s*;",
             js, re.DOTALL,
         )
         assert m, "找不到 sse.addEventListener('candidate', ...) handler"
         body = m.group(1)
-        # 必須有 myIndex 變數
-        assert re.search(r"const\s+myIndex\s*=\s*this\._candidates\.length\s*-\s*1", body), \
-            "candidate handler 必須在 push 後同步 capture myIndex（race fix）"
-        # myIndex 必須出現在 await 之前
-        idx_pos = body.find("const myIndex")
-        await_pos = body.find("await this.$nextTick")
-        assert 0 <= idx_pos < await_pos, \
-            "myIndex capture 必須在 await this.$nextTick() 之前（race fix）"
-        # newCard 必須使用 myIndex（不能再用 this._candidates.length - 1）
-        assert re.search(r"cards\[\s*myIndex\s*\]", body), \
-            "newCard 必須使用 cards[myIndex]，不可用 cards[this._candidates.length - 1]"
-        assert "cards[this._candidates.length - 1]" not in body, \
-            "candidate handler 不可使用 cards[this._candidates.length - 1]（race bug：所有 handler 拿到同一張卡）"
+        # Method B：candidate handler 不可 await（defer-burst contract）
+        assert "await" not in body, \
+            "Method B：candidate handler 不可 await（defer-burst，burst 交給 _burstAllPickerCandidates）"
+        # candidate handler 不可自行呼叫 playPickerBurst
+        assert "playPickerBurst" not in body, \
+            "Method B：candidate handler 不可呼叫 playPickerBurst（改由 _burstAllPickerCandidates 統一觸發）"
+        # _burstAllPickerCandidates 必須定義一次 + done/timeout/error 三處呼叫（共 ≥4 次出現）
+        assert js.count("_burstAllPickerCandidates") >= 4, \
+            "_burstAllPickerCandidates 必須定義一次 + done / timeout / error 三處呼叫"
 
 
 class TestSettingsCssHardcoded:
