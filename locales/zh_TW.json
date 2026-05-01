@@ -477,6 +477,15 @@
       "confirm": "確認刪除"
     }
   },
+  "notif": {
+    "title": "通知",
+    "empty": "目前沒有通知",
+    "clear_all": "全部清空",
+    "scanner_failed": "掃描失敗",
+    "scanner_done": "掃描完成",
+    "batch_enrich_started": "開始批次補完",
+    "batch_enrich_done_with_errors": "批次補完完成（部分失敗）"
+  },
   "showcase": {
     "page_title": "影片瀏覽",
     "placeholder": {
