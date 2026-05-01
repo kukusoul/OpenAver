@@ -479,12 +479,19 @@
   },
   "notif": {
     "title": "通知",
-    "empty": "目前沒有通知",
     "clear_all": "全部清空",
-    "scanner_failed": "掃描失敗",
+    "empty": "目前沒有通知",
+    "open": "開啟通知",
+    "close": "關閉通知",
+    "dialog_label": "通知中心",
+    "scanner_started": "掃描開始",
     "scanner_done": "掃描完成",
-    "batch_enrich_started": "開始批次補完",
-    "batch_enrich_done_with_errors": "批次補完完成（部分失敗）"
+    "scanner_done_with_errors": "掃描完成（部分失敗）",
+    "scanner_failed": "掃描中斷",
+    "batch_enrich_started": "批次補完開始",
+    "batch_enrich_done": "批次補完完成",
+    "batch_enrich_done_with_errors": "批次補完（部分失敗）",
+    "batch_enrich_failed": "批次補完中斷"
   },
   "showcase": {
     "page_title": "影片瀏覽",
