@@ -84,8 +84,6 @@ def generate_avlist() -> Generator[str, None, None]:
     """產生影片列表（SSE 串流）- 使用 SQLite 儲存"""
 
     try:
-        # 53b-T3: 掃描開始通知
-        _emit_notif("info", "notif.scanner_started", task_type="scanner_generate")
         # 載入設定
         config = load_config()
         gallery_config = config.get('gallery', {})
@@ -109,6 +107,8 @@ def generate_avlist() -> Generator[str, None, None]:
             yield _sse_event({"type": "error", "message": "未設定掃描資料夾"})
             return
 
+        # 53b-T3: 確認 directories 有值才 emit 掃描開始通知
+        _emit_notif("info", "notif.scanner_started", task_type="scanner_generate")
         logger.info(f"[Gallery] 開始生成，目錄數: {len(directories)}")
 
         # 確保輸出目錄存在

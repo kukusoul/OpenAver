@@ -84,3 +84,27 @@ def test_highest_unread_level_priority(client):
     client.post("/api/notifications/read")
     emit_notification("warn", "notif.scanner_done_with_errors")
     assert client.get("/api/notifications").json()["highest_unread_level"] == "warn"
+
+
+def test_scanner_no_directory_emits_no_started(client):
+    """scanner_started 在無 directories 時不應 emit（P2-2 regression guard）。
+
+    沒有 scannerRouter 可以直接呼叫 scanner_generate，用 mock config 驗證 emit 邏輯：
+    當 directories 為空時，emit_notification 不應被呼叫（不殘留 scanner_started）。
+    """
+    import unittest.mock as mock
+    from web.routers.notifications import _notifications
+
+    # 模擬 directories 為空的 config
+    empty_config = {"gallery": {"directories": [], "output_dir": "output", "output_filename": "gallery_output.html", "path_mappings": {}, "min_size_mb": 0, "default_mode": "image", "default_sort": "date", "default_order": "descending", "items_per_page": 90}, "general": {"theme": "light"}}
+
+    with mock.patch("web.routers.scanner.load_config", return_value=empty_config):
+        from web.routers.scanner import generate_avlist
+        # 消費完 generator（否則 yield 不執行）
+        events = list(generate_avlist())
+
+    # 驗證：沒有 scanner_started 通知（early return path 不應 emit started）
+    notif_keys = [n["title_key"] for n in _notifications]
+    assert "notif.scanner_started" not in notif_keys, f"scanner_started 不應在 no-directory 路徑出現，但找到：{notif_keys}"
+    # 驗證：SSE stream 包含 error 事件
+    assert any("error" in e for e in events), "no-directory 路徑應產生 SSE error 事件"

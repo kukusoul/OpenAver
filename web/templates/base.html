@@ -269,21 +269,16 @@
             margin-right: 0.5rem;
         }
 
-        /* 53b-T4: sidebar 通知鈴鐺（語義為 button，繼承 nav-link 視覺但非切頁） */
+        /* 53b-T7: sidebar 通知鈴鐺：只保留 button reset，版面對齊繼承 .nav-link */
         .sidebar .nav-link--bell {
+            appearance: none;
             background: none;
             border: none;
             cursor: pointer;
             font: inherit;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            padding: 0.5rem 0.75rem;
-            width: 100%;
             text-align: left;
-            border-radius: var(--fluent-radius-md, 8px);
-            color: inherit;
-            transition: background var(--fluent-duration-fast, 167ms) var(--fluent-ease, linear);
+            width: -webkit-fill-available; /* 讓 button 像 <a> 撐滿 <li> 可用寬，消除 icon 右偏 */
+            width: stretch;                /* 標準草案等效值（Chromium 已支援） */
         }
         .sidebar .nav-link--bell:hover {
             background: var(--fluent-subtle-fill-secondary, rgba(0,0,0,0.04));
@@ -301,10 +296,10 @@
             border-radius: 50%;
             border: 1.5px solid var(--sidebar-bg, transparent);
         }
-        .sidebar .nav-link__unread-dot.is-info    { background: hsl(var(--in)); }
-        .sidebar .nav-link__unread-dot.is-success { background: hsl(var(--su)); }
-        .sidebar .nav-link__unread-dot.is-warn    { background: hsl(var(--wa)); }
-        .sidebar .nav-link__unread-dot.is-error   { background: hsl(var(--er)); }
+        .sidebar .nav-link__unread-dot.is-info    { background: var(--color-info); }
+        .sidebar .nav-link__unread-dot.is-success { background: var(--color-success); }
+        .sidebar .nav-link__unread-dot.is-warn    { background: var(--color-warning); }
+        .sidebar .nav-link__unread-dot.is-error   { background: var(--color-error); }
     </style>
 
     {% block extra_css %}{% endblock %}
@@ -555,12 +550,12 @@
                     <span class="nav-text">{{ t('nav.showcase') }}</span>
                 </a>
             </li>
-            <!-- 53b-T4: desktop 鈴鐺（sidebar 內 help 上方，不是切頁 nav-item） -->
-            <li class="nav-item">
+            <!-- 53b-T7: desktop 鈴鐺在底部組最上方（mt-auto 推至底，Bell → Help → Settings） -->
+            <li class="nav-item mt-auto">
                 <button x-ref="desktopBellBtn"
                         @click.stop="toggleDrawer($refs.desktopBellBtn)"
                         type="button"
-                        class="nav-link nav-link--bell relative w-full text-left"
+                        class="nav-link nav-link--bell relative"
                         :class="{ 'is-open': notifBell.drawerOpen }"
                         :title="notifBell.unreadCount > 0 ? ((window.t ? window.t('notif.title') : '通知') + ' (' + notifBell.unreadCount + ')') : (window.t ? window.t('notif.title') : '通知')"
                         :aria-label="notifBell.drawerOpen ? (window.t ? window.t('notif.close') : '關閉通知') : (window.t ? window.t('notif.open') : '開啟通知')"
@@ -580,7 +575,7 @@
                     </template>
                 </button>
             </li>
-            <li class="nav-item mt-auto">
+            <li class="nav-item">
                 <a class="nav-link {% if page == 'help' %}active{% endif %}" href="/help" title="{{ t('nav.help_title') }}"
                    @click="handleNavClick($event, $el.href)">
                     <i class="bi bi-question-circle"></i>
