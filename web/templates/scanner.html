@@ -257,16 +257,24 @@
 
     <!-- Actress Alias Management -->
     <div class="actress-alias-card" id="actressAliasCard">
-        <div class="actress-alias-header">
+        <!-- 53a-T5fix: header 整列點擊展開（對齊 settings collapsible-trigger pattern） -->
+        <div class="actress-alias-header"
+             role="button"
+             tabindex="0"
+             :aria-expanded="(!aliasCardCollapsed).toString()"
+             title="{{ t('scanner.alias.collapse_title') }}"
+             @click="toggleAliasCard()"
+             @keydown.enter.prevent="toggleAliasCard()"
+             @keydown.space.prevent="toggleAliasCard()">
             <div class="title">
                 <i class="bi bi-person-circle"></i> <span>{{ t('scanner.alias.section_title') }}</span>
             </div>
-            <button class="btn-icon btn-collapse" @click="toggleAliasCard()" title="{{ t('scanner.alias.collapse_title') }}">
+            <span class="btn-collapse" aria-hidden="true">
                 <i class="bi" :class="aliasCardCollapsed ? 'bi-chevron-down' : 'bi-chevron-up'"></i>
-            </button>
+            </span>
         </div>
 
-        <div class="actress-alias-body" x-show="!aliasCardCollapsed">
+        <div class="actress-alias-body" x-show="!aliasCardCollapsed" x-collapse>
             <!-- 單一輸入框：篩選 + 新增 -->
             <div class="alias-toolbar">
                 <div class="alias-input-wrap">
