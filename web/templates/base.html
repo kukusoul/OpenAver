@@ -268,6 +268,43 @@
             width: 24px;
             margin-right: 0.5rem;
         }
+
+        /* 53b-T4: sidebar 通知鈴鐺（語義為 button，繼承 nav-link 視覺但非切頁） */
+        .sidebar .nav-link--bell {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font: inherit;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 0.75rem;
+            width: 100%;
+            text-align: left;
+            border-radius: var(--fluent-radius-md, 8px);
+            color: inherit;
+            transition: background var(--fluent-duration-fast, 167ms) var(--fluent-ease, linear);
+        }
+        .sidebar .nav-link--bell:hover {
+            background: var(--fluent-subtle-fill-secondary, rgba(0,0,0,0.04));
+        }
+        .sidebar .nav-link--bell.is-open {
+            background: var(--fluent-subtle-fill-secondary, rgba(0,0,0,0.06));
+        }
+        /* 紅點：絕對定位於 icon 右上，sidebar collapsed 時仍可見 */
+        .sidebar .nav-link__unread-dot {
+            position: absolute;
+            top: 8px;
+            left: 28px;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            border: 1.5px solid var(--sidebar-bg, transparent);
+        }
+        .sidebar .nav-link__unread-dot.is-info    { background: hsl(var(--in)); }
+        .sidebar .nav-link__unread-dot.is-success { background: hsl(var(--su)); }
+        .sidebar .nav-link__unread-dot.is-warn    { background: hsl(var(--wa)); }
+        .sidebar .nav-link__unread-dot.is-error   { background: hsl(var(--er)); }
     </style>
 
     {% block extra_css %}{% endblock %}
@@ -302,7 +339,61 @@
             event.preventDefault();
         }
     },
-    sampleGalleryOpen: false, sampleGalleryImages: [], sampleGalleryIndex: 0
+    sampleGalleryOpen: false, sampleGalleryImages: [], sampleGalleryIndex: 0,
+    notifBell: {
+        items: [],
+        unreadCount: 0,
+        highestLevel: null,
+        drawerOpen: false,
+        _pollTimer: null,
+        _FAST_INTERVAL: 2000,
+        _SLOW_INTERVAL: 5000,
+        _anchorEl: null,
+        _mediaQuery: null,
+    },
+    init() {
+        this.notifBell._pollTimer = setInterval(() => { this._pollNotifications(); }, this.notifBell._SLOW_INTERVAL);
+        this._pollNotifications();
+        this.notifBell._mediaQuery = window.matchMedia('(min-width: 1024px)');
+        const mqHandler = () => { if (this.notifBell.drawerOpen) this.closeDrawer(); };
+        if (this.notifBell._mediaQuery.addEventListener) {
+            this.notifBell._mediaQuery.addEventListener('change', mqHandler);
+        } else {
+            this.notifBell._mediaQuery.addListener(mqHandler);
+        }
+        window.addEventListener('beforeunload', () => { clearInterval(this.notifBell._pollTimer); });
+    },
+    async _pollNotifications() {
+        try {
+            const res = await fetch('/api/notifications');
+            if (!res.ok) return;
+            const data = await res.json();
+            this.notifBell.items = data.items ?? [];
+            this.notifBell.unreadCount = data.unread_count ?? 0;
+            this.notifBell.highestLevel = data.highest_unread_level ?? null;
+        } catch (_) {}
+    },
+    async toggleDrawer(anchorEl) {
+        if (this.notifBell.drawerOpen) { return this.closeDrawer(); }
+        this.notifBell._anchorEl = anchorEl;
+        this.notifBell.drawerOpen = true;
+        clearInterval(this.notifBell._pollTimer);
+        this.notifBell._pollTimer = setInterval(() => { this._pollNotifications(); }, this.notifBell._FAST_INTERVAL);
+        await fetch('/api/notifications/read', { method: 'POST' });
+        await this._pollNotifications();
+    },
+    closeDrawer() {
+        this.notifBell.drawerOpen = false;
+        clearInterval(this.notifBell._pollTimer);
+        this.notifBell._pollTimer = setInterval(() => { this._pollNotifications(); }, this.notifBell._SLOW_INTERVAL);
+    },
+    async clearNotifications() {
+        await fetch('/api/notifications', { method: 'DELETE' });
+        await this._pollNotifications();
+    },
+    formatTimestamp(ts) {
+        return new Date(ts * 1000).toLocaleString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+    }
 }"
      x-init="$watch('sidebarCollapsed', configSync('sidebar_collapsed'))"
      :class="{ 'sidebar-collapsed': sidebarCollapsed }"
@@ -326,7 +417,25 @@
             </span>
         </div>
         <div class="navbar-end">
-            <span class="w-10"></span>
+            <!-- 53b-T4: mobile 鈴鐺 -->
+            <button x-ref="mobileBellBtn"
+                    @click.stop="toggleDrawer($refs.mobileBellBtn)"
+                    type="button"
+                    class="btn btn-ghost btn-sm relative"
+                    :aria-label="notifBell.drawerOpen ? (window.t ? window.t('notif.close') : '關閉通知') : (window.t ? window.t('notif.open') : '開啟通知')"
+                    aria-haspopup="true"
+                    :aria-expanded="notifBell.drawerOpen.toString()">
+                <i :class="notifBell.unreadCount > 0 ? 'bi bi-bell-fill' : 'bi bi-bell'" class="text-xl"></i>
+                <template x-if="notifBell.highestLevel">
+                    <span class="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full"
+                          :class="{
+                            'bg-info': notifBell.highestLevel === 'info',
+                            'bg-success': notifBell.highestLevel === 'success',
+                            'bg-warning': notifBell.highestLevel === 'warn',
+                            'bg-error': notifBell.highestLevel === 'error'
+                          }"></span>
+                </template>
+            </button>
         </div>
     </nav>
 
@@ -446,6 +555,31 @@
                     <span class="nav-text">{{ t('nav.showcase') }}</span>
                 </a>
             </li>
+            <!-- 53b-T4: desktop 鈴鐺（sidebar 內 help 上方，不是切頁 nav-item） -->
+            <li class="nav-item">
+                <button x-ref="desktopBellBtn"
+                        @click.stop="toggleDrawer($refs.desktopBellBtn)"
+                        type="button"
+                        class="nav-link nav-link--bell relative w-full text-left"
+                        :class="{ 'is-open': notifBell.drawerOpen }"
+                        :title="notifBell.unreadCount > 0 ? ((window.t ? window.t('notif.title') : '通知') + ' (' + notifBell.unreadCount + ')') : (window.t ? window.t('notif.title') : '通知')"
+                        :aria-label="notifBell.drawerOpen ? (window.t ? window.t('notif.close') : '關閉通知') : (window.t ? window.t('notif.open') : '開啟通知')"
+                        aria-haspopup="dialog"
+                        :aria-expanded="notifBell.drawerOpen.toString()">
+                    <i :class="notifBell.unreadCount > 0 ? 'bi bi-bell-fill' : 'bi bi-bell'"></i>
+                    <span class="nav-text" x-text="window.t ? window.t('notif.title') : '通知'"></span>
+                    <template x-if="notifBell.highestLevel">
+                        <span class="nav-link__unread-dot"
+                              :class="{
+                                'is-info':    notifBell.highestLevel === 'info',
+                                'is-success': notifBell.highestLevel === 'success',
+                                'is-warn':    notifBell.highestLevel === 'warn',
+                                'is-error':   notifBell.highestLevel === 'error'
+                              }"
+                              aria-hidden="true"></span>
+                    </template>
+                </button>
+            </li>
             <li class="nav-item mt-auto">
                 <a class="nav-link {% if page == 'help' %}active{% endif %}" href="/help" title="{{ t('nav.help_title') }}"
                    @click="handleNavClick($event, $el.href)">
@@ -493,12 +627,67 @@
     <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/collapse@3.15.12/dist/cdn.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/focus@3.15.12/dist/cdn.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/intersect@3.15.12/dist/cdn.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/anchor@3.15.12/dist/cdn.min.js"></script>
     <!-- Alpine Core -->
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.15.12/dist/cdn.min.js"></script>
     <!-- Tutorial JS -->
     <script src="/static/js/components/tutorial.js"></script>
 
     {% block extra_js %}{% endblock %}
+
+    <!-- 53b-T4: 通知抽屜（單例，fixed 浮動，anchor 由 toggleDrawer 決定） -->
+    <div x-show="notifBell.drawerOpen"
+         x-cloak
+         x-anchor.right-start.offset.8="notifBell._anchorEl || $el"
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0 -translate-x-2"
+         x-transition:enter-end="opacity-100 translate-x-0"
+         x-transition:leave="transition ease-in duration-150"
+         x-transition:leave-start="opacity-100 translate-x-0"
+         x-transition:leave-end="opacity-0 -translate-x-2"
+         x-trap.inert="notifBell.drawerOpen"
+         @click.outside="closeDrawer()"
+         @keydown.escape.window="if (notifBell.drawerOpen) closeDrawer()"
+         class="w-80 bg-base-100 border border-base-300 rounded-xl shadow-lg"
+         style="z-index: 1010; position: fixed;"
+         role="dialog"
+         :aria-label="window.t ? window.t('notif.dialog_label') : '通知中心'">
+        <div class="flex items-center justify-between px-4 py-2 border-b border-base-300">
+            <span class="font-semibold text-sm" x-text="window.t ? window.t('notif.title') : '通知'"></span>
+            <button @click="clearNotifications()"
+                    class="btn btn-ghost btn-xs text-base-content/60"
+                    x-text="window.t ? window.t('notif.clear_all') : '全部清空'"></button>
+        </div>
+        <div class="max-h-80 overflow-y-auto">
+            <template x-if="notifBell.items.length === 0">
+                <div class="px-4 py-6 text-center text-base-content/40 text-sm"
+                     x-text="window.t ? window.t('notif.empty') : '目前沒有通知'"></div>
+            </template>
+            <template x-for="item in notifBell.items" :key="item.id">
+                <div class="px-4 py-3 border-b border-base-200"
+                     :class="item.is_read ? 'opacity-60' : ''">
+                    <div class="flex items-start gap-2">
+                        <span class="text-xs mt-0.5 flex-shrink-0"
+                              :class="{
+                                'text-info': item.level === 'info',
+                                'text-success': item.level === 'success',
+                                'text-warning': item.level === 'warn',
+                                'text-error': item.level === 'error'
+                              }">●</span>
+                        <div class="flex-1 min-w-0">
+                            <div class="text-sm font-medium leading-tight"
+                                 x-text="window.t ? window.t(item.title_key) : item.title_key"></div>
+                            <template x-if="item.message">
+                                <div class="text-xs text-base-content/60 mt-0.5" x-text="item.message"></div>
+                            </template>
+                            <div class="text-xs text-base-content/40 mt-0.5"
+                                 x-text="formatTimestamp(item.timestamp)"></div>
+                        </div>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </div>
 </body>
 
 </html>
