@@ -205,7 +205,10 @@ class TestShowcaseCoreJsSearchableFields:
 
 SETTINGS_HTML = Path(__file__).parent.parent.parent / "web" / "templates" / "settings.html"
 SCANNER_HTML = Path(__file__).parent.parent.parent / "web" / "templates" / "scanner.html"
-SCANNER_JS = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "scanner.js"
+SCANNER_SCAN_JS  = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "scanner" / "state-scan.js"
+SCANNER_BATCH_JS = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "scanner" / "state-batch.js"
+SCANNER_ALIAS_JS = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "scanner" / "state-alias.js"
+SCANNER_MAIN_JS  = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "scanner" / "main.js"
 MOTION_LAB_HTML = Path(__file__).parent.parent.parent / "web" / "templates" / "motion_lab.html"
 DESIGN_SYSTEM_HTML = Path(__file__).parent.parent.parent / "web" / "templates" / "design-system.html"
 THEME_CSS = Path(__file__).parent.parent.parent / "web" / "static" / "css" / "theme.css"
@@ -511,7 +514,7 @@ class TestJellyfinCheckManualGuard:
         return SCANNER_HTML.read_text(encoding="utf-8")
 
     def _js(self):
-        return SCANNER_JS.read_text(encoding="utf-8")
+        return SCANNER_SCAN_JS.read_text(encoding="utf-8")
 
     def test_no_auto_trigger_in_init(self):
         """init() 後的 loadStats 呼叫後，不應緊接 checkJellyfinImages()"""
@@ -1490,39 +1493,22 @@ class TestScannerStateGuard:
     def _html(self):
         return SCANNER_HTML.read_text(encoding="utf-8")
 
-    def test_scanner_extra_js_uses_scanner_js(self):
-        """scanner.html 的 extra_js block 含 scanner.js 引用，且 inline <script> 不超過 10 行"""
-        import re
+    def test_scanner_html_has_pre_alpine_module_block(self):
+        """scanner.html 含 pre_alpine_module block override，且含 scanner/main.js module script（54c-T2）"""
         html = self._html()
-        # 擷取 {% block extra_js %} 到 {% endblock %} 之間的內容
-        pattern = re.compile(r'\{%-?\s*block extra_js\s*-?%\}(.*?)\{%-?\s*endblock\s*-?%\}', re.DOTALL)
-        match = pattern.search(html)
-        assert match is not None, "scanner.html 找不到 {% block extra_js %} 區段"
-        block_content = match.group(1)
-
-        # 必須包含 scanner.js 引用
-        assert 'scanner.js' in block_content, \
-            "scanner.html {% block extra_js %} 缺少 scanner.js script 引用"
-        assert '<script src="/static/js/pages/scanner.js"></script>' in block_content, \
-            "scanner.html {% block extra_js %} 應含 <script src=\"/static/js/pages/scanner.js\"></script>"
-
-        # inline <script> 行數不超過 10 行（防止 inline JS 悄悄重新引入）
-        inline_scripts = re.findall(r'<script(?:\s[^>]*)?>.*?</script>', block_content, re.DOTALL)
-        for script_tag in inline_scripts:
-            # 排除有 src 屬性的外部 script
-            if 'src=' in script_tag:
-                continue
-            line_count = script_tag.count('\n') + 1
-            assert line_count <= 10, \
-                f"scanner.html extra_js 區段含超過 10 行的 inline <script>（{line_count} 行），應將 JS 移至 scanner.js"
+        assert "pre_alpine_module" in html, \
+            "scanner.html 缺少 {% block pre_alpine_module %}（54c-T2 未加入 main.js 載入）"
+        assert "scanner/main.js" in html, \
+            "scanner.html pre_alpine_module block 缺少 main.js module script"
 
     def test_scanner_no_inline_script(self):
-        """scanner.html 的 extra_js 區段不含超過 10 行的 inline script"""
+        """scanner.html 的 extra_js 區段（若存在）不含超過 10 行的 inline script"""
         import re
         html = self._html()
         pattern = re.compile(r'\{%-?\s*block extra_js\s*-?%\}(.*?)\{%-?\s*endblock\s*-?%\}', re.DOTALL)
         match = pattern.search(html)
-        assert match is not None, "scanner.html 找不到 {% block extra_js %} 區段"
+        if match is None:
+            return  # extra_js block 已移除，守衛通過
         block_content = match.group(1)
         # 確認區段內沒有 inline script（只有含 src 的外部 script 標籤）
         inline_scripts = re.findall(r'<script(?:\s[^>]*)?>.*?</script>', block_content, re.DOTALL)
@@ -1727,11 +1713,16 @@ class TestNoAlertInSearchJs:
         assert "alert(" not in content, \
             "result-card.js 含原生 alert()，應改用 this.showToast()"
 
-    def test_no_alert_in_scanner_js(self):
-        """T3.6: scanner.js 8 處 alert 已改 showToast / fluent-modal"""
-        content = SCANNER_JS.read_text(encoding="utf-8")
-        assert "alert(" not in content, \
-            "scanner.js 含原生 alert()，應改用 this.showToast() 或 fluent-modal"
+    @pytest.mark.parametrize("fname", [
+        "web/static/js/pages/scanner/state-scan.js",
+        "web/static/js/pages/scanner/state-batch.js",
+        "web/static/js/pages/scanner/state-alias.js",
+    ])
+    def test_no_alert_in_scanner_modules(self, fname):
+        """T3.6: scanner state 模組不含原生 alert()（54c-T2 拆模組後改用 parametrize）"""
+        p = Path(__file__).parent.parent.parent / fname
+        assert "alert(" not in p.read_text(encoding="utf-8"), \
+            f"{fname} 含原生 alert()，應改用 this.showToast() 或 fluent-modal"
 
     @pytest.mark.parametrize("fname", [
         "web/static/js/pages/settings/state-config.js",
@@ -1745,7 +1736,7 @@ class TestNoAlertInSearchJs:
             f"{fname} 含原生 alert()，應改用 this.showToast()"
 
     def test_scanner_clipboard_has_availability_guard(self):
-        """T3.6 P2 fix: scanner.js 兩處 clipboard call 必須有 availability guard
+        """T3.6 P2 fix: scanner/state-scan.js 兩處 clipboard call 必須有 availability guard
 
         navigator.clipboard 在 HTTP / 舊 WebView 為 undefined，
         若直接呼叫 navigator.clipboard.writeText(...) 會在 property access 階段
@@ -1753,11 +1744,11 @@ class TestNoAlertInSearchJs:
         導致 copyLogs 的 fail modal / copyOutputPath 的 error toast 被跳過。
         守衛 if (!navigator.clipboard?.writeText) 必須在兩處 clipboard call 之前。
         """
-        content = SCANNER_JS.read_text(encoding="utf-8")
+        content = SCANNER_SCAN_JS.read_text(encoding="utf-8")
         # 兩處 copy 點都應該有 ?. optional chaining guard
         guard_count = content.count("navigator.clipboard?.writeText")
         assert guard_count >= 2, (
-            f"scanner.js 應該有至少 2 處 navigator.clipboard?.writeText 守衛 "
+            f"scanner/state-scan.js 應該有至少 2 處 navigator.clipboard?.writeText 守衛 "
             f"（copyLogs + copyOutputPath），目前只有 {guard_count} 處。"
             "若沒守衛，clipboard API 不存在時 .catch() 完全不會觸發。"
         )
@@ -2619,16 +2610,15 @@ class TestShowcaseAliasGuard:
 # ---------------------------------------------------------------------------
 # T6: Scanner Alias UI v2 — 舊 token 移除 + 新 token 存在守衛
 # ---------------------------------------------------------------------------
-SCANNER_JS = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "scanner.js"
 SCANNER_HTML = Path(__file__).parent.parent.parent / "web" / "templates" / "scanner.html"
 ZH_TW_JSON = Path(__file__).parent.parent.parent / "locales" / "zh_TW.json"
 
 
 class TestScannerAliasV2Guard:
-    """T6: 確認 scanner.js/html 舊 alias token 已移除、新 token 已存在"""
+    """T6: 確認 scanner/state-alias.js/html 舊 alias token 已移除、新 token 已存在"""
 
     def _js(self):
-        return SCANNER_JS.read_text(encoding="utf-8")
+        return SCANNER_ALIAS_JS.read_text(encoding="utf-8")
 
     def _html(self):
         return SCANNER_HTML.read_text(encoding="utf-8")
@@ -3241,7 +3231,7 @@ class TestMissingEnrichConfirmGuard:
     """TASK-13 (0.7.6 hotfix): 守衛 Scanner 一鍵補完 > 500 confirm dialog 的實作"""
 
     def _js(self):
-        return SCANNER_JS.read_text(encoding="utf-8")
+        return SCANNER_BATCH_JS.read_text(encoding="utf-8")
 
     def _html(self):
         return SCANNER_HTML.read_text(encoding="utf-8")
@@ -3373,10 +3363,10 @@ class TestIMEGuard:
 
 
 class TestLongPathWarning:
-    """spec-48a §a5 — scanner.js long_paths 警告處理"""
+    """spec-48a §a5 — scanner/state-scan.js long_paths 警告處理"""
 
     def _js(self):
-        return SCANNER_JS.read_text(encoding="utf-8")
+        return SCANNER_SCAN_JS.read_text(encoding="utf-8")
 
     def test_scanner_js_handles_long_paths(self):
         """scanner.js done event 處理須偵測 data.long_paths 並顯示警告 toast"""
@@ -5655,3 +5645,56 @@ class TestScannerESMGuard:
                 for f in forbidden:
                     assert f not in stripped, \
                         f"{fname} 有循環 import：{stripped}"
+
+    def test_scanner_html_has_pre_alpine_module(self):
+        """scanner.html 含 pre_alpine_module block override，含 main.js module script"""
+        content = self._read("web/templates/scanner.html")
+        assert "pre_alpine_module" in content, \
+            "scanner.html 缺少 {% block pre_alpine_module %}（54c-T2 未加入 main.js 載入）"
+        assert "scanner/main.js" in content, \
+            "scanner.html pre_alpine_module block 缺少 main.js module script"
+
+    def test_scanner_html_xdata_is_scanner(self):
+        """scanner.html x-data 值為 'scanner'（非 'scannerPage'）"""
+        content = self._read("web/templates/scanner.html")
+        assert 'x-data="scanner"' in content, \
+            "scanner.html x-data 非 scanner（54c-T2 切換未完成）"
+        assert 'x-data="scannerPage"' not in content, \
+            "scanner.html 仍有舊 x-data=scannerPage（54c-T2 切換未完成）"
+
+    def test_scanner_html_no_scanner_js_script(self):
+        """scanner.html extra_js block 不含 /pages/scanner.js script 載入"""
+        content = self._read("web/templates/scanner.html")
+        assert "/pages/scanner.js" not in content, \
+            "scanner.html 仍載入舊 scanner.js（54c-T2 未移除）"
+
+    def test_scanner_js_deleted(self):
+        """web/static/js/pages/scanner.js 不存在"""
+        from pathlib import Path
+        p = Path(__file__).parent.parent.parent / "web/static/js/pages/scanner.js"
+        assert not p.exists(), \
+            "scanner.js 仍存在（54c-T2 刪除步驟未執行）"
+
+    def test_no_scanner_page_xdata_in_templates(self):
+        """所有 production templates 不含 x-data=\"scannerPage\"（防殘留）"""
+        from pathlib import Path
+        templates_dir = Path(__file__).parent.parent.parent / "web/templates"
+        for tmpl in templates_dir.rglob("*.html"):
+            content = tmpl.read_text(encoding="utf-8")
+            assert 'x-data="scannerPage"' not in content, \
+                f"{tmpl.name} 仍含 x-data=scannerPage（54c-T2 殘留）"
+
+    def test_no_scanner_page_alpine_data_in_js(self):
+        """web/static/js/pages/ 下所有 JS 不含 Alpine.data('scannerPage'（防殘留）"""
+        from pathlib import Path
+        pages_dir = Path(__file__).parent.parent.parent / "web/static/js/pages"
+        for js_file in pages_dir.rglob("*.js"):
+            content = js_file.read_text(encoding="utf-8")
+            assert "Alpine.data('scannerPage'" not in content, \
+                f"{js_file.name} 仍含 Alpine.data('scannerPage'（54c-T2 殘留）"
+
+    def test_main_js_no_scannerpage_reference(self):
+        """scanner/main.js 不含 scannerPage 字串"""
+        content = self._read("web/static/js/pages/scanner/main.js")
+        assert "scannerPage" not in content, \
+            "scanner/main.js 含 scannerPage（54c-T2 設計錯誤）"

@@ -484,11 +484,11 @@ class TestJellyfinFrontend:
             "settings.html 缺少 jellyfinMode 綁定（Jellyfin 圖片模式開關）"
 
     def test_jellyfin_update_in_scanner(self):
-        """scanner.js 包含 runJellyfinImageUpdate method"""
-        js_file = PROJECT_ROOT / "web" / "static" / "js" / "pages" / "scanner.js"
+        """scanner/state-scan.js 包含 runJellyfinImageUpdate method"""
+        js_file = PROJECT_ROOT / "web" / "static" / "js" / "pages" / "scanner" / "state-scan.js"
         content = js_file.read_text(encoding='utf-8')
         assert 'runJellyfinImageUpdate' in content, \
-            "scanner.js 缺少 runJellyfinImageUpdate（T6d Jellyfin 批次補齊）"
+            "scanner/state-scan.js 缺少 runJellyfinImageUpdate（T6d Jellyfin 批次補齊）"
 
     def test_jellyfin_settings_hint_has_extrafanart(self):
         """settings.html Jellyfin 模式描述文字應包含 extrafanart/ 說明（T5b）
@@ -805,13 +805,13 @@ class TestScannerClearCache:
     """清除快取守衛 — scanner 頁面必要元素"""
 
     def test_scanner_html_has_clear_cache_method(self):
-        """scanner.js 含 clearCache() method"""
-        js = (PROJECT_ROOT / 'web/static/js/pages/scanner.js').read_text(encoding='utf-8')
+        """scanner/state-scan.js 含 clearCache() method"""
+        js = (PROJECT_ROOT / 'web/static/js/pages/scanner/state-scan.js').read_text(encoding='utf-8')
         assert 'clearCache()' in js
 
     def test_scanner_html_has_delete_api_binding(self):
-        """scanner.js 含 DELETE /api/gallery/cache 呼叫"""
-        js = (PROJECT_ROOT / 'web/static/js/pages/scanner.js').read_text(encoding='utf-8')
+        """scanner/state-scan.js 含 DELETE /api/gallery/cache 呼叫"""
+        js = (PROJECT_ROOT / 'web/static/js/pages/scanner/state-scan.js').read_text(encoding='utf-8')
         assert "/api/gallery/cache" in js
         assert "DELETE" in js
 
@@ -891,11 +891,11 @@ class TestPageLifecycleGuard:
             "showcase/core.js 缺少 __registerPage 呼叫 — Showcase lightbox cleanup lifecycle 會失效"
 
     def test_scanner_html_calls_register_page(self):
-        """scanner.js 必須呼叫 __registerPage"""
-        js_file = PROJECT_ROOT / "web" / "static" / "js" / "pages" / "scanner.js"
+        """scanner/state-scan.js 必須呼叫 __registerPage"""
+        js_file = PROJECT_ROOT / "web" / "static" / "js" / "pages" / "scanner" / "state-scan.js"
         content = js_file.read_text(encoding='utf-8')
         assert '__registerPage' in content, \
-            "scanner.js 缺少 __registerPage 呼叫 — Scanner lifecycle 未接入統一機制"
+            "scanner/state-scan.js 缺少 __registerPage 呼叫 — Scanner lifecycle 未接入統一機制"
 
 
 class TestSettingsSourceBadge:
@@ -4361,7 +4361,7 @@ class TestScannerDeleteAliasGroupNoNativeConfirm:
     被混進 confirmRemoveActress 等不相關名稱，弱守衛仍會 pass）。
     """
 
-    SCANNER_JS = PROJECT_ROOT / 'web' / 'static' / 'js' / 'pages' / 'scanner.js'
+    SCANNER_JS = PROJECT_ROOT / 'web' / 'static' / 'js' / 'pages' / 'scanner' / 'state-alias.js'
 
     def test_scanner_no_delete_alias_group_native_confirm(self):
         """T3.5: deleteAliasGroup native confirm 已替換為 fluent-modal"""
@@ -4990,7 +4990,8 @@ class TestScannerMissingPillGuard:
     """T10 守衛 — 缺 NFO/封面 pill + SSE 補完的靜態結構驗證"""
 
     SCANNER_HTML = PROJECT_ROOT / "web" / "templates" / "scanner.html"
-    SCANNER_JS = PROJECT_ROOT / "web" / "static" / "js" / "pages" / "scanner.js"
+    SCANNER_SCAN_JS = PROJECT_ROOT / "web" / "static" / "js" / "pages" / "scanner" / "state-scan.js"
+    SCANNER_BATCH_JS = PROJECT_ROOT / "web" / "static" / "js" / "pages" / "scanner" / "state-batch.js"
     ZH_TW = PROJECT_ROOT / "locales" / "zh_TW.json"
 
     def test_html_has_missing_pill_xshow(self):
@@ -5006,46 +5007,46 @@ class TestScannerMissingPillGuard:
             "scanner.html 缺少 resumePillVisible — T10 resume pill row 未加入"
 
     def test_js_has_missing_pill_visible_state(self):
-        """scanner.js 含 missingPillVisible 狀態宣告"""
-        js = self.SCANNER_JS.read_text(encoding='utf-8')
+        """scanner/state-batch.js 含 missingPillVisible 狀態宣告"""
+        js = self.SCANNER_BATCH_JS.read_text(encoding='utf-8')
         assert 'missingPillVisible' in js, \
-            "scanner.js 缺少 missingPillVisible 狀態宣告 — T10 Alpine data 未加入"
+            "scanner/state-batch.js 缺少 missingPillVisible 狀態宣告 — T10 Alpine data 未加入"
 
     def test_js_has_missing_items_state(self):
-        """scanner.js 含 missingItems 狀態宣告"""
-        js = self.SCANNER_JS.read_text(encoding='utf-8')
+        """scanner/state-batch.js 含 missingItems 狀態宣告"""
+        js = self.SCANNER_BATCH_JS.read_text(encoding='utf-8')
         assert 'missingItems' in js, \
-            "scanner.js 缺少 missingItems 狀態宣告 — T10 Alpine data 未加入"
+            "scanner/state-batch.js 缺少 missingItems 狀態宣告 — T10 Alpine data 未加入"
 
     def test_js_has_resume_pill_visible_state(self):
-        """scanner.js 含 resumePillVisible 狀態宣告"""
-        js = self.SCANNER_JS.read_text(encoding='utf-8')
+        """scanner/state-batch.js 含 resumePillVisible 狀態宣告"""
+        js = self.SCANNER_BATCH_JS.read_text(encoding='utf-8')
         assert 'resumePillVisible' in js, \
-            "scanner.js 缺少 resumePillVisible 狀態宣告 — T10 Alpine data 未加入"
+            "scanner/state-batch.js 缺少 resumePillVisible 狀態宣告 — T10 Alpine data 未加入"
 
     def test_js_has_run_missing_enrich_method(self):
-        """scanner.js 含 runMissingEnrich 方法"""
-        js = self.SCANNER_JS.read_text(encoding='utf-8')
+        """scanner/state-batch.js 含 runMissingEnrich 方法"""
+        js = self.SCANNER_BATCH_JS.read_text(encoding='utf-8')
         assert 'runMissingEnrich' in js, \
-            "scanner.js 缺少 runMissingEnrich 方法 — T10 補完方法未加入"
+            "scanner/state-batch.js 缺少 runMissingEnrich 方法 — T10 補完方法未加入"
 
     def test_js_has_check_missing_method(self):
-        """scanner.js 含 checkMissing 方法"""
-        js = self.SCANNER_JS.read_text(encoding='utf-8')
+        """scanner/state-batch.js 含 checkMissing 方法"""
+        js = self.SCANNER_BATCH_JS.read_text(encoding='utf-8')
         assert 'checkMissing' in js, \
-            "scanner.js 缺少 checkMissing 方法 — T10 檢查方法未加入"
+            "scanner/state-batch.js 缺少 checkMissing 方法 — T10 檢查方法未加入"
 
     def test_js_is_generating_includes_enriching(self):
-        """scanner.js 的 isGenerating getter 包含 'enriching' 狀態"""
-        js = self.SCANNER_JS.read_text(encoding='utf-8')
+        """scanner/state-scan.js 的 isGenerating getter 包含 'enriching' 狀態"""
+        js = self.SCANNER_SCAN_JS.read_text(encoding='utf-8')
         assert 'enriching' in js, \
-            "scanner.js isGenerating 缺少 enriching 狀態 — T10 狀態機擴充未完成"
+            "scanner/state-scan.js isGenerating 缺少 enriching 狀態 — T10 狀態機擴充未完成"
 
     def test_js_clear_cache_resets_missing_state(self):
-        """scanner.js 的 clearCache() 含 missingPillVisible 重設"""
-        js = self.SCANNER_JS.read_text(encoding='utf-8')
+        """scanner/state-scan.js 的 clearCache() 含 missingPillVisible 重設"""
+        js = self.SCANNER_SCAN_JS.read_text(encoding='utf-8')
         assert 'missingPillVisible' in js, \
-            "scanner.js 缺少 missingPillVisible — clearCache() 重設未加入"
+            "scanner/state-scan.js 缺少 missingPillVisible — clearCache() 重設未加入"
 
     def test_i18n_has_missing_enrich_idle_key(self):
         """locales/zh_TW.json 含 missing_enrich_idle key"""
@@ -5131,9 +5132,9 @@ class TestT36ToastI18nKeys:
 
 
 class TestScannerCopyFailModal:
-    """T3.6: scanner.html copyFailModal markup + scanner.js 三 method + escape ladder"""
+    """T3.6: scanner.html copyFailModal markup + scanner/state-scan.js 三 method + escape ladder"""
 
-    SCANNER_JS = PROJECT_ROOT / "web" / "static" / "js" / "pages" / "scanner.js"
+    SCANNER_JS = PROJECT_ROOT / "web" / "static" / "js" / "pages" / "scanner" / "state-scan.js"
     SCANNER_HTML = PROJECT_ROOT / "web" / "templates" / "scanner.html"
 
     def test_scanner_js_has_copy_fail_modal_methods(self):
