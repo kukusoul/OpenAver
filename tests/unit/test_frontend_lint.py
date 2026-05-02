@@ -674,11 +674,15 @@ class TestSmartCloseRemovedGuard:
 
     def test_no_lightbox_move_enabled_in_core_js(self):
         """core.js 不應包含 lightboxMoveEnabled（Smart Close 門控已移除）"""
+        if not self.CORE_JS.exists():
+            return  # core.js 已刪除（54b）— 內容自然不存在
         content = self.CORE_JS.read_text(encoding='utf-8')
         assert 'lightboxMoveEnabled' not in content
 
     def test_no_lightbox_move_timer_in_core_js(self):
         """core.js 不應包含 lightboxMoveTimer（Smart Close timer 已移除）"""
+        if not self.CORE_JS.exists():
+            return  # core.js 已刪除（54b）— 內容自然不存在
         content = self.CORE_JS.read_text(encoding='utf-8')
         assert 'lightboxMoveTimer' not in content
 
@@ -2296,6 +2300,8 @@ class TestRescrapeRemoved:
     SHOWCASE_HTML = Path(__file__).parents[2] / 'web' / 'templates' / 'showcase.html'
 
     def _js(self):
+        if not self.CORE_JS.exists():
+            return None  # core.js 已刪除（54b）
         return self.CORE_JS.read_text(encoding='utf-8')
 
     def _html(self):
@@ -2304,18 +2310,24 @@ class TestRescrapeRemoved:
     def test_rescrape_actress_not_in_js(self):
         """core.js 不含 rescrapeActress（49b-T5 dead code 已刪除）"""
         js = self._js()
+        if js is None:
+            return  # core.js 已刪除（54b）— 內容自然不存在
         assert "rescrapeActress" not in js, \
             "showcase/core.js 仍含 rescrapeActress（49b-T5 應已完全移除）"
 
     def test_rescraping_state_not_in_js(self):
         """core.js 不含 _rescraping state（49b-T5 dead code 已刪除）"""
         js = self._js()
+        if js is None:
+            return  # core.js 已刪除（54b）— 內容自然不存在
         assert "_rescraping" not in js, \
             "showcase/core.js 仍含 _rescraping state（49b-T5 應已完全移除）"
 
     def test_rescrape_url_not_in_js(self):
         """core.js 不含 /rescrape fetch call（49b-T5 dead code 已刪除）"""
         js = self._js()
+        if js is None:
+            return  # core.js 已刪除（54b）— 內容自然不存在
         assert "/rescrape" not in js, \
             "showcase/core.js 仍含 /rescrape fetch call（49b-T5 應已完全移除）"
 
@@ -3212,17 +3224,17 @@ class TestGhostFlyGuards:
         assert len(ghost_fly_refs) >= 3, "應有至少 3 個 window.GhostFly 引用（三個委派函式）"
 
     def test_gsap_animating_before_lightbox_open(self):
-        """showcase/core.js 的 gsap-animating 在 lightboxOpen = true 之前"""
-        js = Path("web/static/js/pages/showcase/core.js").read_text(encoding="utf-8")
-        # 只在 openLightbox 函數區域內檢查順序
-        idx_fn = js.find("openLightbox(")
-        assert idx_fn > 0, "找不到 openLightbox 函數"
-        fn_scope = js[idx_fn:]
-        idx_animating = fn_scope.find("classList.add('gsap-animating')")
-        idx_open = fn_scope.find("this.lightboxOpen = true")
-        assert idx_animating > 0, "找不到 gsap-animating classList.add"
-        assert idx_open > 0, "找不到 lightboxOpen = true"
-        assert idx_animating < idx_open, "gsap-animating 應在 lightboxOpen = true 之前"
+        """state-lightbox.js 的 gsap-animating 在 lightboxOpen = true 之前（openLightbox + openHeroCardLightbox）"""
+        content = SHOWCASE_LIGHTBOX_JS.read_text(encoding="utf-8")
+        for fn_name in ("openLightbox(", "openHeroCardLightbox("):
+            idx_fn = content.find(fn_name)
+            assert idx_fn > 0, f"找不到 {fn_name}"
+            fn_scope = content[idx_fn:idx_fn + 4000]
+            idx_animating = fn_scope.find("gsap-animating")
+            idx_open = fn_scope.find("this.lightboxOpen = true")
+            assert idx_animating > 0, f"{fn_name}: 找不到 gsap-animating"
+            assert idx_open > 0, f"{fn_name}: 找不到 lightboxOpen = true"
+            assert idx_animating < idx_open, f"{fn_name}: gsap-animating 應在 lightboxOpen = true 之前"
 
 
 class TestTutorialExpandGuard:
@@ -5975,4 +5987,73 @@ class TestShowcaseESMGuard:
             assert "this._PICKER_PARAMS" not in content, (
                 f"showcase/{filename} 含 this._PICKER_PARAMS — "
                 "應改為閉包直接存取 _PICKER_PARAMS（無需 this.）"
+            )
+
+    # ── T2b guards ────────────────────────────────────────────────────
+
+    def test_showcase_html_has_pre_alpine_module(self):
+        """showcase.html 含 {% block pre_alpine_module %} override（含 main.js module script）"""
+        html_path = Path(__file__).parents[2] / "web" / "templates" / "showcase.html"
+        content = html_path.read_text(encoding="utf-8")
+        assert "pre_alpine_module" in content, (
+            "showcase.html 缺少 {% block pre_alpine_module %} — "
+            "main.js 必須放在此 slot 確保 alpine:init listener 在 Alpine CDN 之前掛上"
+        )
+        assert "showcase/main.js" in content, (
+            "showcase.html 的 pre_alpine_module block 缺少 showcase/main.js module script"
+        )
+
+    def test_showcase_html_xdata_is_showcase(self):
+        """showcase.html 的 x-data 值為 showcase（非 showcaseState）"""
+        html_path = Path(__file__).parents[2] / "web" / "templates" / "showcase.html"
+        content = html_path.read_text(encoding="utf-8")
+        assert 'x-data="showcase"' in content, (
+            'showcase.html 缺少 x-data="showcase" — '
+            "54b 要求 x-data 從 showcaseState 改為 showcase"
+        )
+        assert 'x-data="showcaseState"' not in content, (
+            'showcase.html 仍含 x-data="showcaseState" — 舊名稱應已移除'
+        )
+
+    def test_showcase_html_no_core_js_script(self):
+        """showcase.html 不含 core.js script tag"""
+        html_path = Path(__file__).parents[2] / "web" / "templates" / "showcase.html"
+        content = html_path.read_text(encoding="utf-8")
+        assert "core.js" not in content, (
+            "showcase.html 仍含 core.js script tag — 54b 完成後 core.js 應已刪除且 HTML 不再引用"
+        )
+
+    def test_showcase_html_still_has_animations_js(self):
+        """showcase.html 仍含 animations.js script tag（B5：不動 animations.js）"""
+        html_path = Path(__file__).parents[2] / "web" / "templates" / "showcase.html"
+        content = html_path.read_text(encoding="utf-8")
+        assert "animations.js" in content, (
+            "showcase.html 缺少 animations.js script tag — "
+            "54b 不動 animations.js，它應仍在 extra_js block 中"
+        )
+
+    def test_core_js_deleted(self):
+        """web/static/js/pages/showcase/core.js 不存在"""
+        core_js = self.BASE / "core.js"
+        assert not core_js.exists(), (
+            "showcase/core.js 仍然存在 — 54b 完成後應已刪除"
+        )
+
+    def test_no_showcase_state_xdata_in_templates(self):
+        """所有 production templates 不含 x-data="showcaseState"（防殘留）"""
+        templates_dir = Path(__file__).parents[2] / "web" / "templates"
+        for tmpl in templates_dir.glob("**/*.html"):
+            content = tmpl.read_text(encoding="utf-8")
+            assert 'x-data="showcaseState"' not in content, (
+                f"{tmpl.name} 仍含 x-data=\"showcaseState\" — 舊名稱應已全部移除"
+            )
+
+    def test_no_showcase_state_alpine_data_in_js(self):
+        """web/static/js/pages/ 下所有 JS 不含 Alpine.data('showcaseState'（防殘留）"""
+        pages_dir = Path(__file__).parents[2] / "web" / "static" / "js" / "pages"
+        for js_file in pages_dir.glob("**/*.js"):
+            content = js_file.read_text(encoding="utf-8")
+            assert "Alpine.data('showcaseState'" not in content and \
+                   'Alpine.data("showcaseState"' not in content, (
+                f"{js_file.name} 含 Alpine.data('showcaseState' — 舊名稱應已全部移除"
             )

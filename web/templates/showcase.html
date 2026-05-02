@@ -6,9 +6,13 @@
 <link href="/static/css/pages/showcase.css" rel="stylesheet">
 {% endblock %}
 
+{% block pre_alpine_module %}
+<script type="module" src="/static/js/pages/showcase/main.js"></script>
+{% endblock %}
+
 {% block content %}
 <div class="showcase-container ds-gallery-composition"
-     x-data="showcaseState"
+     x-data="showcase"
      @keydown.window="handleKeydown($event)">
 
     <!-- Loading State (初始顯示) -->
@@ -935,7 +939,7 @@
 
     <!-- Footer 三段式 (49a-T4)：左 count + 中 shortcut + 右 pager -->
     <!-- ⚠️ 不可加 x-data（會建立 nested Alpine scope，讓 showFavoriteActresses / totalPages / filteredCount 等 state 全變 undefined）。
-         footer 在 showcase.html 頂層 x-data="showcaseState" 作用域內，直接用父級 state。 -->
+         footer 在 showcase.html 頂層 x-data="showcase" 作用域內，直接用父級 state。 -->
     <div class="showcase-footer">
         <!-- Left: count pill + mode icon -->
         <div class="footer-left">
@@ -1016,7 +1020,6 @@
 <script>
 window.__SHOWCASE_CONFIG__ = {{ (config.gallery or {}) | tojson | safe }};
 </script>
-<!-- B5: animations.js 必須在 core.js 之前載入 -->
+<!-- B5: animations.js 在 ESM main.js 之前載入（透過 extra_js defer） -->
 <script src="/static/js/pages/showcase/animations.js"></script>
-<script src="/static/js/pages/showcase/core.js"></script>
 {% endblock %}

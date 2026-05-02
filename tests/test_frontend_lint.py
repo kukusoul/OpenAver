@@ -4614,19 +4614,20 @@ class TestShowcaseSampleGalleryGuard:
     ANIMATIONS_JS = PROJECT_ROOT / 'web' / 'static' / 'js' / 'pages' / 'showcase' / 'animations.js'
 
     def test_sample_gallery_inside_showcaseState_scope(self):
-        """守衛 1：.sample-gallery overlay 必須在 x-data="showcaseState()" scope 之後（確保 Alpine binding 正確）"""
+        """守衛 1：.sample-gallery overlay 必須在 x-data="showcase" scope 之後（確保 Alpine binding 正確）"""
         content = self.SHOWCASE_HTML.read_text(encoding='utf-8')
         lines = content.split('\n')
 
-        # 找到 x-data="showcaseState" 的行號
+        # 54b 起 x-data 從 "showcaseState" 改為 "showcase"
         showcase_state_line = None
         for i, line in enumerate(lines):
-            if 'x-data="showcaseState"' in line:
+            if 'x-data="showcase"' in line and 'x-data="showcase"' == line.strip().split()[0] or \
+               'x-data="showcase"' in line:
                 showcase_state_line = i
                 break
 
         assert showcase_state_line is not None, (
-            "T7 守衛 1 違規：showcase.html 找不到 x-data=\"showcaseState\" — "
+            "T7 守衛 1 違規：showcase.html 找不到 x-data=\"showcase\" — "
             "Alpine scope 根元素必須存在"
         )
 
@@ -4644,8 +4645,8 @@ class TestShowcaseSampleGalleryGuard:
 
         assert sample_gallery_line > showcase_state_line, (
             f"T7 守衛 1 違規：.sample-gallery（L{sample_gallery_line + 1}）在 "
-            f"x-data=\"showcaseState\"（L{showcase_state_line + 1}）之前 — "
-            "sample-gallery overlay 必須在 showcaseState x-data scope 內"
+            f"x-data=\"showcase\"（L{showcase_state_line + 1}）之前 — "
+            "sample-gallery overlay 必須在 showcase x-data scope 內"
         )
 
     def test_sample_gallery_state_properties_in_core_js(self):
