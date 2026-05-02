@@ -95,38 +95,8 @@ class TestNoHardcodedColors:
         # VS Code diff 配色、或任何帶 lint-ignore 標記的行
         return bool(re.search(r'/\*.*(?:VS Code|lint-ignore).*\*/', line))
 
-    def test_no_hardcoded_colors_in_css(self):
-        """掃描 CSS 檔案，確認無 hardcoded hex color"""
-        violations = []
-
-        # 掃描 pages/*.css + theme.css
-        css_dir = PROJECT_ROOT / "web" / "static" / "css"
-        css_files = list((css_dir / "pages").glob("*.css")) + [css_dir / "theme.css"]
-
-        for css_file in css_files:
-            # 跳過 design-system.css (參考頁)
-            if css_file.name == "design-system.css":
-                continue
-
-            matches = find_pattern_in_file(
-                css_file,
-                r'#[0-9a-fA-F]{3,8}',
-                exclude_lines=lambda line, num: (
-                    self.is_css_variable_definition(line, num) or
-                    self.is_svg_data_uri(line, num) or
-                    self.is_intentional_color(line)
-                )
-            )
-
-            for line_num, line_content in matches:
-                violations.append(
-                    f"{css_file.relative_to(PROJECT_ROOT)}:{line_num} — {line_content[:80]}"
-                )
-
-        assert len(violations) == 0, (
-            f"發現 {len(violations)} 個 hardcoded hex color 違規 (CSS):\n" +
-            "\n".join(f"  - {v}" for v in violations)
-        )
+    # CSS-scan method removed in T55b — superseded by stylelint `color-no-hex` rule.
+    # HTML inline-scan method below stays as C-class deferral (T55d).
 
     def test_no_hardcoded_colors_in_html(self):
         """掃描 HTML inline styles，確認無 hardcoded hex color"""
@@ -151,89 +121,6 @@ class TestNoHardcodedColors:
         assert len(violations) == 0, (
             f"發現 {len(violations)} 個 hardcoded hex color 違規 (HTML inline):\n" +
             "\n".join(f"  - {v}" for v in violations)
-        )
-
-
-class TestSearchCssHardcoded:
-    """Phase 51 T2.4 — search.css §1/§2/§3/§4 hardcoded 守衛
-
-    確保 T2.1（color/blur/radius）/ T2.2（spacing 6px layout）修齊結果不被回退；
-    新加違規會被擋下。allow-list 為 (line_num: reason) dict，新增例外
-    必須提供 reason 字串說明（§3 角色色白名單 / §2 drop-shadow 例外 /
-    var() fallback / §4 micro chip optical 之一）。
-    """
-
-    SEARCH_CSS = PROJECT_ROOT / "web/static/css/pages/search.css"
-
-    HARDCODED_RGBA_ALLOWLIST = {
-        # T2.1 commit 41f2a5b 後狀態：
-        90: "drop-shadow rgba 0.3 — §2 例外（drop-shadow 跟封面去背形狀，非矩形 box-shadow 無法用 --fluent-shadow-* token）",
-        780: "var(--bg-card, rgba(0, 0, 0, 0.05)) fallback — defensive fallback，非硬編碼違規",
-    }
-
-    SIX_PX_ALLOWLIST = {
-        # T2.2 commit 89d52b6 後狀態：
-        235: "row inline btn optical 6px — T2.2 加 optical 註記（btn-sm 12px padding 對 row inline 太寬）",
-        516: ".batch-progress-bar height: 6px — intrinsic dimension（非 §4 spacing）",
-        571: "chip optical 6px — T2.2 加 optical 註記（對齊 showcase .lb-tag-add-btn）",
-    }
-
-    def _scan(self, regex: str, allowlist=None):
-        violations = []
-        text = self.SEARCH_CSS.read_text(encoding='utf-8')
-        for i, line in enumerate(text.splitlines(), 1):
-            # 跳過純註解行（CSS comment 不是實際 declaration，提及 6px / rgba 為文檔說明）
-            stripped = line.lstrip()
-            if stripped.startswith('/*') or stripped.startswith('*'):
-                continue
-            if re.search(regex, line):
-                if allowlist and i in allowlist:
-                    continue
-                violations.append((i, line.rstrip()))
-        return violations
-
-    def test_no_hardcoded_rgba_in_search_css(self):
-        """禁 search.css 出現 rgba(0,0,0,...) 硬編碼（須走 var(--overlay-*) 角色色 token）"""
-        violations = self._scan(
-            r'rgba\(\s*0\s*,\s*0\s*,\s*0\s*,',
-            allowlist=self.HARDCODED_RGBA_ALLOWLIST,
-        )
-        assert not violations, (
-            f"search.css 出現新 rgba(0,0,0,...) 硬編碼違規 ({len(violations)} 處)：\n"
-            + "\n".join(f"  L{n}: {l[:100]}" for n, l in violations)
-            + "\n\n請改用 var(--overlay-*) 角色色 token；如為 §2 drop-shadow 例外 / "
-            + "var() fallback，請更新 HARDCODED_RGBA_ALLOWLIST + 說明理由。"
-        )
-
-    def test_no_hardcoded_blur_px_in_search_css(self):
-        """禁 search.css 出現 blur(Npx) 硬編碼（須走 var(--fluent-blur*) 三階）"""
-        violations = self._scan(r'blur\(\s*\d+px')
-        assert not violations, (
-            f"search.css 出現 blur(Npx) 硬編碼違規 ({len(violations)} 處)：\n"
-            + "\n".join(f"  L{n}: {l[:100]}" for n, l in violations)
-            + "\n\n請改用 var(--fluent-blur) (overlay 30px) / var(--fluent-blur-light) (floating-control 12px)。"
-        )
-
-    def test_no_hardcoded_border_radius_px_in_search_css(self):
-        """禁 search.css 出現 border-radius: Npx 硬編碼（須走 var(--fluent-radius-*) 或 var(--radius-*)）"""
-        violations = self._scan(r'border-radius:\s*\d+px')
-        assert not violations, (
-            f"search.css 出現 border-radius: Npx 硬編碼違規 ({len(violations)} 處)：\n"
-            + "\n".join(f"  L{n}: {l[:100]}" for n, l in violations)
-            + "\n\n請改用 var(--fluent-radius-md) (4px 互動級) / var(--radius-md) (12px 容器級)。"
-        )
-
-    def test_no_hardcoded_six_px_layout_in_search_css(self):
-        """禁 search.css 出現 6px layout 違規（padding/margin/gap/etc.）"""
-        # `[:\s]6px(?:\s|;|$)` 限定 6px 出現在 property value 上下文，避免 16px/26px/0.6px 誤抓
-        violations = self._scan(
-            r'[:\s]6px(?:\s|;|$)',
-            allowlist=self.SIX_PX_ALLOWLIST,
-        )
-        assert not violations, (
-            f"search.css 出現新 6px layout 違規 ({len(violations)} 處)：\n"
-            + "\n".join(f"  L{n}: {l[:100]}" for n, l in violations)
-            + "\n\n請改 layout 8pt grid / micro 4px / 加 /* ... optical 6px ... */ 註記 + 更新 SIX_PX_ALLOWLIST。"
         )
 
 
