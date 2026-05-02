@@ -7,10 +7,12 @@
  * - UNC 路徑（//server/share）：去除前綴，/ → \
  * - Linux/其他路徑：去除前綴，保留 /
  */
-window.pathToDisplay = function(fileUri) {
+function pathToDisplay(fileUri) {
     if (!fileUri) return '';
     const stripped = fileUri.replace(/^file:\/\/\//, '');
     if (/^[A-Za-z]:/.test(stripped)) return stripped.replace(/\//g, '\\');
     if (stripped.startsWith('//')) return stripped.replace(/\//g, '\\');
     return stripped;
-};
+}
+window.pathToDisplay = pathToDisplay;
+export { pathToDisplay };

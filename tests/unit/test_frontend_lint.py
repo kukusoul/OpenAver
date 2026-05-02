@@ -4397,16 +4397,17 @@ class TestBurstPickerGuard:
             assert method + ":" in js, f"burst-picker.js 缺少 {method} 方法定義"
 
     def test_base_html_loads_burst_picker(self):
-        """base.html 含 burst-picker.js script tag 且使用 defer"""
+        """base.html 含 burst-picker.js script tag 且使用 defer 或 type="module"（54a-T2 後允許 module）"""
         html = BASE_HTML_T4A.read_text(encoding="utf-8")
         assert "/static/js/shared/burst-picker.js" in html, \
             "base.html 缺少 /static/js/shared/burst-picker.js script 引用"
-        # 驗證 defer
+        # 驗證 defer 或 type="module"（type="module" 天生 deferred，等同 defer）
         pattern = re.compile(r'<script[^>]*burst-picker\.js[^>]*>')
         matches = pattern.findall(html)
         assert matches, "base.html 找不到 burst-picker.js script tag"
         for tag in matches:
-            assert "defer" in tag, f"burst-picker.js script tag 應含 defer 屬性：{tag}"
+            assert "defer" in tag or 'type="module"' in tag, \
+                f"burst-picker.js script tag 應含 defer 或 type=\"module\" 屬性：{tag}"
 
     def test_motion_lab_js_no_longer_defines_picker_methods(self):
         """motion-lab.js 已不再內嵌 7 個 playPicker* 方法定義（僅 burst-picker.js 內有）"""
@@ -4757,7 +4758,7 @@ class TestPickerIntegrationGuard:
         with open("web/static/js/shared/burst-picker.js", "r", encoding="utf-8") as f:
             burst_js = f.read()
         m = re.search(
-            r"playPickerHoverOut:\s*function\s*\([^)]*\)\s*\{(.*?)\n\s{8}\},",
+            r"playPickerHoverOut:\s*function\s*\([^)]*\)\s*\{(.*?)\n\s{4}\},",
             burst_js, re.DOTALL,
         )
         assert m, "burst-picker.js 找不到 playPickerHoverOut 方法定義"
@@ -4776,7 +4777,7 @@ class TestPickerIntegrationGuard:
         with open("web/static/js/shared/burst-picker.js", "r", encoding="utf-8") as f:
             burst_js = f.read()
         m = re.search(
-            r"playPickerExitAll:\s*function\s*\([^)]*\)\s*\{(.*?)\n\s{8}\},",
+            r"playPickerExitAll:\s*function\s*\([^)]*\)\s*\{(.*?)\n\s{4}\},",
             burst_js, re.DOTALL,
         )
         assert m, "burst-picker.js 找不到 playPickerExitAll 方法定義"
@@ -5366,3 +5367,86 @@ class TestImportMapGuard:
             'base.html ghost-fly.js script tag 非 type="module"（54a-T1 script tag 未更新）'
         assert '<script defer src="/static/js/shared/ghost-fly.js">' not in content, \
             'base.html 仍有殘留的 <script defer src=".../ghost-fly.js">（54a-T1 舊標籤未移除）'
+
+
+class TestESMExportGuard:
+    """
+    54a-T2：守衛五個 shared/components 工具的 ESM export + window 橋接 + base.html script tag
+    前置：TestImportMapGuard 通過（T1 spike gate）
+    """
+
+    def _read(self, rel_path):
+        return Path(__file__).parent.parent.parent / rel_path
+
+    def _burst_picker(self):
+        return (self._read("web/static/js/shared/burst-picker.js")).read_text(encoding="utf-8")
+
+    def _motion_adapter(self):
+        return (self._read("web/static/js/components/motion-adapter.js")).read_text(encoding="utf-8")
+
+    def _path_utils(self):
+        return (self._read("web/static/js/components/path-utils.js")).read_text(encoding="utf-8")
+
+    def _page_lifecycle(self):
+        return (self._read("web/static/js/components/page-lifecycle.js")).read_text(encoding="utf-8")
+
+    def _motion_prefs(self):
+        return (self._read("web/static/js/components/motion-prefs.js")).read_text(encoding="utf-8")
+
+    def _base(self):
+        return (self._read("web/templates/base.html")).read_text(encoding="utf-8")
+
+    def test_burst_picker_export_and_bridge(self):
+        """burst-picker.js 含 export + window.BurstPicker 橋接"""
+        content = self._burst_picker()
+        assert "export" in content, \
+            "burst-picker.js 缺少 export（54a-T2 ESM export 未加入）"
+        assert "window.BurstPicker" in content, \
+            "burst-picker.js 缺少 window.BurstPicker（54a-T2 window 橋接被移除）"
+
+    def test_motion_adapter_export_and_bridge(self):
+        """motion-adapter.js 含 export + window.OpenAver.motion 橋接"""
+        content = self._motion_adapter()
+        assert "export" in content, \
+            "motion-adapter.js 缺少 export（54a-T2 ESM export 未加入）"
+        assert "window.OpenAver.motion" in content, \
+            "motion-adapter.js 缺少 window.OpenAver.motion（54a-T2 window 橋接被移除）"
+
+    def test_path_utils_export_and_bridge(self):
+        """path-utils.js 含 export pathToDisplay + window.pathToDisplay 橋接"""
+        content = self._path_utils()
+        assert "export" in content and "pathToDisplay" in content, \
+            "path-utils.js 缺少 export pathToDisplay（54a-T2 ESM export 未加入）"
+        assert "window.pathToDisplay" in content, \
+            "path-utils.js 缺少 window.pathToDisplay（54a-T2 window 橋接被移除）"
+
+    def test_page_lifecycle_export_and_bridge(self):
+        """page-lifecycle.js 含 export + window.__registerPage 橋接"""
+        content = self._page_lifecycle()
+        assert "export" in content, \
+            "page-lifecycle.js 缺少 export（54a-T2 ESM export 未加入）"
+        assert "window.__registerPage" in content, \
+            "page-lifecycle.js 缺少 window.__registerPage（54a-T2 window 橋接被移除）"
+
+    def test_motion_prefs_export_and_bridge(self):
+        """motion-prefs.js 含 export + window.OpenAver 初始化保留"""
+        content = self._motion_prefs()
+        assert "export" in content, \
+            "motion-prefs.js 缺少 export（54a-T2 ESM export 未加入）"
+        assert "window.OpenAver" in content, \
+            "motion-prefs.js 缺少 window.OpenAver（54a-T2 window 橋接被移除）"
+
+    @pytest.mark.parametrize("path", [
+        "/static/js/shared/burst-picker.js",
+        "/static/js/components/motion-adapter.js",
+        "/static/js/components/path-utils.js",
+        "/static/js/components/page-lifecycle.js",
+        "/static/js/components/motion-prefs.js",
+    ])
+    def test_five_files_script_tags_are_module(self, path):
+        """base.html 中五個工具的 script tag 均為 type="module"，無殘留 <script defer src>"""
+        content = self._base()
+        assert f'type="module" src="{path}"' in content, \
+            f'base.html {path} script tag 非 type="module"（54a-T2 script tag 未更新）'
+        assert f'<script defer src="{path}">' not in content, \
+            f'base.html 仍有殘留的 <script defer src="{path}">（54a-T2 舊標籤未移除）'
