@@ -24,6 +24,7 @@ export var _filteredVideos = [];
 export var _actresses = [];
 export var _filteredActresses = [];
 export var _actressesLoaded = false;
+export function _setActressesLoaded(v) { _actressesLoaded = v; }
 export var _nameToGroup = {};  // { "舊名": ["新名", "舊名"], "新名": [...] } 雙向 alias map
 export var _aliasMapLoaded = false;
 

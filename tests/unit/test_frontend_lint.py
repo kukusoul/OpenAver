@@ -5754,3 +5754,174 @@ class TestShowcaseESMGuard:
             "state-base.js 含 _PICKER_PARAMS — "
             "此常數應在 stateLightbox() 函式頂部作閉包常數（OQ-54B-2 Option B），不應放 stateBase"
         )
+
+    # ── T1b guards（state-videos / state-actress / state-lightbox / main.js）──
+
+    def test_state_videos_exists_and_exports(self):
+        """state-videos.js 存在且含 export function stateVideos"""
+        assert (self.BASE / "state-videos.js").exists(), (
+            "showcase/state-videos.js 不存在"
+        )
+        content = self._read("state-videos.js")
+        assert "export function stateVideos" in content, (
+            "state-videos.js 缺少 export function stateVideos"
+        )
+
+    def test_state_actress_exists_and_exports(self):
+        """state-actress.js 存在且含 export function stateActress"""
+        assert (self.BASE / "state-actress.js").exists(), (
+            "showcase/state-actress.js 不存在"
+        )
+        content = self._read("state-actress.js")
+        assert "export function stateActress" in content, (
+            "state-actress.js 缺少 export function stateActress"
+        )
+
+    def test_state_lightbox_exists_and_exports(self):
+        """state-lightbox.js 存在且含 export function stateLightbox"""
+        assert (self.BASE / "state-lightbox.js").exists(), (
+            "showcase/state-lightbox.js 不存在"
+        )
+        content = self._read("state-lightbox.js")
+        assert "export function stateLightbox" in content, (
+            "state-lightbox.js 缺少 export function stateLightbox"
+        )
+
+    def test_main_js_exists_and_has_alpine_init(self):
+        """main.js 存在且含 alpine:init 事件監聽"""
+        assert (self.BASE / "main.js").exists(), (
+            "showcase/main.js 不存在"
+        )
+        content = self._read("main.js")
+        assert "alpine:init" in content, (
+            "showcase/main.js 缺少 alpine:init 事件監聽"
+        )
+
+    def test_main_js_registers_showcase_name(self):
+        """main.js 含 Alpine.data('showcase', — 名稱必須是 showcase，非 showcaseState"""
+        content = self._read("main.js")
+        assert "Alpine.data('showcase'," in content or 'Alpine.data("showcase",' in content, (
+            "showcase/main.js 缺少 Alpine.data('showcase', — "
+            "54b 要求 Alpine component 名稱從 showcaseState 改為 showcase"
+        )
+        assert "Alpine.data('showcaseState'" not in content and 'Alpine.data("showcaseState"' not in content, (
+            "showcase/main.js 不應含 Alpine.data('showcaseState' — "
+            "舊名稱 showcaseState 應已移除，防殘留"
+        )
+
+    def test_main_js_uses_importmap_alias(self):
+        """main.js import 語句使用 @/showcase/ alias"""
+        content = self._read("main.js")
+        assert "@/showcase/" in content, (
+            "showcase/main.js import 語句缺少 @/showcase/ alias — "
+            "必須使用 importmap alias，不可用相對路徑"
+        )
+
+    def test_main_js_has_descriptor_merge(self):
+        """main.js 含 getOwnPropertyDescriptors 或 defineProperties"""
+        content = self._read("main.js")
+        has_merge = (
+            "getOwnPropertyDescriptors" in content
+            or "defineProperties" in content
+        )
+        assert has_merge, (
+            "showcase/main.js 缺少 descriptor-preserving 合併（getOwnPropertyDescriptors 或 defineProperties）"
+        )
+
+    def test_main_js_no_plain_spread_merge(self):
+        """main.js 不含 plain spread（...stateBase() 等）"""
+        content = self._read("main.js")
+        for factory in ("stateBase()", "stateVideos()", "stateActress()", "stateLightbox()"):
+            assert f"...{factory}" not in content, (
+                f"showcase/main.js 含 ...{factory} plain spread — "
+                "必須改用 mergeState（descriptor-preserving）"
+            )
+
+    def test_main_js_factory_calls_use_call_this(self):
+        """main.js 所有 factory 呼叫使用 .call(this)"""
+        content = self._read("main.js")
+        for factory in ("stateBase", "stateVideos", "stateActress", "stateLightbox"):
+            assert f"{factory}.call(this)" in content, (
+                f"showcase/main.js 缺少 {factory}.call(this) — "
+                "stateBase() 含 this.$persist(...)，bare call 時 this=undefined 會崩潰"
+            )
+
+    def test_main_js_has_window_showcase_state_bridge(self):
+        """main.js 含 window.showcaseState 橋接"""
+        content = self._read("main.js")
+        assert "window.showcaseState" in content, (
+            "showcase/main.js 缺少 window.showcaseState 橋接 — "
+            "spec-54 §5 明確要求保留向後相容橋接"
+        )
+
+    def test_no_circular_state_factory_imports(self):
+        """state 模組頂層 import 不含其他 state-*.js 的 factory 函式名稱"""
+        import re
+        factory_names = ["stateBase", "stateVideos", "stateActress", "stateLightbox"]
+        for filename in ("state-videos.js", "state-actress.js", "state-lightbox.js"):
+            content = self._read(filename)
+            import_lines = [
+                line for line in content.split("\n")
+                if line.strip().startswith("import ")
+            ]
+            import_text = "\n".join(import_lines)
+            for name in factory_names:
+                assert name not in import_text, (
+                    f"showcase/{filename} 的 import 語句含 {name} — "
+                    "state 模組不可 import 其他 state factory，違反 spec-54 §9 D2"
+                )
+
+    def test_state_lightbox_imports_kill_timelines(self):
+        """state-lightbox.js 從 state-base.js import _killLightboxTimelines"""
+        content = self._read("state-lightbox.js")
+        assert "_killLightboxTimelines" in content, (
+            "state-lightbox.js 缺少 _killLightboxTimelines — "
+            "此函式從 state-base.js import，閉包/全域存取均不符 ESM 規範"
+        )
+
+    def test_state_videos_no_actress_functions(self):
+        """state-videos.js 不含 loadActresses / addFavoriteActress"""
+        content = self._read("state-videos.js")
+        assert "loadActresses" not in content, (
+            "state-videos.js 含 loadActresses — 女優邏輯應在 state-actress.js"
+        )
+        assert "addFavoriteActress" not in content, (
+            "state-videos.js 含 addFavoriteActress — 女優 CRUD 應在 state-actress.js"
+        )
+
+    def test_state_actress_no_lightbox_functions(self):
+        """state-actress.js 不含 openLightbox / closeLightbox 定義"""
+        import re
+        content = self._read("state-actress.js")
+        assert not re.search(r"^\s+openLightbox\s*\(", content, re.MULTILINE), (
+            "state-actress.js 含 openLightbox 方法定義 — 應在 state-lightbox.js"
+        )
+        assert not re.search(r"^\s+closeLightbox\s*\(", content, re.MULTILINE), (
+            "state-actress.js 含 closeLightbox 方法定義 — 應在 state-lightbox.js"
+        )
+
+    def test_no_gsap_at_module_top_level(self):
+        """state 模組頂層不含 window.gsap 或 gsap 直接存取"""
+        import re
+        for filename in ("state-base.js", "state-videos.js", "state-actress.js", "state-lightbox.js", "main.js"):
+            content = self._read(filename)
+            lines = content.split("\n")
+            for i, line in enumerate(lines, 1):
+                stripped = line.strip()
+                if stripped.startswith("//") or stripped.startswith("*"):
+                    continue
+                if line and not line.startswith(" ") and not line.startswith("\t"):
+                    if "window.gsap" in line or (re.match(r"^gsap\b", line)):
+                        assert False, (
+                            f"showcase/{filename} L{i}: 模組頂層含 gsap 存取 — "
+                            "spec-54 §9 D3：window.gsap 只在函式體內存取"
+                        )
+
+    def test_no_this_picker_params_in_state_modules(self):
+        """state 模組不含 this._PICKER_PARAMS（應改為閉包直接存取）"""
+        for filename in ("state-base.js", "state-videos.js", "state-actress.js", "state-lightbox.js"):
+            content = self._read(filename)
+            assert "this._PICKER_PARAMS" not in content, (
+                f"showcase/{filename} 含 this._PICKER_PARAMS — "
+                "應改為閉包直接存取 _PICKER_PARAMS（無需 this.）"
+            )
