@@ -927,6 +927,10 @@
 </div>
 {% endblock %}
 
+{% block pre_alpine_module %}
+<script type="module" src="/static/js/pages/search/main.js"></script>
+{% endblock %}
+
 {% block extra_js %}
 <script>
     // === 全域函數：供 PyWebView Python 端呼叫 ===
@@ -947,18 +951,8 @@
 
     // === 主程式已移至 /static/js/pages/search/ ===
 </script>
-<!-- T5: 動畫模組（GSAP 已在 base.html defer 載入）— 必須在 state modules 之前 -->
+<!-- T5: 動畫模組（GSAP 已在 base.html defer 載入）-->
 <script src="/static/js/pages/search/animations.js"></script>
-<!-- Alpine State Modules (must load before other JS) -->
-<script src="/static/js/pages/search/state/base.js"></script>
-<script src="/static/js/pages/search/state/persistence.js"></script>
-<script src="/static/js/pages/search/state/search-flow.js"></script>
-<script src="/static/js/pages/search/state/navigation.js"></script>
-<script src="/static/js/pages/search/state/batch.js"></script>
-<script src="/static/js/pages/search/state/result-card.js"></script>
-<script src="/static/js/pages/search/state/file-list.js"></script>
-<script src="/static/js/pages/search/state/grid-mode.js"></script>
-<script src="/static/js/pages/search/state/index.js"></script>
 <!-- Existing JS modules -->
 <script src="/static/js/pages/search/core.js"></script>
 <script src="/static/js/pages/search/ui.js"></script>

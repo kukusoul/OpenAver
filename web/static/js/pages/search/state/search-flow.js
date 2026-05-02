@@ -2,7 +2,8 @@
  * SearchState - Search Flow Mixin
  * 包含：搜尋流程（doSearch, fallbackSearch, cancelSearch, handleSearchStatus）
  */
-window.SearchStateMixin_SearchFlow = {
+export function searchStateSearchFlow() {
+    return {
     // ===== Methods =====
     async loadAppConfig() {
         // T4: inline 直接 fetch，消除 SearchCore.loadAppConfig 委派
@@ -999,4 +1000,5 @@ window.SearchStateMixin_SearchFlow = {
             this.progressLog = `${sourceName} 失敗`;
         }
     }
-};
+    };
+}

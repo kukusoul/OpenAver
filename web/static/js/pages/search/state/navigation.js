@@ -2,7 +2,8 @@
  * SearchState - Navigation Mixin
  * 包含：導航邏輯（navigate, loadMore, handleKeydown）
  */
-window.SearchStateMixin_Navigation = {
+export function searchStateNavigation() {
+    return {
     // ===== Navigation Methods =====
 
     /**
@@ -209,4 +210,5 @@ window.SearchStateMixin_Navigation = {
             this.navigate(1);
         }
     }
-};
+    };
+}

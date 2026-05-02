@@ -877,11 +877,11 @@ class TestPageLifecycleGuard:
             "settings/state-config.js 缺少 __registerPage 呼叫 — dirty-check lifecycle 會失效"
 
     def test_search_state_index_calls_register_page(self):
-        """search/state/index.js 必須呼叫 __registerPage"""
-        js_file = PROJECT_ROOT / "web" / "static" / "js" / "pages" / "search" / "state" / "index.js"
+        """search/main.js 必須呼叫 __registerPage"""
+        js_file = PROJECT_ROOT / "web" / "static" / "js" / "pages" / "search" / "main.js"
         content = js_file.read_text(encoding='utf-8')
         assert '__registerPage' in content, \
-            "search/state/index.js 缺少 __registerPage 呼叫 — Search 離頁 save/cleanup 會失效"
+            "search/main.js 缺少 __registerPage 呼叫 — Search 離頁 save/cleanup 會失效"
 
     def test_showcase_core_calls_register_page(self):
         """showcase/state-base.js 必須呼叫 __registerPage"""
@@ -1452,17 +1452,17 @@ class TestAnimationHookup:
             "animations.js 缺少 window.SearchAnimations — 必須掛 window 物件供 search-flow.js 呼叫"
 
     def test_animations_js_loaded_before_state_modules(self):
-        """animations.js script tag 在 state/base.js 之前（search.html 載入順序）"""
+        """animations.js script tag 在 core.js 之前（search.html 載入順序）"""
         content = self.SEARCH_HTML.read_text(encoding='utf-8')
         anim_pos = content.find('animations.js')
-        base_pos = content.find('state/base.js')
+        core_pos = content.find('search/core.js')
         assert anim_pos != -1, \
             "search.html 缺少 animations.js script tag"
-        assert base_pos != -1, \
-            "search.html 缺少 state/base.js script tag（預期已存在）"
-        assert anim_pos < base_pos, \
-            ("animations.js 必須在 state/base.js 之前載入 — "
-             "確保 window.SearchAnimations 在 SSE handler 執行前已掛上")
+        assert core_pos != -1, \
+            "search.html 缺少 search/core.js script tag（預期已存在）"
+        assert anim_pos < core_pos, \
+            ("animations.js 必須在 core.js 之前載入 — "
+             "確保 window.SearchAnimations 在 SearchCore 執行前已掛上")
 
     def test_search_flow_has_animation_trigger_in_result_item(self):
         """search-flow.js 包含 SearchAnimations 引用；U3 後 playMiniBurst 在 _flushStreamBuffer 呼叫"""
@@ -3912,8 +3912,6 @@ class TestLightboxStateFirstGuard:
 
     def test_lightbox_close_increments_generation(self):
         """B19: closeLightbox / ESC / searchFromMetadata / page cleanup 必須 increment _lightboxGeneration"""
-        SEARCH_INDEX = PROJECT_ROOT / 'web' / 'static' / 'js' / 'pages' / 'search' / 'state' / 'index.js'
-
         # Search closeLightbox
         content = self._read_file(self.SEARCH_GRID_MODE)
         body = self._extract_function(content, 'closeLightbox')
@@ -3940,10 +3938,11 @@ class TestLightboxStateFirstGuard:
             "pending $nextTick callback 不會被 invalidate"
         )
 
-        # Page lifecycle cleanup — search
-        search_index_content = SEARCH_INDEX.read_text(encoding='utf-8')
-        assert '_lightboxGeneration++' in search_index_content, (
-            "B19 違規：search state/index.js cleanup 缺少 _lightboxGeneration++ — "
+        # Page lifecycle cleanup — search (index.js 已由 main.js 取代，54e)
+        SEARCH_MAIN = PROJECT_ROOT / 'web' / 'static' / 'js' / 'pages' / 'search' / 'main.js'
+        search_main_content = SEARCH_MAIN.read_text(encoding='utf-8')
+        assert '_lightboxGeneration++' in search_main_content, (
+            "B19 違規：search main.js cleanup 缺少 _lightboxGeneration++ — "
             "離頁時 pending $nextTick lightbox callback 不會被 invalidate"
         )
 

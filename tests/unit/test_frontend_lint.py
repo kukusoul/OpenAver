@@ -397,53 +397,53 @@ class TestBatchIntervalGuard:
             "base.js 應在初始 state 宣告 _translateCheckInterval: null"
 
 
-INDEX_JS = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "search" / "state" / "index.js"
+MAIN_JS = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "search" / "main.js"
 
 
 class TestTimerListenerGuard:
-    """T2(40b): 守衛 index.js window listener 具名 ref + cleanup removeEventListener"""
+    """T2(40b): 守衛 main.js window listener 具名 ref + cleanup removeEventListener"""
 
     def _index(self):
-        return INDEX_JS.read_text(encoding="utf-8")
+        return MAIN_JS.read_text(encoding="utf-8")
 
     def _base(self):
         return BASE_JS.read_text(encoding="utf-8")
 
     def test_index_uses_set_timer_for_cover_height(self):
-        """index.js $watch('searchResults') 使用 _setTimer('updateCoverHeight'"""
+        """main.js $watch('searchResults') 使用 _setTimer('updateCoverHeight'"""
         js = self._index()
         assert "_setTimer('updateCoverHeight'" in js, \
-            "index.js $watch('searchResults') 應改用 _setTimer('updateCoverHeight', ...) 取代裸 setTimeout"
+            "main.js $watch('searchResults') 應改用 _setTimer('updateCoverHeight', ...) 取代裸 setTimeout"
 
     def test_index_no_bare_settimeout_for_cover_height(self):
-        """index.js 不含裸 setTimeout(() => this._updateCoverHeight()"""
+        """main.js 不含裸 setTimeout(() => this._updateCoverHeight()"""
         js = self._index()
         assert "setTimeout(() => this._updateCoverHeight()" not in js, \
-            "index.js 仍含裸 setTimeout(() => this._updateCoverHeight()，應改為 _setTimer"
+            "main.js 仍含裸 setTimeout(() => this._updateCoverHeight()，應改為 _setTimer"
 
     def test_index_pywebview_handler_assigned(self):
-        """index.js pywebview-files listener 賦值給 this._pywebviewFilesHandler"""
+        """main.js pywebview-files listener 賦值給 this._pywebviewFilesHandler"""
         js = self._index()
         assert "this._pywebviewFilesHandler =" in js, \
-            "index.js 應將 pywebview-files handler 賦值給 this._pywebviewFilesHandler（具名 ref）"
+            "main.js 應將 pywebview-files handler 賦值給 this._pywebviewFilesHandler（具名 ref）"
 
     def test_index_resize_handler_assigned(self):
-        """index.js resize listener 賦值給 this._resizeHandler"""
+        """main.js resize listener 賦值給 this._resizeHandler"""
         js = self._index()
         assert "this._resizeHandler =" in js, \
-            "index.js 應將 resize handler 賦值給 this._resizeHandler（具名 ref）"
+            "main.js 應將 resize handler 賦值給 this._resizeHandler（具名 ref）"
 
     def test_index_cleanup_removes_pywebview_listener(self):
-        """index.js cleanup() 含 removeEventListener('pywebview-files', this._pywebviewFilesHandler)"""
+        """main.js cleanup() 含 removeEventListener('pywebview-files', this._pywebviewFilesHandler)"""
         js = self._index()
         assert "removeEventListener('pywebview-files', this._pywebviewFilesHandler)" in js, \
-            "index.js cleanup() 應 removeEventListener('pywebview-files', this._pywebviewFilesHandler)"
+            "main.js cleanup() 應 removeEventListener('pywebview-files', this._pywebviewFilesHandler)"
 
     def test_index_cleanup_removes_resize_listener(self):
-        """index.js cleanup() 含 removeEventListener('resize', this._resizeHandler)"""
+        """main.js cleanup() 含 removeEventListener('resize', this._resizeHandler)"""
         js = self._index()
         assert "removeEventListener('resize', this._resizeHandler)" in js, \
-            "index.js cleanup() 應 removeEventListener('resize', this._resizeHandler)"
+            "main.js cleanup() 應 removeEventListener('resize', this._resizeHandler)"
 
     def test_base_declares_pywebview_handler(self):
         """base.js state 初始化包含 _pywebviewFilesHandler 欄位"""
@@ -6057,3 +6057,200 @@ class TestShowcaseESMGuard:
                    'Alpine.data("showcaseState"' not in content, (
                 f"{js_file.name} 含 Alpine.data('showcaseState' — 舊名稱應已全部移除"
             )
+
+
+class TestSearchESMGuard:
+    """54e 守衛 — Search ESM 遷移（window.SearchStateMixin_* → ESM export）"""
+
+    BASE = Path(__file__).parents[2] / "web" / "static" / "js" / "pages" / "search"
+    STATE = BASE / "state"
+
+    def _read_state(self, filename):
+        return (self.STATE / filename).read_text(encoding="utf-8")
+
+    def _read_main(self):
+        return (self.BASE / "main.js").read_text(encoding="utf-8")
+
+    # ── state 模組 export 驗證（8 條）────────────────────────────────
+
+    def test_state_base_exists_and_exports(self):
+        """state/base.js 含 export function searchStateBase"""
+        content = self._read_state("base.js")
+        assert "export function searchStateBase" in content, (
+            "state/base.js 缺少 export function searchStateBase — "
+            "需將 window.SearchStateMixin_Base = function() 改為 export function searchStateBase()"
+        )
+
+    def test_state_persistence_exists_and_exports(self):
+        """state/persistence.js 含 export function searchStatePersistence"""
+        content = self._read_state("persistence.js")
+        assert "export function searchStatePersistence" in content
+
+    def test_state_search_flow_exists_and_exports(self):
+        """state/search-flow.js 含 export function searchStateSearchFlow"""
+        content = self._read_state("search-flow.js")
+        assert "export function searchStateSearchFlow" in content
+
+    def test_state_navigation_exists_and_exports(self):
+        """state/navigation.js 含 export function searchStateNavigation"""
+        content = self._read_state("navigation.js")
+        assert "export function searchStateNavigation" in content
+
+    def test_state_batch_exists_and_exports(self):
+        """state/batch.js 含 export function searchStateBatch"""
+        content = self._read_state("batch.js")
+        assert "export function searchStateBatch" in content
+
+    def test_state_result_card_exists_and_exports(self):
+        """state/result-card.js 含 export function searchStateResultCard"""
+        content = self._read_state("result-card.js")
+        assert "export function searchStateResultCard" in content
+
+    def test_state_file_list_exists_and_exports(self):
+        """state/file-list.js 含 export function searchStateFileList"""
+        content = self._read_state("file-list.js")
+        assert "export function searchStateFileList" in content
+
+    def test_state_grid_mode_exists_and_exports(self):
+        """state/grid-mode.js 含 export function searchStateGridMode"""
+        content = self._read_state("grid-mode.js")
+        assert "export function searchStateGridMode" in content
+
+    # ── main.js 驗證（4 條）─────────────────────────────────────────
+
+    def test_main_js_exists_and_has_alpine_init(self):
+        """search/main.js 存在且含 alpine:init"""
+        assert (self.BASE / "main.js").exists(), "search/main.js 不存在"
+        content = self._read_main()
+        assert "alpine:init" in content
+
+    def test_main_js_registers_search_page_name(self):
+        """main.js 含 Alpine.data('searchPage',"""
+        content = self._read_main()
+        assert "Alpine.data('searchPage'" in content or 'Alpine.data("searchPage"' in content, (
+            "main.js 缺少 Alpine.data('searchPage', — component 名稱必須保持 searchPage"
+        )
+
+    def test_main_js_uses_importmap_alias(self):
+        """main.js import 使用 @/search/state/ alias"""
+        content = self._read_main()
+        assert "@/search/state/" in content, (
+            "main.js 缺少 @/search/state/ import alias — 需使用 importmap 別名"
+        )
+
+    def test_main_js_uses_merge_state_not_spread(self):
+        """main.js 使用 descriptor-preserving mergeState（含 Object.getOwnPropertyDescriptors 和 Object.defineProperties），且不含 plain spread"""
+        content = self._read_main()
+        assert "Object.getOwnPropertyDescriptors" in content, (
+            "main.js 缺少 Object.getOwnPropertyDescriptors — "
+            "必須使用 descriptor-preserving mergeState 保留 base.js L300 的 get isCloudSearchMode() getter"
+        )
+        assert "Object.defineProperties" in content, (
+            "main.js 缺少 Object.defineProperties — mergeState 必須用此 API"
+        )
+        assert "...searchStateBase()" not in content, (
+            "main.js 含 ...searchStateBase() plain spread — 會凍結 getter，用 mergeState() 取代"
+        )
+
+    # ── 防殘留驗證（4 條）────────────────────────────────────────────
+
+    def test_no_window_mixin_in_state_modules(self):
+        """8 個 state 模組均不含 window.SearchStateMixin_ 字串"""
+        state_files = [
+            "base.js", "persistence.js", "search-flow.js", "navigation.js",
+            "batch.js", "result-card.js", "file-list.js", "grid-mode.js",
+        ]
+        for fname in state_files:
+            content = self._read_state(fname)
+            assert "window.SearchStateMixin_" not in content, (
+                f"state/{fname} 仍含 window.SearchStateMixin_ — 舊全域名稱應已移除"
+            )
+
+    def test_no_circular_state_imports(self):
+        """8 個 state 模組頂層 import 語句不互相引用"""
+        state_files = [
+            "base.js", "persistence.js", "search-flow.js", "navigation.js",
+            "batch.js", "result-card.js", "file-list.js", "grid-mode.js",
+        ]
+        state_names = [f.replace(".js", "") for f in state_files]
+        for fname in state_files:
+            content = self._read_state(fname)
+            import_lines = [
+                line for line in content.splitlines()
+                if line.strip().startswith("import ")
+            ]
+            for imp_line in import_lines:
+                for other in state_names:
+                    if other != fname.replace(".js", "") and f"state/{other}" in imp_line:
+                        raise AssertionError(
+                            f"state/{fname} 頂層 import 引用了 state/{other} — "
+                            "state 模組不可互相 import（D2 規則），跨模組連接只在 main.js 做"
+                        )
+
+    def test_no_window_search_state_mixin_in_templates(self):
+        """所有 templates 不含 window.SearchStateMixin_"""
+        templates_dir = Path(__file__).parents[2] / "web" / "templates"
+        for tmpl in templates_dir.glob("**/*.html"):
+            content = tmpl.read_text(encoding="utf-8")
+            assert "window.SearchStateMixin_" not in content, (
+                f"{tmpl.name} 含 window.SearchStateMixin_ — 舊全域名稱應已全部移除"
+            )
+
+    def test_no_window_search_state_mixin_in_pages_js(self):
+        """pages/search/ 下所有 JS 不含 window.SearchStateMixin_ 賦值"""
+        search_dir = self.BASE
+        for js_file in search_dir.glob("**/*.js"):
+            content = js_file.read_text(encoding="utf-8")
+            assert "window.SearchStateMixin_" not in content, (
+                f"{js_file.name} 含 window.SearchStateMixin_ — 舊全域名稱應已全部移除"
+            )
+
+    # ── HTML 切換驗證（4 條）─────────────────────────────────────────
+
+    def test_search_html_has_pre_alpine_module(self):
+        """search.html 含 {% block pre_alpine_module %} 且含 search/main.js module script"""
+        html_path = Path(__file__).parents[2] / "web" / "templates" / "search.html"
+        content = html_path.read_text(encoding="utf-8")
+        assert "pre_alpine_module" in content, (
+            "search.html 缺少 {% block pre_alpine_module %} — "
+            "main.js 必須放在此 slot 確保 alpine:init listener 在 Alpine CDN 之前掛上"
+        )
+        assert "search/main.js" in content, (
+            "search.html 缺少 search/main.js module script"
+        )
+
+    def test_search_html_xdata_is_search_page(self):
+        """search.html 仍含 x-data=\"searchPage\"（防誤改）"""
+        html_path = Path(__file__).parents[2] / "web" / "templates" / "search.html"
+        content = html_path.read_text(encoding="utf-8")
+        assert 'x-data="searchPage"' in content, (
+            'search.html 缺少 x-data="searchPage" — component 名稱必須保持 searchPage'
+        )
+
+    def test_search_html_no_old_state_script_tags(self):
+        """search.html 不含 9 個舊 state script tag（逐一 assert）"""
+        html_path = Path(__file__).parents[2] / "web" / "templates" / "search.html"
+        content = html_path.read_text(encoding="utf-8")
+        old_scripts = [
+            "state/base.js",
+            "state/persistence.js",
+            "state/search-flow.js",
+            "state/navigation.js",
+            "state/batch.js",
+            "state/result-card.js",
+            "state/file-list.js",
+            "state/grid-mode.js",
+            "state/index.js",
+        ]
+        for script in old_scripts:
+            assert script not in content, (
+                f"search.html 仍含 {script} script tag — "
+                "54e 完成後應改由 ESM main.js 載入，所有 state 模組 classic script tag 應已移除"
+            )
+
+    def test_search_state_index_js_deleted(self):
+        """search/state/index.js 不存在"""
+        index_js = self.STATE / "index.js"
+        assert not index_js.exists(), (
+            "search/state/index.js 仍然存在 — 54e 完成後 index.js 職責已由 main.js 接替，應已刪除"
+        )
