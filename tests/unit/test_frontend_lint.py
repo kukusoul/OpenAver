@@ -323,7 +323,9 @@ class TestInlineStyleCleanup:
 BATCH_JS = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "search" / "state" / "batch.js"
 SEARCH_FLOW_JS = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "search" / "state" / "search-flow.js"
 BASE_JS = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "search" / "state" / "base.js"
-SETTINGS_JS = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "settings.js"
+SETTINGS_CONFIG_JS    = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "settings" / "state-config.js"
+SETTINGS_PROVIDERS_JS = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "settings" / "state-providers.js"
+SETTINGS_UI_JS        = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "settings" / "state-ui.js"
 SEARCH_FILE_JS = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "search" / "file.js"
 
 
@@ -453,7 +455,7 @@ class TestSettingsCleanupBypassGuard:
     """T3(40b): 確保 dirtyCheckDiscard() 使用 __leavePage 而非直接跳轉"""
 
     def _js(self):
-        return SETTINGS_JS.read_text(encoding="utf-8")
+        return SETTINGS_UI_JS.read_text(encoding="utf-8")
 
     def test_dirty_check_discard_uses_leave_page(self):
         """dirtyCheckDiscard() 呼叫 window.__leavePage"""
@@ -1173,7 +1175,7 @@ class TestGeminiLocaleKeyGuard:
     """39a-T3: 守衛 settings.js 不再使用 gemini_n_flash_models locale key"""
 
     def _js(self):
-        return SETTINGS_JS.read_text(encoding="utf-8")
+        return SETTINGS_PROVIDERS_JS.read_text(encoding="utf-8")
 
     def test_settings_js_no_gemini_n_flash_models(self):
         """settings.js 不應出現 gemini_n_flash_models（已替換為 connected_n_models）"""
@@ -1306,7 +1308,7 @@ class TestCodexFixes:
         return NAVIGATION_JS.read_text(encoding="utf-8")
 
     def _settings_js(self):
-        return SETTINGS_JS.read_text(encoding="utf-8")
+        return SETTINGS_PROVIDERS_JS.read_text(encoding="utf-8")
 
     def test_loadmore_no_currentindex_assignment(self):
         """F1：loadMore() 成功分支不含 this.currentIndex = 賦值"""
@@ -1340,7 +1342,7 @@ class TestOpenAIErrorI18nGuard:
     """39a-PR-fix P1: 守衛 fetchOpenAIModels/testOpenAITranslation error 使用 window.t(errorKey) 翻譯"""
 
     def _js(self):
-        return SETTINGS_JS.read_text(encoding="utf-8")
+        return SETTINGS_PROVIDERS_JS.read_text(encoding="utf-8")
 
     def test_fetch_models_error_uses_i18n(self):
         """fetchOpenAIModels() error 分支使用 settings.status.openai_ 動態 errorKey 拼接"""
@@ -1375,7 +1377,10 @@ class TestAutoFetchDirtyStateGuard:
     """39a-PR-fix P2: 守衛 auto-fallback 後同步 savedState，防止誤觸 dirty state"""
 
     def _js(self):
-        return SETTINGS_JS.read_text(encoding="utf-8")
+        return SETTINGS_PROVIDERS_JS.read_text(encoding="utf-8")
+
+    def _config_js(self):
+        return SETTINGS_CONFIG_JS.read_text(encoding="utf-8")
 
     def test_gemini_fallback_syncs_saved_state(self):
         """testGeminiConnection() auto-fallback 後同步 savedState.geminiModel"""
@@ -1391,15 +1396,15 @@ class TestAutoFetchDirtyStateGuard:
 
     def test_openai_config_saves_use_custom_model(self):
         """saveConfig() openai 區段應含 use_custom_model，以便重載後還原 custom/select 模式"""
-        js = self._js()
+        js = self._config_js()
         assert "use_custom_model: this.openaiUseCustomModel" in js, \
-            "settings.js saveConfig() 的 openai 物件應含 use_custom_model: this.openaiUseCustomModel，否則重載後 custom 模式丟失"
+            "settings/state-config.js saveConfig() 的 openai 物件應含 use_custom_model: this.openaiUseCustomModel，否則重載後 custom 模式丟失"
 
     def test_openai_config_loads_use_custom_model(self):
         """loadConfig() 應從 config 還原 openaiUseCustomModel，而非固定從 false 重設"""
-        js = self._js()
+        js = self._config_js()
         assert "config.translate.openai?.use_custom_model" in js, \
-            "settings.js loadConfig() 應含 config.translate.openai?.use_custom_model 讀取，否則重載後 custom 模式無法還原"
+            "settings/state-config.js loadConfig() 應含 config.translate.openai?.use_custom_model 讀取，否則重載後 custom 模式無法還原"
 
     def test_fetch_openai_models_has_source_param(self):
         """fetchOpenAIModels() 應接受 source 參數，區分 auto-fetch 與手動 Fetch"""
@@ -1728,12 +1733,16 @@ class TestNoAlertInSearchJs:
         assert "alert(" not in content, \
             "scanner.js 含原生 alert()，應改用 this.showToast() 或 fluent-modal"
 
-    def test_no_alert_in_settings_js(self):
-        """T3.6: settings.js 1 處 alert 已改 showToast"""
-        settings_js = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "settings.js"
-        content = settings_js.read_text(encoding="utf-8")
-        assert "alert(" not in content, \
-            "settings.js 含原生 alert()，應改用 this.showToast()"
+    @pytest.mark.parametrize("fname", [
+        "web/static/js/pages/settings/state-config.js",
+        "web/static/js/pages/settings/state-providers.js",
+        "web/static/js/pages/settings/state-ui.js",
+    ])
+    def test_no_alert_in_settings_modules(self, fname):
+        """T3.6: settings state 模組不含原生 alert()"""
+        p = Path(__file__).parent.parent.parent / fname
+        assert "alert(" not in p.read_text(encoding="utf-8"), \
+            f"{fname} 含原生 alert()，應改用 this.showToast()"
 
     def test_scanner_clipboard_has_availability_guard(self):
         """T3.6 P2 fix: scanner.js 兩處 clipboard call 必須有 availability guard
@@ -5496,3 +5505,58 @@ class TestSettingsESMGuard:
                 for f in forbidden:
                     assert f not in stripped, \
                         f"{fname} 有循環 import：{stripped}"
+
+    # ── T2 guards ──────────────────────────────────────────────────────────
+
+    def test_settings_html_has_pre_alpine_module(self):
+        """settings.html 含 pre_alpine_module block override，含 main.js module script"""
+        content = self._read("web/templates/settings.html")
+        assert "pre_alpine_module" in content, \
+            "settings.html 缺少 {% block pre_alpine_module %}（54d-T2 未加入 main.js 載入）"
+        assert "settings/main.js" in content, \
+            "settings.html pre_alpine_module block 缺少 main.js module script"
+
+    def test_settings_html_xdata_is_settings(self):
+        """settings.html x-data 值為 'settings'（非 'settingsPage'）"""
+        content = self._read("web/templates/settings.html")
+        assert 'x-data="settings"' in content, \
+            "settings.html x-data 非 settings（54d-T2 切換未完成）"
+        assert 'x-data="settingsPage"' not in content, \
+            "settings.html 仍有舊 x-data=settingsPage（54d-T2 切換未完成）"
+
+    def test_settings_html_no_settings_js_script(self):
+        """settings.html extra_js block 不含 /pages/settings.js script 載入"""
+        content = self._read("web/templates/settings.html")
+        assert "/pages/settings.js" not in content, \
+            "settings.html 仍載入舊 settings.js（54d-T2 未移除）"
+
+    def test_settings_js_deleted(self):
+        """web/static/js/pages/settings.js 不存在"""
+        from pathlib import Path
+        p = Path(__file__).parent.parent.parent / "web/static/js/pages/settings.js"
+        assert not p.exists(), \
+            "settings.js 仍存在（54d-T2 刪除步驟未執行）"
+
+    def test_no_settings_page_xdata_in_templates(self):
+        """所有 production templates 不含 x-data=\"settingsPage\"（防殘留）"""
+        from pathlib import Path
+        templates_dir = Path(__file__).parent.parent.parent / "web/templates"
+        for tmpl in templates_dir.rglob("*.html"):
+            content = tmpl.read_text(encoding="utf-8")
+            assert 'x-data="settingsPage"' not in content, \
+                f"{tmpl.name} 仍含 x-data=settingsPage（54d-T2 殘留）"
+
+    def test_no_settings_page_alpine_data_in_js(self):
+        """web/static/js/pages/ 下所有 JS 不含 Alpine.data('settingsPage'（防殘留）"""
+        from pathlib import Path
+        pages_dir = Path(__file__).parent.parent.parent / "web/static/js/pages"
+        for js_file in pages_dir.rglob("*.js"):
+            content = js_file.read_text(encoding="utf-8")
+            assert "Alpine.data('settingsPage'" not in content, \
+                f"{js_file.name} 仍含 Alpine.data('settingsPage'（54d-T2 殘留）"
+
+    def test_main_js_no_settingspage_reference(self):
+        """settings/main.js 不含 settingsPage 字串"""
+        content = self._read("web/static/js/pages/settings/main.js")
+        assert "settingsPage" not in content, \
+            "settings/main.js 含 settingsPage（54d-T2 設計錯誤）"

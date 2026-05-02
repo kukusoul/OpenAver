@@ -745,12 +745,12 @@ class TestSettingsSimplify:
             "settings.html 仍包含 checkUpdate — 應已搬至 /help"
 
     def test_settings_js_no_dead_methods(self):
-        """settings.js 不含 loadVersion 及 restartTutorial（已搬至 help）"""
-        js = (PROJECT_ROOT / 'web/static/js/pages/settings.js').read_text(encoding='utf-8')
+        """settings/state-config.js 不含 loadVersion 及 restartTutorial（已搬至 help）"""
+        js = (PROJECT_ROOT / 'web/static/js/pages/settings/state-config.js').read_text(encoding='utf-8')
         assert 'loadVersion' not in js, \
-            "settings.js 仍包含 loadVersion — 應已搬至 help.js"
+            "settings/state-config.js 仍包含 loadVersion — 應已搬至 help.js"
         assert 'restartTutorial' not in js, \
-            "settings.js 仍包含 restartTutorial — HTML row 刪除後為死碼"
+            "settings/state-config.js 仍包含 restartTutorial — HTML row 刪除後為死碼"
 
 
 class TestHelpPage:
@@ -870,11 +870,11 @@ class TestPageLifecycleGuard:
             "base.html 缺少 page-lifecycle.js script tag — 刪除會導致三頁 __registerPage 呼叫靜默失敗"
 
     def test_settings_js_calls_register_page(self):
-        """settings.js 必須呼叫 __registerPage"""
-        js_file = PROJECT_ROOT / "web" / "static" / "js" / "pages" / "settings.js"
+        """settings/state-config.js 必須呼叫 __registerPage"""
+        js_file = PROJECT_ROOT / "web" / "static" / "js" / "pages" / "settings" / "state-config.js"
         content = js_file.read_text(encoding='utf-8')
         assert '__registerPage' in content, \
-            "settings.js 缺少 __registerPage 呼叫 — dirty-check lifecycle 會失效"
+            "settings/state-config.js 缺少 __registerPage 呼叫 — dirty-check lifecycle 會失效"
 
     def test_search_state_index_calls_register_page(self):
         """search/state/index.js 必須呼叫 __registerPage"""
@@ -4229,7 +4229,7 @@ class TestGridPerPageGuard:
         必須用 `??`（nullish coalescing）只對 null/undefined 走 fallback，保留 numeric 0。
         """
         showcase_core = self.CORE_JS.read_text(encoding='utf-8')
-        settings_js = (PROJECT_ROOT / 'web' / 'static' / 'js' / 'pages' / 'settings.js').read_text(encoding='utf-8')
+        settings_js = (PROJECT_ROOT / 'web' / 'static' / 'js' / 'pages' / 'settings' / 'state-config.js').read_text(encoding='utf-8')
 
         # 禁止 `items_per_page || ...` pattern（吞 0 的寫法）
         bad_pattern = re.compile(r'items_per_page\s*\|\|')
@@ -4335,7 +4335,7 @@ class TestSettingsResetConfigNoNativeConfirm:
     該 confirm 屬 backlog，不在 Phase 52 範圍。
     """
 
-    SETTINGS_JS = PROJECT_ROOT / 'web' / 'static' / 'js' / 'pages' / 'settings.js'
+    SETTINGS_JS = PROJECT_ROOT / 'web' / 'static' / 'js' / 'pages' / 'settings' / 'state-config.js'
 
     def test_settings_resetconfig_no_native_confirm(self):
         """T3.4: resetConfig 改 fluent-modal 後 settings.js 不再含原 confirm 完整文字
