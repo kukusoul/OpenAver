@@ -5560,3 +5560,19 @@ class TestSettingsESMGuard:
         content = self._read("web/static/js/pages/settings/main.js")
         assert "settingsPage" not in content, \
             "settings/main.js 含 settingsPage（54d-T2 設計錯誤）"
+
+    def test_main_js_uses_descriptor_merge(self):
+        """main.js 使用 descriptor-preserving merge 而非 object spread，
+        防止 getter（isDirty、folderPreviewText 等）在合併時被立即求值成靜態值"""
+        content = self._read("web/static/js/pages/settings/main.js")
+        assert "getOwnPropertyDescriptors" in content, \
+            "settings/main.js 缺少 getOwnPropertyDescriptors（54d Codex P1 修正未套用）"
+        assert "...stateConfig()" not in content, \
+            "settings/main.js 仍使用 spread 合併 stateConfig()（54d Codex P1 修正未套用）"
+
+    def test_state_config_has_getter_isDirty(self):
+        """state-config.js 的 isDirty 必須是 getter（get isDirty()），
+        確保 mergeState 有 getter 可以保留"""
+        content = self._read("web/static/js/pages/settings/state-config.js")
+        assert "get isDirty()" in content, \
+            "state-config.js 的 isDirty 不是 getter — spread bug 修正依賴此 getter"
