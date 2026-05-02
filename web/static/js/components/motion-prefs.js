@@ -2,15 +2,12 @@
  * Motion Preferences Bridge — Phase E (GSAP) 準備
  * CSS @media 在 theme.css:2128 已覆蓋，但 GSAP 繞過 CSS 需要 JS 層檢查
  */
-(function () {
-    window.OpenAver = window.OpenAver || {};
+window.OpenAver = window.OpenAver || {};
 
-    // Feature detect: 舊/特殊嵌入環境可能無 matchMedia
-    if (typeof window.matchMedia !== 'function') {
-        window.OpenAver.prefersReducedMotion = false;
-        return;
-    }
-
+// Feature detect: 舊/特殊嵌入環境可能無 matchMedia
+if (typeof window.matchMedia !== 'function') {
+    window.OpenAver.prefersReducedMotion = false;
+} else {
     var mql = window.matchMedia('(prefers-reduced-motion: reduce)');
     window.OpenAver.prefersReducedMotion = mql.matches;
 
@@ -29,4 +26,5 @@
     } else if (mql.addListener) {
         mql.addListener(onChange);
     }
-})();
+}
+export const OpenAver = window.OpenAver;

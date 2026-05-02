@@ -2,7 +2,8 @@
  * SearchState - Persistence Mixin
  * 包含：狀態持久化（restoreState, saveState, clearState, setupAutoSave）
  */
-window.SearchStateMixin_Persistence = {
+export function searchStatePersistence() {
+    return {
     // ===== State Persistence =====
     restoreState() {
         const saved = sessionStorage.getItem(this.STATE_KEY);
@@ -131,4 +132,5 @@ window.SearchStateMixin_Persistence = {
         this.$watch('fileList', debouncedSave);
         this.$watch('listMode', debouncedSave);
     }
-};
+    };
+}

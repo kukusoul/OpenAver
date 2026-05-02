@@ -2,7 +2,7 @@
  * SearchState - Base Mixin
  * 包含：data 初始值、constants、computed methods、file list helpers
  */
-window.SearchStateMixin_Base = function () {
+export function searchStateBase() {
     return {
         // ===== Page State =====
         pageState: 'empty',  // 'empty' | 'loading' | 'result' | 'error'
@@ -588,4 +588,4 @@ window.SearchStateMixin_Base = function () {
             }
         },
     };
-};
+}

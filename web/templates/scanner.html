@@ -6,8 +6,12 @@
 <link href="/static/css/pages/scanner.css" rel="stylesheet">
 {% endblock %}
 
+{% block pre_alpine_module %}
+<script type="module" src="/static/js/pages/scanner/main.js"></script>
+{% endblock %}
+
 {% block content %}
-<div class="avlist-container ds-gallery-composition" x-data="scannerPage"
+<div class="avlist-container ds-gallery-composition" x-data="scanner"
      @dragenter.document="handleDragEnter($event)"
      @dragleave.document="handleDragLeave($event)"
      @dragover.document.prevent
@@ -528,6 +532,3 @@
 </div>
 {% endblock %}
 
-{% block extra_js %}
-<script src="/static/js/pages/scanner.js"></script>
-{% endblock %}

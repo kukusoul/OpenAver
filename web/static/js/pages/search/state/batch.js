@@ -35,7 +35,8 @@ async function translateBatchHelper(titles) {
     }
 }
 
-window.SearchStateMixin_Batch = {
+export function searchStateBatch() {
+    return {
     isBatchTranslating(index) {
         return batchTranslatingIndices.has(index);
     },
@@ -459,4 +460,5 @@ window.SearchStateMixin_Batch = {
 
         file.isScraping = false;
     }
-};
+    };
+}

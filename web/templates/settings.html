@@ -7,7 +7,7 @@
 {% endblock %}
 
 {% block content %}
-<div id="settings-components" x-data="settingsPage">
+<div id="settings-components" x-data="settings">
     <div class="settings-header">
         <h4 class="mb-0">
             <i class="bi bi-gear"></i> {{ t('settings.header.title') }}
@@ -793,7 +793,9 @@
 </div>
 {% endblock %}
 
+{% block pre_alpine_module %}
+<script type="module" src="/static/js/pages/settings/main.js"></script>
+{% endblock %}
 {% block extra_js %}
 <script src="/static/js/pages/settings/theme-transition.js"></script>
-<script src="/static/js/pages/settings.js"></script>
 {% endblock %}

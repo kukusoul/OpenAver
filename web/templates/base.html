@@ -597,6 +597,20 @@
         {% block content %}{% endblock %}
     </main>
 
+    <!-- ESM Import Maps (54a) — must appear before all type="module" scripts -->
+    <script type="importmap">
+    {
+      "imports": {
+        "@/shared/":     "/static/js/shared/",
+        "@/components/": "/static/js/components/",
+        "@/showcase/":   "/static/js/pages/showcase/",
+        "@/scanner/":    "/static/js/pages/scanner/",
+        "@/settings/":   "/static/js/pages/settings/",
+        "@/search/":     "/static/js/pages/search/"
+      }
+    }
+    </script>
+
     <!-- GSAP Core (Phase E) — defer 保序：GSAP → prefs → adapter → Alpine -->
     <script defer src="https://cdn.jsdelivr.net/npm/gsap@3.14/dist/gsap.min.js"></script>
     <!-- GSAP Plugins (全站共用) -->
@@ -605,17 +619,19 @@
     <script defer src="https://cdn.jsdelivr.net/npm/gsap@3.14/dist/CustomEase.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/gsap@3.14/dist/CustomBounce.min.js"></script>
     <!-- Path Display Utilities (T7d) -->
-    <script defer src="/static/js/components/path-utils.js"></script>
+    <script type="module" src="/static/js/components/path-utils.js"></script>
     <!-- Motion Preferences Bridge (T4) -->
-    <script defer src="/static/js/components/motion-prefs.js"></script>
+    <script type="module" src="/static/js/components/motion-prefs.js"></script>
     <!-- Motion Adapter — shared GSAP wrappers (T5) -->
-    <script defer src="/static/js/components/motion-adapter.js"></script>
+    <script type="module" src="/static/js/components/motion-adapter.js"></script>
     <!-- Page Lifecycle Manager (T2.1) -->
-    <script defer src="/static/js/components/page-lifecycle.js"></script>
+    <script type="module" src="/static/js/components/page-lifecycle.js"></script>
     <!-- Ghost Fly — shared lightbox transition helper (T8) -->
-    <script defer src="/static/js/shared/ghost-fly.js"></script>
+    <script type="module" src="/static/js/shared/ghost-fly.js"></script>
     <!-- Burst Picker — shared photo-picker animation module (49b-T4a) -->
-    <script defer src="/static/js/shared/burst-picker.js"></script>
+    <script type="module" src="/static/js/shared/burst-picker.js"></script>
+
+    {% block pre_alpine_module %}{% endblock %}
 
     <!-- Alpine Plugins (must load before Alpine Core) — 53a: 釘版 3.15.12，新增 focus + intersect -->
     <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/persist@3.15.12/dist/cdn.min.js"></script>

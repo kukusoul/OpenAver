@@ -119,14 +119,18 @@ class TestSearchLightboxMetadataGuard:
             "search.html 缺少 lb-details（Lightbox 合併 meta 列，37b-layout）"
 
 
-SHOWCASE_CORE_JS = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "showcase" / "core.js"
+SHOWCASE_BASE_JS     = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "showcase" / "state-base.js"
+SHOWCASE_VIDEOS_JS   = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "showcase" / "state-videos.js"
+SHOWCASE_ACTRESS_JS  = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "showcase" / "state-actress.js"
+SHOWCASE_LIGHTBOX_JS = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "showcase" / "state-lightbox.js"
+SHOWCASE_MAIN_JS     = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "showcase" / "main.js"
 
 
 class TestShowcaseCoreJsSearchableFields:
-    """T5: 確保 showcase/core.js applyFilterAndSort 的 searchable fields 包含新欄位"""
+    """T5: 確保 showcase/state-videos.js applyFilterAndSort 的 searchable fields 包含新欄位"""
 
     def _js(self):
-        return SHOWCASE_CORE_JS.read_text(encoding="utf-8")
+        return SHOWCASE_VIDEOS_JS.read_text(encoding="utf-8")
 
     def _extract_searchable_fields(self, js: str) -> set[str]:
         """從 core.js 抓出 `const searchable = [ ... ].filter(Boolean)` 的 array literal，
@@ -205,7 +209,10 @@ class TestShowcaseCoreJsSearchableFields:
 
 SETTINGS_HTML = Path(__file__).parent.parent.parent / "web" / "templates" / "settings.html"
 SCANNER_HTML = Path(__file__).parent.parent.parent / "web" / "templates" / "scanner.html"
-SCANNER_JS = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "scanner.js"
+SCANNER_SCAN_JS  = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "scanner" / "state-scan.js"
+SCANNER_BATCH_JS = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "scanner" / "state-batch.js"
+SCANNER_ALIAS_JS = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "scanner" / "state-alias.js"
+SCANNER_MAIN_JS  = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "scanner" / "main.js"
 MOTION_LAB_HTML = Path(__file__).parent.parent.parent / "web" / "templates" / "motion_lab.html"
 DESIGN_SYSTEM_HTML = Path(__file__).parent.parent.parent / "web" / "templates" / "design-system.html"
 THEME_CSS = Path(__file__).parent.parent.parent / "web" / "static" / "css" / "theme.css"
@@ -323,7 +330,9 @@ class TestInlineStyleCleanup:
 BATCH_JS = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "search" / "state" / "batch.js"
 SEARCH_FLOW_JS = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "search" / "state" / "search-flow.js"
 BASE_JS = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "search" / "state" / "base.js"
-SETTINGS_JS = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "settings.js"
+SETTINGS_CONFIG_JS    = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "settings" / "state-config.js"
+SETTINGS_PROVIDERS_JS = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "settings" / "state-providers.js"
+SETTINGS_UI_JS        = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "settings" / "state-ui.js"
 SEARCH_FILE_JS = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "search" / "file.js"
 
 
@@ -388,53 +397,53 @@ class TestBatchIntervalGuard:
             "base.js 應在初始 state 宣告 _translateCheckInterval: null"
 
 
-INDEX_JS = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "search" / "state" / "index.js"
+MAIN_JS = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "search" / "main.js"
 
 
 class TestTimerListenerGuard:
-    """T2(40b): 守衛 index.js window listener 具名 ref + cleanup removeEventListener"""
+    """T2(40b): 守衛 main.js window listener 具名 ref + cleanup removeEventListener"""
 
     def _index(self):
-        return INDEX_JS.read_text(encoding="utf-8")
+        return MAIN_JS.read_text(encoding="utf-8")
 
     def _base(self):
         return BASE_JS.read_text(encoding="utf-8")
 
     def test_index_uses_set_timer_for_cover_height(self):
-        """index.js $watch('searchResults') 使用 _setTimer('updateCoverHeight'"""
+        """main.js $watch('searchResults') 使用 _setTimer('updateCoverHeight'"""
         js = self._index()
         assert "_setTimer('updateCoverHeight'" in js, \
-            "index.js $watch('searchResults') 應改用 _setTimer('updateCoverHeight', ...) 取代裸 setTimeout"
+            "main.js $watch('searchResults') 應改用 _setTimer('updateCoverHeight', ...) 取代裸 setTimeout"
 
     def test_index_no_bare_settimeout_for_cover_height(self):
-        """index.js 不含裸 setTimeout(() => this._updateCoverHeight()"""
+        """main.js 不含裸 setTimeout(() => this._updateCoverHeight()"""
         js = self._index()
         assert "setTimeout(() => this._updateCoverHeight()" not in js, \
-            "index.js 仍含裸 setTimeout(() => this._updateCoverHeight()，應改為 _setTimer"
+            "main.js 仍含裸 setTimeout(() => this._updateCoverHeight()，應改為 _setTimer"
 
     def test_index_pywebview_handler_assigned(self):
-        """index.js pywebview-files listener 賦值給 this._pywebviewFilesHandler"""
+        """main.js pywebview-files listener 賦值給 this._pywebviewFilesHandler"""
         js = self._index()
         assert "this._pywebviewFilesHandler =" in js, \
-            "index.js 應將 pywebview-files handler 賦值給 this._pywebviewFilesHandler（具名 ref）"
+            "main.js 應將 pywebview-files handler 賦值給 this._pywebviewFilesHandler（具名 ref）"
 
     def test_index_resize_handler_assigned(self):
-        """index.js resize listener 賦值給 this._resizeHandler"""
+        """main.js resize listener 賦值給 this._resizeHandler"""
         js = self._index()
         assert "this._resizeHandler =" in js, \
-            "index.js 應將 resize handler 賦值給 this._resizeHandler（具名 ref）"
+            "main.js 應將 resize handler 賦值給 this._resizeHandler（具名 ref）"
 
     def test_index_cleanup_removes_pywebview_listener(self):
-        """index.js cleanup() 含 removeEventListener('pywebview-files', this._pywebviewFilesHandler)"""
+        """main.js cleanup() 含 removeEventListener('pywebview-files', this._pywebviewFilesHandler)"""
         js = self._index()
         assert "removeEventListener('pywebview-files', this._pywebviewFilesHandler)" in js, \
-            "index.js cleanup() 應 removeEventListener('pywebview-files', this._pywebviewFilesHandler)"
+            "main.js cleanup() 應 removeEventListener('pywebview-files', this._pywebviewFilesHandler)"
 
     def test_index_cleanup_removes_resize_listener(self):
-        """index.js cleanup() 含 removeEventListener('resize', this._resizeHandler)"""
+        """main.js cleanup() 含 removeEventListener('resize', this._resizeHandler)"""
         js = self._index()
         assert "removeEventListener('resize', this._resizeHandler)" in js, \
-            "index.js cleanup() 應 removeEventListener('resize', this._resizeHandler)"
+            "main.js cleanup() 應 removeEventListener('resize', this._resizeHandler)"
 
     def test_base_declares_pywebview_handler(self):
         """base.js state 初始化包含 _pywebviewFilesHandler 欄位"""
@@ -453,7 +462,7 @@ class TestSettingsCleanupBypassGuard:
     """T3(40b): 確保 dirtyCheckDiscard() 使用 __leavePage 而非直接跳轉"""
 
     def _js(self):
-        return SETTINGS_JS.read_text(encoding="utf-8")
+        return SETTINGS_UI_JS.read_text(encoding="utf-8")
 
     def test_dirty_check_discard_uses_leave_page(self):
         """dirtyCheckDiscard() 呼叫 window.__leavePage"""
@@ -509,7 +518,7 @@ class TestJellyfinCheckManualGuard:
         return SCANNER_HTML.read_text(encoding="utf-8")
 
     def _js(self):
-        return SCANNER_JS.read_text(encoding="utf-8")
+        return SCANNER_SCAN_JS.read_text(encoding="utf-8")
 
     def test_no_auto_trigger_in_init(self):
         """init() 後的 loadStats 呼叫後，不應緊接 checkJellyfinImages()"""
@@ -665,11 +674,15 @@ class TestSmartCloseRemovedGuard:
 
     def test_no_lightbox_move_enabled_in_core_js(self):
         """core.js 不應包含 lightboxMoveEnabled（Smart Close 門控已移除）"""
+        if not self.CORE_JS.exists():
+            return  # core.js 已刪除（54b）— 內容自然不存在
         content = self.CORE_JS.read_text(encoding='utf-8')
         assert 'lightboxMoveEnabled' not in content
 
     def test_no_lightbox_move_timer_in_core_js(self):
         """core.js 不應包含 lightboxMoveTimer（Smart Close timer 已移除）"""
+        if not self.CORE_JS.exists():
+            return  # core.js 已刪除（54b）— 內容自然不存在
         content = self.CORE_JS.read_text(encoding='utf-8')
         assert 'lightboxMoveTimer' not in content
 
@@ -677,7 +690,7 @@ class TestSmartCloseRemovedGuard:
 class TestShowcaseKeyboardGuard:
     """Phase 40d-T2: Showcase 鍵盤 preventDefault 守衛"""
 
-    CORE_JS = Path(__file__).parents[2] / 'web' / 'static' / 'js' / 'pages' / 'showcase' / 'core.js'
+    CORE_JS = SHOWCASE_LIGHTBOX_JS
 
     def _extract_block(self, content, anchor, end_marker='return;'):
         """提取從 anchor 到 end_marker 的區塊"""
@@ -709,7 +722,12 @@ class TestShowcaseActressState:
     """Phase 44a-T2: Showcase 女優模式 Alpine state 守衛"""
 
     def _js(self):
-        return SHOWCASE_CORE_JS.read_text(encoding="utf-8")
+        # 女優 state 分散於 state-base/actress/lightbox，合併讀取確保覆蓋
+        return (
+            SHOWCASE_BASE_JS.read_text(encoding="utf-8") + "\n" +
+            SHOWCASE_ACTRESS_JS.read_text(encoding="utf-8") + "\n" +
+            SHOWCASE_LIGHTBOX_JS.read_text(encoding="utf-8")
+        )
 
     # --- Module-level arrays ---
     def test_module_level_actresses_declared(self):
@@ -979,7 +997,12 @@ class TestActressLightboxSourceGuard:
     """
 
     def _js(self):
-        return SHOWCASE_CORE_JS.read_text(encoding="utf-8")
+        # actressLightboxSource / openActressLightbox / closeLightbox / handleKeydown → state-lightbox.js
+        # openHeroCardLightbox → state-lightbox.js
+        return (
+            SHOWCASE_ACTRESS_JS.read_text(encoding="utf-8") + "\n" +
+            SHOWCASE_LIGHTBOX_JS.read_text(encoding="utf-8")
+        )
 
     def _html(self):
         return SHOWCASE_HTML.read_text(encoding="utf-8")
@@ -1043,7 +1066,15 @@ class TestShowcasePreciseMatchState:
     """Phase 44b-T1: Showcase 精準匹配 Alpine state 守衛"""
 
     def _js(self):
-        return SHOWCASE_CORE_JS.read_text(encoding="utf-8")
+        # _isPreciseActressMatch / _checkPreciseActressMatch / _actressesLoaded → state-actress.js
+        # searchFromMetadata → state-lightbox.js
+        # capturedTerm / onSearchChange → state-actress.js
+        return (
+            SHOWCASE_ACTRESS_JS.read_text(encoding="utf-8") + "\n" +
+            SHOWCASE_VIDEOS_JS.read_text(encoding="utf-8") + "\n" +
+            SHOWCASE_BASE_JS.read_text(encoding="utf-8") + "\n" +
+            SHOWCASE_LIGHTBOX_JS.read_text(encoding="utf-8")
+        )
 
     def _extract_fn_block(self, content, fn_anchor):
         """提取從 fn_anchor 開始到下一個頂層逗號的函數區塊"""
@@ -1128,10 +1159,11 @@ class TestShowcasePreciseMatchState:
 
     # --- Lazy load flag ---
     def test_loadActresses_sets_loaded_flag(self):
-        """_actressesLoaded = true 出現於 core.js（懶載 flag 設定）"""
+        """_actressesLoaded 設定為 true 出現於 state（懶載 flag 設定）"""
         js = self._js()
-        assert "_actressesLoaded = true" in js, \
-            "showcase/core.js loadActresses() 缺少 _actressesLoaded = true"
+        # ESM：透過 _setActressesLoaded(true) 設定；monolith：直接 _actressesLoaded = true
+        assert "_actressesLoaded = true" in js or "_setActressesLoaded(true)" in js, \
+            "showcase state loadActresses() 缺少 _actressesLoaded 設為 true（_actressesLoaded = true 或 _setActressesLoaded(true)）"
 
     def _html(self):
         return SHOWCASE_HTML.read_text(encoding="utf-8")
@@ -1173,7 +1205,7 @@ class TestGeminiLocaleKeyGuard:
     """39a-T3: 守衛 settings.js 不再使用 gemini_n_flash_models locale key"""
 
     def _js(self):
-        return SETTINGS_JS.read_text(encoding="utf-8")
+        return SETTINGS_PROVIDERS_JS.read_text(encoding="utf-8")
 
     def test_settings_js_no_gemini_n_flash_models(self):
         """settings.js 不應出現 gemini_n_flash_models（已替換為 connected_n_models）"""
@@ -1306,7 +1338,7 @@ class TestCodexFixes:
         return NAVIGATION_JS.read_text(encoding="utf-8")
 
     def _settings_js(self):
-        return SETTINGS_JS.read_text(encoding="utf-8")
+        return SETTINGS_PROVIDERS_JS.read_text(encoding="utf-8")
 
     def test_loadmore_no_currentindex_assignment(self):
         """F1：loadMore() 成功分支不含 this.currentIndex = 賦值"""
@@ -1340,7 +1372,7 @@ class TestOpenAIErrorI18nGuard:
     """39a-PR-fix P1: 守衛 fetchOpenAIModels/testOpenAITranslation error 使用 window.t(errorKey) 翻譯"""
 
     def _js(self):
-        return SETTINGS_JS.read_text(encoding="utf-8")
+        return SETTINGS_PROVIDERS_JS.read_text(encoding="utf-8")
 
     def test_fetch_models_error_uses_i18n(self):
         """fetchOpenAIModels() error 分支使用 settings.status.openai_ 動態 errorKey 拼接"""
@@ -1375,7 +1407,10 @@ class TestAutoFetchDirtyStateGuard:
     """39a-PR-fix P2: 守衛 auto-fallback 後同步 savedState，防止誤觸 dirty state"""
 
     def _js(self):
-        return SETTINGS_JS.read_text(encoding="utf-8")
+        return SETTINGS_PROVIDERS_JS.read_text(encoding="utf-8")
+
+    def _config_js(self):
+        return SETTINGS_CONFIG_JS.read_text(encoding="utf-8")
 
     def test_gemini_fallback_syncs_saved_state(self):
         """testGeminiConnection() auto-fallback 後同步 savedState.geminiModel"""
@@ -1391,15 +1426,15 @@ class TestAutoFetchDirtyStateGuard:
 
     def test_openai_config_saves_use_custom_model(self):
         """saveConfig() openai 區段應含 use_custom_model，以便重載後還原 custom/select 模式"""
-        js = self._js()
+        js = self._config_js()
         assert "use_custom_model: this.openaiUseCustomModel" in js, \
-            "settings.js saveConfig() 的 openai 物件應含 use_custom_model: this.openaiUseCustomModel，否則重載後 custom 模式丟失"
+            "settings/state-config.js saveConfig() 的 openai 物件應含 use_custom_model: this.openaiUseCustomModel，否則重載後 custom 模式丟失"
 
     def test_openai_config_loads_use_custom_model(self):
         """loadConfig() 應從 config 還原 openaiUseCustomModel，而非固定從 false 重設"""
-        js = self._js()
+        js = self._config_js()
         assert "config.translate.openai?.use_custom_model" in js, \
-            "settings.js loadConfig() 應含 config.translate.openai?.use_custom_model 讀取，否則重載後 custom 模式無法還原"
+            "settings/state-config.js loadConfig() 應含 config.translate.openai?.use_custom_model 讀取，否則重載後 custom 模式無法還原"
 
     def test_fetch_openai_models_has_source_param(self):
         """fetchOpenAIModels() 應接受 source 參數，區分 auto-fetch 與手動 Fetch"""
@@ -1485,39 +1520,22 @@ class TestScannerStateGuard:
     def _html(self):
         return SCANNER_HTML.read_text(encoding="utf-8")
 
-    def test_scanner_extra_js_uses_scanner_js(self):
-        """scanner.html 的 extra_js block 含 scanner.js 引用，且 inline <script> 不超過 10 行"""
-        import re
+    def test_scanner_html_has_pre_alpine_module_block(self):
+        """scanner.html 含 pre_alpine_module block override，且含 scanner/main.js module script（54c-T2）"""
         html = self._html()
-        # 擷取 {% block extra_js %} 到 {% endblock %} 之間的內容
-        pattern = re.compile(r'\{%-?\s*block extra_js\s*-?%\}(.*?)\{%-?\s*endblock\s*-?%\}', re.DOTALL)
-        match = pattern.search(html)
-        assert match is not None, "scanner.html 找不到 {% block extra_js %} 區段"
-        block_content = match.group(1)
-
-        # 必須包含 scanner.js 引用
-        assert 'scanner.js' in block_content, \
-            "scanner.html {% block extra_js %} 缺少 scanner.js script 引用"
-        assert '<script src="/static/js/pages/scanner.js"></script>' in block_content, \
-            "scanner.html {% block extra_js %} 應含 <script src=\"/static/js/pages/scanner.js\"></script>"
-
-        # inline <script> 行數不超過 10 行（防止 inline JS 悄悄重新引入）
-        inline_scripts = re.findall(r'<script(?:\s[^>]*)?>.*?</script>', block_content, re.DOTALL)
-        for script_tag in inline_scripts:
-            # 排除有 src 屬性的外部 script
-            if 'src=' in script_tag:
-                continue
-            line_count = script_tag.count('\n') + 1
-            assert line_count <= 10, \
-                f"scanner.html extra_js 區段含超過 10 行的 inline <script>（{line_count} 行），應將 JS 移至 scanner.js"
+        assert "pre_alpine_module" in html, \
+            "scanner.html 缺少 {% block pre_alpine_module %}（54c-T2 未加入 main.js 載入）"
+        assert "scanner/main.js" in html, \
+            "scanner.html pre_alpine_module block 缺少 main.js module script"
 
     def test_scanner_no_inline_script(self):
-        """scanner.html 的 extra_js 區段不含超過 10 行的 inline script"""
+        """scanner.html 的 extra_js 區段（若存在）不含超過 10 行的 inline script"""
         import re
         html = self._html()
         pattern = re.compile(r'\{%-?\s*block extra_js\s*-?%\}(.*?)\{%-?\s*endblock\s*-?%\}', re.DOTALL)
         match = pattern.search(html)
-        assert match is not None, "scanner.html 找不到 {% block extra_js %} 區段"
+        if match is None:
+            return  # extra_js block 已移除，守衛通過
         block_content = match.group(1)
         # 確認區段內沒有 inline script（只有含 src 的外部 script 標籤）
         inline_scripts = re.findall(r'<script(?:\s[^>]*)?>.*?</script>', block_content, re.DOTALL)
@@ -1722,21 +1740,30 @@ class TestNoAlertInSearchJs:
         assert "alert(" not in content, \
             "result-card.js 含原生 alert()，應改用 this.showToast()"
 
-    def test_no_alert_in_scanner_js(self):
-        """T3.6: scanner.js 8 處 alert 已改 showToast / fluent-modal"""
-        content = SCANNER_JS.read_text(encoding="utf-8")
-        assert "alert(" not in content, \
-            "scanner.js 含原生 alert()，應改用 this.showToast() 或 fluent-modal"
+    @pytest.mark.parametrize("fname", [
+        "web/static/js/pages/scanner/state-scan.js",
+        "web/static/js/pages/scanner/state-batch.js",
+        "web/static/js/pages/scanner/state-alias.js",
+    ])
+    def test_no_alert_in_scanner_modules(self, fname):
+        """T3.6: scanner state 模組不含原生 alert()（54c-T2 拆模組後改用 parametrize）"""
+        p = Path(__file__).parent.parent.parent / fname
+        assert "alert(" not in p.read_text(encoding="utf-8"), \
+            f"{fname} 含原生 alert()，應改用 this.showToast() 或 fluent-modal"
 
-    def test_no_alert_in_settings_js(self):
-        """T3.6: settings.js 1 處 alert 已改 showToast"""
-        settings_js = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "settings.js"
-        content = settings_js.read_text(encoding="utf-8")
-        assert "alert(" not in content, \
-            "settings.js 含原生 alert()，應改用 this.showToast()"
+    @pytest.mark.parametrize("fname", [
+        "web/static/js/pages/settings/state-config.js",
+        "web/static/js/pages/settings/state-providers.js",
+        "web/static/js/pages/settings/state-ui.js",
+    ])
+    def test_no_alert_in_settings_modules(self, fname):
+        """T3.6: settings state 模組不含原生 alert()"""
+        p = Path(__file__).parent.parent.parent / fname
+        assert "alert(" not in p.read_text(encoding="utf-8"), \
+            f"{fname} 含原生 alert()，應改用 this.showToast()"
 
     def test_scanner_clipboard_has_availability_guard(self):
-        """T3.6 P2 fix: scanner.js 兩處 clipboard call 必須有 availability guard
+        """T3.6 P2 fix: scanner/state-scan.js 兩處 clipboard call 必須有 availability guard
 
         navigator.clipboard 在 HTTP / 舊 WebView 為 undefined，
         若直接呼叫 navigator.clipboard.writeText(...) 會在 property access 階段
@@ -1744,11 +1771,11 @@ class TestNoAlertInSearchJs:
         導致 copyLogs 的 fail modal / copyOutputPath 的 error toast 被跳過。
         守衛 if (!navigator.clipboard?.writeText) 必須在兩處 clipboard call 之前。
         """
-        content = SCANNER_JS.read_text(encoding="utf-8")
+        content = SCANNER_SCAN_JS.read_text(encoding="utf-8")
         # 兩處 copy 點都應該有 ?. optional chaining guard
         guard_count = content.count("navigator.clipboard?.writeText")
         assert guard_count >= 2, (
-            f"scanner.js 應該有至少 2 處 navigator.clipboard?.writeText 守衛 "
+            f"scanner/state-scan.js 應該有至少 2 處 navigator.clipboard?.writeText 守衛 "
             f"（copyLogs + copyOutputPath），目前只有 {guard_count} 處。"
             "若沒守衛，clipboard API 不存在時 .catch() 完全不會觸發。"
         )
@@ -2118,7 +2145,8 @@ class TestShowcaseActressLightbox:
         return SHOWCASE_HTML.read_text(encoding="utf-8")
 
     def _js(self):
-        return SHOWCASE_CORE_JS.read_text(encoding="utf-8")
+        # _actressCoreMetadata / _allInfoChips / _chipsLimit / _visibleAliases / _visibleInfoChips / _visibleVideoTags → state-actress.js
+        return SHOWCASE_ACTRESS_JS.read_text(encoding="utf-8")
 
     # --- showcase.html x-if branches ---
 
@@ -2198,7 +2226,8 @@ class TestShowcaseActressCRUD:
         return SHOWCASE_HTML.read_text(encoding="utf-8")
 
     def _js(self):
-        return SHOWCASE_CORE_JS.read_text(encoding="utf-8")
+        # addFavoriteActress / rescrapeActress / removeActress / searchActressFilms → state-actress.js
+        return SHOWCASE_ACTRESS_JS.read_text(encoding="utf-8")
 
     # --- core.js method guards ---
 
@@ -2271,6 +2300,8 @@ class TestRescrapeRemoved:
     SHOWCASE_HTML = Path(__file__).parents[2] / 'web' / 'templates' / 'showcase.html'
 
     def _js(self):
+        if not self.CORE_JS.exists():
+            return None  # core.js 已刪除（54b）
         return self.CORE_JS.read_text(encoding='utf-8')
 
     def _html(self):
@@ -2279,18 +2310,24 @@ class TestRescrapeRemoved:
     def test_rescrape_actress_not_in_js(self):
         """core.js 不含 rescrapeActress（49b-T5 dead code 已刪除）"""
         js = self._js()
+        if js is None:
+            return  # core.js 已刪除（54b）— 內容自然不存在
         assert "rescrapeActress" not in js, \
             "showcase/core.js 仍含 rescrapeActress（49b-T5 應已完全移除）"
 
     def test_rescraping_state_not_in_js(self):
         """core.js 不含 _rescraping state（49b-T5 dead code 已刪除）"""
         js = self._js()
+        if js is None:
+            return  # core.js 已刪除（54b）— 內容自然不存在
         assert "_rescraping" not in js, \
             "showcase/core.js 仍含 _rescraping state（49b-T5 應已完全移除）"
 
     def test_rescrape_url_not_in_js(self):
         """core.js 不含 /rescrape fetch call（49b-T5 dead code 已刪除）"""
         js = self._js()
+        if js is None:
+            return  # core.js 已刪除（54b）— 內容自然不存在
         assert "/rescrape" not in js, \
             "showcase/core.js 仍含 /rescrape fetch call（49b-T5 應已完全移除）"
 
@@ -2308,7 +2345,8 @@ class TestShowcaseActressCardFooter:
         return SHOWCASE_HTML.read_text(encoding="utf-8")
 
     def _js(self):
-        return SHOWCASE_CORE_JS.read_text(encoding="utf-8")
+        # _actressCardMiddle / _actressHoverInfo / actressSort → state-actress.js
+        return SHOWCASE_ACTRESS_JS.read_text(encoding="utf-8")
 
     def test_actress_footer_default_three_cols(self):
         """showcase.html actress card footer 含 footer-default 三欄結構"""
@@ -2456,10 +2494,11 @@ class TestSettingsResetModalI18n:
 class TestShowcaseLightboxSentinel:
     """Phase 44b-T4: Lightbox -1 sentinel nav guards"""
 
-    CORE_JS = Path(__file__).parents[2] / 'web' / 'static' / 'js' / 'pages' / 'showcase' / 'core.js'
+    CORE_JS = SHOWCASE_LIGHTBOX_JS
     SHOWCASE_HTML = Path(__file__).parents[2] / 'web' / 'templates' / 'showcase.html'
 
     def _js(self):
+        # openHeroCardLightbox / hasVisiblePrev / hasVisibleNext / prevLightboxVideo / nextLightboxVideo / handleKeydown → state-lightbox.js
         return self.CORE_JS.read_text(encoding='utf-8')
 
     def _html(self):
@@ -2567,7 +2606,14 @@ class TestShowcaseAliasGuard:
     """T5 (45-actress-alias): Frontend Guard — alias 展開注入守衛"""
 
     def _js(self):
-        return SHOWCASE_CORE_JS.read_text(encoding="utf-8")
+        # _nameToGroup 宣告 + _loadAliasMap → state-base.js
+        # applyActressFilterAndSort / _checkPreciseActressMatch 的 _nameToGroup 使用 → state-actress.js
+        # applyFilterAndSort 的 _nameToGroup[term] 使用 → state-videos.js
+        return (
+            SHOWCASE_BASE_JS.read_text(encoding="utf-8") + "\n" +
+            SHOWCASE_ACTRESS_JS.read_text(encoding="utf-8") + "\n" +
+            SHOWCASE_VIDEOS_JS.read_text(encoding="utf-8")
+        )
 
     def test_name_to_group_declaration_exists(self):
         """_nameToGroup module-level 宣告必須存在於 core.js"""
@@ -2610,16 +2656,15 @@ class TestShowcaseAliasGuard:
 # ---------------------------------------------------------------------------
 # T6: Scanner Alias UI v2 — 舊 token 移除 + 新 token 存在守衛
 # ---------------------------------------------------------------------------
-SCANNER_JS = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "scanner.js"
 SCANNER_HTML = Path(__file__).parent.parent.parent / "web" / "templates" / "scanner.html"
 ZH_TW_JSON = Path(__file__).parent.parent.parent / "locales" / "zh_TW.json"
 
 
 class TestScannerAliasV2Guard:
-    """T6: 確認 scanner.js/html 舊 alias token 已移除、新 token 已存在"""
+    """T6: 確認 scanner/state-alias.js/html 舊 alias token 已移除、新 token 已存在"""
 
     def _js(self):
-        return SCANNER_JS.read_text(encoding="utf-8")
+        return SCANNER_ALIAS_JS.read_text(encoding="utf-8")
 
     def _html(self):
         return SCANNER_HTML.read_text(encoding="utf-8")
@@ -3179,17 +3224,17 @@ class TestGhostFlyGuards:
         assert len(ghost_fly_refs) >= 3, "應有至少 3 個 window.GhostFly 引用（三個委派函式）"
 
     def test_gsap_animating_before_lightbox_open(self):
-        """showcase/core.js 的 gsap-animating 在 lightboxOpen = true 之前"""
-        js = Path("web/static/js/pages/showcase/core.js").read_text(encoding="utf-8")
-        # 只在 openLightbox 函數區域內檢查順序
-        idx_fn = js.find("openLightbox(")
-        assert idx_fn > 0, "找不到 openLightbox 函數"
-        fn_scope = js[idx_fn:]
-        idx_animating = fn_scope.find("classList.add('gsap-animating')")
-        idx_open = fn_scope.find("this.lightboxOpen = true")
-        assert idx_animating > 0, "找不到 gsap-animating classList.add"
-        assert idx_open > 0, "找不到 lightboxOpen = true"
-        assert idx_animating < idx_open, "gsap-animating 應在 lightboxOpen = true 之前"
+        """state-lightbox.js 的 gsap-animating 在 lightboxOpen = true 之前（openLightbox + openHeroCardLightbox）"""
+        content = SHOWCASE_LIGHTBOX_JS.read_text(encoding="utf-8")
+        for fn_name in ("openLightbox(", "openHeroCardLightbox("):
+            idx_fn = content.find(fn_name)
+            assert idx_fn > 0, f"找不到 {fn_name}"
+            fn_scope = content[idx_fn:idx_fn + 4000]
+            idx_animating = fn_scope.find("gsap-animating")
+            idx_open = fn_scope.find("this.lightboxOpen = true")
+            assert idx_animating > 0, f"{fn_name}: 找不到 gsap-animating"
+            assert idx_open > 0, f"{fn_name}: 找不到 lightboxOpen = true"
+            assert idx_animating < idx_open, f"{fn_name}: gsap-animating 應在 lightboxOpen = true 之前"
 
 
 class TestTutorialExpandGuard:
@@ -3232,7 +3277,7 @@ class TestMissingEnrichConfirmGuard:
     """TASK-13 (0.7.6 hotfix): 守衛 Scanner 一鍵補完 > 500 confirm dialog 的實作"""
 
     def _js(self):
-        return SCANNER_JS.read_text(encoding="utf-8")
+        return SCANNER_BATCH_JS.read_text(encoding="utf-8")
 
     def _html(self):
         return SCANNER_HTML.read_text(encoding="utf-8")
@@ -3364,10 +3409,10 @@ class TestIMEGuard:
 
 
 class TestLongPathWarning:
-    """spec-48a §a5 — scanner.js long_paths 警告處理"""
+    """spec-48a §a5 — scanner/state-scan.js long_paths 警告處理"""
 
     def _js(self):
-        return SCANNER_JS.read_text(encoding="utf-8")
+        return SCANNER_SCAN_JS.read_text(encoding="utf-8")
 
     def test_scanner_js_handles_long_paths(self):
         """scanner.js done event 處理須偵測 data.long_paths 並顯示警告 toast"""
@@ -3460,7 +3505,12 @@ class TestFetchSamplesButton:
         return SHOWCASE_HTML.read_text(encoding="utf-8")
 
     def _js(self):
-        return SHOWCASE_CORE_JS.read_text(encoding="utf-8")
+        # fetchSamples / _fetchSamplesLoading (usage) → state-lightbox.js
+        # _fetchSamplesLoading: (init) / _fetchSamplesFailed: (init) → state-actress.js
+        return (
+            SHOWCASE_ACTRESS_JS.read_text(encoding="utf-8") + "\n" +
+            SHOWCASE_LIGHTBOX_JS.read_text(encoding="utf-8")
+        )
 
     def _fetch_samples_btn_tag(self, html: str):
         """從 showcase.html 抽出 fetch-samples-btn 的完整 <button ...> tag。
@@ -3743,7 +3793,8 @@ class TestActressCoreMetadataVideoCount:
     """T2: _actressCoreMetadata() 加 video_count 前置 + i18n showcase.unit.films 改值"""
 
     def _js(self):
-        return SHOWCASE_CORE_JS.read_text(encoding="utf-8")
+        # _actressCoreMetadata → state-actress.js
+        return SHOWCASE_ACTRESS_JS.read_text(encoding="utf-8")
 
     def _extract_method_body(self, js, method_name):
         """抓取 Alpine state method 函式主體（大括號平衡）。"""
@@ -3825,7 +3876,12 @@ class TestModeToggleFadeOutGuard:
     """T1: 模式切換動畫補 fade-out（playModeCrossfade 4-arg + toggleActressMode callback 延遲翻轉）"""
 
     def _core_js(self):
-        return SHOWCASE_CORE_JS.read_text(encoding="utf-8")
+        # toggleActressMode / searchActressFilms → state-actress.js
+        # switchMode → state-videos.js
+        return (
+            SHOWCASE_ACTRESS_JS.read_text(encoding="utf-8") + "\n" +
+            SHOWCASE_VIDEOS_JS.read_text(encoding="utf-8")
+        )
 
     def _anim_js(self):
         return SHOWCASE_ANIMATIONS_JS.read_text(encoding="utf-8")
@@ -3991,7 +4047,12 @@ class TestAliasLiveQueryGuard:
     """
 
     def _js(self):
-        return SHOWCASE_CORE_JS.read_text(encoding="utf-8")
+        # _fetchLiveAliases / openActressLightbox / prevActressLightbox / nextActressLightbox → state-actress.js
+        # openHeroCardLightbox → state-lightbox.js
+        return (
+            SHOWCASE_ACTRESS_JS.read_text(encoding="utf-8") + "\n" +
+            SHOWCASE_LIGHTBOX_JS.read_text(encoding="utf-8")
+        )
 
     def _extract_method_body(self, js, method_name):
         """抓取 Alpine state method 函式主體，大括號平衡（容忍 async 前綴）。"""
@@ -4088,14 +4149,15 @@ class TestGhostFlyInFlightGuard:
     """49a-T7: 女優 → 影片跨模式 Ghost Fly 動畫並發保護 guard
 
     驗證：
-    - core.js 初始化物件含 _ghostFlyInFlight: false（CD-13 並發 flag）
+    - state 初始化物件含 _ghostFlyInFlight: false（CD-13 並發 flag）
     - ghost-fly.js 新增 playActressToHeroCard 方法（CD-11）
     - searchActressFilms 為 async 並接受第二參數 fromEl
     - showcase.html 兩個 camera button（grid + lightbox）皆綁 :disabled="_ghostFlyInFlight"
     """
 
     def _js(self):
-        return SHOWCASE_CORE_JS.read_text(encoding="utf-8")
+        # _ghostFlyInFlight / searchActressFilms → state-actress.js
+        return SHOWCASE_ACTRESS_JS.read_text(encoding="utf-8")
 
     def _ghost_js(self):
         return GHOST_FLY_JS.read_text(encoding="utf-8")
@@ -4277,8 +4339,8 @@ class TestT4FooterStructure:
         隱藏 select 用 .click() 在主流瀏覽器只 dispatch event 不會開 native picker（AC-7 fail）。
         並驗證 pager-current @click 走的是 openPagePicker（不是直接 .click()）。
         """
-        # JS method 端
-        js = SHOWCASE_CORE_JS.read_text(encoding="utf-8")
+        # JS method 端 — openPagePicker → state-videos.js
+        js = SHOWCASE_VIDEOS_JS.read_text(encoding="utf-8")
         assert re.search(r'openPagePicker\s*\(', js), \
             "showcase/core.js 缺少 openPagePicker method 定義"
         # 必須含 showPicker 嘗試
@@ -4397,16 +4459,17 @@ class TestBurstPickerGuard:
             assert method + ":" in js, f"burst-picker.js 缺少 {method} 方法定義"
 
     def test_base_html_loads_burst_picker(self):
-        """base.html 含 burst-picker.js script tag 且使用 defer"""
+        """base.html 含 burst-picker.js script tag 且使用 defer 或 type="module"（54a-T2 後允許 module）"""
         html = BASE_HTML_T4A.read_text(encoding="utf-8")
         assert "/static/js/shared/burst-picker.js" in html, \
             "base.html 缺少 /static/js/shared/burst-picker.js script 引用"
-        # 驗證 defer
+        # 驗證 defer 或 type="module"（type="module" 天生 deferred，等同 defer）
         pattern = re.compile(r'<script[^>]*burst-picker\.js[^>]*>')
         matches = pattern.findall(html)
         assert matches, "base.html 找不到 burst-picker.js script tag"
         for tag in matches:
-            assert "defer" in tag, f"burst-picker.js script tag 應含 defer 屬性：{tag}"
+            assert "defer" in tag or 'type="module"' in tag, \
+                f"burst-picker.js script tag 應含 defer 或 type=\"module\" 屬性：{tag}"
 
     def test_motion_lab_js_no_longer_defines_picker_methods(self):
         """motion-lab.js 已不再內嵌 7 個 playPicker* 方法定義（僅 burst-picker.js 內有）"""
@@ -4430,7 +4493,6 @@ class TestBurstPickerGuard:
 
 
 # ─── 49b-T4cd: Actress Photo Picker UI/Alpine/SSE 整合守衛 ──────────────────
-SHOWCASE_CORE_JS_T4CD = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "showcase" / "core.js"
 SHOWCASE_CSS_T4CD = Path(__file__).parent.parent.parent / "web" / "static" / "css" / "pages" / "showcase.css"
 
 
@@ -4441,7 +4503,8 @@ class TestPickerIntegrationGuard:
         return SHOWCASE_HTML.read_text(encoding="utf-8")
 
     def _core_js(self):
-        return SHOWCASE_CORE_JS_T4CD.read_text(encoding="utf-8")
+        # picker state/methods → state-lightbox.js
+        return SHOWCASE_LIGHTBOX_JS.read_text(encoding="utf-8")
 
     def _css(self):
         return SHOWCASE_CSS_T4CD.read_text(encoding="utf-8")
@@ -4757,7 +4820,7 @@ class TestPickerIntegrationGuard:
         with open("web/static/js/shared/burst-picker.js", "r", encoding="utf-8") as f:
             burst_js = f.read()
         m = re.search(
-            r"playPickerHoverOut:\s*function\s*\([^)]*\)\s*\{(.*?)\n\s{8}\},",
+            r"playPickerHoverOut:\s*function\s*\([^)]*\)\s*\{(.*?)\n\s{4}\},",
             burst_js, re.DOTALL,
         )
         assert m, "burst-picker.js 找不到 playPickerHoverOut 方法定義"
@@ -4776,7 +4839,7 @@ class TestPickerIntegrationGuard:
         with open("web/static/js/shared/burst-picker.js", "r", encoding="utf-8") as f:
             burst_js = f.read()
         m = re.search(
-            r"playPickerExitAll:\s*function\s*\([^)]*\)\s*\{(.*?)\n\s{8}\},",
+            r"playPickerExitAll:\s*function\s*\([^)]*\)\s*\{(.*?)\n\s{4}\},",
             burst_js, re.DOTALL,
         )
         assert m, "burst-picker.js 找不到 playPickerExitAll 方法定義"
@@ -5315,3 +5378,879 @@ class TestMotionLabT2SpecialMotion:
         """motion_lab.html special-motion panel 含 whitelist-skip-note 跳過說明"""
         assert "whitelist-skip-note" in self._html(), \
             "motion_lab.html 缺少 whitelist-skip-note（§5 Special Motion 跳過條目說明未加入）"
+
+
+# ─── 54a-T1: importmap + pre_alpine_module slot + ghost-fly ESM export 守衛 ───
+_BASE_HTML_54A = Path(__file__).parent.parent.parent / "web" / "templates" / "base.html"
+_GHOST_FLY_JS_54A = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "shared" / "ghost-fly.js"
+
+
+class TestImportMapGuard:
+    """54a-T1: importmap + pre_alpine_module slot + ghost-fly ESM export guards"""
+
+    def _base(self) -> str:
+        return _BASE_HTML_54A.read_text(encoding="utf-8")
+
+    def _ghost_fly(self) -> str:
+        return _GHOST_FLY_JS_54A.read_text(encoding="utf-8")
+
+    def test_importmap_exists(self):
+        """base.html 含 type="importmap" 字串"""
+        assert 'type="importmap"' in self._base(), \
+            'base.html 缺少 <script type="importmap">（54a-T1 importmap 未插入）'
+
+    def test_importmap_aliases(self):
+        """base.html importmap 含六個 @/ alias"""
+        content = self._base()
+        for alias in ('"@/shared/"', '"@/components/"', '"@/showcase/"',
+                      '"@/scanner/"', '"@/settings/"', '"@/search/"'):
+            assert alias in content, \
+                f'base.html importmap 缺少 {alias} alias（54a-T1 importmap alias 未設定）'
+
+    def test_pre_alpine_module_slot(self):
+        """base.html 含 {% block pre_alpine_module %} slot"""
+        assert "{% block pre_alpine_module %}" in self._base(), \
+            "base.html 缺少 {% block pre_alpine_module %}（54a-T1 slot 未插入）"
+
+    def test_ghost_fly_has_export(self):
+        """ghost-fly.js 含 export 關鍵字"""
+        assert "export" in self._ghost_fly(), \
+            "ghost-fly.js 缺少 export（54a-T1 ESM export 未加入）"
+
+    def test_ghost_fly_window_bridge(self):
+        """ghost-fly.js 含 window.GhostFly 賦值（橋接保留）"""
+        assert "window.GhostFly = GhostFly" in self._ghost_fly(), \
+            "ghost-fly.js 缺少 window.GhostFly = GhostFly（54a-T1 window 橋接被移除）"
+
+    def test_ghost_fly_script_tag_is_module(self):
+        """base.html 中 ghost-fly.js 的 script tag 是 type="module"，無殘留 defer 標籤"""
+        content = self._base()
+        assert 'type="module" src="/static/js/shared/ghost-fly.js"' in content, \
+            'base.html ghost-fly.js script tag 非 type="module"（54a-T1 script tag 未更新）'
+        assert '<script defer src="/static/js/shared/ghost-fly.js">' not in content, \
+            'base.html 仍有殘留的 <script defer src=".../ghost-fly.js">（54a-T1 舊標籤未移除）'
+
+
+class TestESMExportGuard:
+    """
+    54a-T2：守衛五個 shared/components 工具的 ESM export + window 橋接 + base.html script tag
+    前置：TestImportMapGuard 通過（T1 spike gate）
+    """
+
+    def _read(self, rel_path):
+        return Path(__file__).parent.parent.parent / rel_path
+
+    def _burst_picker(self):
+        return (self._read("web/static/js/shared/burst-picker.js")).read_text(encoding="utf-8")
+
+    def _motion_adapter(self):
+        return (self._read("web/static/js/components/motion-adapter.js")).read_text(encoding="utf-8")
+
+    def _path_utils(self):
+        return (self._read("web/static/js/components/path-utils.js")).read_text(encoding="utf-8")
+
+    def _page_lifecycle(self):
+        return (self._read("web/static/js/components/page-lifecycle.js")).read_text(encoding="utf-8")
+
+    def _motion_prefs(self):
+        return (self._read("web/static/js/components/motion-prefs.js")).read_text(encoding="utf-8")
+
+    def _base(self):
+        return (self._read("web/templates/base.html")).read_text(encoding="utf-8")
+
+    def test_burst_picker_export_and_bridge(self):
+        """burst-picker.js 含 export + window.BurstPicker 橋接"""
+        content = self._burst_picker()
+        assert "export" in content, \
+            "burst-picker.js 缺少 export（54a-T2 ESM export 未加入）"
+        assert "window.BurstPicker" in content, \
+            "burst-picker.js 缺少 window.BurstPicker（54a-T2 window 橋接被移除）"
+
+    def test_motion_adapter_export_and_bridge(self):
+        """motion-adapter.js 含 export + window.OpenAver.motion 橋接"""
+        content = self._motion_adapter()
+        assert "export" in content, \
+            "motion-adapter.js 缺少 export（54a-T2 ESM export 未加入）"
+        assert "window.OpenAver.motion" in content, \
+            "motion-adapter.js 缺少 window.OpenAver.motion（54a-T2 window 橋接被移除）"
+
+    def test_path_utils_export_and_bridge(self):
+        """path-utils.js 含 export pathToDisplay + window.pathToDisplay 橋接"""
+        content = self._path_utils()
+        assert "export" in content and "pathToDisplay" in content, \
+            "path-utils.js 缺少 export pathToDisplay（54a-T2 ESM export 未加入）"
+        assert "window.pathToDisplay" in content, \
+            "path-utils.js 缺少 window.pathToDisplay（54a-T2 window 橋接被移除）"
+
+    def test_page_lifecycle_export_and_bridge(self):
+        """page-lifecycle.js 含 export + window.__registerPage 橋接"""
+        content = self._page_lifecycle()
+        assert "export" in content, \
+            "page-lifecycle.js 缺少 export（54a-T2 ESM export 未加入）"
+        assert "window.__registerPage" in content, \
+            "page-lifecycle.js 缺少 window.__registerPage（54a-T2 window 橋接被移除）"
+
+    def test_motion_prefs_export_and_bridge(self):
+        """motion-prefs.js 含 export + window.OpenAver 初始化保留"""
+        content = self._motion_prefs()
+        assert "export" in content, \
+            "motion-prefs.js 缺少 export（54a-T2 ESM export 未加入）"
+        assert "window.OpenAver" in content, \
+            "motion-prefs.js 缺少 window.OpenAver（54a-T2 window 橋接被移除）"
+
+    @pytest.mark.parametrize("path", [
+        "/static/js/shared/burst-picker.js",
+        "/static/js/components/motion-adapter.js",
+        "/static/js/components/path-utils.js",
+        "/static/js/components/page-lifecycle.js",
+        "/static/js/components/motion-prefs.js",
+    ])
+    def test_five_files_script_tags_are_module(self, path):
+        """base.html 中五個工具的 script tag 均為 type="module"，無殘留 <script defer src>"""
+        content = self._base()
+        assert f'type="module" src="{path}"' in content, \
+            f'base.html {path} script tag 非 type="module"（54a-T2 script tag 未更新）'
+        assert f'<script defer src="{path}">' not in content, \
+            f'base.html 仍有殘留的 <script defer src="{path}">（54a-T2 舊標籤未移除）'
+
+
+class TestSettingsESMGuard:
+    """54d-T1：守衛 settings state 模組 + main.js 結構"""
+
+    def _read(self, rel_path):
+        return (Path(__file__).parent.parent.parent / rel_path).read_text(encoding="utf-8")
+
+    def test_state_config_exists_and_exports(self):
+        content = self._read("web/static/js/pages/settings/state-config.js")
+        assert "export function stateConfig" in content
+
+    def test_state_providers_exists_and_exports(self):
+        content = self._read("web/static/js/pages/settings/state-providers.js")
+        assert "export function stateProviders" in content
+
+    def test_state_ui_exists_and_exports(self):
+        content = self._read("web/static/js/pages/settings/state-ui.js")
+        assert "export function stateUI" in content
+
+    def test_main_js_exists_and_has_alpine_init(self):
+        content = self._read("web/static/js/pages/settings/main.js")
+        assert "alpine:init" in content
+
+    def test_main_js_registers_settings_name(self):
+        content = self._read("web/static/js/pages/settings/main.js")
+        assert "Alpine.data('settings'," in content
+        assert "Alpine.data('settingsPage'" not in content
+
+    def test_main_js_uses_importmap_alias(self):
+        content = self._read("web/static/js/pages/settings/main.js")
+        assert "@/settings/" in content
+
+    def test_no_circular_state_imports(self):
+        """三個 state 模組頂層 import 不可引用彼此"""
+        import re
+        forbidden = ["state-config", "state-providers", "state-ui"]
+        for fname in ["state-config.js", "state-providers.js", "state-ui.js"]:
+            content = self._read(f"web/static/js/pages/settings/{fname}")
+            for line in content.splitlines():
+                stripped = line.strip()
+                if not stripped.startswith("import"):
+                    continue
+                for f in forbidden:
+                    assert f not in stripped, \
+                        f"{fname} 有循環 import：{stripped}"
+
+    # ── T2 guards ──────────────────────────────────────────────────────────
+
+    def test_settings_html_has_pre_alpine_module(self):
+        """settings.html 含 pre_alpine_module block override，含 main.js module script"""
+        content = self._read("web/templates/settings.html")
+        assert "pre_alpine_module" in content, \
+            "settings.html 缺少 {% block pre_alpine_module %}（54d-T2 未加入 main.js 載入）"
+        assert "settings/main.js" in content, \
+            "settings.html pre_alpine_module block 缺少 main.js module script"
+
+    def test_settings_html_xdata_is_settings(self):
+        """settings.html x-data 值為 'settings'（非 'settingsPage'）"""
+        content = self._read("web/templates/settings.html")
+        assert 'x-data="settings"' in content, \
+            "settings.html x-data 非 settings（54d-T2 切換未完成）"
+        assert 'x-data="settingsPage"' not in content, \
+            "settings.html 仍有舊 x-data=settingsPage（54d-T2 切換未完成）"
+
+    def test_settings_html_no_settings_js_script(self):
+        """settings.html extra_js block 不含 /pages/settings.js script 載入"""
+        content = self._read("web/templates/settings.html")
+        assert "/pages/settings.js" not in content, \
+            "settings.html 仍載入舊 settings.js（54d-T2 未移除）"
+
+    def test_settings_js_deleted(self):
+        """web/static/js/pages/settings.js 不存在"""
+        from pathlib import Path
+        p = Path(__file__).parent.parent.parent / "web/static/js/pages/settings.js"
+        assert not p.exists(), \
+            "settings.js 仍存在（54d-T2 刪除步驟未執行）"
+
+    def test_no_settings_page_xdata_in_templates(self):
+        """所有 production templates 不含 x-data=\"settingsPage\"（防殘留）"""
+        from pathlib import Path
+        templates_dir = Path(__file__).parent.parent.parent / "web/templates"
+        for tmpl in templates_dir.rglob("*.html"):
+            content = tmpl.read_text(encoding="utf-8")
+            assert 'x-data="settingsPage"' not in content, \
+                f"{tmpl.name} 仍含 x-data=settingsPage（54d-T2 殘留）"
+
+    def test_no_settings_page_alpine_data_in_js(self):
+        """web/static/js/pages/ 下所有 JS 不含 Alpine.data('settingsPage'（防殘留）"""
+        from pathlib import Path
+        pages_dir = Path(__file__).parent.parent.parent / "web/static/js/pages"
+        for js_file in pages_dir.rglob("*.js"):
+            content = js_file.read_text(encoding="utf-8")
+            assert "Alpine.data('settingsPage'" not in content, \
+                f"{js_file.name} 仍含 Alpine.data('settingsPage'（54d-T2 殘留）"
+
+    def test_main_js_no_settingspage_reference(self):
+        """settings/main.js 不含 settingsPage 字串"""
+        content = self._read("web/static/js/pages/settings/main.js")
+        assert "settingsPage" not in content, \
+            "settings/main.js 含 settingsPage（54d-T2 設計錯誤）"
+
+    def test_main_js_uses_descriptor_merge(self):
+        """main.js 使用 descriptor-preserving merge 而非 object spread，
+        防止 getter（isDirty、folderPreviewText 等）在合併時被立即求值成靜態值"""
+        content = self._read("web/static/js/pages/settings/main.js")
+        assert "getOwnPropertyDescriptors" in content, \
+            "settings/main.js 缺少 getOwnPropertyDescriptors（54d Codex P1 修正未套用）"
+        assert "...stateConfig()" not in content, \
+            "settings/main.js 仍使用 spread 合併 stateConfig()（54d Codex P1 修正未套用）"
+
+    def test_state_config_has_getter_isDirty(self):
+        """state-config.js 的 isDirty 必須是 getter（get isDirty()），
+        確保 mergeState 有 getter 可以保留"""
+        content = self._read("web/static/js/pages/settings/state-config.js")
+        assert "get isDirty()" in content, \
+            "state-config.js 的 isDirty 不是 getter — spread bug 修正依賴此 getter"
+
+
+class TestScannerESMGuard:
+    """54c-T1：守衛 scanner state 模組 + main.js 結構"""
+
+    def _read(self, rel_path):
+        return (Path(__file__).parent.parent.parent / rel_path).read_text(encoding="utf-8")
+
+    def test_state_scan_exists_and_exports(self):
+        """驗 state-scan.js 存在且含 export function stateScan"""
+        content = self._read("web/static/js/pages/scanner/state-scan.js")
+        assert "export function stateScan" in content
+
+    def test_state_batch_exists_and_exports(self):
+        """驗 state-batch.js 存在且含 export function stateBatch"""
+        content = self._read("web/static/js/pages/scanner/state-batch.js")
+        assert "export function stateBatch" in content
+
+    def test_state_alias_exists_and_exports(self):
+        """驗 state-alias.js 存在且含 export function stateAlias"""
+        content = self._read("web/static/js/pages/scanner/state-alias.js")
+        assert "export function stateAlias" in content
+
+    def test_main_js_exists_and_has_alpine_init(self):
+        """驗 main.js 存在且含 alpine:init"""
+        content = self._read("web/static/js/pages/scanner/main.js")
+        assert "alpine:init" in content
+
+    def test_main_js_registers_scanner_name(self):
+        """驗 main.js 含 Alpine.data('scanner', 且不含 scannerPage"""
+        content = self._read("web/static/js/pages/scanner/main.js")
+        assert "Alpine.data('scanner'," in content
+        assert "Alpine.data('scannerPage'" not in content
+
+    def test_main_js_uses_importmap_alias(self):
+        """驗 main.js import 語句使用 @/scanner/ alias"""
+        content = self._read("web/static/js/pages/scanner/main.js")
+        assert "@/scanner/" in content
+
+    def test_main_js_has_descriptor_merge(self):
+        """驗 main.js 含 getOwnPropertyDescriptors 或 defineProperties（確保 getter 不被 spread 破壞）"""
+        content = self._read("web/static/js/pages/scanner/main.js")
+        assert "getOwnPropertyDescriptors" in content or "defineProperties" in content
+
+    def test_main_js_no_plain_spread_merge(self):
+        """驗 main.js 不含三個 state 的 plain spread（...stateScan() 等）"""
+        content = self._read("web/static/js/pages/scanner/main.js")
+        assert "...stateScan()" not in content
+        assert "...stateBatch()" not in content
+        assert "...stateAlias()" not in content
+
+    def test_state_scan_no_batch_functions(self):
+        """驗 state-scan.js 不含 batch 函式定義（防誤放；跨模組 this.xxx 呼叫允許）"""
+        content = self._read("web/static/js/pages/scanner/state-scan.js")
+        # 只防函式定義被放錯模組，不攔 this.checkMissing() 等跨模組呼叫
+        assert "checkMissing() {" not in content
+        assert "runMissingEnrich" not in content
+        assert "resumeMissingEnrich" not in content
+
+    def test_state_batch_no_scan_functions(self):
+        """驗 state-batch.js 不含 scan 主流程函式（防誤放）"""
+        content = self._read("web/static/js/pages/scanner/state-batch.js")
+        assert "generate(" not in content
+        assert "runNfoUpdate" not in content
+        assert "runJellyfinImageUpdate" not in content
+        assert "copyOutputPath" not in content
+
+    def test_no_circular_state_imports(self):
+        """驗三個 state 模組頂層 import 不引用彼此"""
+        forbidden = ["state-scan", "state-batch", "state-alias"]
+        for fname in ["state-scan.js", "state-batch.js", "state-alias.js"]:
+            content = self._read(f"web/static/js/pages/scanner/{fname}")
+            for line in content.splitlines():
+                stripped = line.strip()
+                if not stripped.startswith("import"):
+                    continue
+                for f in forbidden:
+                    assert f not in stripped, \
+                        f"{fname} 有循環 import：{stripped}"
+
+    def test_scanner_html_has_pre_alpine_module(self):
+        """scanner.html 含 pre_alpine_module block override，含 main.js module script"""
+        content = self._read("web/templates/scanner.html")
+        assert "pre_alpine_module" in content, \
+            "scanner.html 缺少 {% block pre_alpine_module %}（54c-T2 未加入 main.js 載入）"
+        assert "scanner/main.js" in content, \
+            "scanner.html pre_alpine_module block 缺少 main.js module script"
+
+    def test_scanner_html_xdata_is_scanner(self):
+        """scanner.html x-data 值為 'scanner'（非 'scannerPage'）"""
+        content = self._read("web/templates/scanner.html")
+        assert 'x-data="scanner"' in content, \
+            "scanner.html x-data 非 scanner（54c-T2 切換未完成）"
+        assert 'x-data="scannerPage"' not in content, \
+            "scanner.html 仍有舊 x-data=scannerPage（54c-T2 切換未完成）"
+
+    def test_scanner_html_no_scanner_js_script(self):
+        """scanner.html extra_js block 不含 /pages/scanner.js script 載入"""
+        content = self._read("web/templates/scanner.html")
+        assert "/pages/scanner.js" not in content, \
+            "scanner.html 仍載入舊 scanner.js（54c-T2 未移除）"
+
+    def test_scanner_js_deleted(self):
+        """web/static/js/pages/scanner.js 不存在"""
+        from pathlib import Path
+        p = Path(__file__).parent.parent.parent / "web/static/js/pages/scanner.js"
+        assert not p.exists(), \
+            "scanner.js 仍存在（54c-T2 刪除步驟未執行）"
+
+    def test_no_scanner_page_xdata_in_templates(self):
+        """所有 production templates 不含 x-data=\"scannerPage\"（防殘留）"""
+        from pathlib import Path
+        templates_dir = Path(__file__).parent.parent.parent / "web/templates"
+        for tmpl in templates_dir.rglob("*.html"):
+            content = tmpl.read_text(encoding="utf-8")
+            assert 'x-data="scannerPage"' not in content, \
+                f"{tmpl.name} 仍含 x-data=scannerPage（54c-T2 殘留）"
+
+    def test_no_scanner_page_alpine_data_in_js(self):
+        """web/static/js/pages/ 下所有 JS 不含 Alpine.data('scannerPage'（防殘留）"""
+        from pathlib import Path
+        pages_dir = Path(__file__).parent.parent.parent / "web/static/js/pages"
+        for js_file in pages_dir.rglob("*.js"):
+            content = js_file.read_text(encoding="utf-8")
+            assert "Alpine.data('scannerPage'" not in content, \
+                f"{js_file.name} 仍含 Alpine.data('scannerPage'（54c-T2 殘留）"
+
+    def test_main_js_no_scannerpage_reference(self):
+        """scanner/main.js 不含 scannerPage 字串"""
+        content = self._read("web/static/js/pages/scanner/main.js")
+        assert "scannerPage" not in content, \
+            "scanner/main.js 含 scannerPage（54c-T2 設計錯誤）"
+
+
+class TestShowcaseESMGuard:
+    """54b 守衛 — Showcase ESM 模組化
+
+    T1a：state-base.js（foundation）
+    T1b：state-videos / state-actress / state-lightbox / main.js
+    T2b：showcase.html 切換 + core.js 刪除
+    """
+
+    BASE = Path(__file__).parents[2] / "web" / "static" / "js" / "pages" / "showcase"
+
+    def _read(self, filename):
+        return (self.BASE / filename).read_text(encoding="utf-8")
+
+    # ── T1a guards（state-base.js foundation）────────────────────────
+
+    def test_state_base_exists_and_exports(self):
+        """state-base.js 存在且含 export function stateBase 和 export var _videos"""
+        assert (self.BASE / "state-base.js").exists(), (
+            "showcase/state-base.js 不存在"
+        )
+        content = self._read("state-base.js")
+        assert "export function stateBase" in content, (
+            "state-base.js 缺少 export function stateBase"
+        )
+        assert "export var _videos" in content or "export let _videos" in content, (
+            "state-base.js 缺少 export var _videos（共用陣列必須 export 供其他模組 import）"
+        )
+
+    def test_state_base_has_shared_array_exports(self):
+        """state-base.js export _videos、_filteredVideos、_actresses、_filteredActresses"""
+        content = self._read("state-base.js")
+        for var_name in ("_videos", "_filteredVideos", "_actresses", "_filteredActresses"):
+            assert var_name in content, (
+                f"state-base.js 缺少 {var_name} — "
+                "module-level 共用陣列必須在 state-base.js 宣告（F1 性能優化：大陣列移出 Alpine reactive scope）"
+            )
+
+    def test_state_base_no_lightbox_functions(self):
+        """state-base.js 不含 openLightbox / closeLightbox（防止 lightbox 邏輯誤放入 base）"""
+        content = self._read("state-base.js")
+        assert "openLightbox(" not in content, (
+            "state-base.js 含 openLightbox — lightbox 邏輯應在 state-lightbox.js"
+        )
+        assert "closeLightbox(" not in content, (
+            "state-base.js 含 closeLightbox — lightbox 邏輯應在 state-lightbox.js"
+        )
+
+    def test_state_base_no_picker_params(self):
+        """state-base.js 不含 _PICKER_PARAMS（應在 stateLightbox 閉包，非 base state）"""
+        content = self._read("state-base.js")
+        assert "_PICKER_PARAMS" not in content, (
+            "state-base.js 含 _PICKER_PARAMS — "
+            "此常數應在 stateLightbox() 函式頂部作閉包常數（OQ-54B-2 Option B），不應放 stateBase"
+        )
+
+    # ── T1b guards（state-videos / state-actress / state-lightbox / main.js）──
+
+    def test_state_videos_exists_and_exports(self):
+        """state-videos.js 存在且含 export function stateVideos"""
+        assert (self.BASE / "state-videos.js").exists(), (
+            "showcase/state-videos.js 不存在"
+        )
+        content = self._read("state-videos.js")
+        assert "export function stateVideos" in content, (
+            "state-videos.js 缺少 export function stateVideos"
+        )
+
+    def test_state_actress_exists_and_exports(self):
+        """state-actress.js 存在且含 export function stateActress"""
+        assert (self.BASE / "state-actress.js").exists(), (
+            "showcase/state-actress.js 不存在"
+        )
+        content = self._read("state-actress.js")
+        assert "export function stateActress" in content, (
+            "state-actress.js 缺少 export function stateActress"
+        )
+
+    def test_state_lightbox_exists_and_exports(self):
+        """state-lightbox.js 存在且含 export function stateLightbox"""
+        assert (self.BASE / "state-lightbox.js").exists(), (
+            "showcase/state-lightbox.js 不存在"
+        )
+        content = self._read("state-lightbox.js")
+        assert "export function stateLightbox" in content, (
+            "state-lightbox.js 缺少 export function stateLightbox"
+        )
+
+    def test_main_js_exists_and_has_alpine_init(self):
+        """main.js 存在且含 alpine:init 事件監聽"""
+        assert (self.BASE / "main.js").exists(), (
+            "showcase/main.js 不存在"
+        )
+        content = self._read("main.js")
+        assert "alpine:init" in content, (
+            "showcase/main.js 缺少 alpine:init 事件監聽"
+        )
+
+    def test_main_js_registers_showcase_name(self):
+        """main.js 含 Alpine.data('showcase', — 名稱必須是 showcase，非 showcaseState"""
+        content = self._read("main.js")
+        assert "Alpine.data('showcase'," in content or 'Alpine.data("showcase",' in content, (
+            "showcase/main.js 缺少 Alpine.data('showcase', — "
+            "54b 要求 Alpine component 名稱從 showcaseState 改為 showcase"
+        )
+        assert "Alpine.data('showcaseState'" not in content and 'Alpine.data("showcaseState"' not in content, (
+            "showcase/main.js 不應含 Alpine.data('showcaseState' — "
+            "舊名稱 showcaseState 應已移除，防殘留"
+        )
+
+    def test_main_js_uses_importmap_alias(self):
+        """main.js import 語句使用 @/showcase/ alias"""
+        content = self._read("main.js")
+        assert "@/showcase/" in content, (
+            "showcase/main.js import 語句缺少 @/showcase/ alias — "
+            "必須使用 importmap alias，不可用相對路徑"
+        )
+
+    def test_main_js_has_descriptor_merge(self):
+        """main.js 含 getOwnPropertyDescriptors 或 defineProperties"""
+        content = self._read("main.js")
+        has_merge = (
+            "getOwnPropertyDescriptors" in content
+            or "defineProperties" in content
+        )
+        assert has_merge, (
+            "showcase/main.js 缺少 descriptor-preserving 合併（getOwnPropertyDescriptors 或 defineProperties）"
+        )
+
+    def test_main_js_no_plain_spread_merge(self):
+        """main.js 不含 plain spread（...stateBase() 等）"""
+        content = self._read("main.js")
+        for factory in ("stateBase()", "stateVideos()", "stateActress()", "stateLightbox()"):
+            assert f"...{factory}" not in content, (
+                f"showcase/main.js 含 ...{factory} plain spread — "
+                "必須改用 mergeState（descriptor-preserving）"
+            )
+
+    def test_main_js_factory_calls_use_call_this(self):
+        """main.js 所有 factory 呼叫使用 .call(this)"""
+        content = self._read("main.js")
+        for factory in ("stateBase", "stateVideos", "stateActress", "stateLightbox"):
+            assert f"{factory}.call(this)" in content, (
+                f"showcase/main.js 缺少 {factory}.call(this) — "
+                "stateBase() 含 this.$persist(...)，bare call 時 this=undefined 會崩潰"
+            )
+
+    def test_main_js_has_window_showcase_state_bridge(self):
+        """main.js 含 window.showcaseState 橋接"""
+        content = self._read("main.js")
+        assert "window.showcaseState" in content, (
+            "showcase/main.js 缺少 window.showcaseState 橋接 — "
+            "spec-54 §5 明確要求保留向後相容橋接"
+        )
+
+    def test_no_circular_state_factory_imports(self):
+        """state 模組頂層 import 不含其他 state-*.js 的 factory 函式名稱"""
+        import re
+        factory_names = ["stateBase", "stateVideos", "stateActress", "stateLightbox"]
+        for filename in ("state-videos.js", "state-actress.js", "state-lightbox.js"):
+            content = self._read(filename)
+            import_lines = [
+                line for line in content.split("\n")
+                if line.strip().startswith("import ")
+            ]
+            import_text = "\n".join(import_lines)
+            for name in factory_names:
+                assert name not in import_text, (
+                    f"showcase/{filename} 的 import 語句含 {name} — "
+                    "state 模組不可 import 其他 state factory，違反 spec-54 §9 D2"
+                )
+
+    def test_state_lightbox_imports_kill_timelines(self):
+        """state-lightbox.js 從 state-base.js import _killLightboxTimelines"""
+        content = self._read("state-lightbox.js")
+        assert "_killLightboxTimelines" in content, (
+            "state-lightbox.js 缺少 _killLightboxTimelines — "
+            "此函式從 state-base.js import，閉包/全域存取均不符 ESM 規範"
+        )
+
+    def test_state_videos_no_actress_functions(self):
+        """state-videos.js 不含 loadActresses / addFavoriteActress"""
+        content = self._read("state-videos.js")
+        assert "loadActresses" not in content, (
+            "state-videos.js 含 loadActresses — 女優邏輯應在 state-actress.js"
+        )
+        assert "addFavoriteActress" not in content, (
+            "state-videos.js 含 addFavoriteActress — 女優 CRUD 應在 state-actress.js"
+        )
+
+    def test_state_actress_no_lightbox_functions(self):
+        """state-actress.js 不含 openLightbox / closeLightbox 定義"""
+        import re
+        content = self._read("state-actress.js")
+        assert not re.search(r"^\s+openLightbox\s*\(", content, re.MULTILINE), (
+            "state-actress.js 含 openLightbox 方法定義 — 應在 state-lightbox.js"
+        )
+        assert not re.search(r"^\s+closeLightbox\s*\(", content, re.MULTILINE), (
+            "state-actress.js 含 closeLightbox 方法定義 — 應在 state-lightbox.js"
+        )
+
+    def test_no_gsap_at_module_top_level(self):
+        """state 模組頂層不含 window.gsap 或 gsap 直接存取"""
+        import re
+        for filename in ("state-base.js", "state-videos.js", "state-actress.js", "state-lightbox.js", "main.js"):
+            content = self._read(filename)
+            lines = content.split("\n")
+            for i, line in enumerate(lines, 1):
+                stripped = line.strip()
+                if stripped.startswith("//") or stripped.startswith("*"):
+                    continue
+                if line and not line.startswith(" ") and not line.startswith("\t"):
+                    if "window.gsap" in line or (re.match(r"^gsap\b", line)):
+                        assert False, (
+                            f"showcase/{filename} L{i}: 模組頂層含 gsap 存取 — "
+                            "spec-54 §9 D3：window.gsap 只在函式體內存取"
+                        )
+
+    def test_no_this_picker_params_in_state_modules(self):
+        """state 模組不含 this._PICKER_PARAMS（應改為閉包直接存取）"""
+        for filename in ("state-base.js", "state-videos.js", "state-actress.js", "state-lightbox.js"):
+            content = self._read(filename)
+            assert "this._PICKER_PARAMS" not in content, (
+                f"showcase/{filename} 含 this._PICKER_PARAMS — "
+                "應改為閉包直接存取 _PICKER_PARAMS（無需 this.）"
+            )
+
+    # ── T2b guards ────────────────────────────────────────────────────
+
+    def test_showcase_html_has_pre_alpine_module(self):
+        """showcase.html 含 {% block pre_alpine_module %} override（含 main.js module script）"""
+        html_path = Path(__file__).parents[2] / "web" / "templates" / "showcase.html"
+        content = html_path.read_text(encoding="utf-8")
+        assert "pre_alpine_module" in content, (
+            "showcase.html 缺少 {% block pre_alpine_module %} — "
+            "main.js 必須放在此 slot 確保 alpine:init listener 在 Alpine CDN 之前掛上"
+        )
+        assert "showcase/main.js" in content, (
+            "showcase.html 的 pre_alpine_module block 缺少 showcase/main.js module script"
+        )
+
+    def test_showcase_html_xdata_is_showcase(self):
+        """showcase.html 的 x-data 值為 showcase（非 showcaseState）"""
+        html_path = Path(__file__).parents[2] / "web" / "templates" / "showcase.html"
+        content = html_path.read_text(encoding="utf-8")
+        assert 'x-data="showcase"' in content, (
+            'showcase.html 缺少 x-data="showcase" — '
+            "54b 要求 x-data 從 showcaseState 改為 showcase"
+        )
+        assert 'x-data="showcaseState"' not in content, (
+            'showcase.html 仍含 x-data="showcaseState" — 舊名稱應已移除'
+        )
+
+    def test_showcase_html_no_core_js_script(self):
+        """showcase.html 不含 core.js script tag"""
+        html_path = Path(__file__).parents[2] / "web" / "templates" / "showcase.html"
+        content = html_path.read_text(encoding="utf-8")
+        assert "core.js" not in content, (
+            "showcase.html 仍含 core.js script tag — 54b 完成後 core.js 應已刪除且 HTML 不再引用"
+        )
+
+    def test_showcase_html_still_has_animations_js(self):
+        """showcase.html 仍含 animations.js script tag（B5：不動 animations.js）"""
+        html_path = Path(__file__).parents[2] / "web" / "templates" / "showcase.html"
+        content = html_path.read_text(encoding="utf-8")
+        assert "animations.js" in content, (
+            "showcase.html 缺少 animations.js script tag — "
+            "54b 不動 animations.js，它應仍在 extra_js block 中"
+        )
+
+    def test_core_js_deleted(self):
+        """web/static/js/pages/showcase/core.js 不存在"""
+        core_js = self.BASE / "core.js"
+        assert not core_js.exists(), (
+            "showcase/core.js 仍然存在 — 54b 完成後應已刪除"
+        )
+
+    def test_no_showcase_state_xdata_in_templates(self):
+        """所有 production templates 不含 x-data="showcaseState"（防殘留）"""
+        templates_dir = Path(__file__).parents[2] / "web" / "templates"
+        for tmpl in templates_dir.glob("**/*.html"):
+            content = tmpl.read_text(encoding="utf-8")
+            assert 'x-data="showcaseState"' not in content, (
+                f"{tmpl.name} 仍含 x-data=\"showcaseState\" — 舊名稱應已全部移除"
+            )
+
+    def test_no_showcase_state_alpine_data_in_js(self):
+        """web/static/js/pages/ 下所有 JS 不含 Alpine.data('showcaseState'（防殘留）"""
+        pages_dir = Path(__file__).parents[2] / "web" / "static" / "js" / "pages"
+        for js_file in pages_dir.glob("**/*.js"):
+            content = js_file.read_text(encoding="utf-8")
+            assert "Alpine.data('showcaseState'" not in content and \
+                   'Alpine.data("showcaseState"' not in content, (
+                f"{js_file.name} 含 Alpine.data('showcaseState' — 舊名稱應已全部移除"
+            )
+
+
+class TestSearchESMGuard:
+    """54e 守衛 — Search ESM 遷移（window.SearchStateMixin_* → ESM export）"""
+
+    BASE = Path(__file__).parents[2] / "web" / "static" / "js" / "pages" / "search"
+    STATE = BASE / "state"
+
+    def _read_state(self, filename):
+        return (self.STATE / filename).read_text(encoding="utf-8")
+
+    def _read_main(self):
+        return (self.BASE / "main.js").read_text(encoding="utf-8")
+
+    # ── state 模組 export 驗證（8 條）────────────────────────────────
+
+    def test_state_base_exists_and_exports(self):
+        """state/base.js 含 export function searchStateBase"""
+        content = self._read_state("base.js")
+        assert "export function searchStateBase" in content, (
+            "state/base.js 缺少 export function searchStateBase — "
+            "需將 window.SearchStateMixin_Base = function() 改為 export function searchStateBase()"
+        )
+
+    def test_state_persistence_exists_and_exports(self):
+        """state/persistence.js 含 export function searchStatePersistence"""
+        content = self._read_state("persistence.js")
+        assert "export function searchStatePersistence" in content
+
+    def test_state_search_flow_exists_and_exports(self):
+        """state/search-flow.js 含 export function searchStateSearchFlow"""
+        content = self._read_state("search-flow.js")
+        assert "export function searchStateSearchFlow" in content
+
+    def test_state_navigation_exists_and_exports(self):
+        """state/navigation.js 含 export function searchStateNavigation"""
+        content = self._read_state("navigation.js")
+        assert "export function searchStateNavigation" in content
+
+    def test_state_batch_exists_and_exports(self):
+        """state/batch.js 含 export function searchStateBatch"""
+        content = self._read_state("batch.js")
+        assert "export function searchStateBatch" in content
+
+    def test_state_result_card_exists_and_exports(self):
+        """state/result-card.js 含 export function searchStateResultCard"""
+        content = self._read_state("result-card.js")
+        assert "export function searchStateResultCard" in content
+
+    def test_state_file_list_exists_and_exports(self):
+        """state/file-list.js 含 export function searchStateFileList"""
+        content = self._read_state("file-list.js")
+        assert "export function searchStateFileList" in content
+
+    def test_state_grid_mode_exists_and_exports(self):
+        """state/grid-mode.js 含 export function searchStateGridMode"""
+        content = self._read_state("grid-mode.js")
+        assert "export function searchStateGridMode" in content
+
+    # ── main.js 驗證（4 條）─────────────────────────────────────────
+
+    def test_main_js_exists_and_has_alpine_init(self):
+        """search/main.js 存在且含 alpine:init"""
+        assert (self.BASE / "main.js").exists(), "search/main.js 不存在"
+        content = self._read_main()
+        assert "alpine:init" in content
+
+    def test_main_js_registers_search_page_name(self):
+        """main.js 含 Alpine.data('searchPage',"""
+        content = self._read_main()
+        assert "Alpine.data('searchPage'" in content or 'Alpine.data("searchPage"' in content, (
+            "main.js 缺少 Alpine.data('searchPage', — component 名稱必須保持 searchPage"
+        )
+
+    def test_main_js_uses_importmap_alias(self):
+        """main.js import 使用 @/search/state/ alias"""
+        content = self._read_main()
+        assert "@/search/state/" in content, (
+            "main.js 缺少 @/search/state/ import alias — 需使用 importmap 別名"
+        )
+
+    def test_main_js_uses_merge_state_not_spread(self):
+        """main.js 使用 descriptor-preserving mergeState（含 Object.getOwnPropertyDescriptors 和 Object.defineProperties），且不含 plain spread"""
+        content = self._read_main()
+        assert "Object.getOwnPropertyDescriptors" in content, (
+            "main.js 缺少 Object.getOwnPropertyDescriptors — "
+            "必須使用 descriptor-preserving mergeState 保留 base.js L300 的 get isCloudSearchMode() getter"
+        )
+        assert "Object.defineProperties" in content, (
+            "main.js 缺少 Object.defineProperties — mergeState 必須用此 API"
+        )
+        assert "...searchStateBase()" not in content, (
+            "main.js 含 ...searchStateBase() plain spread — 會凍結 getter，用 mergeState() 取代"
+        )
+
+    # ── 防殘留驗證（4 條）────────────────────────────────────────────
+
+    def test_no_window_mixin_in_state_modules(self):
+        """8 個 state 模組均不含 window.SearchStateMixin_ 字串"""
+        state_files = [
+            "base.js", "persistence.js", "search-flow.js", "navigation.js",
+            "batch.js", "result-card.js", "file-list.js", "grid-mode.js",
+        ]
+        for fname in state_files:
+            content = self._read_state(fname)
+            assert "window.SearchStateMixin_" not in content, (
+                f"state/{fname} 仍含 window.SearchStateMixin_ — 舊全域名稱應已移除"
+            )
+
+    def test_no_circular_state_imports(self):
+        """8 個 state 模組頂層 import 語句不互相引用"""
+        state_files = [
+            "base.js", "persistence.js", "search-flow.js", "navigation.js",
+            "batch.js", "result-card.js", "file-list.js", "grid-mode.js",
+        ]
+        state_names = [f.replace(".js", "") for f in state_files]
+        for fname in state_files:
+            content = self._read_state(fname)
+            import_lines = [
+                line for line in content.splitlines()
+                if line.strip().startswith("import ")
+            ]
+            for imp_line in import_lines:
+                for other in state_names:
+                    if other != fname.replace(".js", "") and f"state/{other}" in imp_line:
+                        raise AssertionError(
+                            f"state/{fname} 頂層 import 引用了 state/{other} — "
+                            "state 模組不可互相 import（D2 規則），跨模組連接只在 main.js 做"
+                        )
+
+    def test_no_window_search_state_mixin_in_templates(self):
+        """所有 templates 不含 window.SearchStateMixin_"""
+        templates_dir = Path(__file__).parents[2] / "web" / "templates"
+        for tmpl in templates_dir.glob("**/*.html"):
+            content = tmpl.read_text(encoding="utf-8")
+            assert "window.SearchStateMixin_" not in content, (
+                f"{tmpl.name} 含 window.SearchStateMixin_ — 舊全域名稱應已全部移除"
+            )
+
+    def test_no_window_search_state_mixin_in_pages_js(self):
+        """pages/search/ 下所有 JS 不含 window.SearchStateMixin_ 賦值"""
+        search_dir = self.BASE
+        for js_file in search_dir.glob("**/*.js"):
+            content = js_file.read_text(encoding="utf-8")
+            assert "window.SearchStateMixin_" not in content, (
+                f"{js_file.name} 含 window.SearchStateMixin_ — 舊全域名稱應已全部移除"
+            )
+
+    # ── HTML 切換驗證（4 條）─────────────────────────────────────────
+
+    def test_search_html_has_pre_alpine_module(self):
+        """search.html 含 {% block pre_alpine_module %} 且含 search/main.js module script"""
+        html_path = Path(__file__).parents[2] / "web" / "templates" / "search.html"
+        content = html_path.read_text(encoding="utf-8")
+        assert "pre_alpine_module" in content, (
+            "search.html 缺少 {% block pre_alpine_module %} — "
+            "main.js 必須放在此 slot 確保 alpine:init listener 在 Alpine CDN 之前掛上"
+        )
+        assert "search/main.js" in content, (
+            "search.html 缺少 search/main.js module script"
+        )
+
+    def test_search_html_xdata_is_search_page(self):
+        """search.html 仍含 x-data=\"searchPage\"（防誤改）"""
+        html_path = Path(__file__).parents[2] / "web" / "templates" / "search.html"
+        content = html_path.read_text(encoding="utf-8")
+        assert 'x-data="searchPage"' in content, (
+            'search.html 缺少 x-data="searchPage" — component 名稱必須保持 searchPage'
+        )
+
+    def test_search_html_no_old_state_script_tags(self):
+        """search.html 不含 9 個舊 state script tag（逐一 assert）"""
+        html_path = Path(__file__).parents[2] / "web" / "templates" / "search.html"
+        content = html_path.read_text(encoding="utf-8")
+        old_scripts = [
+            "state/base.js",
+            "state/persistence.js",
+            "state/search-flow.js",
+            "state/navigation.js",
+            "state/batch.js",
+            "state/result-card.js",
+            "state/file-list.js",
+            "state/grid-mode.js",
+            "state/index.js",
+        ]
+        for script in old_scripts:
+            assert script not in content, (
+                f"search.html 仍含 {script} script tag — "
+                "54e 完成後應改由 ESM main.js 載入，所有 state 模組 classic script tag 應已移除"
+            )
+
+    def test_search_state_index_js_deleted(self):
+        """search/state/index.js 不存在"""
+        index_js = self.STATE / "index.js"
+        assert not index_js.exists(), (
+            "search/state/index.js 仍然存在 — 54e 完成後 index.js 職責已由 main.js 接替，應已刪除"
+        )

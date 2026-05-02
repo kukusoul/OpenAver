@@ -2,7 +2,8 @@
  * SearchState - Grid Mode Mixin
  * 包含：Grid 模式切換、Lightbox 控制
  */
-window.SearchStateMixin_GridMode = {
+export function searchStateGridMode() {
+    return {
     // ===== Display Mode Toggle =====
 
     /**
@@ -549,4 +550,5 @@ window.SearchStateMixin_GridMode = {
     }
 
     // ==================== End Sample Gallery Methods ====================
-};
+    };
+}

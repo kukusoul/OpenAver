@@ -2,7 +2,8 @@
  * SearchState - File List Mixin
  * 包含：檔案列表操作（switchToFile, searchForFile, setFileList, addFiles, addFolder, loadFavorite）
  */
-window.SearchStateMixin_FileList = {
+export function searchStateFileList() {
+    return {
     // ===== T1d: File Methods =====
 
     async switchToFile(index, position = 'first', showFullLoading = false) {
@@ -462,4 +463,5 @@ window.SearchStateMixin_FileList = {
             this._clearAbort('loadFavorite', loadFavoriteSignal);  // T4.3: 操作完成清除 registry（比對 signal 避免刪掉新請求）
         }
     }
-};
+    };
+}

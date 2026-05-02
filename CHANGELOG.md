@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.4] - 2026-05-03
+
+本版完成全站前端 JS 的 ESM 模組化（feature/54）。把 showcase/core.js（2725 行）、scanner.js（1546 行）、settings.js（972 行）等巨型單檔，以及 search 的 window.SearchStateMixin_* 全域模式，全部遷移到原生 ESM（`import/export`）。Import Maps 統一路徑別名，每個頁面有獨立的 `main.js` 入口，依賴關係從隱性約定變成明確的 import 語句。對用戶完全無感知——功能、動畫、資料行為完全不變。
+
+*This release completes the frontend ESM migration (feature/54). The monolithic showcase/core.js (2725 lines), scanner.js (1546 lines), settings.js (972 lines) and the search window.SearchStateMixin_* globals are all migrated to native ESM (import/export) with Import Maps path aliases and per-page main.js entry points. Zero user-facing changes.*
+
+### Changed
+
+#### 🏗️ 54 — 全站前端 ESM 模組化
+
+- **54a ESM 基礎建設**：base.html 加 Import Maps（`@/shared/`、`@/components/`、`@/showcase/` 等 6 個路徑別名）+ `{% block pre_alpine_module %}` slot；7 個共用工具（ghost-fly、burst-picker、motion-adapter、path-utils、page-lifecycle、motion-prefs）加 ESM export + window 橋接（過渡期向後相容）
+- **54d Settings 拆解**：settings.js（972 行）→ state-config / state-providers / state-ui + main.js；settings.js 刪除
+- **54c Scanner 拆解**：scanner.js（1546 行）→ state-scan / state-nfo / state-alias / state-batch + main.js；scanner.js 刪除
+- **54b Showcase 拆解**：core.js（2725 行）→ state-base / state-videos / state-actress / state-lightbox + main.js；core.js 刪除；descriptor-preserving mergeState 保留 getter
+- **54e Search 遷移**：8 個 `window.SearchStateMixin_*` 全域模式 → ESM `export function`；新增 `search/main.js`（descriptor-preserving mergeState）；state/index.js 刪除
+
 ## [0.8.3] - 2026-05-02
 
 本版帶來兩個獨立升級包：53a 補齊四個 Alpine 官方插件（焦點鎖、切頁狀態保留、平滑展開、指向交叉偵測），同時修正 showcase 切頁殘留動畫鬼影；53b 新增全站通知中心（sidebar 鈴鐺 + 抽屜），讓 Scanner 掃描與批次補完的開始/完成/失敗事件即時可見，從任何頁面甚至跨裝置都能查閱，不再需要停在 Scanner 頁面等待。

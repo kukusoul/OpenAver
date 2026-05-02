@@ -2,7 +2,8 @@
  * SearchState - Result Card Mixin
  * 包含：結果卡片顯示、編輯、翻譯、標籤、本地狀態
  */
-window.SearchStateMixin_ResultCard = {
+export function searchStateResultCard() {
+    return {
     // ===== T1c: Result Card Computed =====
 
     current() {
@@ -490,4 +491,5 @@ window.SearchStateMixin_ResultCard = {
             await window.switchSourceCore(this, number);
         }
     }
-};
+    };
+}

@@ -1,0 +1,80 @@
+export function stateUI() {
+    return {
+        // ===== UI State =====
+        newSuffixInput: '',
+        showPathHelp: false,
+        showSampleImagesHelp: false,
+
+        // Toast state
+        _toast: { message: '', type: 'success', visible: false },
+        _toastTimer: null,
+
+        // Dirty Check Modal State
+        dirtyCheckModalOpen: false,
+
+        // Reset Config Modal State (T3.4)
+        resetConfigModalOpen: false,
+        _resetConfigLoading: false,
+
+        // ===== Methods =====
+        showToast(message, type = 'success', duration = 2500) {
+            this._toast.message = message;
+            this._toast.type = type;
+            this._toast.visible = true;
+            if (this._toastTimer) clearTimeout(this._toastTimer);
+            this._toastTimer = setTimeout(() => {
+                this._toast.visible = false;
+                this._toastTimer = null;
+            }, duration);
+        },
+
+        async selectOutputFolder() {
+            if (typeof window.pywebview === 'undefined' || !window.pywebview.api) {
+                this.showToast(window.t('settings.toast.desktop_only'), 'info');
+                return;
+            }
+
+            try {
+                const result = await window.pywebview.api.select_folder();
+                if (result && result.folder) {
+                    this.form.avlistOutputDir = result.folder;
+                }
+            } catch (e) {
+                console.error('選擇資料夾失敗:', e);
+            }
+        },
+
+        // Dirty check modal — 儲存更改後離開
+        async dirtyCheckSave() {
+            await this.saveConfig();
+            // saveConfig 成功會更新 savedState，isDirty 變 false
+            if (!this.isDirty) {
+                // 儲存成功，透過 lifecycle API 執行 cleanup 再跳轉
+                this.dirtyCheckModalOpen = false;
+                if (window.__leavePage) {
+                    if (!window.__leavePage(this.pendingNavigationUrl)) return;
+                }
+                window.location.href = this.pendingNavigationUrl;
+            }
+            // 儲存失敗：modal 保持開啟，toast 已顯示錯誤
+            // 用戶可選「不儲存」離開或「取消」留下
+        },
+
+        // Dirty check modal — 不儲存直接離開
+        dirtyCheckDiscard() {
+            this.savedState = null;  // 防止殘留
+            // T3(40b): 透過 lifecycle API 執行 cleanup 再跳轉
+            // __leavePage 回傳 false 表示 cleanup 阻止導航（例如仍有進行中請求）
+            if (window.__leavePage) {
+                if (!window.__leavePage(this.pendingNavigationUrl)) return;
+            }
+            window.location.href = this.pendingNavigationUrl;
+        },
+
+        // Dirty check modal — 取消（留在 settings）
+        dirtyCheckCancel() {
+            this.pendingNavigationUrl = '';
+            this.dirtyCheckModalOpen = false;
+        },
+    };
+}
