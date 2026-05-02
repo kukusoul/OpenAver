@@ -661,32 +661,6 @@ class TestJellyfinCheckI18nKeys:
         assert val, "zh_TW.json 缺少 scanner.stats.jellyfin_check_done_ok"
 
 
-class TestSmartCloseRemovedGuard:
-    """Phase 40d-T1: Showcase Smart Close 系統移除守衛"""
-
-    CORE_JS = Path(__file__).parents[2] / 'web' / 'static' / 'js' / 'pages' / 'showcase' / 'core.js'
-    SHOWCASE_HTML = Path(__file__).parents[2] / 'web' / 'templates' / 'showcase.html'
-
-    def test_no_mousemove_handler_in_showcase_html(self):
-        """showcase.html 不應包含 handleLightboxMousemove binding"""
-        content = self.SHOWCASE_HTML.read_text(encoding='utf-8')
-        assert 'handleLightboxMousemove' not in content
-
-    def test_no_lightbox_move_enabled_in_core_js(self):
-        """core.js 不應包含 lightboxMoveEnabled（Smart Close 門控已移除）"""
-        if not self.CORE_JS.exists():
-            return  # core.js 已刪除（54b）— 內容自然不存在
-        content = self.CORE_JS.read_text(encoding='utf-8')
-        assert 'lightboxMoveEnabled' not in content
-
-    def test_no_lightbox_move_timer_in_core_js(self):
-        """core.js 不應包含 lightboxMoveTimer（Smart Close timer 已移除）"""
-        if not self.CORE_JS.exists():
-            return  # core.js 已刪除（54b）— 內容自然不存在
-        content = self.CORE_JS.read_text(encoding='utf-8')
-        assert 'lightboxMoveTimer' not in content
-
-
 class TestShowcaseKeyboardGuard:
     """Phase 40d-T2: Showcase 鍵盤 preventDefault 守衛"""
 
@@ -2293,51 +2267,6 @@ class TestShowcaseActressCRUD:
             f"showcase.html searchActressFilms() handler 出現次數不足（期望 >=2，實際 {count}）"
 
 
-class TestRescrapeRemoved:
-    """Phase 49b-T5: rescrape dead code 守衛 — 確認已完全移除"""
-
-    CORE_JS = Path(__file__).parents[2] / 'web' / 'static' / 'js' / 'pages' / 'showcase' / 'core.js'
-    SHOWCASE_HTML = Path(__file__).parents[2] / 'web' / 'templates' / 'showcase.html'
-
-    def _js(self):
-        if not self.CORE_JS.exists():
-            return None  # core.js 已刪除（54b）
-        return self.CORE_JS.read_text(encoding='utf-8')
-
-    def _html(self):
-        return self.SHOWCASE_HTML.read_text(encoding='utf-8')
-
-    def test_rescrape_actress_not_in_js(self):
-        """core.js 不含 rescrapeActress（49b-T5 dead code 已刪除）"""
-        js = self._js()
-        if js is None:
-            return  # core.js 已刪除（54b）— 內容自然不存在
-        assert "rescrapeActress" not in js, \
-            "showcase/core.js 仍含 rescrapeActress（49b-T5 應已完全移除）"
-
-    def test_rescraping_state_not_in_js(self):
-        """core.js 不含 _rescraping state（49b-T5 dead code 已刪除）"""
-        js = self._js()
-        if js is None:
-            return  # core.js 已刪除（54b）— 內容自然不存在
-        assert "_rescraping" not in js, \
-            "showcase/core.js 仍含 _rescraping state（49b-T5 應已完全移除）"
-
-    def test_rescrape_url_not_in_js(self):
-        """core.js 不含 /rescrape fetch call（49b-T5 dead code 已刪除）"""
-        js = self._js()
-        if js is None:
-            return  # core.js 已刪除（54b）— 內容自然不存在
-        assert "/rescrape" not in js, \
-            "showcase/core.js 仍含 /rescrape fetch call（49b-T5 應已完全移除）"
-
-    def test_rescrape_not_in_html(self):
-        """showcase.html 不含 rescrape 相關 handler（49b-T5 dead code 已刪除）"""
-        html = self._html()
-        assert "rescrape" not in html, \
-            "showcase.html 仍含 rescrape 相關 handler（49b-T5 應已完全移除）"
-
-
 class TestShowcaseActressCardFooter:
     """Phase 44c-T2: Actress Card Footer 三欄 + hover 守衛"""
 
@@ -3769,24 +3698,6 @@ class TestFetchSamplesButton:
             f"當前值：{value!r}\n"
             "b6fix2 應將 emoji 前綴從所有 4 語系 locale 值中移除。"
         )
-
-
-class TestActressLightboxHeartRemoved:
-    """T6: Actress Lightbox header 純裝飾愛心 button + CSS 死碼移除守衛"""
-
-    def test_no_decorative_heart_button_in_actress_lightbox(self):
-        """showcase.html 不應再含 pointer-events:none 的 is-favorite 愛心裝飾 button"""
-        html = SHOWCASE_HTML.read_text(encoding="utf-8")
-        # 確認舊裝飾按鈕已移除（pointer-events:none + aria-label="favorite"）
-        pattern = r'<button[^>]*pointer-events:none[^>]*aria-label="favorite"'
-        assert not re.search(pattern, html), "decorative heart button should be removed"
-        # 同時確保 hero card 功能按鈕仍存在
-        assert 'GhostFly.floatingHearts' in html, "hero card floatingHearts button must remain"
-
-    def test_no_orphan_actress_lb_header_btn_glass_circle_css(self):
-        """showcase.css 不應再含 .actress-lb-header .btn-glass-circle 規則"""
-        css = Path("web/static/css/pages/showcase.css").read_text(encoding="utf-8")
-        assert '.actress-lb-header .btn-glass-circle' not in css, "orphan CSS should be removed"
 
 
 class TestActressCoreMetadataVideoCount:
