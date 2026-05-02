@@ -876,7 +876,7 @@ class TestPageLifecycleGuard:
         assert '__registerPage' in content, \
             "settings/state-config.js 缺少 __registerPage 呼叫 — dirty-check lifecycle 會失效"
 
-    def test_search_state_index_calls_register_page(self):
+    def test_search_main_js_calls_register_page(self):
         """search/main.js 必須呼叫 __registerPage"""
         js_file = PROJECT_ROOT / "web" / "static" / "js" / "pages" / "search" / "main.js"
         content = js_file.read_text(encoding='utf-8')
