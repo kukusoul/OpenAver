@@ -119,14 +119,18 @@ class TestSearchLightboxMetadataGuard:
             "search.html 缺少 lb-details（Lightbox 合併 meta 列，37b-layout）"
 
 
-SHOWCASE_CORE_JS = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "showcase" / "core.js"
+SHOWCASE_BASE_JS     = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "showcase" / "state-base.js"
+SHOWCASE_VIDEOS_JS   = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "showcase" / "state-videos.js"
+SHOWCASE_ACTRESS_JS  = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "showcase" / "state-actress.js"
+SHOWCASE_LIGHTBOX_JS = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "showcase" / "state-lightbox.js"
+SHOWCASE_MAIN_JS     = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "showcase" / "main.js"
 
 
 class TestShowcaseCoreJsSearchableFields:
-    """T5: 確保 showcase/core.js applyFilterAndSort 的 searchable fields 包含新欄位"""
+    """T5: 確保 showcase/state-videos.js applyFilterAndSort 的 searchable fields 包含新欄位"""
 
     def _js(self):
-        return SHOWCASE_CORE_JS.read_text(encoding="utf-8")
+        return SHOWCASE_VIDEOS_JS.read_text(encoding="utf-8")
 
     def _extract_searchable_fields(self, js: str) -> set[str]:
         """從 core.js 抓出 `const searchable = [ ... ].filter(Boolean)` 的 array literal，
@@ -682,7 +686,7 @@ class TestSmartCloseRemovedGuard:
 class TestShowcaseKeyboardGuard:
     """Phase 40d-T2: Showcase 鍵盤 preventDefault 守衛"""
 
-    CORE_JS = Path(__file__).parents[2] / 'web' / 'static' / 'js' / 'pages' / 'showcase' / 'core.js'
+    CORE_JS = SHOWCASE_LIGHTBOX_JS
 
     def _extract_block(self, content, anchor, end_marker='return;'):
         """提取從 anchor 到 end_marker 的區塊"""
@@ -714,7 +718,12 @@ class TestShowcaseActressState:
     """Phase 44a-T2: Showcase 女優模式 Alpine state 守衛"""
 
     def _js(self):
-        return SHOWCASE_CORE_JS.read_text(encoding="utf-8")
+        # 女優 state 分散於 state-base/actress/lightbox，合併讀取確保覆蓋
+        return (
+            SHOWCASE_BASE_JS.read_text(encoding="utf-8") + "\n" +
+            SHOWCASE_ACTRESS_JS.read_text(encoding="utf-8") + "\n" +
+            SHOWCASE_LIGHTBOX_JS.read_text(encoding="utf-8")
+        )
 
     # --- Module-level arrays ---
     def test_module_level_actresses_declared(self):
@@ -984,7 +993,12 @@ class TestActressLightboxSourceGuard:
     """
 
     def _js(self):
-        return SHOWCASE_CORE_JS.read_text(encoding="utf-8")
+        # actressLightboxSource / openActressLightbox / closeLightbox / handleKeydown → state-lightbox.js
+        # openHeroCardLightbox → state-lightbox.js
+        return (
+            SHOWCASE_ACTRESS_JS.read_text(encoding="utf-8") + "\n" +
+            SHOWCASE_LIGHTBOX_JS.read_text(encoding="utf-8")
+        )
 
     def _html(self):
         return SHOWCASE_HTML.read_text(encoding="utf-8")
@@ -1048,7 +1062,15 @@ class TestShowcasePreciseMatchState:
     """Phase 44b-T1: Showcase 精準匹配 Alpine state 守衛"""
 
     def _js(self):
-        return SHOWCASE_CORE_JS.read_text(encoding="utf-8")
+        # _isPreciseActressMatch / _checkPreciseActressMatch / _actressesLoaded → state-actress.js
+        # searchFromMetadata → state-lightbox.js
+        # capturedTerm / onSearchChange → state-actress.js
+        return (
+            SHOWCASE_ACTRESS_JS.read_text(encoding="utf-8") + "\n" +
+            SHOWCASE_VIDEOS_JS.read_text(encoding="utf-8") + "\n" +
+            SHOWCASE_BASE_JS.read_text(encoding="utf-8") + "\n" +
+            SHOWCASE_LIGHTBOX_JS.read_text(encoding="utf-8")
+        )
 
     def _extract_fn_block(self, content, fn_anchor):
         """提取從 fn_anchor 開始到下一個頂層逗號的函數區塊"""
@@ -1133,10 +1155,11 @@ class TestShowcasePreciseMatchState:
 
     # --- Lazy load flag ---
     def test_loadActresses_sets_loaded_flag(self):
-        """_actressesLoaded = true 出現於 core.js（懶載 flag 設定）"""
+        """_actressesLoaded 設定為 true 出現於 state（懶載 flag 設定）"""
         js = self._js()
-        assert "_actressesLoaded = true" in js, \
-            "showcase/core.js loadActresses() 缺少 _actressesLoaded = true"
+        # ESM：透過 _setActressesLoaded(true) 設定；monolith：直接 _actressesLoaded = true
+        assert "_actressesLoaded = true" in js or "_setActressesLoaded(true)" in js, \
+            "showcase state loadActresses() 缺少 _actressesLoaded 設為 true（_actressesLoaded = true 或 _setActressesLoaded(true)）"
 
     def _html(self):
         return SHOWCASE_HTML.read_text(encoding="utf-8")
@@ -2118,7 +2141,8 @@ class TestShowcaseActressLightbox:
         return SHOWCASE_HTML.read_text(encoding="utf-8")
 
     def _js(self):
-        return SHOWCASE_CORE_JS.read_text(encoding="utf-8")
+        # _actressCoreMetadata / _allInfoChips / _chipsLimit / _visibleAliases / _visibleInfoChips / _visibleVideoTags → state-actress.js
+        return SHOWCASE_ACTRESS_JS.read_text(encoding="utf-8")
 
     # --- showcase.html x-if branches ---
 
@@ -2198,7 +2222,8 @@ class TestShowcaseActressCRUD:
         return SHOWCASE_HTML.read_text(encoding="utf-8")
 
     def _js(self):
-        return SHOWCASE_CORE_JS.read_text(encoding="utf-8")
+        # addFavoriteActress / rescrapeActress / removeActress / searchActressFilms → state-actress.js
+        return SHOWCASE_ACTRESS_JS.read_text(encoding="utf-8")
 
     # --- core.js method guards ---
 
@@ -2308,7 +2333,8 @@ class TestShowcaseActressCardFooter:
         return SHOWCASE_HTML.read_text(encoding="utf-8")
 
     def _js(self):
-        return SHOWCASE_CORE_JS.read_text(encoding="utf-8")
+        # _actressCardMiddle / _actressHoverInfo / actressSort → state-actress.js
+        return SHOWCASE_ACTRESS_JS.read_text(encoding="utf-8")
 
     def test_actress_footer_default_three_cols(self):
         """showcase.html actress card footer 含 footer-default 三欄結構"""
@@ -2456,10 +2482,11 @@ class TestSettingsResetModalI18n:
 class TestShowcaseLightboxSentinel:
     """Phase 44b-T4: Lightbox -1 sentinel nav guards"""
 
-    CORE_JS = Path(__file__).parents[2] / 'web' / 'static' / 'js' / 'pages' / 'showcase' / 'core.js'
+    CORE_JS = SHOWCASE_LIGHTBOX_JS
     SHOWCASE_HTML = Path(__file__).parents[2] / 'web' / 'templates' / 'showcase.html'
 
     def _js(self):
+        # openHeroCardLightbox / hasVisiblePrev / hasVisibleNext / prevLightboxVideo / nextLightboxVideo / handleKeydown → state-lightbox.js
         return self.CORE_JS.read_text(encoding='utf-8')
 
     def _html(self):
@@ -2567,7 +2594,14 @@ class TestShowcaseAliasGuard:
     """T5 (45-actress-alias): Frontend Guard — alias 展開注入守衛"""
 
     def _js(self):
-        return SHOWCASE_CORE_JS.read_text(encoding="utf-8")
+        # _nameToGroup 宣告 + _loadAliasMap → state-base.js
+        # applyActressFilterAndSort / _checkPreciseActressMatch 的 _nameToGroup 使用 → state-actress.js
+        # applyFilterAndSort 的 _nameToGroup[term] 使用 → state-videos.js
+        return (
+            SHOWCASE_BASE_JS.read_text(encoding="utf-8") + "\n" +
+            SHOWCASE_ACTRESS_JS.read_text(encoding="utf-8") + "\n" +
+            SHOWCASE_VIDEOS_JS.read_text(encoding="utf-8")
+        )
 
     def test_name_to_group_declaration_exists(self):
         """_nameToGroup module-level 宣告必須存在於 core.js"""
@@ -3459,7 +3493,12 @@ class TestFetchSamplesButton:
         return SHOWCASE_HTML.read_text(encoding="utf-8")
 
     def _js(self):
-        return SHOWCASE_CORE_JS.read_text(encoding="utf-8")
+        # fetchSamples / _fetchSamplesLoading (usage) → state-lightbox.js
+        # _fetchSamplesLoading: (init) / _fetchSamplesFailed: (init) → state-actress.js
+        return (
+            SHOWCASE_ACTRESS_JS.read_text(encoding="utf-8") + "\n" +
+            SHOWCASE_LIGHTBOX_JS.read_text(encoding="utf-8")
+        )
 
     def _fetch_samples_btn_tag(self, html: str):
         """從 showcase.html 抽出 fetch-samples-btn 的完整 <button ...> tag。
@@ -3742,7 +3781,8 @@ class TestActressCoreMetadataVideoCount:
     """T2: _actressCoreMetadata() 加 video_count 前置 + i18n showcase.unit.films 改值"""
 
     def _js(self):
-        return SHOWCASE_CORE_JS.read_text(encoding="utf-8")
+        # _actressCoreMetadata → state-actress.js
+        return SHOWCASE_ACTRESS_JS.read_text(encoding="utf-8")
 
     def _extract_method_body(self, js, method_name):
         """抓取 Alpine state method 函式主體（大括號平衡）。"""
@@ -3824,7 +3864,12 @@ class TestModeToggleFadeOutGuard:
     """T1: 模式切換動畫補 fade-out（playModeCrossfade 4-arg + toggleActressMode callback 延遲翻轉）"""
 
     def _core_js(self):
-        return SHOWCASE_CORE_JS.read_text(encoding="utf-8")
+        # toggleActressMode / searchActressFilms → state-actress.js
+        # switchMode → state-videos.js
+        return (
+            SHOWCASE_ACTRESS_JS.read_text(encoding="utf-8") + "\n" +
+            SHOWCASE_VIDEOS_JS.read_text(encoding="utf-8")
+        )
 
     def _anim_js(self):
         return SHOWCASE_ANIMATIONS_JS.read_text(encoding="utf-8")
@@ -3990,7 +4035,12 @@ class TestAliasLiveQueryGuard:
     """
 
     def _js(self):
-        return SHOWCASE_CORE_JS.read_text(encoding="utf-8")
+        # _fetchLiveAliases / openActressLightbox / prevActressLightbox / nextActressLightbox → state-actress.js
+        # openHeroCardLightbox → state-lightbox.js
+        return (
+            SHOWCASE_ACTRESS_JS.read_text(encoding="utf-8") + "\n" +
+            SHOWCASE_LIGHTBOX_JS.read_text(encoding="utf-8")
+        )
 
     def _extract_method_body(self, js, method_name):
         """抓取 Alpine state method 函式主體，大括號平衡（容忍 async 前綴）。"""
@@ -4087,14 +4137,15 @@ class TestGhostFlyInFlightGuard:
     """49a-T7: 女優 → 影片跨模式 Ghost Fly 動畫並發保護 guard
 
     驗證：
-    - core.js 初始化物件含 _ghostFlyInFlight: false（CD-13 並發 flag）
+    - state 初始化物件含 _ghostFlyInFlight: false（CD-13 並發 flag）
     - ghost-fly.js 新增 playActressToHeroCard 方法（CD-11）
     - searchActressFilms 為 async 並接受第二參數 fromEl
     - showcase.html 兩個 camera button（grid + lightbox）皆綁 :disabled="_ghostFlyInFlight"
     """
 
     def _js(self):
-        return SHOWCASE_CORE_JS.read_text(encoding="utf-8")
+        # _ghostFlyInFlight / searchActressFilms → state-actress.js
+        return SHOWCASE_ACTRESS_JS.read_text(encoding="utf-8")
 
     def _ghost_js(self):
         return GHOST_FLY_JS.read_text(encoding="utf-8")
@@ -4276,8 +4327,8 @@ class TestT4FooterStructure:
         隱藏 select 用 .click() 在主流瀏覽器只 dispatch event 不會開 native picker（AC-7 fail）。
         並驗證 pager-current @click 走的是 openPagePicker（不是直接 .click()）。
         """
-        # JS method 端
-        js = SHOWCASE_CORE_JS.read_text(encoding="utf-8")
+        # JS method 端 — openPagePicker → state-videos.js
+        js = SHOWCASE_VIDEOS_JS.read_text(encoding="utf-8")
         assert re.search(r'openPagePicker\s*\(', js), \
             "showcase/core.js 缺少 openPagePicker method 定義"
         # 必須含 showPicker 嘗試
@@ -4430,7 +4481,6 @@ class TestBurstPickerGuard:
 
 
 # ─── 49b-T4cd: Actress Photo Picker UI/Alpine/SSE 整合守衛 ──────────────────
-SHOWCASE_CORE_JS_T4CD = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "showcase" / "core.js"
 SHOWCASE_CSS_T4CD = Path(__file__).parent.parent.parent / "web" / "static" / "css" / "pages" / "showcase.css"
 
 
@@ -4441,7 +4491,8 @@ class TestPickerIntegrationGuard:
         return SHOWCASE_HTML.read_text(encoding="utf-8")
 
     def _core_js(self):
-        return SHOWCASE_CORE_JS_T4CD.read_text(encoding="utf-8")
+        # picker state/methods → state-lightbox.js
+        return SHOWCASE_LIGHTBOX_JS.read_text(encoding="utf-8")
 
     def _css(self):
         return SHOWCASE_CSS_T4CD.read_text(encoding="utf-8")

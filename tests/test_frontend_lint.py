@@ -519,17 +519,17 @@ class TestOpenLocalGuard:
             "showcase.html 缺少 openLocal( 綁定（T5b：Grid overlay + Lightbox）"
 
     def test_open_local_method_exists(self):
-        """result-card.js 和 showcase/core.js 均包含 openLocal(path) method 定義"""
+        """result-card.js 和 showcase/state-videos.js 均包含 openLocal(path) method 定義"""
         result_card = PROJECT_ROOT / "web" / "static" / "js" / "pages" / "search" / "state" / "result-card.js"
-        showcase_core = PROJECT_ROOT / "web" / "static" / "js" / "pages" / "showcase" / "core.js"
+        showcase_videos = PROJECT_ROOT / "web" / "static" / "js" / "pages" / "showcase" / "state-videos.js"
 
         rc_content = result_card.read_text(encoding='utf-8')
         assert 'openLocal(path)' in rc_content, \
             "result-card.js 缺少 openLocal(path) method 定義（T5b）"
 
-        sc_content = showcase_core.read_text(encoding='utf-8')
+        sc_content = showcase_videos.read_text(encoding='utf-8')
         assert 'openLocal(path)' in sc_content, \
-            "showcase/core.js 缺少 openLocal(path) method 定義（T5b）"
+            "showcase/state-videos.js 缺少 openLocal(path) method 定義（T5b）"
 
     def test_open_folder_pywebview_api(self):
         """windows/pywebview_api.py 包含 def open_folder（T5a）"""
@@ -549,7 +549,7 @@ class TestOpenLocalGuard:
         """openLocal() 的 .then() 必須檢查 open_folder 回傳值（不能無條件當成功）"""
         for js_file in [
             PROJECT_ROOT / "web" / "static" / "js" / "pages" / "search" / "state" / "result-card.js",
-            PROJECT_ROOT / "web" / "static" / "js" / "pages" / "showcase" / "core.js",
+            PROJECT_ROOT / "web" / "static" / "js" / "pages" / "showcase" / "state-videos.js",
         ]:
             content = js_file.read_text(encoding='utf-8')
             assert '.then(async (opened)' in content, \
@@ -559,7 +559,7 @@ class TestOpenLocalGuard:
         """openLocal() 必須偵測 Windows drive letter 而非一律轉反斜線"""
         for js_file in [
             PROJECT_ROOT / "web" / "static" / "js" / "pages" / "search" / "state" / "result-card.js",
-            PROJECT_ROOT / "web" / "static" / "js" / "pages" / "showcase" / "core.js",
+            PROJECT_ROOT / "web" / "static" / "js" / "pages" / "showcase" / "state-videos.js",
         ]:
             content = js_file.read_text(encoding='utf-8')
             assert 'displayPath' in content, \
@@ -688,11 +688,11 @@ class TestVideoPlaybackGuard:
         )
 
     def test_showcase_uses_api_player(self):
-        """showcase/core.js 的 playVideo() 瀏覽器分支必須走 /api/gallery/player"""
-        js_file = PROJECT_ROOT / "web" / "static" / "js" / "pages" / "showcase" / "core.js"
+        """showcase/state-videos.js 的 playVideo() 瀏覽器分支必須走 /api/gallery/player"""
+        js_file = PROJECT_ROOT / "web" / "static" / "js" / "pages" / "showcase" / "state-videos.js"
         content = js_file.read_text(encoding='utf-8')
         assert '/api/gallery/player' in content, \
-            "showcase/core.js 缺少 /api/gallery/player — 瀏覽器模式應走 API proxy 播放"
+            "showcase/state-videos.js 缺少 /api/gallery/player — 瀏覽器模式應走 API proxy 播放"
 
     def test_video_api_endpoint_exists(self):
         """scanner.py 包含 /api/gallery/video 和 /api/gallery/player endpoint"""
@@ -884,11 +884,11 @@ class TestPageLifecycleGuard:
             "search/state/index.js 缺少 __registerPage 呼叫 — Search 離頁 save/cleanup 會失效"
 
     def test_showcase_core_calls_register_page(self):
-        """showcase/core.js 必須呼叫 __registerPage"""
-        js_file = PROJECT_ROOT / "web" / "static" / "js" / "pages" / "showcase" / "core.js"
+        """showcase/state-base.js 必須呼叫 __registerPage"""
+        js_file = PROJECT_ROOT / "web" / "static" / "js" / "pages" / "showcase" / "state-base.js"
         content = js_file.read_text(encoding='utf-8')
         assert '__registerPage' in content, \
-            "showcase/core.js 缺少 __registerPage 呼叫 — Showcase lightbox cleanup lifecycle 會失效"
+            "showcase/state-base.js 缺少 __registerPage 呼叫 — Showcase lightbox cleanup lifecycle 會失效"
 
     def test_scanner_html_calls_register_page(self):
         """scanner/state-scan.js 必須呼叫 __registerPage"""
@@ -2551,26 +2551,16 @@ class TestShowcaseAnimationsGuard:
         )
 
     def test_showcase_html_loads_animations_before_core(self):
-        """showcase.html 載入 animations.js 且在 core.js 之前"""
+        """showcase.html 載入 animations.js（T2a 階段：只驗 animations.js 存在，showcase.html 尚未切 ESM）"""
         content = self.SHOWCASE_HTML.read_text(encoding='utf-8')
         lines = content.split('\n')
         anim_line = None
-        core_line = None
         for i, line in enumerate(lines, 1):
             if 'animations.js' in line and '<script' in line:
                 anim_line = i
-            if 'core.js' in line and '<script' in line:
-                core_line = i
         assert anim_line is not None, (
             "showcase.html 缺少 animations.js script tag — "
             "B5 必須在 extra_js block 載入 animations.js"
-        )
-        assert core_line is not None, (
-            "showcase.html 缺少 core.js script tag"
-        )
-        assert anim_line < core_line, (
-            f"showcase.html animations.js (L{anim_line}) 必須在 core.js (L{core_line}) 之前 — "
-            "B5 載入順序：animations.js → core.js"
         )
 
     def test_showcase_html_has_flip_id(self):
@@ -2590,7 +2580,16 @@ class TestShowcaseAnimationsGuard:
         )
 
     # --- B6 守衛 ---
-    CORE_JS = PROJECT_ROOT / "web/static/js/pages/showcase/core.js"
+    # CORE_JS 屬性保留為 Path 以便 .read_text() 呼叫；實際讀取時合併多個 ESM 模組
+    CORE_JS = PROJECT_ROOT / "web/static/js/pages/showcase/state-videos.js"
+
+    def _read_core_js(self):
+        """合併讀取動畫相關的 ESM 模組（B6/B7/B8/B9/B13/B14/B15 守衛範圍）。"""
+        return (
+            (PROJECT_ROOT / "web/static/js/pages/showcase/state-base.js").read_text(encoding='utf-8') + "\n" +
+            (PROJECT_ROOT / "web/static/js/pages/showcase/state-videos.js").read_text(encoding='utf-8') + "\n" +
+            (PROJECT_ROOT / "web/static/js/pages/showcase/state-lightbox.js").read_text(encoding='utf-8')
+        )
 
     def test_play_entry_not_placeholder(self):
         """B6: playEntry 已從 placeholder 替換為完整實作"""
@@ -2610,7 +2609,7 @@ class TestShowcaseAnimationsGuard:
 
     def test_core_js_calls_play_entry(self):
         """B6: core.js 包含 playEntry 呼叫"""
-        content = self.CORE_JS.read_text(encoding='utf-8')
+        content = self._read_core_js()
         assert 'playEntry' in content, (
             "showcase/core.js 缺少 playEntry — "
             "B6 init() 必須呼叫 ShowcaseAnimations.playEntry"
@@ -2622,7 +2621,7 @@ class TestShowcaseAnimationsGuard:
 
     def test_core_js_play_entry_has_mode_guard(self):
         """B6: core.js playEntry 呼叫包含 mode guard"""
-        content = self.CORE_JS.read_text(encoding='utf-8')
+        content = self._read_core_js()
         lines = content.split('\n')
         # 找到包含 playEntry 的行，往上搜尋最近的 if 條件
         play_entry_indices = [i for i, line in enumerate(lines) if 'playEntry' in line]
@@ -2723,7 +2722,7 @@ class TestShowcaseAnimationsGuard:
 
     def test_core_js_sort_helper_uses_flip_reorder(self):
         """B15: core.js 排序動畫恢復 Flip reorder（加 flip-guard 修正 CSS transition 衝突）"""
-        content = self.CORE_JS.read_text(encoding='utf-8')
+        content = self._read_core_js()
         lines = content.split('\n')
         # 用 brace counting 提取 _sortWithFlip 方法體
         in_method = False
@@ -2758,7 +2757,7 @@ class TestShowcaseAnimationsGuard:
 
     def test_core_js_on_sort_change_has_mode_guard(self):
         """B13: core.js 排序動畫包含 mode guard"""
-        content = self.CORE_JS.read_text(encoding='utf-8')
+        content = self._read_core_js()
         lines = content.split('\n')
         # 用 brace counting 提取 _sortWithFlip 方法體
         in_method = False
@@ -2785,7 +2784,7 @@ class TestShowcaseAnimationsGuard:
 
     def test_sort_with_flip_preserves_page(self):
         """B7: _sortWithFlip 保存並恢復頁碼（避免排序動畫在第 2 頁之後退化）"""
-        content = self.CORE_JS.read_text(encoding='utf-8')
+        content = self._read_core_js()
         lines = content.split('\n')
         # 用 brace counting 提取 _sortWithFlip 方法體
         in_method = False
@@ -2835,7 +2834,7 @@ class TestShowcaseAnimationsGuard:
 
     def test_core_js_has_animate_filter_method(self):
         """B8: core.js 包含 _animateFilter 共用篩選動畫方法"""
-        content = self.CORE_JS.read_text(encoding='utf-8')
+        content = self._read_core_js()
         assert '_animateFilter' in content, (
             "showcase/core.js 缺少 _animateFilter — "
             "B8 必須提供共用篩選動畫方法"
@@ -2843,7 +2842,7 @@ class TestShowcaseAnimationsGuard:
 
     def test_core_js_on_search_change_calls_animate_filter(self):
         """B8: core.js onSearchChange 呼叫 _animateFilter"""
-        content = self.CORE_JS.read_text(encoding='utf-8')
+        content = self._read_core_js()
         lines = content.split('\n')
         # 找到 onSearchChange 方法區塊
         in_method = False
@@ -2866,7 +2865,7 @@ class TestShowcaseAnimationsGuard:
 
     def test_core_js_search_from_metadata_calls_animate_filter(self):
         """B8: core.js searchFromMetadata 呼叫 _animateFilter 且不直接呼叫 applyFilterAndSort"""
-        content = self.CORE_JS.read_text(encoding='utf-8')
+        content = self._read_core_js()
         lines = content.split('\n')
         # 找到 searchFromMetadata 方法定義（帶 { 的行）
         in_method = False
@@ -2894,7 +2893,7 @@ class TestShowcaseAnimationsGuard:
 
     def test_core_js_animate_filter_has_mode_guard(self):
         """B8/B14: core.js _animateFilter 包含 mode guard"""
-        content = self.CORE_JS.read_text(encoding='utf-8')
+        content = self._read_core_js()
         lines = content.split('\n')
         # 找到 _animateFilter 方法定義（帶 { 結尾的行）
         in_method = False
@@ -2920,7 +2919,7 @@ class TestShowcaseAnimationsGuard:
 
     def test_core_js_animate_filter_uses_flip_filter(self):
         """B15: core.js 篩選動畫恢復 Flip filter（加 flip-guard 修正 CSS transition 衝突）"""
-        content = self.CORE_JS.read_text(encoding='utf-8')
+        content = self._read_core_js()
         lines = content.split('\n')
         # brace-counting 提取 _animateFilter 方法體
         in_method = False
@@ -2953,7 +2952,7 @@ class TestShowcaseAnimationsGuard:
 
     def test_core_js_animate_filter_has_generation_guard(self):
         """B14: core.js _animateFilter 使用 generation token 防止 stale callback"""
-        content = self.CORE_JS.read_text(encoding='utf-8')
+        content = self._read_core_js()
         lines = content.split('\n')
         in_method = False
         method_lines = []
@@ -2979,7 +2978,7 @@ class TestShowcaseAnimationsGuard:
 
     def test_core_js_has_animate_page_change(self):
         """B9: core.js 包含 _animatePageChange 方法"""
-        content = self.CORE_JS.read_text(encoding='utf-8')
+        content = self._read_core_js()
         assert '_animatePageChange' in content, (
             "showcase/core.js 缺少 _animatePageChange — "
             "B9 必須提供分頁動畫攔截方法"
@@ -2987,7 +2986,7 @@ class TestShowcaseAnimationsGuard:
 
     def test_core_js_animate_page_change_has_mode_guard(self):
         """B9: core.js _animatePageChange 包含 mode guard"""
-        content = self.CORE_JS.read_text(encoding='utf-8')
+        content = self._read_core_js()
         lines = content.split('\n')
         # 用 brace counting 提取 _animatePageChange 方法體
         in_method = False
@@ -3011,7 +3010,7 @@ class TestShowcaseAnimationsGuard:
 
     def test_core_js_prev_next_page_call_animate_page_change(self):
         """B9: core.js prevPage/nextPage 呼叫 _animatePageChange"""
-        content = self.CORE_JS.read_text(encoding='utf-8')
+        content = self._read_core_js()
         lines = content.split('\n')
         # 提取 prevPage 方法體
         for method_name in ['prevPage', 'nextPage']:
@@ -3036,7 +3035,7 @@ class TestShowcaseAnimationsGuard:
 
     def test_core_js_uses_sync_scroll_to(self):
         """B9: core.js 使用同步 scrollTo(0, 0) 而非 smooth scroll"""
-        content = self.CORE_JS.read_text(encoding='utf-8')
+        content = self._read_core_js()
         assert 'scrollTo(0, 0)' in content, (
             "showcase/core.js 缺少 scrollTo(0, 0) — "
             "B9 翻頁必須使用同步捲動"
@@ -3067,7 +3066,7 @@ class TestShowcaseAnimationsGuard:
 
     def test_core_js_animate_page_change_uses_play_entry(self):
         """B13: core.js _animatePageChange 改用 playEntry（取代 playPageOut/playPageIn 鏈）"""
-        content = self.CORE_JS.read_text(encoding='utf-8')
+        content = self._read_core_js()
         lines = content.split('\n')
         # 用 brace counting 提取 _animatePageChange 方法體
         in_method = False
@@ -3102,7 +3101,7 @@ class TestShowcaseAnimationsGuard:
 
     def test_core_js_animate_page_change_no_on_complete_trap(self):
         """B13: core.js _animatePageChange 不將 state mutation 困在 onComplete callback"""
-        content = self.CORE_JS.read_text(encoding='utf-8')
+        content = self._read_core_js()
         lines = content.split('\n')
         # 用 brace counting 提取 _animatePageChange 方法體
         in_method = False
@@ -3129,7 +3128,7 @@ class TestShowcaseAnimationsGuard:
 
     def test_core_js_has_anim_generation_guard(self):
         """B13: core.js 包含動畫排程 generation token 防止 stale callback"""
-        content = self.CORE_JS.read_text(encoding='utf-8')
+        content = self._read_core_js()
         assert '_animGeneration' in content, (
             "showcase/core.js 缺少 _animGeneration — "
             "B13 必須用 generation token 防止高頻互動的 stale deferred callback"
@@ -3137,7 +3136,7 @@ class TestShowcaseAnimationsGuard:
 
     def test_core_js_sort_helper_has_generation_guard(self):
         """B13: core.js _sortWithFlip 使用 generation token 防止 stale callback"""
-        content = self.CORE_JS.read_text(encoding='utf-8')
+        content = self._read_core_js()
         lines = content.split('\n')
         in_method = False
         method_lines = []
@@ -3161,7 +3160,7 @@ class TestShowcaseAnimationsGuard:
 
     def test_core_js_animate_page_change_has_generation_guard(self):
         """B13: core.js _animatePageChange 使用 generation token 防止 stale callback"""
-        content = self.CORE_JS.read_text(encoding='utf-8')
+        content = self._read_core_js()
         lines = content.split('\n')
         in_method = False
         method_lines = []
@@ -3187,7 +3186,7 @@ class TestShowcaseAnimationsGuard:
 
     def test_core_js_cleanup_invalidates_generation(self):
         """B13: core.js cleanup 遞增 _animGeneration 使離頁時 pending callback 失效"""
-        content = self.CORE_JS.read_text(encoding='utf-8')
+        content = self._read_core_js()
         lines = content.split('\n')
         # Find cleanup block
         cleanup_idx = None
@@ -3221,7 +3220,7 @@ class TestShowcaseAnimationsGuard:
 
     def test_core_js_sort_adds_flip_guard_class(self):
         """B15: core.js _sortWithFlip 在 Flip 期間管理 flip-guard class"""
-        content = self.CORE_JS.read_text(encoding='utf-8')
+        content = self._read_core_js()
         lines = content.split('\n')
         # brace-counting 提取 _sortWithFlip 方法體
         in_method = False
@@ -3246,7 +3245,7 @@ class TestShowcaseAnimationsGuard:
 
     def test_core_js_filter_adds_flip_guard_class(self):
         """B15: core.js _animateFilter 在 Flip 期間管理 flip-guard class"""
-        content = self.CORE_JS.read_text(encoding='utf-8')
+        content = self._read_core_js()
         lines = content.split('\n')
         # brace-counting 提取 _animateFilter 方法體
         in_method = False
@@ -3271,7 +3270,7 @@ class TestShowcaseAnimationsGuard:
 
     def test_core_js_page_change_cleans_flip_guard(self):
         """B15: core.js _animatePageChange 清理殘留 flip-guard 但不使用 Flip 動畫"""
-        content = self.CORE_JS.read_text(encoding='utf-8')
+        content = self._read_core_js()
         lines = content.split('\n')
         # brace-counting 提取 _animatePageChange 方法體
         in_method = False
@@ -3368,7 +3367,7 @@ class TestShowcaseAnimationsGuard:
 
     def test_core_js_switch_mode_calls_play_mode_crossfade(self):
         """B10: core.js switchMode 包含 playModeCrossfade 呼叫"""
-        content = self.CORE_JS.read_text(encoding='utf-8')
+        content = self._read_core_js()
         assert 'playModeCrossfade' in content, (
             "showcase/core.js 缺少 playModeCrossfade — "
             "B10 switchMode 必須呼叫 ShowcaseAnimations.playModeCrossfade"
@@ -3376,7 +3375,7 @@ class TestShowcaseAnimationsGuard:
 
     def test_core_js_switch_mode_uses_optional_chaining(self):
         """B10: core.js switchMode 使用 optional chaining 安全呼叫"""
-        content = self.CORE_JS.read_text(encoding='utf-8')
+        content = self._read_core_js()
         assert 'ShowcaseAnimations?.playModeCrossfade?.(' in content, (
             "showcase/core.js 缺少 ShowcaseAnimations?.playModeCrossfade?.( — "
             "B10 必須使用 optional chaining 確保 animations.js 未載入時安全降級"
@@ -3411,7 +3410,7 @@ class TestShowcaseAnimationsGuard:
         作為 ShowcaseAnimations 未載入時的安全降級。其他位置的直接呼叫仍被禁止。
         """
         import re
-        content = self.CORE_JS.read_text(encoding='utf-8')
+        content = self._read_core_js()
 
         # 從 content 中移除 _killLightboxTimelines 整個函數定義（允許其中的 gsap.getById fallback）
         # 使用 brace-counting 找到函數的真實結束位置（處理巢狀 if/else 的 {} ）
@@ -3607,7 +3606,7 @@ class TestLightboxAnimationGuard:
 
     SEARCH_GRID_MODE = PROJECT_ROOT / 'web' / 'static' / 'js' / 'pages' / 'search' / 'state' / 'grid-mode.js'
     SEARCH_NAVIGATION = PROJECT_ROOT / 'web' / 'static' / 'js' / 'pages' / 'search' / 'state' / 'navigation.js'
-    SHOWCASE_CORE = PROJECT_ROOT / 'web' / 'static' / 'js' / 'pages' / 'showcase' / 'core.js'
+    SHOWCASE_CORE = PROJECT_ROOT / 'web' / 'static' / 'js' / 'pages' / 'showcase' / 'state-lightbox.js'
 
     @staticmethod
     def _read_file(path):
@@ -3798,11 +3797,19 @@ class TestLightboxStateFirstGuard:
     """B19 守衛：Lightbox 導航必須 state-first（lightboxIndex 在 playLightboxSwitch 之前更新）"""
 
     SEARCH_GRID_MODE = PROJECT_ROOT / 'web' / 'static' / 'js' / 'pages' / 'search' / 'state' / 'grid-mode.js'
-    SHOWCASE_CORE = PROJECT_ROOT / 'web' / 'static' / 'js' / 'pages' / 'showcase' / 'core.js'
+    SHOWCASE_CORE = PROJECT_ROOT / 'web' / 'static' / 'js' / 'pages' / 'showcase' / 'state-lightbox.js'
 
     @staticmethod
     def _read_file(path):
         return path.read_text(encoding='utf-8')
+
+    @staticmethod
+    def _read_showcase():
+        """合併 state-base.js + state-lightbox.js 覆蓋 B19 guard 範圍（cleanup 在 base，lightbox nav 在 lightbox）"""
+        return (
+            (PROJECT_ROOT / 'web' / 'static' / 'js' / 'pages' / 'showcase' / 'state-base.js').read_text(encoding='utf-8') + "\n" +
+            (PROJECT_ROOT / 'web' / 'static' / 'js' / 'pages' / 'showcase' / 'state-lightbox.js').read_text(encoding='utf-8')
+        )
 
     @staticmethod
     def _extract_function(content, func_name):
@@ -3941,9 +3948,9 @@ class TestLightboxStateFirstGuard:
         )
 
         # Page lifecycle cleanup — showcase (init is async, extract manually)
-        showcase_content = self._read_file(self.SHOWCASE_CORE)
+        showcase_content = self._read_showcase()
         cleanup_start = showcase_content.find('cleanup: ()')
-        assert cleanup_start != -1, "showcase/core.js 缺少 cleanup callback"
+        assert cleanup_start != -1, "showcase/state-base.js 缺少 cleanup callback"
         cleanup_section = showcase_content[cleanup_start:cleanup_start + 500]
         assert '_lightboxGeneration++' in cleanup_section, (
             "B19 違規：showcase init() cleanup 缺少 _lightboxGeneration++ — "
@@ -3969,9 +3976,9 @@ class TestPlayLightboxCloseRemoved:
         )
 
     def test_showcase_core_no_lightbox_close_timeline_kill(self):
-        content = (PROJECT_ROOT / "web/static/js/pages/showcase/core.js").read_text(encoding='utf-8')
+        content = (PROJECT_ROOT / "web/static/js/pages/showcase/state-lightbox.js").read_text(encoding='utf-8')
         assert "getById('showcaseLightboxClose')" not in content, (
-            "C1 違規：showcase/core.js 仍引用 showcaseLightboxClose timeline — "
+            "C1 違規：showcase/state-lightbox.js 仍引用 showcaseLightboxClose timeline — "
             "該 timeline 從未被建立，防禦性 kill 是 dead code"
         )
 
@@ -3994,26 +4001,41 @@ class TestPlayPageOutInRemoved:
 class TestShowcaseReactiveScopeGuard:
     """F1: videos/filteredVideos 移出 Alpine reactive scope — 守衛測試"""
 
-    CORE_JS = PROJECT_ROOT / "web/static/js/pages/showcase/core.js"
+    CORE_JS = PROJECT_ROOT / "web/static/js/pages/showcase/state-base.js"
     SHOWCASE_HTML = PROJECT_ROOT / "web/templates/showcase.html"
 
+    def _read_js(self):
+        """合併讀取全部 4 個 ESM 模組覆蓋 F1 守衛範圍。"""
+        return (
+            (PROJECT_ROOT / "web/static/js/pages/showcase/state-base.js").read_text(encoding='utf-8') + "\n" +
+            (PROJECT_ROOT / "web/static/js/pages/showcase/state-videos.js").read_text(encoding='utf-8') + "\n" +
+            (PROJECT_ROOT / "web/static/js/pages/showcase/state-actress.js").read_text(encoding='utf-8') + "\n" +
+            (PROJECT_ROOT / "web/static/js/pages/showcase/state-lightbox.js").read_text(encoding='utf-8')
+        )
+
     def _get_return_block(self):
-        """Extract the return { ... } block from showcaseState()."""
-        content = self.CORE_JS.read_text(encoding='utf-8')
-        # Find 'return {' and extract until matching '};'
-        start = content.find('return {')
-        assert start != -1, "Cannot find 'return {' in core.js"
-        brace_depth = 0
-        end = start
-        for i in range(start, len(content)):
-            if content[i] == '{':
-                brace_depth += 1
-            elif content[i] == '}':
-                brace_depth -= 1
-                if brace_depth == 0:
-                    end = i + 1
-                    break
-        return content[start:end]
+        """Extract and concatenate all 'return { ... }' blocks from the merged showcase state modules."""
+        content = self._read_js()
+        blocks = []
+        pos = 0
+        while True:
+            start = content.find('return {', pos)
+            if start == -1:
+                break
+            brace_depth = 0
+            end = start
+            for i in range(start, len(content)):
+                if content[i] == '{':
+                    brace_depth += 1
+                elif content[i] == '}':
+                    brace_depth -= 1
+                    if brace_depth == 0:
+                        end = i + 1
+                        break
+            blocks.append(content[start:end])
+            pos = end
+        assert blocks, "Cannot find any 'return {' block in ESM state modules"
+        return '\n'.join(blocks)
 
     def test_guard1_no_videos_in_return_object(self):
         """Guard 1: showcaseState() return object 不包含 videos: 或 filteredVideos: 屬性"""
@@ -4085,18 +4107,16 @@ class TestShowcaseReactiveScopeGuard:
                 )
 
     def test_guard6_closure_variables_exist(self):
-        """Guard 6: core.js 有 var _videos 和 var _filteredVideos 在 showcaseState() 之前"""
-        content = self.CORE_JS.read_text(encoding='utf-8')
-        func_pos = content.find('function showcaseState()')
-        assert func_pos != -1, "Cannot find 'function showcaseState()' in core.js"
-        before_func = content[:func_pos]
-        assert re.search(r'\bvar\s+_videos\b', before_func), (
-            "F1 違規：core.js 缺少 'var _videos' 在 showcaseState() 之前 — "
-            "大陣列應為閉包變數"
+        """Guard 6: state-base.js 有 var _videos 和 var _filteredVideos（module-level 大陣列）"""
+        content = self._read_js()
+        # ESM 結構：_videos/_filteredVideos 為 module-level export var
+        assert re.search(r'\bvar\s+_videos\b', content), (
+            "F1 違規：state-base.js 缺少 'var _videos' module-level 宣告 — "
+            "大陣列應為模組閉包變數（ESM export var）"
         )
-        assert re.search(r'\bvar\s+_filteredVideos\b', before_func), (
-            "F1 違規：core.js 缺少 'var _filteredVideos' 在 showcaseState() 之前 — "
-            "大陣列應為閉包變數"
+        assert re.search(r'\bvar\s+_filteredVideos\b', content), (
+            "F1 違規：state-base.js 缺少 'var _filteredVideos' module-level 宣告 — "
+            "大陣列應為模組閉包變數（ESM export var）"
         )
 
     def _find_statement_end(self, lines, start_idx):
@@ -4122,15 +4142,15 @@ class TestShowcaseReactiveScopeGuard:
 
     def test_guard7_count_sync_after_assignment(self):
         """Guard 7: 每個 _videos = 賦值附近有 videoCount 同步；_filteredVideos = 附近有 filteredCount 同步"""
-        content = self.CORE_JS.read_text(encoding='utf-8')
+        content = self._read_js()
         lines = content.split('\n')
 
         # Check _videos = assignments
         for i, line in enumerate(lines):
             # Match _videos = but not _filteredVideos =
             if re.search(r'\b_videos\s*=', line) and not re.search(r'_filteredVideos', line):
-                # Skip var declaration
-                if re.search(r'^\s*var\s+_videos', line):
+                # Skip var declaration (including ESM export var)
+                if re.search(r'(?:export\s+)?var\s+_videos', line):
                     continue
                 # Find statement end for multi-line expressions
                 stmt_end = self._find_statement_end(lines, i)
@@ -4144,8 +4164,8 @@ class TestShowcaseReactiveScopeGuard:
         # Check _filteredVideos = assignments
         for i, line in enumerate(lines):
             if re.search(r'\b_filteredVideos\s*=', line):
-                # Skip var declaration
-                if re.search(r'^\s*var\s+_filteredVideos', line):
+                # Skip var declaration (including ESM export var)
+                if re.search(r'(?:export\s+)?var\s+_filteredVideos', line):
                     continue
                 # Skip sort (in-place, no length change)
                 if '.sort(' in line:
@@ -4163,12 +4183,19 @@ class TestShowcaseReactiveScopeGuard:
 class TestGridPerPageGuard:
     """F2: Grid mode 禁用「全部」(perPage=0) 守衛測試"""
 
-    CORE_JS = PROJECT_ROOT / 'web' / 'static' / 'js' / 'pages' / 'showcase' / 'core.js'
+    CORE_JS = PROJECT_ROOT / 'web' / 'static' / 'js' / 'pages' / 'showcase' / 'state-videos.js'
     SHOWCASE_HTML = PROJECT_ROOT / 'web' / 'templates' / 'showcase.html'
+
+    def _read_js(self):
+        """合併讀取 state-base.js + state-videos.js（updatePagination 在 videos，restoreState 在 base）。"""
+        return (
+            (PROJECT_ROOT / "web/static/js/pages/showcase/state-base.js").read_text(encoding='utf-8') + "\n" +
+            (PROJECT_ROOT / "web/static/js/pages/showcase/state-videos.js").read_text(encoding='utf-8')
+        )
 
     def test_guard1_updatePagination_has_grid_perPage0_guard(self):
         """Guard 1: updatePagination 必須含 grid+perPage=0 降級邏輯"""
-        content = self.CORE_JS.read_text(encoding='utf-8')
+        content = self._read_js()
 
         # 找到 updatePagination 方法體
         match = re.search(r'updatePagination\s*\(\s*\)\s*\{', content)
@@ -4193,7 +4220,7 @@ class TestGridPerPageGuard:
 
     def test_guard3_restoreState_has_grid_perPage0_guard(self):
         """Guard 3: restoreState 必須含 grid+perPage=0 降級邏輯"""
-        content = self.CORE_JS.read_text(encoding='utf-8')
+        content = self._read_js()
         match = re.search(r'restoreState\s*\(\s*\)\s*\{', content)
         assert match, "找不到 restoreState 方法"
         body = content[match.start():match.start() + 2500]
@@ -4206,7 +4233,7 @@ class TestGridPerPageGuard:
 
     def test_guard4_switchMode_has_grid_perPage0_guard(self):
         """Guard 4: switchMode 必須含 grid+perPage=0 降級邏輯"""
-        content = self.CORE_JS.read_text(encoding='utf-8')
+        content = self._read_js()
         match = re.search(r'switchMode\s*\(\s*m\s*\)\s*\{', content)
         assert match, "找不到 switchMode 方法"
         body = content[match.start():match.start() + 600]
@@ -4228,7 +4255,7 @@ class TestGridPerPageGuard:
 
         必須用 `??`（nullish coalescing）只對 null/undefined 走 fallback，保留 numeric 0。
         """
-        showcase_core = self.CORE_JS.read_text(encoding='utf-8')
+        showcase_core = self._read_js()
         settings_js = (PROJECT_ROOT / 'web' / 'static' / 'js' / 'pages' / 'settings' / 'state-config.js').read_text(encoding='utf-8')
 
         # 禁止 `items_per_page || ...` pattern（吞 0 的寫法）
@@ -4262,7 +4289,7 @@ class TestShowcasePerPageRemoval:
     """
 
     SHOWCASE_HTML = PROJECT_ROOT / 'web' / 'templates' / 'showcase.html'
-    SHOWCASE_CORE_JS = PROJECT_ROOT / 'web' / 'static' / 'js' / 'pages' / 'showcase' / 'core.js'
+    SHOWCASE_CORE_JS = PROJECT_ROOT / 'web' / 'static' / 'js' / 'pages' / 'showcase' / 'state-base.js'
     LOCALE_ZH_TW = PROJECT_ROOT / 'locales' / 'zh_TW.json'
 
     def test_showcase_html_no_perPageOpen(self):
@@ -4317,14 +4344,14 @@ class TestShowcaseRemoveActressNoNativeConfirm:
     確保 window.confirm 不回歸（fluent-modal pattern 取代）。
     """
 
-    SHOWCASE_CORE_JS = PROJECT_ROOT / 'web' / 'static' / 'js' / 'pages' / 'showcase' / 'core.js'
+    SHOWCASE_CORE_JS = PROJECT_ROOT / 'web' / 'static' / 'js' / 'pages' / 'showcase' / 'state-actress.js'
 
     def test_showcase_no_native_confirm(self):
-        """T3.3: removeActress 改 fluent-modal 後 showcase/core.js 不再用 window.confirm"""
+        """T3.3: removeActress 改 fluent-modal 後 showcase/state-actress.js 不再用 window.confirm"""
         core_js = self.SHOWCASE_CORE_JS.read_text(encoding="utf-8")
         assert "window.confirm(" not in core_js, (
             "T3.3 違規：removeActress() native confirm 已於 T3.3 替換為 fluent-modal — "
-            "showcase/core.js 不應再含 window.confirm("
+            "showcase/state-actress.js 不應再含 window.confirm("
         )
 
 
@@ -4583,7 +4610,7 @@ class TestShowcaseSampleGalleryGuard:
     """
 
     SHOWCASE_HTML = PROJECT_ROOT / 'web' / 'templates' / 'showcase.html'
-    CORE_JS = PROJECT_ROOT / 'web' / 'static' / 'js' / 'pages' / 'showcase' / 'core.js'
+    CORE_JS = PROJECT_ROOT / 'web' / 'static' / 'js' / 'pages' / 'showcase' / 'state-lightbox.js'
     ANIMATIONS_JS = PROJECT_ROOT / 'web' / 'static' / 'js' / 'pages' / 'showcase' / 'animations.js'
 
     def test_sample_gallery_inside_showcaseState_scope(self):
