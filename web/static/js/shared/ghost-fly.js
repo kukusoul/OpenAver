@@ -1,16 +1,13 @@
-(function () {
-    'use strict';
-
-    /**
-     * GhostFly — 跨頁面共用的封面 ghost 飛行動畫模組
-     *
-     * 提供 Grid ↔ Lightbox 封面飛行動畫，
-     * 以及底層 ghost 節點管理工具函式。
-     *
-     * 使用方式：
-     *   window.GhostFly.playGridToLightbox(fromRect, lightboxEl, options)
-     *   window.GhostFly.playLightboxToGrid(fromRect, targetCardEl, options)
-     */
+/**
+ * GhostFly — 跨頁面共用的封面 ghost 飛行動畫模組
+ *
+ * 提供 Grid ↔ Lightbox 封面飛行動畫，
+ * 以及底層 ghost 節點管理工具函式。
+ *
+ * 使用方式：
+ *   window.GhostFly.playGridToLightbox(fromRect, lightboxEl, options)
+ *   window.GhostFly.playLightboxToGrid(fromRect, targetCardEl, options)
+ */
 
     // ─── Ghost 節點管理工具 ────────────────────────────────────────────────
 
@@ -534,5 +531,5 @@
         }
     };
 
-    window.GhostFly = GhostFly;
-})();
+window.GhostFly = GhostFly;
+export { GhostFly };

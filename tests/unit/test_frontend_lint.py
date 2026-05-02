@@ -5315,3 +5315,54 @@ class TestMotionLabT2SpecialMotion:
         """motion_lab.html special-motion panel 含 whitelist-skip-note 跳過說明"""
         assert "whitelist-skip-note" in self._html(), \
             "motion_lab.html 缺少 whitelist-skip-note（§5 Special Motion 跳過條目說明未加入）"
+
+
+# ─── 54a-T1: importmap + pre_alpine_module slot + ghost-fly ESM export 守衛 ───
+_BASE_HTML_54A = Path(__file__).parent.parent.parent / "web" / "templates" / "base.html"
+_GHOST_FLY_JS_54A = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "shared" / "ghost-fly.js"
+
+
+class TestImportMapGuard:
+    """54a-T1: importmap + pre_alpine_module slot + ghost-fly ESM export guards"""
+
+    def _base(self) -> str:
+        return _BASE_HTML_54A.read_text(encoding="utf-8")
+
+    def _ghost_fly(self) -> str:
+        return _GHOST_FLY_JS_54A.read_text(encoding="utf-8")
+
+    def test_importmap_exists(self):
+        """base.html 含 type="importmap" 字串"""
+        assert 'type="importmap"' in self._base(), \
+            'base.html 缺少 <script type="importmap">（54a-T1 importmap 未插入）'
+
+    def test_importmap_aliases(self):
+        """base.html importmap 含六個 @/ alias"""
+        content = self._base()
+        for alias in ('"@/shared/"', '"@/components/"', '"@/showcase/"',
+                      '"@/scanner/"', '"@/settings/"', '"@/search/"'):
+            assert alias in content, \
+                f'base.html importmap 缺少 {alias} alias（54a-T1 importmap alias 未設定）'
+
+    def test_pre_alpine_module_slot(self):
+        """base.html 含 {% block pre_alpine_module %} slot"""
+        assert "{% block pre_alpine_module %}" in self._base(), \
+            "base.html 缺少 {% block pre_alpine_module %}（54a-T1 slot 未插入）"
+
+    def test_ghost_fly_has_export(self):
+        """ghost-fly.js 含 export 關鍵字"""
+        assert "export" in self._ghost_fly(), \
+            "ghost-fly.js 缺少 export（54a-T1 ESM export 未加入）"
+
+    def test_ghost_fly_window_bridge(self):
+        """ghost-fly.js 含 window.GhostFly 賦值（橋接保留）"""
+        assert "window.GhostFly = GhostFly" in self._ghost_fly(), \
+            "ghost-fly.js 缺少 window.GhostFly = GhostFly（54a-T1 window 橋接被移除）"
+
+    def test_ghost_fly_script_tag_is_module(self):
+        """base.html 中 ghost-fly.js 的 script tag 是 type="module"，無殘留 defer 標籤"""
+        content = self._base()
+        assert 'type="module" src="/static/js/shared/ghost-fly.js"' in content, \
+            'base.html ghost-fly.js script tag 非 type="module"（54a-T1 script tag 未更新）'
+        assert '<script defer src="/static/js/shared/ghost-fly.js">' not in content, \
+            'base.html 仍有殘留的 <script defer src=".../ghost-fly.js">（54a-T1 舊標籤未移除）'
