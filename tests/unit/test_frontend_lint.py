@@ -5698,3 +5698,59 @@ class TestScannerESMGuard:
         content = self._read("web/static/js/pages/scanner/main.js")
         assert "scannerPage" not in content, \
             "scanner/main.js 含 scannerPage（54c-T2 設計錯誤）"
+
+
+class TestShowcaseESMGuard:
+    """54b 守衛 — Showcase ESM 模組化
+
+    T1a：state-base.js（foundation）
+    T1b：state-videos / state-actress / state-lightbox / main.js
+    T2b：showcase.html 切換 + core.js 刪除
+    """
+
+    BASE = Path(__file__).parents[2] / "web" / "static" / "js" / "pages" / "showcase"
+
+    def _read(self, filename):
+        return (self.BASE / filename).read_text(encoding="utf-8")
+
+    # ── T1a guards（state-base.js foundation）────────────────────────
+
+    def test_state_base_exists_and_exports(self):
+        """state-base.js 存在且含 export function stateBase 和 export var _videos"""
+        assert (self.BASE / "state-base.js").exists(), (
+            "showcase/state-base.js 不存在"
+        )
+        content = self._read("state-base.js")
+        assert "export function stateBase" in content, (
+            "state-base.js 缺少 export function stateBase"
+        )
+        assert "export var _videos" in content or "export let _videos" in content, (
+            "state-base.js 缺少 export var _videos（共用陣列必須 export 供其他模組 import）"
+        )
+
+    def test_state_base_has_shared_array_exports(self):
+        """state-base.js export _videos、_filteredVideos、_actresses、_filteredActresses"""
+        content = self._read("state-base.js")
+        for var_name in ("_videos", "_filteredVideos", "_actresses", "_filteredActresses"):
+            assert var_name in content, (
+                f"state-base.js 缺少 {var_name} — "
+                "module-level 共用陣列必須在 state-base.js 宣告（F1 性能優化：大陣列移出 Alpine reactive scope）"
+            )
+
+    def test_state_base_no_lightbox_functions(self):
+        """state-base.js 不含 openLightbox / closeLightbox（防止 lightbox 邏輯誤放入 base）"""
+        content = self._read("state-base.js")
+        assert "openLightbox(" not in content, (
+            "state-base.js 含 openLightbox — lightbox 邏輯應在 state-lightbox.js"
+        )
+        assert "closeLightbox(" not in content, (
+            "state-base.js 含 closeLightbox — lightbox 邏輯應在 state-lightbox.js"
+        )
+
+    def test_state_base_no_picker_params(self):
+        """state-base.js 不含 _PICKER_PARAMS（應在 stateLightbox 閉包，非 base state）"""
+        content = self._read("state-base.js")
+        assert "_PICKER_PARAMS" not in content, (
+            "state-base.js 含 _PICKER_PARAMS — "
+            "此常數應在 stateLightbox() 函式頂部作閉包常數（OQ-54B-2 Option B），不應放 stateBase"
+        )
