@@ -6,7 +6,7 @@
  * 從 state-base.js import 共用大陣列（F1：移出 Alpine reactive scope）。
  */
 
-import { _videos, _filteredVideos, _nameToGroup } from '@/showcase/state-base.js';
+import { _videos, _filteredVideos, _nameToGroup, _setVideos, _setFilteredVideos } from '@/showcase/state-base.js';
 
 export function stateVideos() {
     return {
@@ -38,9 +38,9 @@ export function stateVideos() {
                 // (core.js uses direct assignment; ESM re-exports work because we read
                 // _videos/_filteredVideos at call time, not at import time)
                 var vids = data.videos || [];
-                _videos.splice(0, _videos.length, ...vids);
+                _setVideos(vids);
                 this.videoCount = _videos.length;
-                _filteredVideos.splice(0, _filteredVideos.length, ..._videos);
+                _setFilteredVideos(_videos);
                 this.filteredCount = _filteredVideos.length;
             } catch (e) {
                 console.error('Failed to fetch videos:', e);
@@ -322,11 +322,11 @@ export function stateVideos() {
                         return termNames.some(function(n) { return searchable.includes(n.toLowerCase()); });
                     });
                 });
-                _filteredVideos.splice(0, _filteredVideos.length, ...filtered);
+                _setFilteredVideos(filtered);
                 this.filteredCount = _filteredVideos.length;
             } else {
                 // 空搜尋：回傳全部影片
-                _filteredVideos.splice(0, _filteredVideos.length, ..._videos);
+                _setFilteredVideos(_videos);
                 this.filteredCount = _filteredVideos.length;
             }
 

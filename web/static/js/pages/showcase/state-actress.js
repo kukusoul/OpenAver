@@ -5,7 +5,7 @@
  * 從 state-base.js import 共用大陣列（F1：移出 Alpine reactive scope）。
  */
 
-import { _actresses, _filteredActresses, _actressesLoaded, _nameToGroup, _loadAliasMap, _killLightboxTimelines, _setActressesLoaded } from '@/showcase/state-base.js';
+import { _actresses, _filteredActresses, _actressesLoaded, _nameToGroup, _loadAliasMap, _killLightboxTimelines, _setActressesLoaded, _setActresses, _setFilteredActresses } from '@/showcase/state-base.js';
 
 export function stateActress() {
     return {
@@ -176,7 +176,7 @@ export function stateActress() {
                     return;
                 }
                 var acts = data.actresses || [];
-                _actresses.splice(0, _actresses.length, ...acts);
+                _setActresses(acts);
                 // 45: alias map（冪等，init 可能已載入）
                 await _loadAliasMap();
                 this.applyActressFilterAndSort();
@@ -255,7 +255,7 @@ export function stateActress() {
             });
 
             // 3. Update state
-            _filteredActresses.splice(0, _filteredActresses.length, ...filtered);
+            _setFilteredActresses(filtered);
             this.actressCount = _actresses.length;
             this.filteredActressCount = _filteredActresses.length;
             this.paginatedActresses = _filteredActresses.slice();  // CD-9: 全量，不分頁

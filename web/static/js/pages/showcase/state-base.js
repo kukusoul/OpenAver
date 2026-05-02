@@ -25,6 +25,22 @@ export var _actresses = [];
 export var _filteredActresses = [];
 export var _actressesLoaded = false;
 export function _setActressesLoaded(v) { _actressesLoaded = v; }
+export function _setVideos(v) {
+    _videos.length = 0;
+    for (const item of (v || [])) _videos.push(item);
+}
+export function _setFilteredVideos(v) {
+    _filteredVideos.length = 0;
+    for (const item of (v || [])) _filteredVideos.push(item);
+}
+export function _setActresses(v) {
+    _actresses.length = 0;
+    for (const item of (v || [])) _actresses.push(item);
+}
+export function _setFilteredActresses(v) {
+    _filteredActresses.length = 0;
+    for (const item of (v || [])) _filteredActresses.push(item);
+}
 export var _nameToGroup = {};  // { "舊名": ["新名", "舊名"], "新名": [...] } 雙向 alias map
 export var _aliasMapLoaded = false;
 
