@@ -5576,3 +5576,82 @@ class TestSettingsESMGuard:
         content = self._read("web/static/js/pages/settings/state-config.js")
         assert "get isDirty()" in content, \
             "state-config.js 的 isDirty 不是 getter — spread bug 修正依賴此 getter"
+
+
+class TestScannerESMGuard:
+    """54c-T1：守衛 scanner state 模組 + main.js 結構"""
+
+    def _read(self, rel_path):
+        return (Path(__file__).parent.parent.parent / rel_path).read_text(encoding="utf-8")
+
+    def test_state_scan_exists_and_exports(self):
+        """驗 state-scan.js 存在且含 export function stateScan"""
+        content = self._read("web/static/js/pages/scanner/state-scan.js")
+        assert "export function stateScan" in content
+
+    def test_state_batch_exists_and_exports(self):
+        """驗 state-batch.js 存在且含 export function stateBatch"""
+        content = self._read("web/static/js/pages/scanner/state-batch.js")
+        assert "export function stateBatch" in content
+
+    def test_state_alias_exists_and_exports(self):
+        """驗 state-alias.js 存在且含 export function stateAlias"""
+        content = self._read("web/static/js/pages/scanner/state-alias.js")
+        assert "export function stateAlias" in content
+
+    def test_main_js_exists_and_has_alpine_init(self):
+        """驗 main.js 存在且含 alpine:init"""
+        content = self._read("web/static/js/pages/scanner/main.js")
+        assert "alpine:init" in content
+
+    def test_main_js_registers_scanner_name(self):
+        """驗 main.js 含 Alpine.data('scanner', 且不含 scannerPage"""
+        content = self._read("web/static/js/pages/scanner/main.js")
+        assert "Alpine.data('scanner'," in content
+        assert "Alpine.data('scannerPage'" not in content
+
+    def test_main_js_uses_importmap_alias(self):
+        """驗 main.js import 語句使用 @/scanner/ alias"""
+        content = self._read("web/static/js/pages/scanner/main.js")
+        assert "@/scanner/" in content
+
+    def test_main_js_has_descriptor_merge(self):
+        """驗 main.js 含 getOwnPropertyDescriptors 或 defineProperties（確保 getter 不被 spread 破壞）"""
+        content = self._read("web/static/js/pages/scanner/main.js")
+        assert "getOwnPropertyDescriptors" in content or "defineProperties" in content
+
+    def test_main_js_no_plain_spread_merge(self):
+        """驗 main.js 不含三個 state 的 plain spread（...stateScan() 等）"""
+        content = self._read("web/static/js/pages/scanner/main.js")
+        assert "...stateScan()" not in content
+        assert "...stateBatch()" not in content
+        assert "...stateAlias()" not in content
+
+    def test_state_scan_no_batch_functions(self):
+        """驗 state-scan.js 不含 batch 函式定義（防誤放；跨模組 this.xxx 呼叫允許）"""
+        content = self._read("web/static/js/pages/scanner/state-scan.js")
+        # 只防函式定義被放錯模組，不攔 this.checkMissing() 等跨模組呼叫
+        assert "checkMissing() {" not in content
+        assert "runMissingEnrich" not in content
+        assert "resumeMissingEnrich" not in content
+
+    def test_state_batch_no_scan_functions(self):
+        """驗 state-batch.js 不含 scan 主流程函式（防誤放）"""
+        content = self._read("web/static/js/pages/scanner/state-batch.js")
+        assert "generate(" not in content
+        assert "runNfoUpdate" not in content
+        assert "runJellyfinImageUpdate" not in content
+        assert "copyOutputPath" not in content
+
+    def test_no_circular_state_imports(self):
+        """驗三個 state 模組頂層 import 不引用彼此"""
+        forbidden = ["state-scan", "state-batch", "state-alias"]
+        for fname in ["state-scan.js", "state-batch.js", "state-alias.js"]:
+            content = self._read(f"web/static/js/pages/scanner/{fname}")
+            for line in content.splitlines():
+                stripped = line.strip()
+                if not stripped.startswith("import"):
+                    continue
+                for f in forbidden:
+                    assert f not in stripped, \
+                        f"{fname} 有循環 import：{stripped}"
