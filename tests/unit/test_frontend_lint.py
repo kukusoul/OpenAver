@@ -5450,3 +5450,49 @@ class TestESMExportGuard:
             f'base.html {path} script tag 非 type="module"（54a-T2 script tag 未更新）'
         assert f'<script defer src="{path}">' not in content, \
             f'base.html 仍有殘留的 <script defer src="{path}">（54a-T2 舊標籤未移除）'
+
+
+class TestSettingsESMGuard:
+    """54d-T1：守衛 settings state 模組 + main.js 結構"""
+
+    def _read(self, rel_path):
+        return (Path(__file__).parent.parent.parent / rel_path).read_text(encoding="utf-8")
+
+    def test_state_config_exists_and_exports(self):
+        content = self._read("web/static/js/pages/settings/state-config.js")
+        assert "export function stateConfig" in content
+
+    def test_state_providers_exists_and_exports(self):
+        content = self._read("web/static/js/pages/settings/state-providers.js")
+        assert "export function stateProviders" in content
+
+    def test_state_ui_exists_and_exports(self):
+        content = self._read("web/static/js/pages/settings/state-ui.js")
+        assert "export function stateUI" in content
+
+    def test_main_js_exists_and_has_alpine_init(self):
+        content = self._read("web/static/js/pages/settings/main.js")
+        assert "alpine:init" in content
+
+    def test_main_js_registers_settings_name(self):
+        content = self._read("web/static/js/pages/settings/main.js")
+        assert "Alpine.data('settings'," in content
+        assert "Alpine.data('settingsPage'" not in content
+
+    def test_main_js_uses_importmap_alias(self):
+        content = self._read("web/static/js/pages/settings/main.js")
+        assert "@/settings/" in content
+
+    def test_no_circular_state_imports(self):
+        """三個 state 模組頂層 import 不可引用彼此"""
+        import re
+        forbidden = ["state-config", "state-providers", "state-ui"]
+        for fname in ["state-config.js", "state-providers.js", "state-ui.js"]:
+            content = self._read(f"web/static/js/pages/settings/{fname}")
+            for line in content.splitlines():
+                stripped = line.strip()
+                if not stripped.startswith("import"):
+                    continue
+                for f in forbidden:
+                    assert f not in stripped, \
+                        f"{fname} 有循環 import：{stripped}"
