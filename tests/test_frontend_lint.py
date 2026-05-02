@@ -124,6 +124,74 @@ class TestNoHardcodedColors:
         )
 
 
+class TestSearchCssHardcoded:
+    """Phase 51 T2.4 — search.css §1/§2/§3/§4 hardcoded 守衛
+
+    確保 T2.1（color/rgba）/ T2.2（spacing 6px layout）修齊結果不被回退；
+    新加違規會被擋下。allow-list 為 (line_num: reason) dict，新增例外
+    必須提供 reason 字串說明（§3 角色色白名單 / §2 drop-shadow 例外 /
+    var() fallback / §4 micro chip optical 之一）。
+
+    T55b: blur / border-radius 兩支已由 stylelint 接管（無法表達 line-allowlist
+    的 RGBA 與 6px layout 守衛保留 pytest）。
+    """
+
+    SEARCH_CSS = PROJECT_ROOT / "web/static/css/pages/search.css"
+
+    HARDCODED_RGBA_ALLOWLIST = {
+        # T2.1 commit 41f2a5b 後狀態：
+        90: "drop-shadow rgba 0.3 — §2 例外（drop-shadow 跟封面去背形狀，非矩形 box-shadow 無法用 --fluent-shadow-* token）",
+        780: "var(--bg-card, rgba(0, 0, 0, 0.05)) fallback — defensive fallback，非硬編碼違規",
+    }
+
+    SIX_PX_ALLOWLIST = {
+        # T2.2 commit 89d52b6 後狀態：
+        235: "row inline btn optical 6px — T2.2 加 optical 註記（btn-sm 12px padding 對 row inline 太寬）",
+        516: ".batch-progress-bar height: 6px — intrinsic dimension（非 §4 spacing）",
+        571: "chip optical 6px — T2.2 加 optical 註記（對齊 showcase .lb-tag-add-btn）",
+    }
+
+    def _scan(self, regex: str, allowlist=None):
+        violations = []
+        text = self.SEARCH_CSS.read_text(encoding='utf-8')
+        for i, line in enumerate(text.splitlines(), 1):
+            # 跳過純註解行（CSS comment 不是實際 declaration，提及 6px / rgba 為文檔說明）
+            stripped = line.lstrip()
+            if stripped.startswith('/*') or stripped.startswith('*'):
+                continue
+            if re.search(regex, line):
+                if allowlist and i in allowlist:
+                    continue
+                violations.append((i, line.rstrip()))
+        return violations
+
+    def test_no_hardcoded_rgba_in_search_css(self):
+        """禁 search.css 出現 rgba(0,0,0,...) 硬編碼（須走 var(--overlay-*) 角色色 token）"""
+        violations = self._scan(
+            r'rgba\(\s*0\s*,\s*0\s*,\s*0\s*,',
+            allowlist=self.HARDCODED_RGBA_ALLOWLIST,
+        )
+        assert not violations, (
+            f"search.css 出現新 rgba(0,0,0,...) 硬編碼違規 ({len(violations)} 處)：\n"
+            + "\n".join(f"  L{n}: {l[:100]}" for n, l in violations)
+            + "\n\n請改用 var(--overlay-*) 角色色 token；如為 §2 drop-shadow 例外 / "
+            + "var() fallback，請更新 HARDCODED_RGBA_ALLOWLIST + 說明理由。"
+        )
+
+    def test_no_hardcoded_six_px_layout_in_search_css(self):
+        """禁 search.css 出現 6px layout 違規（padding/margin/gap/etc.）"""
+        # `[:\s]6px(?:\s|;|$)` 限定 6px 出現在 property value 上下文，避免 16px/26px/0.6px 誤抓
+        violations = self._scan(
+            r'[:\s]6px(?:\s|;|$)',
+            allowlist=self.SIX_PX_ALLOWLIST,
+        )
+        assert not violations, (
+            f"search.css 出現新 6px layout 違規 ({len(violations)} 處)：\n"
+            + "\n".join(f"  L{n}: {l[:100]}" for n, l in violations)
+            + "\n\n請改 layout 8pt grid / micro 4px / 加 /* ... optical 6px ... */ 註記 + 更新 SIX_PX_ALLOWLIST。"
+        )
+
+
 class TestNoCreateElement:
     """確認 Alpine state mixins 不用 createElement"""
 

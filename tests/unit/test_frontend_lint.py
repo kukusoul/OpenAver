@@ -2671,8 +2671,27 @@ class TestScannerAliasV2Guard:
             "zh_TW.json 缺少 scanner.alias.filter_hint"
 
 
-# TestUserTagCSSGuard removed in T55b — superseded by stylelint guard scope
-# (selector-disallowed-list / declaration-property-value-disallowed-list).
+class TestUserTagCSSGuard:
+    """T3: 確保 user-tag 選擇器不使用 --text-inverse（dark mode 對比度修正）"""
+
+    def test_search_user_tag_no_text_inverse(self):
+        """search.css 的 .tag-badge.user-tag 不使用 --text-inverse"""
+        css = Path("web/static/css/pages/search.css").read_text(encoding="utf-8")
+        # 截取 .tag-badge.user-tag 選擇器區塊
+        match = re.search(r'\.tag-badge\.user-tag\s*\{([^}]+)\}', css)
+        assert match, ".tag-badge.user-tag selector not found in search.css"
+        block = match.group(1)
+        assert "--text-inverse" not in block, \
+            ".tag-badge.user-tag should use --color-primary-content, not --text-inverse"
+
+    def test_showcase_lb_user_tag_no_text_inverse(self):
+        """showcase.css 的 .lb-user-tag 不使用 --text-inverse"""
+        css = Path("web/static/css/pages/showcase.css").read_text(encoding="utf-8")
+        match = re.search(r'\.lb-user-tag\s*\{([^}]+)\}', css)
+        assert match, ".lb-user-tag selector not found in showcase.css"
+        block = match.group(1)
+        assert "--text-inverse" not in block, \
+            ".lb-user-tag should use --color-primary-content, not --text-inverse"
 
 
 class TestShowcaseToolbarStructureGuard:
@@ -2791,8 +2810,20 @@ class TestFluentCustomEaseRegistered:
                 "fluent CustomEase 註冊不應被 DOMContentLoaded handler 包住"
 
 
-# TestShowcaseCssTransitionTokens removed in T55b — superseded by stylelint
-# `declaration-property-value-disallowed-list` rule on `transition` property.
+class TestShowcaseCssTransitionTokens:
+    """Phase 50.2.10 + 51.T1.2: showcase.css transition 硬編碼 → fluent token（影片 + 女優模式全段）"""
+
+    def _css(self):
+        return Path("web/static/css/pages/showcase.css").read_text(encoding="utf-8")
+
+    def test_actress_picker_transition_tokenized(self):
+        """Phase 51 T1.2: 女優 picker 三處 transition 已 token 化（fluent-duration-fast + fluent-ease-standard）"""
+        css = self._css()
+        # picker-check-icon (opacity), picker-refresh-btn (all), picker-open cover-actions (opacity)
+        assert "transition: opacity var(--fluent-duration-fast) var(--fluent-ease-standard)" in css, \
+            "picker-check-icon / cover-actions opacity transition 應使用 fluent token"
+        assert "transition: all var(--fluent-duration-fast) var(--fluent-ease-standard)" in css, \
+            "picker-refresh-btn all transition 應使用 fluent token"
 
 
 class TestMotionDurationConstants:

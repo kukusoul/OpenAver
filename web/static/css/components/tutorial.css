@@ -149,6 +149,7 @@
 .tutorial-card.large code {
     background: var(--border-light);
     padding: 2px 8px;
+    /* stylelint-disable-next-line declaration-property-value-disallowed-list -- inline <code> tag pill, intentional small radius (Fluent token would be too large for inline text), 2026-05-03 */
     border-radius: 4px;
     font-size: 13px;
 }
