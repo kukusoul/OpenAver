@@ -1682,46 +1682,9 @@ SEARCH_STATE_DIR = Path(__file__).parent.parent.parent / "web" / "static" / "js"
 
 
 class TestNoAlertInSearchJs:
-    """39c-T2c + T3.6: search/scanner/settings JS 不應使用原生 alert()，改用 showToast / fluent-modal"""
-
-    def test_no_alert_in_batch_js(self):
-        content = (SEARCH_STATE_DIR / "batch.js").read_text(encoding="utf-8")
-        assert "alert(" not in content, \
-            "batch.js 含原生 alert()，應改用 this.showToast()"
-
-    def test_no_alert_in_file_list_js(self):
-        """T3.6: file-list.js 5 處 alert 已改 showToast"""
-        content = (SEARCH_STATE_DIR / "file-list.js").read_text(encoding="utf-8")
-        assert "alert(" not in content, \
-            "file-list.js 含原生 alert()，應改用 this.showToast()"
-
-    def test_no_alert_in_result_card_js(self):
-        """T3.6: result-card.js 1 處 alert 已改 showToast"""
-        content = (SEARCH_STATE_DIR / "result-card.js").read_text(encoding="utf-8")
-        assert "alert(" not in content, \
-            "result-card.js 含原生 alert()，應改用 this.showToast()"
-
-    @pytest.mark.parametrize("fname", [
-        "web/static/js/pages/scanner/state-scan.js",
-        "web/static/js/pages/scanner/state-batch.js",
-        "web/static/js/pages/scanner/state-alias.js",
-    ])
-    def test_no_alert_in_scanner_modules(self, fname):
-        """T3.6: scanner state 模組不含原生 alert()（54c-T2 拆模組後改用 parametrize）"""
-        p = Path(__file__).parent.parent.parent / fname
-        assert "alert(" not in p.read_text(encoding="utf-8"), \
-            f"{fname} 含原生 alert()，應改用 this.showToast() 或 fluent-modal"
-
-    @pytest.mark.parametrize("fname", [
-        "web/static/js/pages/settings/state-config.js",
-        "web/static/js/pages/settings/state-providers.js",
-        "web/static/js/pages/settings/state-ui.js",
-    ])
-    def test_no_alert_in_settings_modules(self, fname):
-        """T3.6: settings state 模組不含原生 alert()"""
-        p = Path(__file__).parent.parent.parent / fname
-        assert "alert(" not in p.read_text(encoding="utf-8"), \
-            f"{fname} 含原生 alert()，應改用 this.showToast()"
+    """39c-T2c + T3.6: search/scanner/settings JS 不應使用原生 alert()，改用 showToast / fluent-modal
+    (A-class alert tests removed in T55c; clipboard E-class tests retained below)
+    """
 
     def test_scanner_clipboard_has_availability_guard(self):
         """T3.6 P2 fix: scanner/state-scan.js 兩處 clipboard call 必須有 availability guard

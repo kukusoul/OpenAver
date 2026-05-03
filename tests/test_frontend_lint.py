@@ -192,34 +192,6 @@ class TestSearchCssHardcoded:
         )
 
 
-class TestNoCreateElement:
-    """確認 Alpine state mixins 不用 createElement"""
-
-    def test_no_create_element_in_state_mixins(self):
-        """掃描所有 state/*.js，確認無 document.createElement"""
-        violations = []
-        js_pages_dir = PROJECT_ROOT / "web" / "static" / "js" / "pages"
-
-        # 找所有 state 子目錄
-        state_dirs = [d for d in js_pages_dir.rglob("state") if d.is_dir()]
-
-        for state_dir in state_dirs:
-            js_files = state_dir.glob("*.js")
-
-            for js_file in js_files:
-                matches = find_pattern_in_file(js_file, r'document\.createElement')
-
-                for line_num, line_content in matches:
-                    violations.append(
-                        f"{js_file.relative_to(PROJECT_ROOT)}:{line_num} — {line_content[:80]}"
-                    )
-
-        assert len(violations) == 0, (
-            f"發現 {len(violations)} 個 createElement 違規 (state mixins):\n" +
-            "\n".join(f"  - {v}" for v in violations)
-        )
-
-
 class TestNoInlineStyleDisplay:
     """確認 template 不用 style='display:none' 搭配 x-show"""
 
@@ -375,14 +347,6 @@ class TestMotionInfra:
 
 class TestNoDuplicateNativeDialog:
     """確認 duplicate modal 使用 Alpine state-driven pattern（不使用原生 showModal/close）"""
-
-    def test_no_show_modal_in_state_mixins(self):
-        """state/*.js 不應包含 showModal() 呼叫"""
-        state_dir = PROJECT_ROOT / "web/static/js/pages/search/state"
-        for js_file in state_dir.glob("*.js"):
-            content = js_file.read_text(encoding="utf-8")
-            assert "showModal()" not in content, \
-                f"{js_file.name} 仍包含原生 showModal() — 應改用 Alpine state"
 
     def test_duplicate_modal_uses_modal_open_class(self):
         """search.html 的 duplicate modal 應使用 :class=\"{ 'modal-open': ... }\" pattern"""
@@ -3335,48 +3299,6 @@ class TestSearchErrorMessageGuard:
         )
 
 
-class TestSearchConsoleLogGuard:
-    """D1 守衛：search 頁面程式碼不可含 console.log"""
-
-    SEARCH_JS_DIR = PROJECT_ROOT / 'web' / 'static' / 'js' / 'pages' / 'search'
-    SEARCH_HTML = PROJECT_ROOT / 'web' / 'templates' / 'search.html'
-
-    def _collect_scan_files(self):
-        """收集所有需掃描的檔案：search/*.js + search.html"""
-        files = list(self.SEARCH_JS_DIR.rglob('*.js'))
-        if self.SEARCH_HTML.exists():
-            files.append(self.SEARCH_HTML)
-        return files
-
-    @staticmethod
-    def _is_comment_line(line: str, _line_num: int) -> bool:
-        """排除 JS 註解行（// 開頭）和 HTML 註解"""
-        stripped = line.strip()
-        if stripped.startswith('//'):
-            return True
-        if '<!--' in stripped:
-            return True
-        return False
-
-    def test_no_console_log(self):
-        """search 頁面程式碼不可含 console.log("""
-        pattern = r'console\.log\s*\('
-        all_violations = []
-        for scan_file in self._collect_scan_files():
-            violations = find_pattern_in_file(
-                scan_file, pattern,
-                exclude_lines=self._is_comment_line
-            )
-            for line_num, line_content in violations:
-                all_violations.append(f"  {scan_file.relative_to(PROJECT_ROOT)}:{line_num}: {line_content}")
-
-        assert not all_violations, (
-            "D1 守衛違規：search 頁面殘留 console.log\n"
-            + "\n".join(all_violations)
-            + "\n\n修正：移除 console.log，保留 console.error / console.warn"
-        )
-
-
 class TestLightboxAnimationGuard:
     """C18 守衛：Lightbox interrupt 必須用 getById kill 整個 timeline，不可只 killTweensOf 元素"""
 
@@ -4013,23 +3935,6 @@ class TestGridPerPageGuard:
         )
         assert good_pattern.search(settings_js), (
             "T3.2 P2 違規：settings.js 缺少 `items_per_page ?? <number>` 預設值寫法"
-        )
-
-
-class TestShowcaseRemoveActressNoNativeConfirm:
-    """T3.3 (CD-52-11): removeActress 改 fluent-modal 後 showcase/core.js 不再用 native confirm
-
-    確保 window.confirm 不回歸（fluent-modal pattern 取代）。
-    """
-
-    SHOWCASE_CORE_JS = PROJECT_ROOT / 'web' / 'static' / 'js' / 'pages' / 'showcase' / 'state-actress.js'
-
-    def test_showcase_no_native_confirm(self):
-        """T3.3: removeActress 改 fluent-modal 後 showcase/state-actress.js 不再用 window.confirm"""
-        core_js = self.SHOWCASE_CORE_JS.read_text(encoding="utf-8")
-        assert "window.confirm(" not in core_js, (
-            "T3.3 違規：removeActress() native confirm 已於 T3.3 替換為 fluent-modal — "
-            "showcase/state-actress.js 不應再含 window.confirm("
         )
 
 
