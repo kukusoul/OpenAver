@@ -46,3 +46,19 @@
 - No `console.log` left in production JavaScript (except intentional debug modes).
 - Python `except` blocks should not silently swallow errors — at minimum `logger.error()`.
 - Avoid introducing new inline `<script>` blocks in templates; prefer separate `.js` files.
+
+### Out of scope (handled by automated tooling)
+
+The following are enforced by eslint.config.mjs / stylelint.config.js — DO NOT flag in code review (file an eslint/stylelint config issue if a rule is missing):
+- no-console / no-alert violations
+- Inline event handlers (onclick=) / document.createElement in state files / window.confirm / showModal raw calls
+- CSS hardcoded color / blur / radius / transition values that should use design tokens
+
+(Anything outside this list — including formatting, unused variables, dead code — is still in code-review scope unless explicitly added to the lint config.)
+
+### Test bloat policy
+
+DO NOT request new pytest tests for issues that fit eslint/stylelint scope.
+If a regression of this class arises, the fix is:
+- Add an eslint/stylelint rule to the existing config, OR
+- If the rule cannot be expressed in eslint/stylelint (cross-file/cross-language contract), add a dedicated lint script and wire it into `npm run lint` or pre-merge — NOT a new TestNoXxx pytest class.
