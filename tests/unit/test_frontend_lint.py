@@ -490,26 +490,12 @@ class TestJellyfinCheckI18nKeys:
             cur = cur[k]
         return cur
 
-    def test_jellyfin_check_btn_key_exists(self):
+    def test_jellyfin_i18n_keys_exist(self):
+        """zh_TW.json 包含 40c 所有 jellyfin check i18n key"""
         zh_tw = self._zh_tw()
-        val = self._get_nested(zh_tw, "scanner.stats.jellyfin_check_btn")
-        assert val, "zh_TW.json 缺少 scanner.stats.jellyfin_check_btn"
-
-    def test_jellyfin_check_idle_label_key_exists(self):
-        zh_tw = self._zh_tw()
-        val = self._get_nested(zh_tw, "scanner.stats.jellyfin_check_idle_label")
-        assert val, "zh_TW.json 缺少 scanner.stats.jellyfin_check_idle_label"
-
-    def test_jellyfin_checking_key_exists(self):
-        zh_tw = self._zh_tw()
-        val = self._get_nested(zh_tw, "scanner.stats.jellyfin_checking")
-        assert val, "zh_TW.json 缺少 scanner.stats.jellyfin_checking"
-
-    def test_jellyfin_check_done_ok_key_exists(self):
-        """T3(40c) Codex fix: 確認 jellyfin_check_done_ok i18n key 存在"""
-        zh_tw = self._zh_tw()
-        val = self._get_nested(zh_tw, "scanner.stats.jellyfin_check_done_ok")
-        assert val, "zh_TW.json 缺少 scanner.stats.jellyfin_check_done_ok"
+        for key in self.REQUIRED_KEYS + ["scanner.stats.jellyfin_check_done_ok"]:
+            val = self._get_nested(zh_tw, key)
+            assert val, f"zh_TW.json missing: {key!r}"
 
 
 class TestShowcaseKeyboardGuard:
@@ -660,18 +646,33 @@ class TestActressLightboxSourceGuard:
             i += 1
         return js[start:i - 1]
 
-    def test_init_state_present(self):
-        """core.js Alpine state 含 actressLightboxSource: null（容忍空白）"""
+    def test_source_state_init_and_html(self):
+        """core.js Alpine state 含 actressLightboxSource: null；showcase.html camera button 含 grid 綁定"""
         js = self._js()
         assert re.search(r'actressLightboxSource\s*:\s*null', js), \
-            "showcase/core.js 缺少 Alpine state 屬性 actressLightboxSource: null"
+            "showcase/core.js missing: actressLightboxSource: null (Alpine state init)"
+        html = self._html()
+        assert "actressLightboxSource === 'grid'" in html, \
+            "showcase.html missing: actressLightboxSource === 'grid' (camera button x-show binding)"
 
-    def test_open_hero_card_sets_hero(self):
-        """openHeroCardLightbox 函數體設 this.actressLightboxSource = 'hero'"""
+    def test_source_set_in_open_methods(self):
+        """openHeroCardLightbox 設 'hero'；closeLightbox reset null"""
         js = self._js()
-        body = self._extract_method_body(js, 'openHeroCardLightbox')
-        assert re.search(r"this\.actressLightboxSource\s*=\s*['\"]hero['\"]", body), \
-            "showcase/core.js openHeroCardLightbox 函數體缺少 this.actressLightboxSource = 'hero'"
+        for method_name, pattern, msg in [
+            (
+                'openHeroCardLightbox',
+                r"this\.actressLightboxSource\s*=\s*['\"]hero['\"]",
+                "openHeroCardLightbox 函數體缺少 this.actressLightboxSource = 'hero'",
+            ),
+            (
+                'closeLightbox',
+                r"this\.actressLightboxSource\s*=\s*null",
+                "closeLightbox 函數體缺少 this.actressLightboxSource = null（reset）",
+            ),
+        ]:
+            body = self._extract_method_body(js, method_name)
+            assert re.search(pattern, body), \
+                f"showcase/core.js {method_name} missing: {msg}"
 
     def test_open_actress_lightbox_sets_grid(self):
         """openActressLightbox 函數體至少 2 處設 'grid'（首次進入 + 切換女優分支）"""
@@ -680,19 +681,6 @@ class TestActressLightboxSourceGuard:
         matches = re.findall(r"this\.actressLightboxSource\s*=\s*['\"]grid['\"]", body)
         assert len(matches) >= 2, \
             f"showcase/core.js openActressLightbox 應至少 2 處設 'grid'（首次進入 + 切換女優），目前 {len(matches)} 處"
-
-    def test_close_resets_null(self):
-        """closeLightbox 函數體 reset this.actressLightboxSource = null"""
-        js = self._js()
-        body = self._extract_method_body(js, 'closeLightbox')
-        assert re.search(r"this\.actressLightboxSource\s*=\s*null", body), \
-            "showcase/core.js closeLightbox 函數體缺少 this.actressLightboxSource = null（reset）"
-
-    def test_camera_button_x_show_binding(self):
-        """showcase.html camera button 含 x-show=\"actressLightboxSource === 'grid'\""""
-        html = self._html()
-        assert "actressLightboxSource === 'grid'" in html, \
-            "showcase.html camera button 缺少 x-show=\"actressLightboxSource === 'grid'\" 綁定"
 
 
 class TestShowcasePreciseMatchState:
@@ -2215,17 +2203,17 @@ class TestSearchFileJsSubtitleHelper:
     def _js(self):
         return SEARCH_FILE_JS.read_text(encoding="utf-8")
 
-    def test_strip_subtitle_markers_function_exists(self):
-        """file.js 應定義 stripSubtitleMarkers helper（對齊 Python strip_subtitle_markers）"""
+    def test_file_js_contains(self):
+        """file.js 包含 stripSubtitleMarkers helper、常數定義，且舊 regex 已移除"""
         js = self._js()
-        assert "function stripSubtitleMarkers(" in js, \
-            "file.js 缺少 stripSubtitleMarkers() 函式定義（應對齊 Python core/scrapers/utils.py::strip_subtitle_markers）"
-
-    def test_old_regex_removed(self):
-        """殘缺的舊 regex `/^中文字幕\\s*/` 不得留在 file.js（只剝開頭「中文字幕」會漏 [中字] 等變體）"""
-        js = self._js()
+        for expected in [
+            "function stripSubtitleMarkers(",
+            "_SUBTITLE_BRACKETS",
+            "_SUBTITLE_TEXT_MARKERS",
+        ]:
+            assert expected in js, f"file.js missing: {expected!r}"
         assert "/^中文字幕\\s*/" not in js, \
-            "file.js 仍保留殘缺的 `/^中文字幕\\s*/` regex，應改用 stripSubtitleMarkers()"
+            "file.js should not contain: '/^中文字幕\\s*/' (殘缺舊 regex，應改用 stripSubtitleMarkers())"
 
     def test_extract_chinese_title_uses_strip_helper(self):
         """extractChineseTitle() 應呼叫 stripSubtitleMarkers(name)，不再內嵌殘缺 regex"""
@@ -2251,14 +2239,6 @@ class TestSearchFileJsSubtitleHelper:
             "extractChineseTitle() 應呼叫 stripSubtitleMarkers(name) 剝除所有字幕標記變體"
         assert "name.replace(/^中文字幕" not in body, \
             "extractChineseTitle() 不應再內嵌殘缺 `/^中文字幕...` regex"
-
-    def test_subtitle_brackets_constant_present(self):
-        """file.js 應有 _SUBTITLE_BRACKETS / _SUBTITLE_TEXT_MARKERS 常數（對齊 Python _SUBTITLE_PATTERNS_*）"""
-        js = self._js()
-        assert "_SUBTITLE_BRACKETS" in js, \
-            "file.js 缺少 _SUBTITLE_BRACKETS 常數（對齊 Python 字幕 bracket pattern）"
-        assert "_SUBTITLE_TEXT_MARKERS" in js, \
-            "file.js 缺少 _SUBTITLE_TEXT_MARKERS 常數（對齊 Python 字幕純文字 pattern）"
 
 
 class TestFetchSamplesButton:
@@ -2935,13 +2915,31 @@ class TestBurstPickerGuard:
         "playPickerReverseAll",
     )
 
-    def test_burst_picker_js_exists_and_exposes_module(self):
-        """burst-picker.js 存在、IIFE 暴露 window.BurstPicker，含全部 7 個 playPicker* 方法"""
+    def test_burst_picker_js_contains(self):
+        """burst-picker.js 存在暴露 module；motion-lab.js 已無 picker 定義；motion-lab-state.js 用新模組路徑"""
+        # burst-picker.js: exists + window.BurstPicker + 7 method defs
         assert BURST_PICKER_JS.exists(), f"burst-picker.js 不存在：{BURST_PICKER_JS}"
-        js = BURST_PICKER_JS.read_text(encoding="utf-8")
-        assert "window.BurstPicker" in js, "burst-picker.js 未暴露 window.BurstPicker"
+        picker_js = BURST_PICKER_JS.read_text(encoding="utf-8")
+        assert "window.BurstPicker" in picker_js, \
+            "burst-picker.js missing: 'window.BurstPicker'"
         for method in self.PICKER_METHODS:
-            assert method + ":" in js, f"burst-picker.js 缺少 {method} 方法定義"
+            assert method + ":" in picker_js, f"burst-picker.js missing: {method + ':'!r}"
+
+        # motion-lab.js: picker methods should be removed
+        lab_js = MOTION_LAB_JS_T4A.read_text(encoding="utf-8")
+        for method in self.PICKER_METHODS:
+            pattern = re.compile(re.escape(method) + r"\s*:\s*function")
+            matches = pattern.findall(lab_js)
+            assert not matches, \
+                f"motion-lab.js 仍內嵌 {method} 方法定義（應只在 burst-picker.js）"
+
+        # motion-lab-state.js: calls new module, not old
+        state_js = MOTION_LAB_STATE_JS_T4A.read_text(encoding="utf-8")
+        assert "window.BurstPicker.playPicker" in state_js, \
+            "motion-lab-state.js missing: 'window.BurstPicker.playPicker'"
+        legacy = re.findall(r"window\.MotionLab\.playPicker\w+", state_js)
+        assert not legacy, \
+            f"motion-lab-state.js 仍有舊呼叫 window.MotionLab.playPicker*：{legacy}"
 
     def test_base_html_loads_burst_picker(self):
         """base.html 含 burst-picker.js script tag 且使用 defer 或 type="module"（54a-T2 後允許 module）"""
@@ -2955,26 +2953,6 @@ class TestBurstPickerGuard:
         for tag in matches:
             assert "defer" in tag or 'type="module"' in tag, \
                 f"burst-picker.js script tag 應含 defer 或 type=\"module\" 屬性：{tag}"
-
-    def test_motion_lab_js_no_longer_defines_picker_methods(self):
-        """motion-lab.js 已不再內嵌 7 個 playPicker* 方法定義（僅 burst-picker.js 內有）"""
-        js = MOTION_LAB_JS_T4A.read_text(encoding="utf-8")
-        for method in self.PICKER_METHODS:
-            # 偵測 method 定義樣式 "playPickerBurst: function"
-            pattern = re.compile(re.escape(method) + r"\s*:\s*function")
-            matches = pattern.findall(js)
-            assert not matches, \
-                f"motion-lab.js 仍內嵌 {method} 方法定義（應只在 burst-picker.js）"
-
-    def test_motion_lab_state_calls_burst_picker_module(self):
-        """motion-lab-state.js 透過 window.BurstPicker.playPicker* 呼叫，而非 window.MotionLab.playPicker*"""
-        js = MOTION_LAB_STATE_JS_T4A.read_text(encoding="utf-8")
-        assert "window.BurstPicker.playPicker" in js, \
-            "motion-lab-state.js 應呼叫 window.BurstPicker.playPicker*"
-        # 確認舊 window.MotionLab.playPicker* 路徑已全部置換
-        legacy = re.findall(r"window\.MotionLab\.playPicker\w+", js)
-        assert not legacy, \
-            f"motion-lab-state.js 仍有舊呼叫 window.MotionLab.playPicker*：{legacy}"
 
 
 # ─── 49b-T4cd: Actress Photo Picker UI/Alpine/SSE 整合守衛 ──────────────────

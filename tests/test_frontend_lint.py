@@ -255,28 +255,22 @@ class TestNoInlineStyleDisplay:
 class TestMotionInfra:
     """確認 GSAP motion 基礎設施完整"""
 
-    def test_motion_prefs_js_exists(self):
-        """motion-prefs.js 存在且包含必要 API"""
-        js_file = PROJECT_ROOT / "web" / "static" / "js" / "components" / "motion-prefs.js"
-        assert js_file.exists(), f"motion-prefs.js 不存在: {js_file}"
-
-        content = js_file.read_text(encoding='utf-8')
-        assert 'prefersReducedMotion' in content, \
-            "motion-prefs.js 缺少 prefersReducedMotion"
-        assert 'openaver:motion-pref-change' in content, \
-            "motion-prefs.js 缺少 openaver:motion-pref-change 事件"
-        assert 'addListener' in content, \
-            "motion-prefs.js 缺少 addListener 相容性 fallback"
-
-    def test_motion_adapter_js_exists(self):
-        """motion-adapter.js 存在且包含 4 個共用動畫函數 + createContext + _shouldAnimate"""
-        js_file = PROJECT_ROOT / "web" / "static" / "js" / "components" / "motion-adapter.js"
-        assert js_file.exists(), f"motion-adapter.js 不存在: {js_file}"
-
-        content = js_file.read_text(encoding='utf-8')
-        for symbol in ('createContext', 'playEnter', 'playLeave', 'playStagger',
-                        'playModal', '_shouldAnimate'):
-            assert symbol in content, f"motion-adapter.js 缺少 {symbol}"
+    def test_motion_js_files_contain(self):
+        """motion-prefs.js 和 motion-adapter.js 存在且包含必要 API / 函數"""
+        for js_file, expected_strings in [
+            (
+                PROJECT_ROOT / "web" / "static" / "js" / "components" / "motion-prefs.js",
+                ['prefersReducedMotion', 'openaver:motion-pref-change', 'addListener'],
+            ),
+            (
+                PROJECT_ROOT / "web" / "static" / "js" / "components" / "motion-adapter.js",
+                ['createContext', 'playEnter', 'playLeave', 'playStagger', 'playModal', '_shouldAnimate'],
+            ),
+        ]:
+            assert js_file.exists(), f"{js_file.name} 不存在: {js_file}"
+            content = js_file.read_text(encoding='utf-8')
+            for expected in expected_strings:
+                assert expected in content, f"{js_file.name} missing: {expected!r}"
 
     def test_base_html_loads_gsap_and_adapters(self):
         """base.html 載入 GSAP CDN + motion-prefs + motion-adapter，且順序正確"""
@@ -359,37 +353,25 @@ class TestNoDuplicateNativeDialog:
 class TestTranslateAll:
     """確認 translateAll 前端基礎設施完整"""
 
-    def test_translate_all_button_exists(self):
-        """search.html 包含 translateAll() 綁定且按鈕由 listMode 條件控制"""
-        html_file = PROJECT_ROOT / "web" / "templates" / "search.html"
-        content = html_file.read_text(encoding='utf-8')
-        assert 'translateAll()' in content, \
-            "search.html 缺少 translateAll() 綁定"
-        assert "listMode === 'search'" in content, \
-            "search.html 缺少 listMode === 'search' 條件（控制翻譯全部按鈕顯示）"
+    def test_translate_all_infra_contains(self):
+        """search.html / base.js / batch.js 包含 translateAll 基礎設施（字串指紋守衛）"""
+        search_html = PROJECT_ROOT / "web" / "templates" / "search.html"
+        base_js = PROJECT_ROOT / "web" / "static" / "js" / "pages" / "search" / "state" / "base.js"
+        batch_js = PROJECT_ROOT / "web" / "static" / "js" / "pages" / "search" / "state" / "batch.js"
 
-    def test_translate_state_in_base(self):
-        """base.js 包含 translateState 物件定義"""
-        js_file = PROJECT_ROOT / "web" / "static" / "js" / "pages" / "search" / "state" / "base.js"
-        content = js_file.read_text(encoding='utf-8')
-        assert 'translateState' in content, \
-            "base.js 缺少 translateState 物件定義"
+        for path, expected_list in [
+            (search_html, ["translateAll()", "listMode === 'search'"]),
+            (base_js, ["translateState", "listMode === 'search'"]),
+            (batch_js, ["async translateAll"]),
+        ]:
+            content = path.read_text(encoding='utf-8')
+            for expected in expected_list:
+                assert expected in content, f"{path.name} missing: {expected!r}"
 
-    def test_translate_all_in_batch(self):
-        """batch.js 包含 async translateAll method 定義"""
-        js_file = PROJECT_ROOT / "web" / "static" / "js" / "pages" / "search" / "state" / "batch.js"
-        content = js_file.read_text(encoding='utf-8')
-        assert 'async translateAll' in content, \
-            "batch.js 缺少 async translateAll method 定義"
-
-    def test_is_cloud_search_mode_uses_list_mode(self):
-        """isCloudSearchMode 應依賴 listMode === 'search'，不依賴 fileList.length"""
-        js_file = PROJECT_ROOT / "web" / "static" / "js" / "pages" / "search" / "state" / "base.js"
-        content = js_file.read_text(encoding='utf-8')
-        assert "listMode === 'search'" in content, \
-            "isCloudSearchMode 應使用 listMode === 'search'，不應依賴 fileList.length === 0"
-        assert "fileList.length === 0 && this.searchResults.length > 0" not in content, \
-            "isCloudSearchMode 不應使用 fileList.length === 0 條件（殘留 fileList 會使雲端搜尋模式失效）"
+        # 字串指紋守衛：殘留舊 fileList 判斷邏輯應已移除
+        base_content = base_js.read_text(encoding='utf-8')
+        assert "fileList.length === 0 && this.searchResults.length > 0" not in base_content, \
+            "base.js should not contain: 'fileList.length === 0 && this.searchResults.length > 0'"
 
 
 class TestJellyfinFrontend:
@@ -606,32 +588,22 @@ class TestVideoPlaybackGuard:
             + "\n\n提示：瀏覽器模式應使用 /api/gallery/player?path= 代理播放"
         )
 
-    def test_showcase_uses_api_player(self):
-        """showcase/state-videos.js 的 playVideo() 瀏覽器分支必須走 /api/gallery/player"""
-        js_file = PROJECT_ROOT / "web" / "static" / "js" / "pages" / "showcase" / "state-videos.js"
-        content = js_file.read_text(encoding='utf-8')
-        assert '/api/gallery/player' in content, \
-            "showcase/state-videos.js 缺少 /api/gallery/player — 瀏覽器模式應走 API proxy 播放"
-
-    def test_video_api_endpoint_exists(self):
-        """scanner.py 包含 /api/gallery/video 和 /api/gallery/player endpoint"""
-        py_file = PROJECT_ROOT / "web" / "routers" / "scanner.py"
-        content = py_file.read_text(encoding='utf-8')
-        assert 'async def get_video(' in content, \
-            "scanner.py 缺少 get_video endpoint（影片代理 API）"
-        assert 'async def video_player(' in content, \
-            "scanner.py 缺少 video_player endpoint（HTML5 播放頁面）"
-
-    def test_video_api_has_security_checks(self):
-        """get_video() 必須包含 normpath + 目錄白名單 + get_proxy_extensions 動態白名單"""
-        py_file = PROJECT_ROOT / "web" / "routers" / "scanner.py"
-        content = py_file.read_text(encoding='utf-8')
-        assert 'os.path.normpath' in content, \
-            "get_video 缺少 normpath（防路徑穿越）"
-        assert 'get_proxy_extensions' in content, \
-            "get_video 應使用 get_proxy_extensions（動態副檔名白名單）而非硬編碼 ALLOWED_VIDEO_EXTENSIONS"
-        assert 'is_path_under_dir' in content, \
-            "get_video 缺少目錄白名單檢查"
+    def test_video_api_files_contain(self):
+        """showcase/state-videos.js 和 scanner.py 包含必要 API proxy + 安全守衛字串"""
+        for path, expected_list in [
+            (
+                PROJECT_ROOT / "web" / "static" / "js" / "pages" / "showcase" / "state-videos.js",
+                ['/api/gallery/player'],
+            ),
+            (
+                PROJECT_ROOT / "web" / "routers" / "scanner.py",
+                ['async def get_video(', 'async def video_player(', 'os.path.normpath',
+                 'get_proxy_extensions', 'is_path_under_dir'],
+            ),
+        ]:
+            content = path.read_text(encoding='utf-8')
+            for expected in expected_list:
+                assert expected in content, f"{path.name} missing: {expected!r}"
 
     def test_no_hardcoded_video_extensions_in_modules(self):
         """gallery_scanner.py, scanner.py, pywebview_api.py must NOT contain hardcoded video extension sets
@@ -657,125 +629,74 @@ class TestVideoPlaybackGuard:
 class TestSettingsSimplify:
     """T4a 守衛 — Settings 不再包含版本/更新 UI"""
 
-    def test_settings_html_no_check_update(self):
-        """settings.html 不含 checkUpdate（已搬至 help）"""
+    def test_settings_excludes(self):
+        """settings.html/state-config.js 不含已搬移的 checkUpdate / loadVersion / restartTutorial"""
         html = (PROJECT_ROOT / 'web/templates/settings.html').read_text(encoding='utf-8')
-        assert 'checkUpdate' not in html, \
-            "settings.html 仍包含 checkUpdate — 應已搬至 /help"
-
-    def test_settings_js_no_dead_methods(self):
-        """settings/state-config.js 不含 loadVersion 及 restartTutorial（已搬至 help）"""
         js = (PROJECT_ROOT / 'web/static/js/pages/settings/state-config.js').read_text(encoding='utf-8')
-        assert 'loadVersion' not in js, \
-            "settings/state-config.js 仍包含 loadVersion — 應已搬至 help.js"
-        assert 'restartTutorial' not in js, \
-            "settings/state-config.js 仍包含 restartTutorial — HTML row 刪除後為死碼"
+        for forbidden, content, fname in [
+            ('checkUpdate', html, 'settings.html'),
+            ('loadVersion', js, 'settings/state-config.js'),
+            ('restartTutorial', js, 'settings/state-config.js'),
+        ]:
+            assert forbidden not in content, \
+                f"{fname} should not contain: {forbidden!r}"
 
 
 class TestHelpPage:
     """T4b 守衛 — Help 頁必要元素"""
 
-    def test_help_js_exists(self):
-        """help.js 存在"""
-        assert (PROJECT_ROOT / 'web/static/js/pages/help.js').exists()
-
-    def test_help_html_has_alpine_scope(self):
-        """help.html 含 helpPage Alpine scope"""
+    def test_help_html_contains(self):
+        """help.html 含 helpPage / checkUpdate / hero-terminal / help.hero.ai_instruction；help.js script 無 defer"""
         html = (PROJECT_ROOT / 'web/templates/help.html').read_text(encoding='utf-8')
-        assert 'helpPage' in html
-
-    def test_help_html_has_check_update(self):
-        """help.html 含 checkUpdate 按鈕"""
-        html = (PROJECT_ROOT / 'web/templates/help.html').read_text(encoding='utf-8')
-        assert 'checkUpdate' in html
-
-    def test_help_js_no_defer(self):
-        """help.js script 不可帶 defer — 避免 Alpine 初始化時序問題"""
-        import re
-        html = (PROJECT_ROOT / 'web/templates/help.html').read_text(encoding='utf-8')
+        for expected in ['helpPage', 'checkUpdate', 'hero-terminal', 'help.hero.ai_instruction']:
+            assert expected in html, f"help.html missing: {expected!r}"
+        assert (PROJECT_ROOT / 'web/static/js/pages/help.js').exists(), \
+            "help.js missing: file does not exist"
         matches = re.findall(r'<script[^>]*help\.js[^>]*>', html)
         assert len(matches) == 1, \
             f"help.html 應恰好有 1 個 help.js script tag，找到 {len(matches)} 個"
         assert 'defer' not in matches[0], \
             "help.js script tag 帶有 defer — Alpine 會在 helpPage() 定義前初始化"
 
-    def test_help_html_has_hero_terminal(self):
-        """help.html 右欄含 .hero-terminal Terminal box（T3b 守衛）"""
-        html = (PROJECT_ROOT / 'web/templates/help.html').read_text(encoding='utf-8')
-        assert 'hero-terminal' in html, \
-            "help.html 缺少 hero-terminal — T3b 右欄 Terminal box 未實作"
-
-    def test_help_has_clipboard_copy(self):
-        """help.js 含 clipboard copy 功能（T3b 守衛）"""
+    def test_help_js_contains(self):
+        """help.js 含 copyCurlCommand / execCommand"""
         js = (PROJECT_ROOT / 'web/static/js/pages/help.js').read_text(encoding='utf-8')
-        assert 'copyCurlCommand' in js, \
-            "help.js 缺少 copyCurlCommand — T3b 一鍵複製功能未實作"
-        assert 'execCommand' in js, \
-            "help.js 缺少 execCommand fallback — 非 HTTPS 環境無法複製"
-
-    def test_help_html_has_ai_instruction_i18n(self):
-        """help.html 含 help.hero.ai_instruction i18n key（T3b 守衛）"""
-        html = (PROJECT_ROOT / 'web/templates/help.html').read_text(encoding='utf-8')
-        assert 'help.hero.ai_instruction' in html, \
-            "help.html 缺少 help.hero.ai_instruction i18n key — T3b 右欄說明文字未實作"
+        for expected in ['copyCurlCommand', 'execCommand']:
+            assert expected in js, f"help.js missing: {expected!r}"
 
 
 class TestScannerClearCache:
     """清除快取守衛 — scanner 頁面必要元素"""
 
-    def test_scanner_html_has_clear_cache_method(self):
-        """scanner/state-scan.js 含 clearCache() method"""
+    def test_scanner_clear_cache_js_contains(self):
+        """scanner/state-scan.js 含 clearCache() + DELETE /api/gallery/cache"""
         js = (PROJECT_ROOT / 'web/static/js/pages/scanner/state-scan.js').read_text(encoding='utf-8')
-        assert 'clearCache()' in js
-
-    def test_scanner_html_has_delete_api_binding(self):
-        """scanner/state-scan.js 含 DELETE /api/gallery/cache 呼叫"""
-        js = (PROJECT_ROOT / 'web/static/js/pages/scanner/state-scan.js').read_text(encoding='utf-8')
-        assert "/api/gallery/cache" in js
-        assert "DELETE" in js
+        for expected in ['clearCache()', '/api/gallery/cache', 'DELETE']:
+            assert expected in js, f"scanner/state-scan.js missing: {expected!r}"
 
 
 class TestSearchCoreFacade:
     """T3.2 守衛 → T4 更新：SearchCore facade 已完全消除"""
 
-    def test_search_core_state_uses_alpine_proxy(self):
-        """T4 完成後：core.js 不含 Alpine.$data（state getter 已刪除）"""
-        js_file = PROJECT_ROOT / "web/static/js/pages/search/core.js"
-        if not js_file.exists():
-            return  # core.js 已刪除，通過
-        content = js_file.read_text(encoding='utf-8')
-        assert 'Alpine.$data' not in content, (
-            "core.js 仍含 Alpine.$data — T4 完成後 SearchCore.state getter 應已刪除"
-        )
-
-    def test_sync_to_core_is_noop(self):
-        """T4 完成後：bridge.js 已刪除"""
+    def test_search_core_facade_files_excludes(self):
+        """bridge.js 已刪除；persistence.js 不含 coreState?."""
         js_file = PROJECT_ROOT / "web/static/js/pages/search/state/bridge.js"
-        assert not js_file.exists(), (
-            "state/bridge.js 仍存在 — T4 Step 8 應已刪除此檔案"
-        )
+        assert not js_file.exists(), \
+            "search/state/bridge.js should not exist: T4 Step 8 應已刪除此檔案"
+        persistence = PROJECT_ROOT / "web/static/js/pages/search/state/persistence.js"
+        content = persistence.read_text(encoding='utf-8')
+        assert 'coreState?.' not in content, \
+            "persistence.js should not contain: 'coreState?.'"
 
-    def test_persistence_no_corestate_fallback(self):
-        """persistence.js 的 saveState() 不含 coreState?. fallback（已改為直接用 Alpine state）"""
-        js_file = PROJECT_ROOT / "web/static/js/pages/search/state/persistence.js"
-        content = js_file.read_text(encoding='utf-8')
-        assert 'coreState?.' not in content, (
-            "persistence.js 仍含 coreState?. fallback — "
-            "T3.2 Step 3 應已移除，直接使用 Alpine this.xxx"
-        )
-
-    def test_search_core_has_legacy_state_fallback(self):
-        """T4 完成後：core.js 不含 _legacyState（整個 SearchCore 物件已刪除）"""
+    def test_search_core_js_excludes(self):
+        """core.js（若存在）不含 Alpine.$data / _legacyState / window.SearchCore = {"""
         js_file = PROJECT_ROOT / "web/static/js/pages/search/core.js"
         if not js_file.exists():
             return  # core.js 已刪除，通過
         content = js_file.read_text(encoding='utf-8')
-        assert '_legacyState' not in content, (
-            "core.js 仍含 _legacyState — T4 完成後 SearchCore 物件應已刪除"
-        )
-        assert 'window.SearchCore = {' not in content, (
-            "core.js 仍含 window.SearchCore = { — T4 完成後整個 facade 應已刪除"
-        )
+        for forbidden in ['Alpine.$data', '_legacyState', 'window.SearchCore = {']:
+            assert forbidden not in content, \
+                f"search/core.js should not contain: {forbidden!r}"
 
 
 class TestPageLifecycleGuard:
@@ -820,17 +741,13 @@ class TestPageLifecycleGuard:
 class TestSettingsSourceBadge:
     """37d T2 守衛 — Settings radio 區塊已移除，badge 改為 primarySource 選擇器"""
 
-    def test_settings_html_no_radio_primary_source(self):
-        """settings.html 不含獨立的主要搜尋來源 radio 區塊"""
+    def test_settings_source_badge_html_contains(self):
+        """settings.html badge 選擇器：不含 radio name=primarySource；含 primarySource 綁定"""
         html = (PROJECT_ROOT / 'web/templates/settings.html').read_text(encoding='utf-8')
         assert 'name="primarySource"' not in html, \
-            "settings.html 仍含 radio name=primarySource — 應已改為 badge 選擇器"
-
-    def test_settings_html_badge_binds_primary_source(self):
-        """settings.html source badge 仍綁 form.primarySource（badge 選擇器）"""
-        html = (PROJECT_ROOT / 'web/templates/settings.html').read_text(encoding='utf-8')
+            "settings.html should not contain: 'name=\"primarySource\"'"
         assert 'primarySource' in html, \
-            "settings.html 缺少 primarySource 綁定 — badge 選擇器應綁定 form.primarySource"
+            "settings.html missing: 'primarySource'"
 
 
 class TestScannerLifecycleGuard:
@@ -867,42 +784,18 @@ class TestScannerLifecycleGuard:
 class TestEventSourceTracking:
     """T4.1 守衛 — 所有 EventSource 建立都透過 _trackConnection 包裝"""
 
-    def test_base_has_active_connections(self):
-        """base.js 必須有 _activeConnections: [] 初始值"""
-        js_file = PROJECT_ROOT / "web/static/js/pages/search/state/base.js"
-        content = js_file.read_text(encoding='utf-8')
-        assert '_activeConnections' in content, \
-            "base.js 缺少 _activeConnections 初始值 — T4.1 集中追蹤 EventSource"
-
-    def test_search_flow_has_track_methods(self):
-        """search-flow.js 必須定義 _trackConnection / _untrackConnection / _closeAllConnections"""
-        js_file = PROJECT_ROOT / "web/static/js/pages/search/state/search-flow.js"
-        content = js_file.read_text(encoding='utf-8')
-        for method in ('_trackConnection', '_untrackConnection', '_closeAllConnections'):
-            assert method in content, \
-                f"search-flow.js 缺少 {method} — T4.1 連線追蹤方法"
-
-    def test_do_search_uses_track_connection(self):
-        """doSearch() 的 new EventSource 必須包在 _trackConnection(...) 內"""
-        js_file = PROJECT_ROOT / "web/static/js/pages/search/state/search-flow.js"
-        content = js_file.read_text(encoding='utf-8')
-        # 確認有 _trackConnection(new EventSource( 的用法
-        assert '_trackConnection(new EventSource(' in content, \
-            "search-flow.js 的 doSearch() 未使用 _trackConnection 包裝 EventSource"
-
-    def test_file_list_uses_track_connection(self):
-        """searchForFile() 的 new EventSource 必須包在 _trackConnection(...) 內"""
-        js_file = PROJECT_ROOT / "web/static/js/pages/search/state/file-list.js"
-        content = js_file.read_text(encoding='utf-8')
-        assert '_trackConnection(' in content, \
-            "file-list.js 的 searchForFile() 未使用 _trackConnection 包裝 EventSource"
-
-    def test_cleanup_calls_close_all_connections(self):
-        """cleanupForNavigation() 必須呼叫 _closeAllConnections()"""
-        js_file = PROJECT_ROOT / "web/static/js/pages/search/state/search-flow.js"
-        content = js_file.read_text(encoding='utf-8')
-        assert '_closeAllConnections()' in content, \
-            "search-flow.js 的 cleanupForNavigation() 未呼叫 _closeAllConnections()"
+    def test_event_source_tracking_js_contains(self):
+        """base.js / search-flow.js / file-list.js 含 T4.1 連線追蹤必要字串"""
+        base = (PROJECT_ROOT / "web/static/js/pages/search/state/base.js").read_text(encoding='utf-8')
+        assert '_activeConnections' in base, \
+            "base.js missing: '_activeConnections'"
+        sf = (PROJECT_ROOT / "web/static/js/pages/search/state/search-flow.js").read_text(encoding='utf-8')
+        for expected in ['_trackConnection', '_untrackConnection', '_closeAllConnections',
+                         '_trackConnection(new EventSource(', '_closeAllConnections()']:
+            assert expected in sf, f"search-flow.js missing: {expected!r}"
+        fl = (PROJECT_ROOT / "web/static/js/pages/search/state/file-list.js").read_text(encoding='utf-8')
+        assert '_trackConnection(' in fl, \
+            "file-list.js missing: '_trackConnection('"
 
     def test_no_bare_new_event_source_in_search_state(self):
         """search/state/ 下所有 JS 的 new EventSource 都應在 _trackConnection 內"""
@@ -910,7 +803,6 @@ class TestEventSourceTracking:
         violations = []
         for js_file in state_dir.glob("*.js"):
             content = js_file.read_text(encoding='utf-8')
-            # 找 new EventSource( 但不在 _trackConnection 同行
             for i, line in enumerate(content.splitlines(), 1):
                 if 'new EventSource(' in line and '_trackConnection' not in line:
                     violations.append(f"{js_file.name}:{i} — {line.strip()[:80]}")
@@ -923,70 +815,31 @@ class TestEventSourceTracking:
 class TestTimerTracking:
     """T4.2 守衛 — 所有 setTimeout 都透過 _timers registry 管理"""
 
-    def test_base_has_timers_registry(self):
-        """base.js 必須有 _timers: {} 初始值"""
-        js_file = PROJECT_ROOT / "web/static/js/pages/search/state/base.js"
-        content = js_file.read_text(encoding='utf-8')
-        assert '_timers: {}' in content, \
-            "base.js 缺少 _timers: {} — T4.2 集中追蹤 setTimeout"
+    def test_timer_tracking_js_contains(self):
+        """base/search-flow/result-card/persistence/file-list: _timers registry 必要字串"""
+        base = (PROJECT_ROOT / "web/static/js/pages/search/state/base.js").read_text(encoding='utf-8')
+        assert '_timers: {}' in base, "base.js missing: '_timers: {}'"
+        sf = (PROJECT_ROOT / "web/static/js/pages/search/state/search-flow.js").read_text(encoding='utf-8')
+        for expected in ['_setTimer(', '_clearAllTimers(', '_clearAllTimers()']:
+            assert expected in sf, f"search-flow.js missing: {expected!r}"
+        rc = (PROJECT_ROOT / "web/static/js/pages/search/state/result-card.js").read_text(encoding='utf-8')
+        assert "_setTimer('toast'" in rc, "result-card.js missing: \"_setTimer('toast'\""
+        ps = (PROJECT_ROOT / "web/static/js/pages/search/state/persistence.js").read_text(encoding='utf-8')
+        assert "_setTimer('autosave'" in ps, "persistence.js missing: \"_setTimer('autosave'\""
+        fl = (PROJECT_ROOT / "web/static/js/pages/search/state/file-list.js").read_text(encoding='utf-8')
+        assert "_setTimer('loadFavorite'" in fl, "file-list.js missing: \"_setTimer('loadFavorite'\""
 
-    def test_base_no_toast_timer(self):
-        """base.js 不再有 _toastTimer: null 宣告（已由 _timers registry 取代）"""
-        js_file = PROJECT_ROOT / "web/static/js/pages/search/state/base.js"
-        content = js_file.read_text(encoding='utf-8')
-        assert '_toastTimer: null' not in content, \
-            "base.js 仍含 _toastTimer: null — T4.2 應已移除，改用 _timers registry"
-
-    def test_search_flow_has_set_timer(self):
-        """search-flow.js 必須定義 _setTimer method"""
-        js_file = PROJECT_ROOT / "web/static/js/pages/search/state/search-flow.js"
-        content = js_file.read_text(encoding='utf-8')
-        assert '_setTimer(' in content, \
-            "search-flow.js 缺少 _setTimer method — T4.2 timer registry"
-
-    def test_search_flow_has_clear_all_timers(self):
-        """search-flow.js 必須定義 _clearAllTimers method"""
-        js_file = PROJECT_ROOT / "web/static/js/pages/search/state/search-flow.js"
-        content = js_file.read_text(encoding='utf-8')
-        assert '_clearAllTimers(' in content, \
-            "search-flow.js 缺少 _clearAllTimers method — T4.2 timer registry"
-
-    def test_cleanup_calls_clear_all_timers(self):
-        """cleanupForNavigation() 必須呼叫 _clearAllTimers()"""
-        js_file = PROJECT_ROOT / "web/static/js/pages/search/state/search-flow.js"
-        content = js_file.read_text(encoding='utf-8')
-        assert '_clearAllTimers()' in content, \
-            "search-flow.js 的 cleanupForNavigation() 未呼叫 _clearAllTimers()"
-
-    def test_result_card_no_manual_toast_timer(self):
-        """result-card.js 不再有 _toastTimer = 手動賦值（改用 _setTimer）"""
-        js_file = PROJECT_ROOT / "web/static/js/pages/search/state/result-card.js"
-        content = js_file.read_text(encoding='utf-8')
-        assert '_toastTimer =' not in content, \
-            "result-card.js 仍含 _toastTimer = 手動賦值 — T4.2 應改用 _setTimer('toast', ...)"
-
-    def test_result_card_uses_set_timer(self):
-        """result-card.js 的 showToast() 必須使用 _setTimer"""
-        js_file = PROJECT_ROOT / "web/static/js/pages/search/state/result-card.js"
-        content = js_file.read_text(encoding='utf-8')
-        assert "_setTimer('toast'" in content, \
-            "result-card.js 的 showToast() 未使用 _setTimer('toast', ...) — T4.2"
-
-    def test_persistence_uses_set_timer(self):
-        """persistence.js 的 setupAutoSave() 必須使用 _setTimer（不再用 saveTimeout local variable）"""
-        js_file = PROJECT_ROOT / "web/static/js/pages/search/state/persistence.js"
-        content = js_file.read_text(encoding='utf-8')
-        assert "_setTimer('autosave'" in content, \
-            "persistence.js 的 setupAutoSave() 未使用 _setTimer('autosave', ...) — T4.2"
-        assert 'saveTimeout' not in content, \
-            "persistence.js 仍含 saveTimeout local variable — T4.2 應已移除"
-
-    def test_file_list_uses_set_timer(self):
-        """file-list.js 的 loadFavorite() 必須使用 _setTimer"""
-        js_file = PROJECT_ROOT / "web/static/js/pages/search/state/file-list.js"
-        content = js_file.read_text(encoding='utf-8')
-        assert "_setTimer('loadFavorite'" in content, \
-            "file-list.js 的 loadFavorite() 未使用 _setTimer('loadFavorite', ...) — T4.2"
+    def test_timer_tracking_js_excludes(self):
+        """base/result-card/persistence: 舊 _toastTimer / saveTimeout 已移除"""
+        base = (PROJECT_ROOT / "web/static/js/pages/search/state/base.js").read_text(encoding='utf-8')
+        assert '_toastTimer: null' not in base, \
+            "base.js should not contain: '_toastTimer: null'"
+        rc = (PROJECT_ROOT / "web/static/js/pages/search/state/result-card.js").read_text(encoding='utf-8')
+        assert '_toastTimer =' not in rc, \
+            "result-card.js should not contain: '_toastTimer ='"
+        ps = (PROJECT_ROOT / "web/static/js/pages/search/state/persistence.js").read_text(encoding='utf-8')
+        assert 'saveTimeout' not in ps, \
+            "persistence.js should not contain: 'saveTimeout'"
 
 
 class TestWindowGlobalCleanup:
@@ -998,90 +851,40 @@ class TestWindowGlobalCleanup:
     SEARCH_FLOW_JS = PROJECT_ROOT / "web/static/js/pages/search/state/search-flow.js"
     INIT_JS = PROJECT_ROOT / "web/static/js/pages/search/init.js"
 
-    def test_bridge_no_window_edit_tag_functions(self):
-        """bridge.js 不應設定 translateWithAI / startEditTitle 等全域函數（T4：bridge.js 已刪除）"""
-        if not self.BRIDGE_JS.exists():
-            return  # T4 已刪除 bridge.js，通過
-        content = self.BRIDGE_JS.read_text(encoding='utf-8')
-        forbidden = [
-            'window.translateWithAI',
-            'window.startEditTitle',
-            'window.confirmEditTitle',
-            'window.cancelEditTitle',
-            'window.startEditChineseTitle',
-            'window.confirmEditChineseTitle',
-            'window.cancelEditChineseTitle',
-            'window.showAddTagInput',
-            'window.confirmAddTag',
-            'window.cancelAddTag',
-            'window.removeUserTag',
-        ]
-        found = [f for f in forbidden if f in content]
-        assert len(found) == 0, (
-            f"bridge.js 仍設定 {len(found)} 個多餘全域函數（HTML 已用 Alpine @click）: {found}"
-        )
-
-    def test_bridge_no_window_searchcore_progress_bridge(self):
-        """bridge.js 不應設定 window.SearchCore.initProgress 等（T4：bridge.js 已刪除）"""
-        if not self.BRIDGE_JS.exists():
-            return  # T4 已刪除 bridge.js，通過
-        content = self.BRIDGE_JS.read_text(encoding='utf-8')
-        forbidden = [
-            'window.SearchCore.initProgress',
-            'window.SearchCore.updateLog',
-            'window.SearchCore.handleSearchStatus',
-        ]
-        found = [f for f in forbidden if f in content]
-        assert len(found) == 0, (
-            f"bridge.js 仍設定 {len(found)} 個 SearchCore bridge（應由 file-list.js 直接呼叫 Alpine method）: {found}"
-        )
-
-    def test_file_list_calls_this_progress_methods(self):
-        """file-list.js 的 searchForFile() 應直接呼叫 this.initProgress / this.updateLog / this.handleSearchStatus"""
-        content = self.FILE_LIST_JS.read_text(encoding='utf-8')
-        assert 'this.initProgress(' in content, \
-            "file-list.js 缺少 this.initProgress() — 應直接呼叫 Alpine method，不透過 window.SearchCore"
-        assert 'this.updateLog(' in content, \
-            "file-list.js 缺少 this.updateLog() — 應直接呼叫 Alpine method，不透過 window.SearchCore"
-        assert 'this.handleSearchStatus(' in content, \
-            "file-list.js 缺少 this.handleSearchStatus() — 應直接呼叫 Alpine method，不透過 window.SearchCore"
-
-    def test_file_list_no_searchcore_progress_calls(self):
-        """file-list.js 不應再透過 window.SearchCore 呼叫進度函數"""
-        content = self.FILE_LIST_JS.read_text(encoding='utf-8')
-        forbidden = [
-            'window.SearchCore.initProgress',
-            'window.SearchCore.updateLog',
-            'window.SearchCore.handleSearchStatus',
-        ]
-        found = [f for f in forbidden if f in content]
-        assert len(found) == 0, (
-            f"file-list.js 仍透過 window.SearchCore 呼叫 {len(found)} 個進度函數: {found}"
-        )
-
-    def test_no_window_searchcore_update_clear_button(self):
-        """Alpine mixins 不應再呼叫 window.SearchCore.updateClearButton()"""
-        targets = [self.FILE_LIST_JS, self.PERSISTENCE_JS, self.SEARCH_FLOW_JS]
-        violations = []
-        for js_file in targets:
+    def test_window_global_cleanup_js_contains_and_excludes(self):
+        """bridge/file-list/persistence/search-flow/init: window.SearchCore 全域函數已清除，this.xxx 直接呼叫已植入"""
+        # bridge.js（T4 已刪除則通過）
+        if self.BRIDGE_JS.exists():
+            bc = self.BRIDGE_JS.read_text(encoding='utf-8')
+            for forbidden in [
+                'window.translateWithAI', 'window.startEditTitle', 'window.confirmEditTitle',
+                'window.cancelEditTitle', 'window.startEditChineseTitle',
+                'window.confirmEditChineseTitle', 'window.cancelEditChineseTitle',
+                'window.showAddTagInput', 'window.confirmAddTag', 'window.cancelAddTag',
+                'window.removeUserTag', 'window.SearchCore.initProgress',
+                'window.SearchCore.updateLog', 'window.SearchCore.handleSearchStatus',
+            ]:
+                assert forbidden not in bc, \
+                    f"bridge.js should not contain: {forbidden!r}"
+        # file-list.js: direct this.xxx calls + no window.SearchCore calls
+        fl = self.FILE_LIST_JS.read_text(encoding='utf-8')
+        for expected in ['this.initProgress(', 'this.updateLog(', 'this.handleSearchStatus(']:
+            assert expected in fl, f"file-list.js missing: {expected!r}"
+        for forbidden in ['window.SearchCore.initProgress', 'window.SearchCore.updateLog',
+                          'window.SearchCore.handleSearchStatus', 'window.SearchCore.updateClearButton']:
+            assert forbidden not in fl, f"file-list.js should not contain: {forbidden!r}"
+        # persistence / search-flow: no updateClearButton
+        for js_file in [self.PERSISTENCE_JS, self.SEARCH_FLOW_JS]:
             content = js_file.read_text(encoding='utf-8')
-            if 'window.SearchCore.updateClearButton' in content:
-                violations.append(js_file.name)
-        assert len(violations) == 0, (
-            f"以下檔案仍呼叫 window.SearchCore.updateClearButton()（應改為 this.hasContent = ...）: {violations}"
-        )
-
-    def test_init_no_progress_fallback(self):
-        """init.js 不應再包含 initProgress 等防呆 fallback（T4：init.js 已刪除）"""
-        if not self.INIT_JS.exists():
-            return  # T4 已刪除 init.js，通過
-        content = self.INIT_JS.read_text(encoding='utf-8')
-        forbidden = ['window.SearchCore.initProgress =', 'window.SearchCore.updateLog =',
-                     'window.SearchCore.handleSearchStatus =']
-        found = [f for f in forbidden if f in content]
-        assert len(found) == 0, (
-            f"init.js 仍包含 {len(found)} 個防呆 fallback（bridge 移除後不再需要）: {found}"
-        )
+            assert 'window.SearchCore.updateClearButton' not in content, \
+                f"{js_file.name} should not contain: 'window.SearchCore.updateClearButton'"
+        # init.js（T4 已刪除則通過）
+        if self.INIT_JS.exists():
+            ic = self.INIT_JS.read_text(encoding='utf-8')
+            for forbidden in ['window.SearchCore.initProgress =', 'window.SearchCore.updateLog =',
+                              'window.SearchCore.handleSearchStatus =']:
+                assert forbidden not in ic, \
+                    f"init.js should not contain: {forbidden!r}"
 
 
 class TestFetchAbortController:
@@ -1790,80 +1593,43 @@ class TestFailedSlotC30Guard:
     BASE_JS = PROJECT_ROOT / "web/static/js/pages/search/state/base.js"
     SEARCH_HTML = PROJECT_ROOT / "web/templates/search.html"
 
-    def test_navigate_skips_failed(self):
-        """navigate() 必須跳過 _failed slot，避免導航到空白結果 (C30)"""
-        content = self.NAVIGATION_JS.read_text(encoding='utf-8')
-        match = re.search(r'navigate\s*\(', content)
+    def test_failed_slot_method_bodies_contain_failed(self):
+        """navigate/prevLightboxVideo/nextLightboxVideo/navIndicatorText/canGoPrev/canGoNext/showNavigation/fileCountText 方法體含 _failed (C30)"""
+        nav_content = self.NAVIGATION_JS.read_text(encoding='utf-8')
+        match = re.search(r'navigate\s*\(', nav_content)
         assert match, "navigation.js 缺少 navigate() 方法"
-        method_body = content[match.start():match.start() + 500]
-        assert '_failed' in method_body, "navigate() 必須包含 _failed skip 邏輯 (C30)"
+        assert '_failed' in nav_content[match.start():match.start() + 500], \
+            "navigation.js navigate() missing: '_failed' skip 邏輯 (C30)"
 
-    def test_lightbox_nav_skips_failed(self):
-        """prevLightboxVideo / nextLightboxVideo 必須跳過 _failed slot (C30)"""
-        content = self.GRID_MODE_JS.read_text(encoding='utf-8')
+        gm_content = self.GRID_MODE_JS.read_text(encoding='utf-8')
         for method_name in ['prevLightboxVideo', 'nextLightboxVideo']:
-            match = re.search(rf'{method_name}\s*\(', content)
-            assert match, f"grid-mode.js 缺少 {method_name}() 方法"
-            method_body = content[match.start():match.start() + 800]
-            assert '_failed' in method_body, f"{method_name}() 必須包含 _failed skip 邏輯 (C30)"
+            m = re.search(rf'{method_name}\s*\(', gm_content)
+            assert m, f"grid-mode.js 缺少 {method_name}() 方法"
+            assert '_failed' in gm_content[m.start():m.start() + 800], \
+                f"grid-mode.js {method_name}() missing: '_failed' skip 邏輯 (C30)"
 
-    def test_nav_indicator_excludes_failed(self):
-        """navIndicatorText() 計算導航指示器時必須排除 _failed slot (C30)"""
-        content = self.BASE_JS.read_text(encoding='utf-8')
-        match = re.search(r'navIndicatorText\s*\(', content)
-        assert match, "base.js 缺少 navIndicatorText() 方法"
-        method_body = content[match.start():match.start() + 500]
-        assert '_failed' in method_body, "navIndicatorText() 必須包含 _failed 排除邏輯 (C30)"
+        base_content = self.BASE_JS.read_text(encoding='utf-8')
+        for method_name, window in [
+            ('navIndicatorText', 500), ('canGoPrev', 300), ('canGoNext', 300),
+            ('showNavigation', 300), ('fileCountText', 500),
+        ]:
+            m = re.search(rf'{method_name}\s*\(', base_content)
+            assert m, f"base.js 缺少 {method_name}() 方法"
+            assert '_failed' in base_content[m.start():m.start() + window], \
+                f"base.js {method_name}() missing: '_failed' 排除邏輯 (C30)"
 
-    def test_can_go_prev_checks_failed(self):
-        """canGoPrev() 判斷是否可向前導航時必須考慮 _failed slot (C30)"""
-        content = self.BASE_JS.read_text(encoding='utf-8')
-        match = re.search(r'canGoPrev\s*\(', content)
-        assert match, "base.js 缺少 canGoPrev() 方法"
-        method_body = content[match.start():match.start() + 300]
-        assert '_failed' in method_body, "canGoPrev() 必須包含 _failed 檢查邏輯 (C30)"
-
-    def test_can_go_next_checks_failed(self):
-        """canGoNext() 判斷是否可向後導航時必須考慮 _failed slot (C30)"""
-        content = self.BASE_JS.read_text(encoding='utf-8')
-        match = re.search(r'canGoNext\s*\(', content)
-        assert match, "base.js 缺少 canGoNext() 方法"
-        method_body = content[match.start():match.start() + 300]
-        assert '_failed' in method_body, "canGoNext() 必須包含 _failed 檢查邏輯 (C30)"
-
-    def test_show_navigation_excludes_failed(self):
-        """showNavigation() 決定是否顯示導航 UI 時必須排除 _failed slot (C30)"""
-        content = self.BASE_JS.read_text(encoding='utf-8')
-        match = re.search(r'showNavigation\s*\(', content)
-        assert match, "base.js 缺少 showNavigation() 方法"
-        method_body = content[match.start():match.start() + 300]
-        assert '_failed' in method_body, "showNavigation() 必須包含 _failed 排除邏輯 (C30)"
-
-    def test_file_count_text_excludes_failed(self):
-        """fileCountText() 顯示檔案數量時必須排除 _failed slot (C30)"""
-        content = self.BASE_JS.read_text(encoding='utf-8')
-        match = re.search(r'fileCountText\s*\(', content)
-        assert match, "base.js 缺少 fileCountText() 方法"
-        method_body = content[match.start():match.start() + 500]
-        assert '_failed' in method_body, "fileCountText() 必須包含 _failed 排除邏輯 (C30)"
-
-    def test_lightbox_arrows_use_has_visible_methods(self):
-        """search.html lightbox 箭頭必須使用 hasVisiblePrev/Next() 而非 canGoPrev/Next() (C30)"""
-        content = self.SEARCH_HTML.read_text(encoding='utf-8')
-        assert 'hasVisiblePrev()' in content, "search.html 必須使用 hasVisiblePrev() (C30)"
-        assert 'hasVisibleNext()' in content, "search.html 必須使用 hasVisibleNext() (C30)"
+        search_html = self.SEARCH_HTML.read_text(encoding='utf-8')
+        for expected in ['hasVisiblePrev()', 'hasVisibleNext()']:
+            assert expected in search_html, f"search.html missing: {expected!r}"
 
     SEARCH_FLOW_JS = PROJECT_ROOT / "web/static/js/pages/search/state/search-flow.js"
 
     def test_repoint_is_conditional(self):
         """result-complete 的 currentIndex repoint 必須是條件式的：只在當前指向 _failed 時才 repoint (Codex review)"""
         content = self.SEARCH_FLOW_JS.read_text(encoding='utf-8')
-        # 找到 repoint 區塊
         idx = content.find('firstValid')
         assert idx != -1, "search-flow.js 缺少 firstValid repoint 邏輯"
-        # 取 repoint 附近的程式碼區塊（往前 200 字元）
         repoint_context = content[max(0, idx - 200):idx + 200]
-        # 確認有條件檢查：在 findIndex 之前先檢查當前 item 是否 _failed
         assert 'currentResult' in repoint_context or 'this.searchResults[this.currentIndex]' in repoint_context, \
             "repoint 必須先檢查當前 currentIndex 是否指向 _failed item，不可無條件覆蓋 (Codex review)"
 
@@ -1879,70 +1645,30 @@ class TestGridSettlePulse:
     ANIMATIONS_JS = PROJECT_ROOT / "web/static/js/pages/search/animations.js"
     SEARCH_FLOW_JS = PROJECT_ROOT / "web/static/js/pages/search/state/search-flow.js"
 
-    def test_animations_exposes_play_grid_settle(self):
-        """animations.js 包含 playGridSettle 方法定義"""
+    def test_grid_settle_pulse_animations_js_contains(self):
+        """animations.js 含 playGridSettle + CustomEase.create("settle")"""
         content = self.ANIMATIONS_JS.read_text(encoding='utf-8')
-        assert 'playGridSettle' in content, (
-            "animations.js 缺少 playGridSettle — "
-            "A4 必須新增此方法（Grid Settle Pulse 落地動畫）"
-        )
+        for expected in ['playGridSettle', 'CustomEase.create("settle"']:
+            assert expected in content, f"animations.js missing: {expected!r}"
 
-    def test_search_flow_calls_play_grid_settle(self):
-        """search-flow.js 的 onExitComplete 或 _triggerStagingExit 區段呼叫 playGridSettle"""
-        content = self.SEARCH_FLOW_JS.read_text(encoding='utf-8')
-        # 找方法定義（不是呼叫點 this._triggerStagingExit()）
-        match = re.search(r'_triggerStagingExit\s*\(\s*\)\s*\{', content)
-        assert match, (
-            "search-flow.js 缺少 _triggerStagingExit 方法定義"
-        )
-        # 取足夠大的方法體區段（包含 onExitComplete callback + $nextTick）
-        trigger_body = content[match.start():match.start() + 1000]
-        assert 'playGridSettle' in trigger_body, (
-            "search-flow.js 的 _triggerStagingExit / onExitComplete 缺少 playGridSettle 呼叫 — "
-            "A4 staging exit 完成後應觸發 Grid Settle Pulse"
-        )
+    def test_grid_settle_pulse_method_bodies(self):
+        """search-flow._triggerStagingExit 含 playGridSettle；playGridSettle 方法體含 killTweensOf、不含 rotation"""
+        sf = self.SEARCH_FLOW_JS.read_text(encoding='utf-8')
+        match = re.search(r'_triggerStagingExit\s*\(\s*\)\s*\{', sf)
+        assert match, "search-flow.js 缺少 _triggerStagingExit 方法定義"
+        assert 'playGridSettle' in sf[match.start():match.start() + 1000], \
+            "search-flow.js _triggerStagingExit missing: 'playGridSettle'"
 
-    def test_animations_registers_settle_custom_ease(self):
-        """animations.js 包含 CustomEase.create("settle" 註冊"""
-        content = self.ANIMATIONS_JS.read_text(encoding='utf-8')
-        assert 'CustomEase.create("settle"' in content, (
-            "animations.js 缺少 CustomEase.create(\"settle\" — "
-            "A4 必須註冊 settle 自訂曲線供 playGridSettle 使用"
+        anim = self.ANIMATIONS_JS.read_text(encoding='utf-8')
+        m = re.search(r'playGridSettle:\s*function', anim)
+        assert m, "animations.js 缺少 playGridSettle 方法定義"
+        body = anim[m.start():m.start() + 3000]
+        assert 'killTweensOf' in body, "animations.js playGridSettle missing: 'killTweensOf'"
+        code_only = '\n'.join(
+            l for l in body.split('\n') if l.strip() and not l.strip().startswith('//')
         )
-
-    def test_play_grid_settle_has_kill_tweens_of(self):
-        """animations.js 的 playGridSettle 方法體包含 killTweensOf（C4 約束）"""
-        content = self.ANIMATIONS_JS.read_text(encoding='utf-8')
-        # 找方法定義（不是 JSDoc 註解中的提及）
-        match = re.search(r'playGridSettle:\s*function', content)
-        assert match, (
-            "animations.js 缺少 playGridSettle 方法定義"
-        )
-        method_body = content[match.start():match.start() + 3000]
-        assert 'killTweensOf' in method_body, (
-            "playGridSettle 缺少 killTweensOf — "
-            "C4 約束：每個動畫開頭必須 gsap.killTweensOf(target) 清舊動畫"
-        )
-
-    def test_play_grid_settle_no_rotation(self):
-        """animations.js 的 playGridSettle 方法體不包含 rotation（C6 約束）"""
-        content = self.ANIMATIONS_JS.read_text(encoding='utf-8')
-        # 找方法定義（不是 JSDoc 註解中的提及）
-        match = re.search(r'playGridSettle:\s*function', content)
-        assert match, (
-            "animations.js 缺少 playGridSettle 方法定義"
-        )
-        method_body = content[match.start():match.start() + 3000]
-        # 排除註解行，只檢查實際程式碼中的 rotation 屬性
-        code_lines = [
-            line for line in method_body.split('\n')
-            if line.strip() and not line.strip().startswith('//')
-        ]
-        code_only = '\n'.join(code_lines)
-        assert 'rotation' not in code_only, (
-            "playGridSettle 包含 rotation — "
-            "C6 約束：不使用 rotationX / rotationY / rotationZ"
-        )
+        assert 'rotation' not in code_only, \
+            "animations.js playGridSettle should not contain: 'rotation' (C6)"
 
 
 class TestHeroImageErrorGuard:
@@ -1956,25 +1682,21 @@ class TestHeroImageErrorGuard:
     BASE_JS = PROJECT_ROOT / "web/static/js/pages/search/state/base.js"
     SEARCH_FLOW_JS = PROJECT_ROOT / "web/static/js/pages/search/state/search-flow.js"
 
-    def test_hero_card_no_target_src_in_error(self):
-        """search.html 中 Hero Card img 的 @error 不包含 target.src 或 .src ="""
-        content = self.SEARCH_HTML.read_text(encoding='utf-8')
-        # 找到 hero-card class 屬性（排除註解）
-        match = re.search(r'class="[^"]*hero-card[^"]*"', content)
-        assert match, "search.html 缺少 hero-card class 區塊"
-        # 取 hero-card 區塊（往後 1200 字元覆蓋 img tag + overlay）
-        hero_block = content[match.start():match.start() + 1200]
-        # 提取 @error 屬性值
-        error_match = re.search(r'@error="([^"]*)"', hero_block)
-        assert error_match, "hero-card 區塊缺少 @error handler"
-        error_value = error_match.group(1)
-        assert 'target.src' not in error_value and '.src =' not in error_value, (
-            f"hero-card @error 仍包含 DOM 修改（target.src / .src =）：{error_value}\n"
-            "A6-1 要求改用 Alpine state（_heroCardImageError = true）"
-        )
+    def test_hero_image_error_js_contains(self):
+        """base.js 含 _heroCardImageError / _heroLightboxImageError；search-flow.js doSearch 重置兩者"""
+        base = self.BASE_JS.read_text(encoding='utf-8')
+        for expected in ['_heroCardImageError', '_heroLightboxImageError']:
+            assert expected in base, f"base.js missing: {expected!r}"
+        sf = self.SEARCH_FLOW_JS.read_text(encoding='utf-8')
+        m = re.search(r'async\s+doSearch', sf)
+        assert m, "search-flow.js 缺少 doSearch 方法定義"
+        body = sf[m.start():m.start() + 2000]
+        for expected in ['_heroCardImageError', '_heroLightboxImageError']:
+            assert expected in body and '= false' in body, \
+                f"search-flow.js doSearch missing: '{expected} = false' reset"
 
-    def test_hero_card_no_onerror_null(self):
-        """search.html 中 Hero Card img 的 @error 不包含 onerror"""
+    def test_hero_card_error_handler_excludes(self):
+        """search.html hero-card @error 不含 target.src / .src = / onerror"""
         content = self.SEARCH_HTML.read_text(encoding='utf-8')
         match = re.search(r'class="[^"]*hero-card[^"]*"', content)
         assert match, "search.html 缺少 hero-card class 區塊"
@@ -1982,35 +1704,9 @@ class TestHeroImageErrorGuard:
         error_match = re.search(r'@error="([^"]*)"', hero_block)
         assert error_match, "hero-card 區塊缺少 @error handler"
         error_value = error_match.group(1)
-        assert 'onerror' not in error_value, (
-            f"hero-card @error 仍包含 onerror=null：{error_value}\n"
-            "A6-1 要求移除 onerror=null，改用 Alpine state 管理"
-        )
-
-    def test_base_has_hero_image_error_states(self):
-        """base.js 包含 _heroCardImageError 和 _heroLightboxImageError 兩個 field"""
-        content = self.BASE_JS.read_text(encoding='utf-8')
-        assert '_heroCardImageError' in content, (
-            "base.js 缺少 _heroCardImageError — A6-1 必須新增 Hero Card 圖片錯誤 state"
-        )
-        assert '_heroLightboxImageError' in content, (
-            "base.js 缺少 _heroLightboxImageError — A6-1 必須新增 Lightbox 圖片錯誤 state"
-        )
-
-    def test_do_search_resets_hero_image_errors(self):
-        """search-flow.js 的 doSearch 方法區段包含兩個 error state 的重置"""
-        content = self.SEARCH_FLOW_JS.read_text(encoding='utf-8')
-        match = re.search(r'async\s+doSearch', content)
-        assert match, "search-flow.js 缺少 doSearch 方法定義"
-        method_body = content[match.start():match.start() + 2000]
-        assert '_heroCardImageError' in method_body and '= false' in method_body, (
-            "search-flow.js doSearch 缺少 _heroCardImageError = false 重置 — "
-            "A6-1 新搜尋必須清空 Hero Card 圖片錯誤"
-        )
-        assert '_heroLightboxImageError' in method_body and '= false' in method_body, (
-            "search-flow.js doSearch 缺少 _heroLightboxImageError = false 重置 — "
-            "A6-1 新搜尋必須清空 Lightbox 圖片錯誤"
-        )
+        for forbidden in ['target.src', '.src =', 'onerror']:
+            assert forbidden not in error_value, \
+                f"hero-card @error should not contain: {forbidden!r} (A6-1)"
 
 
 class TestLightboxModeNormalization:
@@ -2023,41 +1719,22 @@ class TestLightboxModeNormalization:
     PERSISTENCE_JS = PROJECT_ROOT / "web/static/js/pages/search/state/persistence.js"
     GRID_MODE_JS = PROJECT_ROOT / "web/static/js/pages/search/state/grid-mode.js"
 
-    def test_restore_state_resets_lightbox_open(self):
-        """persistence.js 的 restoreState 方法區段包含 lightboxOpen = false 重置"""
-        content = self.PERSISTENCE_JS.read_text(encoding='utf-8')
-        match = re.search(r'restoreState\s*\(\s*\)', content)
-        assert match, "persistence.js 缺少 restoreState 方法定義"
-        # 取 restoreState 方法體（到 saveState 為止，取 3000 字元覆蓋完整 try block）
-        method_body = content[match.start():match.start() + 3000]
-        assert 'lightboxOpen' in method_body and '= false' in method_body, (
-            "persistence.js restoreState 缺少 lightboxOpen = false 重置 — "
-            "A6-2 還原後 lightbox 不應處於開啟狀態"
-        )
-
-    def test_restore_state_handles_lightbox_index_with_actress(self):
-        """persistence.js 的 restoreState 方法區段在 actressProfile 條件下處理 lightboxIndex"""
-        content = self.PERSISTENCE_JS.read_text(encoding='utf-8')
-        match = re.search(r'restoreState\s*\(\s*\)', content)
-        assert match, "persistence.js 缺少 restoreState 方法定義"
-        method_body = content[match.start():match.start() + 3000]
-        # 確認有 actressProfile 條件判斷 + lightboxIndex 設定
-        assert 'actressProfile' in method_body and 'lightboxIndex' in method_body, (
-            "persistence.js restoreState 缺少 actressProfile 條件下的 lightboxIndex 處理 — "
-            "A6-2 有女優資料時應將 lightboxIndex 設為 -1"
-        )
-
-    def test_open_actress_lightbox_has_actress_guard(self):
-        """grid-mode.js 的 openActressLightbox 方法開頭有 actressProfile 存在性 guard"""
-        content = self.GRID_MODE_JS.read_text(encoding='utf-8')
-        match = re.search(r'openActressLightbox\s*\(\s*\)', content)
-        assert match, "grid-mode.js 缺少 openActressLightbox 方法定義"
-        # 取方法開頭 300 字元（guard 應在最前面）
-        method_head = content[match.start():match.start() + 300]
-        assert re.search(r'if\s*\(\s*!this\.actressProfile\s*\)\s*return', method_head), (
-            "grid-mode.js openActressLightbox 缺少 actressProfile guard — "
-            "A6-2 無女優資料時不應開啟 actress lightbox"
-        )
+    def test_lightbox_mode_normalization_contains(self):
+        """persistence.js restoreState 重置 lightboxOpen+lightboxIndex；grid-mode.js openActressLightbox 含 actressProfile guard"""
+        ps = self.PERSISTENCE_JS.read_text(encoding='utf-8')
+        m = re.search(r'restoreState\s*\(\s*\)', ps)
+        assert m, "persistence.js 缺少 restoreState 方法定義"
+        body = ps[m.start():m.start() + 3000]
+        assert 'lightboxOpen' in body and '= false' in body, \
+            "persistence.js restoreState missing: 'lightboxOpen = false' (A6-2)"
+        assert 'actressProfile' in body and 'lightboxIndex' in body, \
+            "persistence.js restoreState missing: actressProfile + lightboxIndex 處理 (A6-2)"
+        gm = self.GRID_MODE_JS.read_text(encoding='utf-8')
+        m2 = re.search(r'openActressLightbox\s*\(\s*\)', gm)
+        assert m2, "grid-mode.js 缺少 openActressLightbox 方法定義"
+        head = gm[m2.start():m2.start() + 300]
+        assert re.search(r'if\s*\(\s*!this\.actressProfile\s*\)\s*return', head), \
+            "grid-mode.js openActressLightbox missing: actressProfile guard (A6-2)"
 
 
 class TestHeroSlotReservation:
@@ -2073,118 +1750,45 @@ class TestHeroSlotReservation:
     SEARCH_HTML = PROJECT_ROOT / "web/templates/search.html"
     ANIMATIONS_JS = PROJECT_ROOT / "web/static/js/pages/search/animations.js"
 
-    def test_seed_handler_sets_hero_slot_reserved(self):
-        """search-flow.js seed handler 包含 _heroSlotReserved = true"""
-        content = self.SEARCH_FLOW_JS.read_text(encoding='utf-8')
-        # 找 seed handler
-        match = re.search(r"data\.type\s*===?\s*['\"]seed['\"]", content)
-        assert match, "search-flow.js 缺少 seed handler"
-        seed_block = content[match.start():match.start() + 1000]
-        assert '_heroSlotReserved' in seed_block and '= true' in seed_block, (
-            "search-flow.js seed handler 缺少 _heroSlotReserved = true — "
-            "A7-Prod 所有送 seed 的搜尋必須預留 Hero slot"
-        )
+    def test_hero_slot_reservation_js_contains(self):
+        """animations.js playHeroRemove；search.html hero-card 含 _heroSlotReserved；search-flow.js seed/fallback/result-complete 邏輯"""
+        anim = self.ANIMATIONS_JS.read_text(encoding='utf-8')
+        assert re.search(r'playHeroRemove\s*:', anim), \
+            "animations.js missing: 'playHeroRemove' method"
+        html = self.SEARCH_HTML.read_text(encoding='utf-8')
+        m = re.search(r'class="[^"]*hero-card[^"]*"', html)
+        assert m, "search.html 缺少 hero-card class 區塊"
+        assert '_heroSlotReserved' in html[max(0, m.start() - 200):m.start() + 200], \
+            "search.html hero-card missing: '_heroSlotReserved' (A7-Prod)"
+        sf = self.SEARCH_FLOW_JS.read_text(encoding='utf-8')
+        seed_m = re.search(r"data\.type\s*===?\s*['\"]seed['\"]", sf)
+        assert seed_m, "search-flow.js 缺少 seed handler"
+        assert '_heroSlotReserved' in sf[seed_m.start():seed_m.start() + 1000] and \
+               '= true' in sf[seed_m.start():seed_m.start() + 1000], \
+            "search-flow.js seed handler missing: '_heroSlotReserved = true'"
+        rc_m = re.search(r"data\.type\s*===?\s*['\"]result-complete['\"]", sf)
+        assert rc_m, "search-flow.js 缺少 result-complete handler"
+        assert '_heroSlotReserved = false' not in sf[rc_m.start():rc_m.start() + 1500], \
+            "search-flow.js result-complete should not contain: '_heroSlotReserved = false'"
+        fb_m = re.search(r'async\s+fallbackSearch\s*\(', sf)
+        assert fb_m, "search-flow.js 缺少 fallbackSearch 方法"
+        fb_body = sf[fb_m.start():fb_m.start() + 3000]
+        for expected in ['_heroSlotReserved', 'playHeroRemove']:
+            assert expected in fb_body, f"search-flow.js fallbackSearch missing: {expected!r}"
 
-    def test_hero_card_xshow_includes_hero_slot_reserved(self):
-        """search.html Hero Card x-show 包含 _heroSlotReserved"""
-        content = self.SEARCH_HTML.read_text(encoding='utf-8')
-        match = re.search(r'class="[^"]*hero-card[^"]*"', content)
-        assert match, "search.html 缺少 hero-card class 區塊"
-        hero_block = content[max(0, match.start() - 200):match.start() + 200]
-        assert '_heroSlotReserved' in hero_block, (
-            "search.html Hero Card x-show 缺少 _heroSlotReserved 條件 — "
-            "A7-Prod Hero Card 應在 actressProfile || _heroSlotReserved 時顯示"
-        )
-
-    def test_animations_exposes_play_hero_remove(self):
-        """animations.js 包含 playHeroRemove 方法定義"""
-        content = self.ANIMATIONS_JS.read_text(encoding='utf-8')
-        assert re.search(r'playHeroRemove\s*:', content), (
-            "animations.js 缺少 playHeroRemove 方法 — "
-            "A7-Prod 必須新增此方法（Flip 補位動畫）"
-        )
-
-    def test_result_complete_does_not_remove_hero_slot(self):
-        """search-flow.js result-complete handler 不拆 Hero placeholder（由 result 事件決定）"""
-        content = self.SEARCH_FLOW_JS.read_text(encoding='utf-8')
-        match = re.search(r"data\.type\s*===?\s*['\"]result-complete['\"]", content)
-        assert match, "search-flow.js 缺少 result-complete handler"
-        rc_block = content[match.start():match.start() + 1500]
-        # result-complete 不應包含 _heroSlotReserved = false（拆除邏輯）
-        assert '_heroSlotReserved = false' not in rc_block, (
-            "search-flow.js result-complete handler 不應拆除 Hero placeholder — "
-            "A7-Prod Hero slot 最終命運由 result 事件決定"
-        )
-
-    def test_fallback_search_handles_hero_slot_no_actress(self):
-        """search-flow.js fallbackSearch 成功但無 actressProfile 時移除 _heroSlotReserved"""
-        content = self.SEARCH_FLOW_JS.read_text(encoding='utf-8')
-        match = re.search(r'async\s+fallbackSearch\s*\(', content)
-        assert match, "search-flow.js 缺少 fallbackSearch 方法"
-        fb_block = content[match.start():match.start() + 3000]
-        assert '_heroSlotReserved' in fb_block, (
-            "search-flow.js fallbackSearch 缺少 _heroSlotReserved 處理 — "
-            "A7-Prod SSE 斷線走 fallback 時，無 actressProfile 必須移除 Hero placeholder"
-        )
-
-    def test_fallback_search_hero_slot_flip_remove(self):
-        """search-flow.js fallbackSearch 的 _heroSlotReserved 移除包含 Flip 動畫"""
-        content = self.SEARCH_FLOW_JS.read_text(encoding='utf-8')
-        match = re.search(r'async\s+fallbackSearch\s*\(', content)
-        assert match, "search-flow.js 缺少 fallbackSearch 方法"
-        fb_block = content[match.start():match.start() + 3000]
-        assert 'playHeroRemove' in fb_block, (
-            "search-flow.js fallbackSearch 的 _heroSlotReserved 移除缺少 playHeroRemove 呼叫 — "
-            "A7-Prod 必須透過 Flip 動畫平滑移除 Hero placeholder"
-        )
-
-    def test_result_event_handles_hero_slot_in_normal_stream(self):
-        """search-flow.js result 事件（正常 stream 路徑）統一處理 _heroSlotReserved"""
-        content = self.SEARCH_FLOW_JS.read_text(encoding='utf-8')
-        # 找 streamComplete 後的 result handler 中的正常路徑
-        # 正常 stream 完成路徑在 "正常 stream 完成：只補充 metadata" 附近
-        assert '正常 stream 完成' in content, (
-            "search-flow.js 缺少正常 stream 完成路徑的註解標記"
-        )
-        normal_idx = content.index('正常 stream 完成')
-        normal_block = content[normal_idx:normal_idx + 2000]
-        assert '_heroSlotReserved' in normal_block, (
-            "search-flow.js result 事件正常 stream 路徑缺少 _heroSlotReserved 處理 — "
-            "A7-Prod Hero slot 最終命運由 result 事件決定"
-        )
-        # 驗證包含 Flip 移除邏輯（playHeroRemove）
-        assert 'playHeroRemove' in normal_block, (
-            "search-flow.js result 事件正常 stream 路徑缺少 playHeroRemove — "
-            "A7-Prod 無 actressProfile 時必須 Flip 移除 Hero placeholder"
-        )
-
-    def test_result_event_allFailed_fallback_handles_hero_slot(self):
-        """search-flow.js result 事件 allFailed+fallback 路徑處理 _heroSlotReserved"""
-        content = self.SEARCH_FLOW_JS.read_text(encoding='utf-8')
-        # allFailed fallback 路徑在 "Issue 1: Fallback 路徑" 附近
-        assert 'Issue 1: Fallback' in content, (
-            "search-flow.js 缺少 allFailed fallback 路徑的註解標記"
-        )
-        fb_idx = content.index('Issue 1: Fallback')
-        fb_block = content[fb_idx:fb_idx + 2000]
-        assert '_heroSlotReserved' in fb_block, (
-            "search-flow.js result 事件 allFailed+fallback 路徑缺少 _heroSlotReserved 處理 — "
-            "A7-Prod fallback 替換結果時必須處理 Hero slot"
-        )
-
-    def test_result_event_allFailed_no_fallback_cleans_hero_slot(self):
-        """search-flow.js result 事件全失敗無 fallback 路徑清理 _heroSlotReserved"""
-        content = self.SEARCH_FLOW_JS.read_text(encoding='utf-8')
-        # 全失敗無 fallback 路徑在 "全部失敗且無 fallback" 附近
-        assert '全部失敗且無 fallback' in content, (
-            "search-flow.js 缺少全失敗無 fallback 路徑的註解標記"
-        )
-        nf_idx = content.index('全部失敗且無 fallback')
-        nf_block = content[nf_idx:nf_idx + 500]
-        assert '_heroSlotReserved' in nf_block, (
-            "search-flow.js result 事件全失敗無 fallback 路徑缺少 _heroSlotReserved 清理 — "
-            "A7-Prod 切到 error state 前必須清理 Hero slot"
-        )
+    def test_result_event_hero_slot_handling(self):
+        """search-flow.js result 事件三路徑（正常stream / allFailed+fallback / 全失敗無fallback）均處理 _heroSlotReserved"""
+        sf = self.SEARCH_FLOW_JS.read_text(encoding='utf-8')
+        for marker, window, expected in [
+            ('正常 stream 完成', 2000, ['_heroSlotReserved', 'playHeroRemove']),
+            ('Issue 1: Fallback', 2000, ['_heroSlotReserved']),
+            ('全部失敗且無 fallback', 500, ['_heroSlotReserved']),
+        ]:
+            assert marker in sf, f"search-flow.js missing: comment marker {marker!r}"
+            block = sf[sf.index(marker):sf.index(marker) + window]
+            for expected_str in expected:
+                assert expected_str in block, \
+                    f"search-flow.js '{marker}' block missing: {expected_str!r}"
 
 
 class TestShowcaseAnimationsGuard:
@@ -2256,18 +1860,13 @@ class TestShowcaseAnimationsGuard:
                 f"theme.css missing: {expected!r}"
 
     def test_showcase_html_contains(self):
-        """showcase.html 包含 animations.js script tag + data-flip-id"""
+        """showcase.html 包含 animations.js script tag + data-flip-id；不重複載入 Flip.min.js"""
         content = self.SHOWCASE_HTML.read_text(encoding='utf-8')
         for expected in ["animations.js", "data-flip-id"]:
             assert expected in content, \
                 f"showcase.html missing: {expected!r}"
-
-    def test_showcase_html_excludes(self):
-        """showcase.html 不重複載入 Flip.min.js"""
-        content = self.SHOWCASE_HTML.read_text(encoding='utf-8')
-        for forbidden in ["Flip.min.js"]:
-            assert forbidden not in content, \
-                f"showcase.html should not contain: {forbidden!r}"
+        assert "Flip.min.js" not in content, \
+            "showcase.html should not contain: 'Flip.min.js'"
 
     def test_core_js_contains(self):
         """core.js (state-base/videos/lightbox) 包含所有動畫 method 及 guard 字串"""
@@ -2369,49 +1968,17 @@ class TestMotionLabShowcase:
     MOTION_LAB_HTML = PROJECT_ROOT / "web/templates/motion_lab.html"
     MOTION_LAB_JS = PROJECT_ROOT / "web/static/js/pages/motion-lab.js"
 
-    def test_motion_lab_html_has_showcase_tab(self):
-        """motion_lab.html 包含 showcase tab 按鈕"""
+    def test_motion_lab_html_contains(self):
+        """motion_lab.html 含 showcase tab + Alpine 切換邏輯"""
         content = self.MOTION_LAB_HTML.read_text(encoding='utf-8')
-        assert "showcase" in content.lower(), (
-            "motion_lab.html 缺少 showcase tab — "
-            "B1-B4 必須在 Motion Lab 新增 Showcase 分頁"
-        )
-        assert "tab === 'showcase'" in content, (
-            "motion_lab.html 缺少 tab === 'showcase' 條件 — "
-            "Showcase tab 必須有 Alpine tab 切換邏輯"
-        )
+        for expected in ["showcase", "tab === 'showcase'"]:
+            assert expected in content, f"motion_lab.html missing: {expected!r}"
 
-    def test_motion_lab_js_has_play_showcase_entry(self):
-        """motion-lab.js 包含 playShowcaseEntry 方法"""
+    def test_motion_lab_js_contains(self):
+        """motion-lab.js 含 B1-B4 四個 Showcase demo 方法"""
         content = self.MOTION_LAB_JS.read_text(encoding='utf-8')
-        assert 'playShowcaseEntry' in content, (
-            "motion-lab.js 缺少 playShowcaseEntry — "
-            "B1 必須在 Motion Lab 提供 Showcase 初始載入 demo"
-        )
-
-    def test_motion_lab_js_has_play_flip_reorder(self):
-        """motion-lab.js 包含 playFlipReorder 方法"""
-        content = self.MOTION_LAB_JS.read_text(encoding='utf-8')
-        assert 'playFlipReorder' in content, (
-            "motion-lab.js 缺少 playFlipReorder — "
-            "B2 必須在 Motion Lab 提供排序洗牌 demo"
-        )
-
-    def test_motion_lab_js_has_play_flip_filter(self):
-        """motion-lab.js 包含 playFlipFilter 方法"""
-        content = self.MOTION_LAB_JS.read_text(encoding='utf-8')
-        assert 'playFlipFilter' in content, (
-            "motion-lab.js 缺少 playFlipFilter — "
-            "B3 必須在 Motion Lab 提供篩選進出場 demo"
-        )
-
-    def test_motion_lab_js_has_play_page_transition(self):
-        """motion-lab.js 包含 playPageTransition 方法（整合 playPageOut + playPageIn）"""
-        content = self.MOTION_LAB_JS.read_text(encoding='utf-8')
-        assert 'playPageTransition' in content, (
-            "motion-lab.js 缺少 playPageTransition — "
-            "B4 必須在 Motion Lab 提供分頁切換 demo"
-        )
+        for expected in ['playShowcaseEntry', 'playFlipReorder', 'playFlipFilter', 'playPageTransition']:
+            assert expected in content, f"motion-lab.js missing: {expected!r}"
 
 
 # ====================================================================
@@ -2440,41 +2007,28 @@ class TestSearchErrorMessageGuard:
             return True
         return False
 
-    def test_no_err_message_in_alert(self):
-        """alert() 內不可含 err.message / error.message / result.error"""
-        pattern = r'alert\s*\([^)]*(?:err\.message|error\.message|result\.error)'
-        all_violations = []
-        for js_file in self._collect_js_files():
-            violations = find_pattern_in_file(
-                js_file, pattern,
-                exclude_lines=lambda line, _: self._is_console_or_throw(line)
+    def test_no_err_message_exposed_in_search_js(self):
+        """D1 守衛：search JS alert() 及 errorText 不可暴露 err.message / error.message / result.error"""
+        checks = [
+            (r'alert\s*\([^)]*(?:err\.message|error\.message|result\.error)',
+             "alert() 內暴露技術錯誤訊息"),
+            (r'this\.errorText\s*=\s*.*(?:err\.message|error\.message)',
+             "errorText 暴露技術錯誤訊息"),
+        ]
+        for pattern, label in checks:
+            all_violations = []
+            for js_file in self._collect_js_files():
+                violations = find_pattern_in_file(
+                    js_file, pattern,
+                    exclude_lines=lambda line, _: self._is_console_or_throw(line)
+                )
+                for line_num, line_content in violations:
+                    all_violations.append(f"  {js_file.relative_to(PROJECT_ROOT)}:{line_num}: {line_content}")
+            assert not all_violations, (
+                f"D1 守衛違規：{label}\n"
+                + "\n".join(all_violations)
+                + "\n\n修正：只顯示友善中文提示，技術細節降級到 console.error"
             )
-            for line_num, line_content in violations:
-                all_violations.append(f"  {js_file.relative_to(PROJECT_ROOT)}:{line_num}: {line_content}")
-
-        assert not all_violations, (
-            "D1 守衛違規：alert() 內暴露技術錯誤訊息\n"
-            + "\n".join(all_violations)
-            + "\n\n修正：alert 只顯示友善中文提示，技術細節降級到 console.error"
-        )
-
-    def test_no_err_message_in_errorText(self):
-        """this.errorText = 內不可含 err.message / error.message"""
-        pattern = r'this\.errorText\s*=\s*.*(?:err\.message|error\.message)'
-        all_violations = []
-        for js_file in self._collect_js_files():
-            violations = find_pattern_in_file(
-                js_file, pattern,
-                exclude_lines=lambda line, _: self._is_console_or_throw(line)
-            )
-            for line_num, line_content in violations:
-                all_violations.append(f"  {js_file.relative_to(PROJECT_ROOT)}:{line_num}: {line_content}")
-
-        assert not all_violations, (
-            "D1 守衛違規：errorText 暴露技術錯誤訊息\n"
-            + "\n".join(all_violations)
-            + "\n\n修正：errorText 只顯示友善中文提示，技術細節降級到 console.error"
-        )
 
 
 class TestLightboxAnimationGuard:
@@ -2889,56 +2443,22 @@ class TestGridPerPageGuard:
             (PROJECT_ROOT / "web/static/js/pages/showcase/state-videos.js").read_text(encoding='utf-8')
         )
 
-    def test_guard1_updatePagination_has_grid_perPage0_guard(self):
-        """Guard 1: updatePagination 必須含 grid+perPage=0 降級邏輯"""
+    def test_grid_per_page_method_bodies_contain_guard(self):
+        """Guard 1/3/4: updatePagination / restoreState / switchMode 均含 grid+perPage=120 降級邏輯"""
         content = self._read_js()
-
-        # 找到 updatePagination 方法體
-        match = re.search(r'updatePagination\s*\(\s*\)\s*\{', content)
-        assert match, "找不到 updatePagination 方法"
-
-        # 取得方法體（到下一個同層級的方法為止）
-        start = match.start()
-        body = content[start:start + 800]
-
-        # 必須同時包含 mode/grid 參考和 perPage=0 降級
-        has_grid_check = bool(re.search(r"mode\s*===?\s*['\"]grid['\"]", body))
-        has_perpage0_downgrade = bool(re.search(r'perPage\s*=\s*120', body))
-
-        assert has_grid_check, (
-            "F2 違規：updatePagination() 缺少 grid mode 檢查 — "
-            "grid mode 下 perPage=0 必須降級為 120"
-        )
-        assert has_perpage0_downgrade, (
-            "F2 違規：updatePagination() 缺少 perPage=0 降級邏輯 — "
-            "grid mode 下 perPage=0 必須降級為 120（this.perPage = 120）"
-        )
-
-    def test_guard3_restoreState_has_grid_perPage0_guard(self):
-        """Guard 3: restoreState 必須含 grid+perPage=0 降級邏輯"""
-        content = self._read_js()
-        match = re.search(r'restoreState\s*\(\s*\)\s*\{', content)
-        assert match, "找不到 restoreState 方法"
-        body = content[match.start():match.start() + 2500]
-        has_grid_check = bool(re.search(r"mode\s*===?\s*['\"]grid['\"]", body))
-        has_downgrade = bool(re.search(r'perPage\s*=\s*120', body))
-        assert has_grid_check and has_downgrade, (
-            "F2 違規：restoreState() 缺少 grid+perPage=0 降級 — "
-            "localStorage/URL 恢復 perPage=0+grid 時必須降級為 120"
-        )
-
-    def test_guard4_switchMode_has_grid_perPage0_guard(self):
-        """Guard 4: switchMode 必須含 grid+perPage=0 降級邏輯"""
-        content = self._read_js()
-        match = re.search(r'switchMode\s*\(\s*m\s*\)\s*\{', content)
-        assert match, "找不到 switchMode 方法"
-        body = content[match.start():match.start() + 600]
-        has_grid_check = bool(re.search(r"['\"]grid['\"]", body))
-        has_downgrade = bool(re.search(r'perPage\s*=\s*120', body))
-        assert has_grid_check and has_downgrade, (
-            "F2 違規：switchMode() 缺少 grid+perPage=0 降級 — "
-            "切到 grid 時若 perPage=0 必須降級為 120"
-        )
+        for method_pat, window in [
+            (r'updatePagination\s*\(\s*\)\s*\{', 800),
+            (r'restoreState\s*\(\s*\)\s*\{', 2500),
+            (r'switchMode\s*\(\s*m\s*\)\s*\{', 600),
+        ]:
+            m = re.search(method_pat, content)
+            method_name = method_pat.split(r'\s')[0]
+            assert m, f"showcase/core.js 找不到 {method_name} 方法"
+            body = content[m.start():m.start() + window]
+            has_grid = bool(re.search(r"['\"]grid['\"]", body))
+            has_120 = bool(re.search(r'perPage\s*=\s*120', body))
+            assert has_grid and has_120, \
+                f"F2 違規：{method_name} 缺少 grid+perPage=120 降級邏輯"
 
     def test_guard5_items_per_page_uses_nullish_coalescing(self):
         """Guard 5 (T3.2 P2 fix): items_per_page 預設值必須用 `??` 而非 `||`
@@ -3066,144 +2586,52 @@ class TestSampleGalleryTemplateGuard:
     BASE_HTML = PROJECT_ROOT / 'web' / 'templates' / 'base.html'
     TEMPLATES_DIR = PROJECT_ROOT / 'web' / 'templates'
 
-    def test_old_sampleLightbox_state_absent(self):
-        """T8：舊 sampleLightboxOpen / sampleLightboxIndex 不應出現在任何模板"""
-        pattern = re.compile(r'sampleLightboxOpen|sampleLightboxIndex')
-        violations = []
-
-        for tmpl in self.TEMPLATES_DIR.glob('**/*.html'):
-            content = tmpl.read_text(encoding='utf-8')
-            if pattern.search(content):
-                violations.append(str(tmpl.relative_to(PROJECT_ROOT)))
-
-        assert not violations, (
-            "T8 違規：舊 sampleLightboxOpen/sampleLightboxIndex 仍殘留於模板 — "
-            f"請確認所有模板已遷移至 sampleGallery* state：{violations}"
-        )
-
-    def test_sampleGalleryOpen_in_search_and_base(self):
-        """T8：sampleGalleryOpen / sampleGalleryImages / sampleGalleryIndex 必須出現在 search.html 且 base.html"""
+    def test_sample_gallery_template_html_contains(self):
+        """T8/37b-layout: search.html + base.html 含 sampleGallery* state；search.html 含 lb-header；不含舊殘留字串"""
         search_content = self.SEARCH_HTML.read_text(encoding='utf-8')
         base_content = self.BASE_HTML.read_text(encoding='utf-8')
-
         for state in ('sampleGalleryOpen', 'sampleGalleryImages', 'sampleGalleryIndex'):
-            assert state in search_content, (
-                f"T8 違規：search.html 缺少 {state} — "
-                "Sample Gallery state 必須存在於 searchPage() scope"
-            )
-            assert state in base_content, (
-                f"T8 違規：base.html 缺少 {state} fallback — "
-                "body x-data 必須包含 sampleGallery* fallback"
-            )
+            assert state in search_content, f"search.html missing: {state!r}"
+            assert state in base_content, f"base.html missing: {state!r}"
+        for expected in ['lb-header']:
+            assert expected in search_content, f"search.html missing: {expected!r}"
+        for forbidden in ['class="sample-lightbox"', 'lb-meta-extra']:
+            assert forbidden not in search_content, \
+                f"search.html should not contain: {forbidden!r}"
 
-    def test_sample_gallery_inside_searchPage_scope(self):
-        """T8：search.html 中 class=\"sample-gallery\" 必須在 x-data=\"searchPage()\" 之後（scope 內）"""
+    def test_sample_gallery_template_structure(self):
+        """T8: 舊 sampleLightbox* 不在任何模板；sample-gallery 在 searchPage scope 內；sg-open-btn 在 lb-header 內"""
+        # 舊 state 不殘留
+        pattern = re.compile(r'sampleLightboxOpen|sampleLightboxIndex')
+        violations = [str(t.relative_to(PROJECT_ROOT))
+                      for t in self.TEMPLATES_DIR.glob('**/*.html')
+                      if pattern.search(t.read_text(encoding='utf-8'))]
+        assert not violations, \
+            f"T8 違規：舊 sampleLightboxOpen/sampleLightboxIndex 仍殘留：{violations}"
+        # sample-gallery 在 searchPage scope 後
         content = self.SEARCH_HTML.read_text(encoding='utf-8')
         lines = content.split('\n')
-
-        # 找到 x-data="searchPage" 的行號
-        search_page_line = None
-        for i, line in enumerate(lines):
-            if 'x-data="searchPage"' in line:
-                search_page_line = i
-                break
-
-        assert search_page_line is not None, (
-            "T8 違規：search.html 找不到 x-data=\"searchPage\" — "
-            "searchPage Alpine 組件必須存在"
-        )
-
-        # 找到 class="sample-gallery" 的行號
-        sample_gallery_line = None
-        for i, line in enumerate(lines):
-            if 'class="sample-gallery"' in line:
-                sample_gallery_line = i
-                break
-
-        assert sample_gallery_line is not None, (
-            "T8 違規：search.html 找不到 class=\"sample-gallery\" 元素 — "
-            "Sample Gallery overlay 必須存在於 search.html"
-        )
-
-        assert sample_gallery_line > search_page_line, (
-            f"T8 違規：.sample-gallery（L{sample_gallery_line + 1}）在 "
-            f"x-data=\"searchPage\"（L{search_page_line + 1}）之前 — "
-            "sample-gallery overlay 必須在 searchPage x-data scope 內"
-        )
-
-    def test_old_sample_lightbox_html_absent(self):
-        """T8：search.html 不應含 class=\"sample-lightbox\"（舊 overlay 已移除）"""
-        content = self.SEARCH_HTML.read_text(encoding='utf-8')
-        assert 'class="sample-lightbox"' not in content, (
-            "T8 違規：search.html 仍含 class=\"sample-lightbox\" — "
-            "舊 Sample Lightbox overlay 必須完整移除，改用 sample-gallery"
-        )
-
-    def test_sg_open_btn_in_lightbox_metadata(self):
-        """T8：search.html 含 sg-open-btn，且其行號在 class=\"lb-header\" 內（開始行與結束行之間）"""
-        content = self.SEARCH_HTML.read_text(encoding='utf-8')
-        lines = content.split('\n')
-
-        # 找到 lb-header 開始行號
-        lb_header_line = None
-        for i, line in enumerate(lines):
-            if '"lb-header"' in line:
-                lb_header_line = i
-                break
-
-        assert lb_header_line is not None, (
-            "T8 違規：search.html 找不到 lb-header — "
-            "Grid Lightbox metadata 標題行必須存在"
-        )
-
-        # 找到 lb-header 容器的閉合 </div>（用深度計數器追蹤巢狀）
-        lb_header_close_line = None
+        sp_line = next((i for i, l in enumerate(lines) if 'x-data="searchPage"' in l), None)
+        assert sp_line is not None, "search.html missing: 'x-data=\"searchPage\"'"
+        sg_line = next((i for i, l in enumerate(lines) if 'class="sample-gallery"' in l), None)
+        assert sg_line is not None, "search.html missing: 'class=\"sample-gallery\"'"
+        assert sg_line > sp_line, \
+            f"T8 違規：.sample-gallery (L{sg_line+1}) 在 searchPage scope (L{sp_line+1}) 之前"
+        # sg-open-btn 在 lb-header 內
+        lb_line = next((i for i, l in enumerate(lines) if '"lb-header"' in l), None)
+        assert lb_line is not None, "search.html missing: 'lb-header'"
+        lb_close = None
         depth = 0
-        for i in range(lb_header_line, len(lines)):
-            ln = lines[i]
-            depth += ln.count('<div') - ln.count('</div>')
-            if i > lb_header_line and depth <= 0:
-                lb_header_close_line = i
+        for i in range(lb_line, len(lines)):
+            depth += lines[i].count('<div') - lines[i].count('</div>')
+            if i > lb_line and depth <= 0:
+                lb_close = i
                 break
-
-        assert lb_header_close_line is not None, (
-            "T8 違規：search.html lb-header 找不到對應的 </div> — "
-            "lb-header 容器必須正確閉合"
-        )
-
-        # 找到 sg-open-btn 行號
-        sg_open_btn_line = None
-        for i, line in enumerate(lines):
-            if 'sg-open-btn' in line:
-                sg_open_btn_line = i
-                break
-
-        assert sg_open_btn_line is not None, (
-            "T8 違規：search.html 找不到 sg-open-btn — "
-            "Grid Lightbox 必須在 .lb-header 內含 Sample Gallery 入口按鈕"
-        )
-
-        assert lb_header_line < sg_open_btn_line < lb_header_close_line, (
-            f"T8 違規：sg-open-btn（L{sg_open_btn_line + 1}）不在 "
-            f"lb-header（L{lb_header_line + 1}～L{lb_header_close_line + 1}）內 — "
-            "入口按鈕必須在 .lb-header 開始與結束之間"
-        )
-
-    def test_lb_meta_extra_removed_from_search_html(self):
-        """37b-layout 守衛：search.html 不應殘留 lb-meta-extra class"""
-        content = self.SEARCH_HTML.read_text(encoding='utf-8')
-        assert 'lb-meta-extra' not in content, (
-            "37b-layout 違規：search.html 仍含 lb-meta-extra — "
-            "合併後應改用 .lb-details，lb-meta-extra 已廢棄"
-        )
-
-    def test_lb_header_in_search_html(self):
-        """37b-layout 守衛：search.html 應含 lb-header class"""
-        content = self.SEARCH_HTML.read_text(encoding='utf-8')
-        assert 'lb-header' in content, (
-            "37b-layout 違規：search.html 缺少 lb-header — "
-            "標題行容器（標題 + 樣品圖按鈕）必須存在"
-        )
+        assert lb_close is not None, "search.html lb-header 找不到對應的 </div>"
+        sg_btn_line = next((i for i, l in enumerate(lines) if 'sg-open-btn' in l), None)
+        assert sg_btn_line is not None, "search.html missing: 'sg-open-btn'"
+        assert lb_line < sg_btn_line < lb_close, \
+            f"T8 違規：sg-open-btn (L{sg_btn_line+1}) 不在 lb-header (L{lb_line+1}~L{lb_close+1}) 內"
 
 
 class TestProxyDirectGuard:
@@ -3235,239 +2663,65 @@ class TestShowcaseSampleGalleryGuard:
     CORE_JS = PROJECT_ROOT / 'web' / 'static' / 'js' / 'pages' / 'showcase' / 'state-lightbox.js'
     ANIMATIONS_JS = PROJECT_ROOT / 'web' / 'static' / 'js' / 'pages' / 'showcase' / 'animations.js'
 
-    def test_sample_gallery_inside_showcaseState_scope(self):
-        """守衛 1：.sample-gallery overlay 必須在 x-data="showcase" scope 之後（確保 Alpine binding 正確）"""
+    def test_showcase_sample_gallery_js_contains(self):
+        """T7 守衛 2/3/7: core.js state props + methods；animations.js playSampleGallerySwitch 完整實作"""
+        core = self.CORE_JS.read_text(encoding='utf-8')
+        for expected in ('sampleGalleryOpen', 'sampleGalleryImages', 'sampleGalleryIndex',
+                         'openSampleGallery', 'closeSampleGallery', 'prevSampleGallery',
+                         'nextSampleGallery', 'jumpSampleGallery'):
+            assert expected in core, f"showcase/state-lightbox.js missing: {expected!r}"
+        anim = self.ANIMATIONS_JS.read_text(encoding='utf-8')
+        for expected in ['playSampleGallerySwitch', 'killTweensOf', 'gsap-animating', 'clearProps']:
+            assert expected in anim, f"showcase/animations.js missing: {expected!r}"
+
+    def test_showcase_sample_gallery_html_structure(self):
+        """T7/37b-layout 守衛 1/4/5/6/8/9/10: showcase.html scope 順序、bindings、lb-header、sg-open-btn 位置"""
         content = self.SHOWCASE_HTML.read_text(encoding='utf-8')
         lines = content.split('\n')
-
-        # 54b 起 x-data 從 "showcaseState" 改為 "showcase"
-        showcase_state_line = None
-        for i, line in enumerate(lines):
-            if 'x-data="showcase"' in line and 'x-data="showcase"' == line.strip().split()[0] or \
-               'x-data="showcase"' in line:
-                showcase_state_line = i
-                break
-
-        assert showcase_state_line is not None, (
-            "T7 守衛 1 違規：showcase.html 找不到 x-data=\"showcase\" — "
-            "Alpine scope 根元素必須存在"
-        )
-
-        # 找到 .sample-gallery 的行號
-        sample_gallery_line = None
-        for i, line in enumerate(lines):
-            if 'sample-gallery' in line:
-                sample_gallery_line = i
-                break
-
-        assert sample_gallery_line is not None, (
-            "T7 守衛 1 違規：showcase.html 找不到 .sample-gallery 元素 — "
-            "sample-gallery overlay 必須存在於 showcase.html"
-        )
-
-        assert sample_gallery_line > showcase_state_line, (
-            f"T7 守衛 1 違規：.sample-gallery（L{sample_gallery_line + 1}）在 "
-            f"x-data=\"showcase\"（L{showcase_state_line + 1}）之前 — "
-            "sample-gallery overlay 必須在 showcase x-data scope 內"
-        )
-
-    def test_sample_gallery_state_properties_in_core_js(self):
-        """守衛 2：core.js 的 showcaseState() 必須包含 sampleGalleryOpen / sampleGalleryImages / sampleGalleryIndex"""
-        content = self.CORE_JS.read_text(encoding='utf-8')
-
-        for state_prop in ('sampleGalleryOpen', 'sampleGalleryImages', 'sampleGalleryIndex'):
-            assert state_prop in content, (
-                f"T7 守衛 2 違規：core.js 缺少 state 屬性 {state_prop} — "
-                "showcaseState() return 物件必須包含此屬性"
-            )
-
-    def test_sample_gallery_methods_in_core_js(self):
-        """守衛 3：core.js 必須包含 openSampleGallery / closeSampleGallery / prevSampleGallery / nextSampleGallery / jumpSampleGallery"""
-        content = self.CORE_JS.read_text(encoding='utf-8')
-
-        for method in ('openSampleGallery', 'closeSampleGallery', 'prevSampleGallery',
-                       'nextSampleGallery', 'jumpSampleGallery'):
-            assert method in content, (
-                f"T7 守衛 3 違規：core.js 缺少 method {method} — "
-                "必須在 showcaseState() 內實作此方法"
-            )
-
-    def test_sg_open_btn_and_openSampleGallery_in_showcase_html(self):
-        """守衛 4：showcase.html 必須包含 sg-open-btn class 和 openSampleGallery( 呼叫（入口按鈕）"""
-        content = self.SHOWCASE_HTML.read_text(encoding='utf-8')
-
-        assert 'sg-open-btn' in content, (
-            "T7 守衛 4 違規：showcase.html 缺少 sg-open-btn class — "
-            "入口按鈕必須有 sg-open-btn class"
-        )
-
-        assert 'openSampleGallery(' in content, (
-            "T7 守衛 4 違規：showcase.html 缺少 openSampleGallery( 呼叫 — "
-            "入口按鈕必須綁定 @click=\"openSampleGallery(...)\""
-        )
-
-    def test_sample_gallery_overlay_bound_to_sampleGalleryOpen(self):
-        """守衛 5：showcase.html 的 .sample-gallery 必須有 sampleGalleryOpen 的 :class 或 x-show 綁定"""
-        content = self.SHOWCASE_HTML.read_text(encoding='utf-8')
-
-        has_binding = bool(re.search(
-            r'sample-gallery[^>]*sampleGalleryOpen|sampleGalleryOpen[^>]*sample-gallery',
-            content
-        )) or bool(re.search(
-            r"class=['\"]sample-gallery['\"][^>]*\n[^>]*sampleGalleryOpen"
-            r"|sampleGalleryOpen.*sample-gallery",
-            content
-        )) or ('sampleGalleryOpen' in content and 'sample-gallery' in content)
-
-        assert has_binding, (
-            "T7 守衛 5 違規：showcase.html 的 .sample-gallery 缺少 sampleGalleryOpen 綁定 — "
-            "overlay 必須用 sampleGalleryOpen 控制顯示（:class=\"{ 'show': sampleGalleryOpen }\" 或 x-show）"
-        )
-
-        # 更精確：確認 sampleGalleryOpen 在 sample-gallery 元素區域出現
-        lines = content.split('\n')
-        gallery_start = None
-        for i, line in enumerate(lines):
-            if 'sample-gallery' in line and ('class=' in line or 'class =' in line):
-                gallery_start = i
-                break
-
-        assert gallery_start is not None, (
-            "T7 守衛 5 違規：showcase.html 找不到含 class 的 .sample-gallery 元素 — "
-            "overlay 根元素必須有 class=\"sample-gallery\" 屬性"
-        )
-
-        # 在 gallery 元素附近 10 行內找 sampleGalleryOpen
-        nearby_lines = lines[gallery_start:gallery_start + 10]
-        nearby_content = '\n'.join(nearby_lines)
-        assert 'sampleGalleryOpen' in nearby_content, (
-            "T7 守衛 5 違規：.sample-gallery 元素附近缺少 sampleGalleryOpen 綁定 — "
-            "必須在 overlay 根元素上加 :class=\"{ 'show': sampleGalleryOpen }\""
-        )
-
-    def test_sg_thumb_active_references_sampleGalleryIndex(self):
-        """守衛 6：showcase.html 必須有 sg-thumb-active 和 sampleGalleryIndex 的關聯綁定"""
-        content = self.SHOWCASE_HTML.read_text(encoding='utf-8')
-
-        assert 'sg-thumb-active' in content, (
-            "T7 守衛 6 違規：showcase.html 缺少 sg-thumb-active class — "
-            "縮圖 active 高亮需要此 class"
-        )
-
-        assert 'sampleGalleryIndex' in content, (
-            "T7 守衛 6 違規：showcase.html 缺少 sampleGalleryIndex 引用 — "
-            "縮圖 active 高亮必須引用 sampleGalleryIndex"
-        )
-
-        # 確認 sg-thumb-active 與 sampleGalleryIndex 在同一行或附近（5 行內）
-        lines = content.split('\n')
-        thumb_active_lines = [i for i, l in enumerate(lines) if 'sg-thumb-active' in l]
-        gallery_index_lines = [i for i, l in enumerate(lines) if 'sampleGalleryIndex' in l]
-
-        # 找到是否有任一 sg-thumb-active 行在某個 sampleGalleryIndex 行 5 行內
-        found_proximity = False
-        for ta_line in thumb_active_lines:
-            for gi_line in gallery_index_lines:
-                if abs(ta_line - gi_line) <= 5:
-                    found_proximity = True
-                    break
-            if found_proximity:
-                break
-
-        assert found_proximity, (
-            "T7 守衛 6 違規：sg-thumb-active 和 sampleGalleryIndex 未在同一區域（5 行內）— "
-            "縮圖 active 的 :class 綁定必須引用 sampleGalleryIndex"
-        )
-
-    def test_playSampleGallerySwitch_in_animations_js(self):
-        """守衛 7：animations.js 必須包含 playSampleGallerySwitch 及 C18/C21 完整實作"""
-        content = self.ANIMATIONS_JS.read_text(encoding='utf-8')
-
-        assert 'playSampleGallerySwitch' in content, (
-            "T7 守衛 7 違規：animations.js 缺少 playSampleGallerySwitch — "
-            "必須新增 playSampleGallerySwitch 方法"
-        )
-
-        assert 'killTweensOf' in content, (
-            "T7 守衛 7 違規：animations.js 缺少 killTweensOf（C18）— "
-            "playSampleGallerySwitch 必須呼叫 gsap.killTweensOf 打斷舊動畫"
-        )
-
-        assert 'gsap-animating' in content, (
-            "T7 守衛 7 違規：animations.js 缺少 gsap-animating（C21）— "
-            "playSampleGallerySwitch 必須在動畫期間加/移除 gsap-animating class"
-        )
-
-        assert 'clearProps' in content, (
-            "T7 守衛 7 違規：animations.js 缺少 clearProps — "
-            "playSampleGallerySwitch 的 fromTo 必須在結束後清除 transform/opacity"
-        )
-
-    def test_lb_meta_extra_removed_from_showcase_html(self):
-        """37b-layout 守衛：showcase.html 不應殘留 lb-meta-extra class"""
-        content = self.SHOWCASE_HTML.read_text(encoding='utf-8')
-        assert 'lb-meta-extra' not in content, (
-            "37b-layout 違規：showcase.html 仍含 lb-meta-extra — "
-            "合併後應改用 .lb-details，lb-meta-extra 已廢棄"
-        )
-
-    def test_lb_header_in_showcase_html(self):
-        """37b-layout 守衛：showcase.html 應含 lb-header class"""
-        content = self.SHOWCASE_HTML.read_text(encoding='utf-8')
-        assert 'lb-header' in content, (
-            "37b-layout 違規：showcase.html 缺少 lb-header — "
-            "標題行容器（標題 + 樣品圖按鈕）必須存在"
-        )
-
-    def test_sg_open_btn_inside_lb_header_in_showcase_html(self):
-        """37b-layout 守衛：showcase.html 的 sg-open-btn 必須在 lb-header 開始與結束之間"""
-        content = self.SHOWCASE_HTML.read_text(encoding='utf-8')
-        lines = content.split('\n')
-
-        # 找到 lb-header 開始行號
-        lb_header_line = None
-        for i, line in enumerate(lines):
-            if '"lb-header"' in line:
-                lb_header_line = i
-                break
-
-        assert lb_header_line is not None, (
-            "37b-layout 違規：showcase.html 找不到 lb-header — "
-            "標題行容器必須存在"
-        )
-
-        # 找到 lb-header 容器的閉合 </div>（用深度計數器追蹤巢狀）
-        lb_header_close_line = None
+        # 守衛 1: .sample-gallery 在 x-data="showcase" scope 後
+        sc_line = next((i for i, l in enumerate(lines) if 'x-data="showcase"' in l), None)
+        assert sc_line is not None, "showcase.html missing: 'x-data=\"showcase\"'"
+        sg_line = next((i for i, l in enumerate(lines) if 'sample-gallery' in l), None)
+        assert sg_line is not None, "showcase.html missing: '.sample-gallery'"
+        assert sg_line > sc_line, \
+            f"T7 違規：.sample-gallery (L{sg_line+1}) 在 showcase scope (L{sc_line+1}) 之前"
+        # 守衛 4: sg-open-btn + openSampleGallery
+        for expected in ['sg-open-btn', 'openSampleGallery(']:
+            assert expected in content, f"showcase.html missing: {expected!r}"
+        # 守衛 5: sampleGalleryOpen 在 .sample-gallery 附近 10 行
+        gl_start = next((i for i, l in enumerate(lines)
+                         if 'sample-gallery' in l and ('class=' in l or 'class =' in l)), None)
+        assert gl_start is not None, "showcase.html missing: class='sample-gallery' element"
+        nearby = '\n'.join(lines[gl_start:gl_start + 10])
+        assert 'sampleGalleryOpen' in nearby, \
+            "showcase.html .sample-gallery missing: 'sampleGalleryOpen' binding nearby"
+        # 守衛 6: sg-thumb-active 與 sampleGalleryIndex 在 5 行內
+        ta_lines = [i for i, l in enumerate(lines) if 'sg-thumb-active' in l]
+        gi_lines = [i for i, l in enumerate(lines) if 'sampleGalleryIndex' in l]
+        assert ta_lines, "showcase.html missing: 'sg-thumb-active'"
+        assert gi_lines, "showcase.html missing: 'sampleGalleryIndex'"
+        assert any(abs(t - g) <= 5 for t in ta_lines for g in gi_lines), \
+            "showcase.html: sg-thumb-active 和 sampleGalleryIndex 未在同一區域（5 行內）"
+        # 37b-layout: lb-header 存在；無 lb-meta-extra
+        assert 'lb-header' in content, "showcase.html missing: 'lb-header'"
+        assert 'lb-meta-extra' not in content, \
+            "showcase.html should not contain: 'lb-meta-extra'"
+        # 守衛 10: sg-open-btn 在 lb-header 範圍內
+        lb_line = next((i for i, l in enumerate(lines) if '"lb-header"' in l), None)
+        assert lb_line is not None, "showcase.html missing: 'lb-header' container"
+        lb_close = None
         depth = 0
-        for i in range(lb_header_line, len(lines)):
-            ln = lines[i]
-            depth += ln.count('<div') - ln.count('</div>')
-            if i > lb_header_line and depth <= 0:
-                lb_header_close_line = i
+        for i in range(lb_line, len(lines)):
+            depth += lines[i].count('<div') - lines[i].count('</div>')
+            if i > lb_line and depth <= 0:
+                lb_close = i
                 break
+        assert lb_close is not None, "showcase.html lb-header 找不到對應的 </div>"
+        sg_btn = next((i for i, l in enumerate(lines) if 'sg-open-btn' in l), None)
+        assert sg_btn is not None, "showcase.html missing: 'sg-open-btn'"
+        assert lb_line < sg_btn < lb_close, \
+            f"showcase.html sg-open-btn (L{sg_btn+1}) 不在 lb-header (L{lb_line+1}~L{lb_close+1}) 內"
 
-        assert lb_header_close_line is not None, (
-            "37b-layout 違規：showcase.html lb-header 找不到對應的 </div> — "
-            "lb-header 容器必須正確閉合"
-        )
-
-        # 找到 sg-open-btn 行號
-        sg_open_btn_line = None
-        for i, line in enumerate(lines):
-            if 'sg-open-btn' in line:
-                sg_open_btn_line = i
-                break
-
-        assert sg_open_btn_line is not None, (
-            "37b-layout 違規：showcase.html 找不到 sg-open-btn — "
-            "入口按鈕必須有 sg-open-btn class"
-        )
-
-        assert lb_header_line < sg_open_btn_line < lb_header_close_line, (
-            f"37b-layout 違規：sg-open-btn（L{sg_open_btn_line + 1}）不在 "
-            f"lb-header（L{lb_header_line + 1}～L{lb_header_close_line + 1}）內 — "
-            "入口按鈕必須在 .lb-header 開始與結束之間"
-        )
 
 
 class TestHelpPageGuard:
@@ -3478,51 +2732,30 @@ class TestHelpPageGuard:
         import json
         return json.loads((PROJECT_ROOT / 'locales/zh_TW.json').read_text(encoding='utf-8'))
 
-    def test_help_has_primary_source(self):
+    def test_help_page_guard_html_contains(self):
+        """37d/38a 守衛：help.html 含 i18n keys；zh_TW.json 含對應字串"""
         html = (PROJECT_ROOT / 'web/templates/help.html').read_text(encoding='utf-8')
-        # 文字已 i18n，改驗證 t() key 出現在模板中
-        assert 'help.scraper.h6_default_source' in html
         zh = self._zh_tw()
-        assert '預設搜尋來源' in zh['help']['scraper']['h6_default_source']
+        for html_key, json_path, expected_text in [
+            ('help.scraper.h6_default_source', ['help', 'scraper', 'h6_default_source'], '預設搜尋來源'),
+            ('help.scraper.h6_dmm_fuzzy', ['help', 'scraper', 'h6_dmm_fuzzy'], '模糊搜尋'),
+            ('help.showcase.other_lightbox_detail', ['help', 'showcase', 'other_lightbox_detail'], '導演'),
+            ('help.showcase.other_gallery', ['help', 'showcase', 'other_gallery'], '劇照'),
+            ('help.showcase.other_table_cols', ['help', 'showcase', 'other_table_cols'], '片長'),
+            ('help.scanner.subtitle_move', ['help', 'scanner', 'subtitle_move'], '字幕'),
+        ]:
+            assert html_key in html, f"help.html missing: {html_key!r}"
+            cur = zh
+            for part in json_path:
+                cur = cur[part]
+            assert expected_text in cur, \
+                f"zh_TW.json {'.'.join(json_path)} missing: {expected_text!r}"
 
-    def test_help_has_dmm_fuzzy_search(self):
+    def test_help_page_guard_direct_mode(self):
+        """help.html 含 direct（至少 2 次）"""
         html = (PROJECT_ROOT / 'web/templates/help.html').read_text(encoding='utf-8')
-        assert 'help.scraper.h6_dmm_fuzzy' in html
-        zh = self._zh_tw()
-        assert '模糊搜尋' in zh['help']['scraper']['h6_dmm_fuzzy']
-
-    def test_help_has_direct_mode(self):
-        html = (PROJECT_ROOT / 'web/templates/help.html').read_text(encoding='utf-8')
-        assert 'direct' in html.lower()
-
-    def test_help_has_lightbox_director(self):
-        html = (PROJECT_ROOT / 'web/templates/help.html').read_text(encoding='utf-8')
-        assert 'help.showcase.other_lightbox_detail' in html
-        zh = self._zh_tw()
-        assert '導演' in zh['help']['showcase']['other_lightbox_detail']
-
-    def test_help_has_sample_gallery(self):
-        html = (PROJECT_ROOT / 'web/templates/help.html').read_text(encoding='utf-8')
-        assert 'help.showcase.other_gallery' in html
-        zh = self._zh_tw()
-        assert '劇照' in zh['help']['showcase']['other_gallery']
-
-    def test_help_has_table_duration(self):
-        html = (PROJECT_ROOT / 'web/templates/help.html').read_text(encoding='utf-8')
-        assert 'help.showcase.other_table_cols' in html
-        zh = self._zh_tw()
-        assert '片長' in zh['help']['showcase']['other_table_cols']
-
-    def test_help_has_subtitle_move(self):
-        html = (PROJECT_ROOT / 'web/templates/help.html').read_text(encoding='utf-8')
-        assert 'help.scanner.subtitle_move' in html
-        zh = self._zh_tw()
-        assert '字幕' in zh['help']['scanner']['subtitle_move']
-
-    def test_troubleshoot_direct(self):
-        html = (PROJECT_ROOT / 'web/templates/help.html').read_text(encoding='utf-8')
-        # direct 至少在 Scraper 來源說明和疑難排解各出現一次
-        assert html.lower().count('direct') >= 2
+        assert html.lower().count('direct') >= 2, \
+            "help.html missing: 'direct' at least 2 occurrences"
 
 
 class TestScannerMissingPillGuard:
@@ -3558,23 +2791,11 @@ class TestGhostFlyPlayLightboxOpen:
 
     GHOST_FLY_JS = PROJECT_ROOT / 'web' / 'static' / 'js' / 'shared' / 'ghost-fly.js'
 
-    def test_ghost_fly_has_play_lightbox_open(self):
-        """ghost-fly.js 內 GhostFly.playLightboxOpen 函式存在"""
+    def test_ghost_fly_play_lightbox_open_contains(self):
+        """ghost-fly.js 含 playLightboxOpen + clearProps + timelineId"""
         js = self.GHOST_FLY_JS.read_text(encoding='utf-8')
-        assert 'playLightboxOpen' in js, \
-            "ghost-fly.js 缺少 playLightboxOpen — Phase 51 T4.1 共用實作未加入"
-
-    def test_ghost_fly_play_lightbox_open_has_clearprops(self):
-        """playLightboxOpen 採 showcase 版 clearProps cleanup 契約（CD-51-14）"""
-        js = self.GHOST_FLY_JS.read_text(encoding='utf-8')
-        assert 'clearProps' in js, \
-            "ghost-fly.js playLightboxOpen 缺少 clearProps cleanup — CD-51-14 共同契約未植入"
-
-    def test_ghost_fly_play_lightbox_open_has_timeline_id_opt(self):
-        """playLightboxOpen 介面含 opts.timelineId（CD-51-16）"""
-        js = self.GHOST_FLY_JS.read_text(encoding='utf-8')
-        assert 'timelineId' in js, \
-            "ghost-fly.js playLightboxOpen 缺少 timelineId opt — CD-51-16 介面未植入"
+        for expected in ['playLightboxOpen', 'clearProps', 'timelineId']:
+            assert expected in js, f"ghost-fly.js missing: {expected!r}"
 
 
 class TestT36ToastI18nKeys:
@@ -3625,23 +2846,12 @@ class TestScannerCopyFailModal:
     SCANNER_JS = PROJECT_ROOT / "web" / "static" / "js" / "pages" / "scanner" / "state-scan.js"
     SCANNER_HTML = PROJECT_ROOT / "web" / "templates" / "scanner.html"
 
-    def test_scanner_js_has_copy_fail_modal_methods(self):
-        content = self.SCANNER_JS.read_text(encoding="utf-8")
-        assert "openCopyFailModal" in content, \
-            "T3.6: openCopyFailModal method 應存在（取代 L728 truncated alert）"
-        assert "closeCopyFailModal" in content, \
-            "T3.6: closeCopyFailModal method 應存在"
-        assert "copyFailModalOpen" in content, \
-            "T3.6: copyFailModalOpen state 應存在"
-
-    def test_scanner_html_has_copy_fail_modal_markup(self):
-        content = self.SCANNER_HTML.read_text(encoding="utf-8")
-        assert "copy_fail_modal.title" in content, \
-            "T3.6: scanner.html 應有 copy_fail_modal markup（i18n key）"
-        assert "copy-fail-pre" in content, \
-            "T3.6: scanner.html copyFailModal 應含 .copy-fail-pre class"
-
-    def test_scanner_html_escape_ladder_includes_copy_fail_modal(self):
-        content = self.SCANNER_HTML.read_text(encoding="utf-8")
-        assert "copyFailModalOpen && closeCopyFailModal" in content, \
-            "T3.6: scanner.html root @keydown.escape.window 應串接 copyFailModal 的 close"
+    def test_scanner_copy_fail_modal_contains(self):
+        """T3.6: scanner.js 三 method + scanner.html markup + escape ladder"""
+        js = self.SCANNER_JS.read_text(encoding="utf-8")
+        for expected in ['openCopyFailModal', 'closeCopyFailModal', 'copyFailModalOpen']:
+            assert expected in js, f"scanner/state-scan.js missing: {expected!r}"
+        html = self.SCANNER_HTML.read_text(encoding="utf-8")
+        for expected in ['copy_fail_modal.title', 'copy-fail-pre',
+                         'copyFailModalOpen && closeCopyFailModal']:
+            assert expected in html, f"scanner.html missing: {expected!r}"
