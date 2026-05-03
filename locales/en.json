@@ -890,5 +890,21 @@
     "step6_content": "The Help page has a command — copy and paste it into Claude Code or Cursor<br>AI will automatically search, scrape, and organize for you",
     "step7_title": "🎯 Try It Now!",
     "step7_content": "Drop the <code>Tutorial</code> folder<br>or any <code>.mp4</code> file into this window<br><br><small class=\"text-muted\">Contains 11 real searchable examples</small>"
+  },
+  "notif": {
+    "title": "Notifications",
+    "clear_all": "Clear All",
+    "empty": "No notifications",
+    "open": "Open notifications",
+    "close": "Close notifications",
+    "dialog_label": "Notification Center",
+    "scanner_started": "Scan started",
+    "scanner_done": "Scan complete",
+    "scanner_done_with_errors": "Scan complete (some failures)",
+    "scanner_failed": "Scan interrupted",
+    "batch_enrich_started": "Batch enrich started",
+    "batch_enrich_done": "Batch enrich complete",
+    "batch_enrich_done_with_errors": "Batch enrich (some failures)",
+    "batch_enrich_failed": "Batch enrich interrupted"
   }
 }

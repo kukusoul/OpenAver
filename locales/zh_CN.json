@@ -890,5 +890,21 @@
     "step6_content": "Help 页有一个指令，复制后粘贴给 Claude Code 或 Cursor<br>AI 就能自动帮你搜索、刮削、整理，不用自己一步一步来",
     "step7_title": "🎯 立即体验！",
     "step7_content": "拖放 <code>教学文件</code> 文件夹<br>或其中任一 <code>.mp4</code> 文件到此窗口<br><br><small class=\"text-muted\">内含 11 个真实可搜索的范例</small>"
+  },
+  "notif": {
+    "title": "通知",
+    "clear_all": "全部清空",
+    "empty": "目前没有通知",
+    "open": "打开通知",
+    "close": "关闭通知",
+    "dialog_label": "通知中心",
+    "scanner_started": "扫描开始",
+    "scanner_done": "扫描完成",
+    "scanner_done_with_errors": "扫描完成（部分失败）",
+    "scanner_failed": "扫描中断",
+    "batch_enrich_started": "批量补完开始",
+    "batch_enrich_done": "批量补完完成",
+    "batch_enrich_done_with_errors": "批量补完（部分失败）",
+    "batch_enrich_failed": "批量补完中断"
   }
 }

@@ -890,5 +890,21 @@
     "step6_content": "HelpページにあるコマンドをClaude CodeやCursorに貼り付けるだけ<br>AIが自動で検索・スクレイピング・整理をすべてこなしてくれます",
     "step7_title": "🎯 さっそく体験！",
     "step7_content": "<code>チュートリアル</code>フォルダ<br>または任意の<code>.mp4</code>ファイルをこのウィンドウにドロップ<br><br><small class=\"text-muted\">検索可能な11個の実例を収録</small>"
+  },
+  "notif": {
+    "title": "通知",
+    "clear_all": "すべてクリア",
+    "empty": "通知はありません",
+    "open": "通知を開く",
+    "close": "通知を閉じる",
+    "dialog_label": "通知センター",
+    "scanner_started": "スキャン開始",
+    "scanner_done": "スキャン完了",
+    "scanner_done_with_errors": "スキャン完了（一部失敗）",
+    "scanner_failed": "スキャン中断",
+    "batch_enrich_started": "一括補完開始",
+    "batch_enrich_done": "一括補完完了",
+    "batch_enrich_done_with_errors": "一括補完（一部失敗）",
+    "batch_enrich_failed": "一括補完中断"
   }
 }
