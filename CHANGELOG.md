@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.5] - 2026-05-03
+
+本版治好 frontend_lint pytest 膨脹（feature/55）。一個月內測試套件從 1634 → 2976 暴增 +82%，新增的 1342 tests 幾乎全來自兩個 `test_frontend_lint.py`，根因是「沒 eslint / stylelint 可用，開發者只能拿 pytest 守 lint 規則」。本版補上工具鏈正確層：eslint flat config 守 JS 語法（`no-alert` / `no-console` / `no-restricted-syntax`）、stylelint 守 CSS token、可折疊的跨檔 contract 用 method folding 折疊、死碼測試直接刪除，最後加四層防膨脹機制（lint config + AGENTS.md 邊界宣告 + CLAUDE.md 規則 + pre-merge SA-pre-6 偵測）讓這種膨脹未來無法復發。frontend_lint 兩檔合計 905 → 450 tests（−50%），用戶完全無感知。
+
+*This release fixes the frontend_lint pytest bloat (feature/55). The test suite ballooned from 1634 → 2976 (+82%) in one month because there was no eslint/stylelint to enforce JS/CSS lint rules — developers used pytest as a substitute. This release introduces the correct tooling layer (eslint flat config + stylelint config), folds cross-file contract tests via method folding, deletes dead-code guards, and locks in four anti-bloat mechanisms so this class of bloat cannot recur. The two `test_frontend_lint.py` files go from 905 → 450 tests (−50%) with zero user-facing changes.*
+
+### Changed
+
+#### 🛠️ 55 — Lint Toolchain & Test Deflation
+
+- **55a 死碼守衛刪除**：移除 10 個 D 類 class（41 tests）— 守的程式碼 path 已永久消失（`bridge.js` / `showcase/core.js` 等已刪除，guard 自身成為死碼）
+- **55b stylelint toolchain**：新建 `package.json` + `stylelint.config.js`（extends `stylelint-config-standard`），引入 `color-no-hex` / `declaration-property-value-disallowed-list`（transition / filter / blur / border-radius / box-shadow）/ `selector-disallowed-list`，移除 B 類 ~25 個 CSS hardcoded 守衛 tests；HTML inline style scan 部分降為 C 類保留至 55d
+- **55c eslint flat config**：新建 `eslint.config.mjs`（ESLint 9 flat config，三段不重疊 file glob 結構防 rule 覆蓋），規則含 `no-alert` 全域 / `no-console` search pages 限定 / `no-restricted-syntax` `document.createElement` state mixins 限定 + `showModal` search state 限定 + `window.confirm` 全域；移除 13 個 A 類 tests；4 處合法 inline `// eslint-disable-next-line` 含理由 + 日期（CD-55-7 格式）
+- **55d C 類 method folding**：~79 個跨檔 contract 守衛 class（543 tests）依 CD-55-3 風格折疊為 ~119 個 method（for-loop + fail message 含被測字串），不使用 `@pytest.mark.parametrize`（會讓 collect 數不降）；E 類保護清單（ESM / GSAP / lifecycle / cross-file API 共 ~285 tests）完全不動
+- **55e 根目錄檔案消滅**：搬移 48 個 class 從 `tests/test_frontend_lint.py` → `tests/unit/test_frontend_lint.py`，刪除根目錄檔案（修正 CLAUDE.md「測試分層規則」違規）；搬移過程修正 2 個潛在 bug（class-level `PROJECT_ROOT` 路徑誤算 + helper 缺 return）
+- **55f 四層防膨脹機制**：M1 lint config（55b/c 已建）/ M2 AGENTS.md 加 `Out of scope` + `Test bloat policy` 兩段（明示 ESLint / Stylelint 各自實際 file scope + 仍由 pytest 守的清單）/ M3 CLAUDE.md 加「Lint 守衛規則」段 / M4 pre-merge.md SA-pre-3 加 `npm run lint` + SA-pre-6 加 lint-guard 偵測規則
+
+### 為什麼不繼續優化其他測試
+
+55 系列收尾後曾考慮開 feature/56-test-deflation-runtime 處理運行時代碼測試（`test_path_utils.py` / `test_collection_sql.py` / `test_organizer.py` 等）的重複熱點。Sonnet 對 `tests/unit/` 全範圍做完 read-only audit 後，實際可削僅 ~78 tests（low + medium 風險），未達 200 tests 門檻 → **放棄計畫**。理由：(1) runtime code 測試與 lint guard 風險屬性不同，刪錯會掩蓋真實 bug，需逐 test 判讀，邊際效益低；(2) 剩餘重複多為「security boundary 鏡射」「format 變數展開」這類，folding 後診斷可讀性下降反而是負價值；(3) 全套 2406 passed 已是健康基準，不為刪而刪。日後若特定模組重構觸發再做。
+
 ## [0.8.4] - 2026-05-03
 
 本版完成全站前端 JS 的 ESM 模組化（feature/54）。把 showcase/core.js（2725 行）、scanner.js（1546 行）、settings.js（972 行）等巨型單檔，以及 search 的 window.SearchStateMixin_* 全域模式，全部遷移到原生 ESM（`import/export`）。Import Maps 統一路徑別名，每個頁面有獨立的 `main.js` 入口，依賴關係從隱性約定變成明確的 import 語句。對用戶完全無感知——功能、動畫、資料行為完全不變。
