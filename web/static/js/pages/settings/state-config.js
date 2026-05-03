@@ -226,6 +226,7 @@ export function stateConfig() {
         // ===== Methods =====
         async cycleLocale() {
             if (this.isDirty) {
+                // eslint-disable-next-line no-alert -- cycleLocale dirty-check confirm, backlog migration to fluent-modal, reviewed 2026-05-03
                 if (!confirm('您有未儲存的變更，切換語系後將遺失。確定繼續？')) return;
             }
             const order = ['zh-TW', 'zh-CN', 'ja', 'en'];

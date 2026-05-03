@@ -7,6 +7,7 @@
     --font-display: 'Space Grotesk', 'Plus Jakarta Sans', 'Hiragino Sans', 'Yu Gothic UI', 'Noto Sans JP', -apple-system, BlinkMacSystemFont, sans-serif;
 
     /* ===== Error Colors ===== */
+    /* stylelint-disable-next-line color-no-hex -- Apple HIG palette source-of-truth token, 2026-05-03 */
     --color-error: #ff3b30;  /* Apple HIG Red */
     --glow-error: rgba(255, 59, 48, 0.2);  /* 錯誤微光 */
 
@@ -70,26 +71,39 @@
     /* ===== 新增：V4 語義化色彩變數 ===== */
 
     /* Apple HIG 色系（badge, gradient） */
+    /* stylelint-disable-next-line color-no-hex -- Apple HIG palette source-of-truth token, 2026-05-03 */
     --accent-secondary: #007aff;      /* Apple Blue (iOS System Blue) */
+    /* stylelint-disable-next-line color-no-hex -- Apple HIG palette source-of-truth token, 2026-05-03 */
     --gradient-cyan: #5ac8fa;          /* Apple Cyan */
+    /* stylelint-disable-next-line color-no-hex -- Apple HIG palette source-of-truth token, 2026-05-03 */
     --gradient-cyan-light: #64d2ff;    /* Apple Cyan Light */
+    /* stylelint-disable-next-line color-no-hex -- Apple HIG palette source-of-truth token, 2026-05-03 */
     --gradient-purple: #bf5af2;        /* Apple Purple */
+    /* stylelint-disable-next-line color-no-hex -- Apple HIG palette source-of-truth token, 2026-05-03 */
     --gradient-indigo: #5856d6;        /* Apple Indigo */
 
     /* Success 色系（綠色 badge, gradient） */
+    /* stylelint-disable-next-line color-no-hex -- Apple HIG palette source-of-truth token, 2026-05-03 */
     --color-success: #34c759;         /* Apple HIG Green (light mode) */
+    /* stylelint-disable-next-line color-no-hex -- Apple HIG palette source-of-truth token, 2026-05-03 */
     --color-success-dark: #30d158;    /* Apple HIG Green (dark mode) */
 
     /* Warning 色系（琥珀色，NFO 警告） */
+    /* stylelint-disable-next-line color-no-hex -- Tailwind amber palette source-of-truth token, 2026-05-03 */
     --color-warning: #f59e0b;         /* Tailwind amber-500 */
+    /* stylelint-disable-next-line color-no-hex -- Tailwind amber palette source-of-truth token, 2026-05-03 */
     --color-warning-dark: #d97706;    /* Tailwind amber-600 */
+    /* stylelint-disable-next-line color-no-hex -- Tailwind amber palette source-of-truth token, 2026-05-03 */
     --color-warning-darker: #b45309;  /* Tailwind amber-700 */
 
     /* Accent 色系（粉紅，女優管理） */
+    /* stylelint-disable-next-line color-no-hex -- Tailwind pink-500 actress identity color, 2026-05-03 */
     --accent-pink: #ec4899;           /* Tailwind pink-500 - 女優識別色 */
+    /* stylelint-disable-next-line color-no-hex -- favorite heart color source-of-truth token, 2026-05-03 */
     --color-favorite: #ff4d6d;        /* 收藏愛心色 */
 
     /* Error 色系擴展（淡紅，delete hover） */
+    /* stylelint-disable-next-line color-no-hex -- delete-hover color source-of-truth token, 2026-05-03 */
     --color-error-hover: #ff6b6b;     /* 柔和紅 - 刪除按鈕 hover */
 
     /* ===== Components: Spotlight Search (44c-T8a) ===== */
@@ -117,7 +131,9 @@ body {
    - None: content cards — 只用 tint + stroke, 無 blur */
 .glass {
     background: var(--bg-header);
+    /* stylelint-disable-next-line declaration-property-value-disallowed-list -- Fluent Heavy glass 16px (per glass-hierarchy comment above), 2026-05-03 */
     backdrop-filter: blur(16px);
+    /* stylelint-disable-next-line declaration-property-value-disallowed-list -- Safari prefix mirror, 2026-05-03 */
     -webkit-backdrop-filter: blur(16px);
     border-bottom: 1px solid var(--border-light);
 }
@@ -125,7 +141,9 @@ body {
 /* ---- T8.2: Fluent Toolbar — 工具列標準 Acrylic 材質 ---- */
 .fluent-toolbar {
     background: var(--bg-header);
+    /* stylelint-disable-next-line declaration-property-value-disallowed-list -- Fluent Heavy acrylic toolbar standard, 2026-05-03 */
     backdrop-filter: blur(16px) saturate(130%);
+    /* stylelint-disable-next-line declaration-property-value-disallowed-list -- Safari prefix mirror, 2026-05-03 */
     -webkit-backdrop-filter: blur(16px) saturate(130%);
 }
 
@@ -184,6 +202,7 @@ body {
     text-decoration: none;
     cursor: pointer;
     transition: background var(--duration-fast) var(--fluent-ease-standard), border-color var(--duration-fast) var(--fluent-ease-standard), color var(--duration-fast) var(--fluent-ease-standard);
+    /* stylelint-disable-next-line declaration-property-value-disallowed-list -- Fluent Medium glass 4px on btn-glass, 2026-05-03 */
     backdrop-filter: blur(4px);
 }
 
@@ -226,7 +245,9 @@ body {
     outline: none;
 
     /* Acrylic 玻璃效果 */
+    /* stylelint-disable-next-line declaration-property-value-disallowed-list -- Fluent Heavy acrylic 20px spotlight input, 2026-05-03 */
     backdrop-filter: blur(20px);
+    /* stylelint-disable-next-line declaration-property-value-disallowed-list -- Safari prefix mirror, 2026-05-03 */
     -webkit-backdrop-filter: blur(20px); /* Safari 支援 */
 
     /* 內層高光線 + 外陰影 */
@@ -579,10 +600,12 @@ body {
 
 /* Dark Mode 調整（DaisyUI theme = dim） */
 [data-theme="dim"] {
+    /* stylelint-disable-next-line color-no-hex -- Apple HIG dark-mode error palette source-of-truth, 2026-05-03 */
     --color-error: #ff453a;  /* 深色模式調亮 */
     --glow-error: rgba(255, 69, 58, 0.25);
 
     /* V4: Dark mode success 色覆寫 */
+    /* stylelint-disable-next-line color-no-hex -- Apple HIG dark-mode green palette source-of-truth, 2026-05-03 */
     --color-success: #30d158;         /* Dark mode 使用較亮綠 */
     --color-translate: oklch(0.72 0.14 260);
 }
@@ -1554,6 +1577,7 @@ body {
     border: none;
     font-size: 0.7rem;
     cursor: pointer;
+    /* stylelint-disable-next-line declaration-property-value-disallowed-list -- inline alias-cancel micro-interaction (12ms) below token range, 2026-05-03 */
     transition: all 0.12s ease;
 }
 

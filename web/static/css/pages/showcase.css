@@ -1253,6 +1253,7 @@
     left: var(--sidebar-width, 200px);
     right: 0;
     z-index: 50;
+    /* stylelint-disable-next-line declaration-property-value-disallowed-list -- token var() with token-derived fallback (200ms = Fluent normal), 2026-05-03 */
     transition: left var(--fluent-duration-normal, 0.2s) var(--fluent-ease-standard, ease);
 
     /* 背景 - 使用 Design System token */
@@ -2143,9 +2144,8 @@ body.sidebar-collapsed .showcase-footer {
     background: rgba(255, 255, 255, 0.1);
     border: 1px solid rgba(255, 255, 255, 0.2);
     border-radius: var(--fluent-radius-md);
-    box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.08),
-        var(--fluent-shadow-2);
+    /* stylelint-disable-next-line declaration-property-value-disallowed-list -- inset highlight composed with Fluent shadow token (default state), 2026-05-03 */
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), var(--fluent-shadow-2);
     cursor: pointer;
     color: var(--text-inverse);
     transition: all var(--fluent-duration-fast) var(--fluent-ease-standard);
@@ -2154,19 +2154,16 @@ body.sidebar-collapsed .showcase-footer {
 .picker-refresh-btn:hover:not(:disabled) {
     background: rgba(255, 255, 255, 0.15);
     border-color: rgba(255, 255, 255, 0.3);
-    box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.12),
-        var(--fluent-shadow-4);
+    /* stylelint-disable-next-line declaration-property-value-disallowed-list -- inset highlight composed with Fluent shadow token (hover state), 2026-05-03 */
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), var(--fluent-shadow-4);
     transform: translateY(-1px);
 }
 
 .picker-refresh-btn:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
-    box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.08),
-        var(--fluent-shadow-2),
-        0 0 0 4px var(--glow-primary);
+    /* stylelint-disable-next-line declaration-property-value-disallowed-list -- inset highlight + Fluent shadow + glow ring (focus-visible), 2026-05-03 */
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), var(--fluent-shadow-2), 0 0 0 4px var(--glow-primary);
 }
 
 .picker-refresh-btn:active:not(:disabled) {

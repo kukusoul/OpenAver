@@ -1,6 +1,6 @@
 # Testing Guide
 
-OpenAver 使用 `pytest` 作為測試框架。測試套件分為四層：單元測試、整合測試、煙霧測試、E2E 測試。
+OpenAver 使用 `pytest` 作為測試框架，搭配 `npm run lint`（eslint + stylelint）構成完整的測試守衛體系。測試套件分為四層：單元測試、整合測試、煙霧測試、E2E 測試。
 
 ## 前置準備
 
@@ -14,11 +14,10 @@ pip install pytest pytest-asyncio pytest-mock httpx
 ```
 tests/
 ├── conftest.py              # 全域 Fixtures
-├── test_frontend_lint.py    # 前端靜態檔案 lint 測試
 │
 ├── unit/                    # 單元測試（不需網路）
 │   ├── conftest.py
-│   ├── test_actress_alias_api.py
+│   ├── test_frontend_lint.py    # 前端靜態檔案跨檔 contract 守衛
 │   ├── test_database.py
 │   ├── test_gallery_scanner.py
 │   ├── test_local_status_api.py
@@ -77,6 +76,21 @@ tests/
     ├── special_format/      # 特殊片商格式
     └── expected_results.json
 ```
+
+## Lint 工具鏈
+
+`npm run lint` 是測試守衛體系的一部分，與 pytest 並行執行（非替代關係）：
+
+```bash
+npm run lint        # eslint + stylelint 全套（pre-merge 必跑）
+npm run lint:js     # 僅跑 eslint（web/static/js/）
+npm run lint:css    # 僅跑 stylelint（web/static/css/）
+```
+
+**守衛分工原則（CLAUDE.md「Lint 守衛規則」段為唯一真理來源）**：
+- JS 語法規則（禁用 API、no-console 等）→ eslint rule，不寫 pytest
+- CSS token 規則（hardcoded hex/rgba 等）→ stylelint rule，不寫 pytest
+- 跨檔 contract、Alpine lifecycle、ESM wiring → `tests/unit/test_frontend_lint.py`（pytest）
 
 ## 執行測試
 
@@ -146,6 +160,7 @@ pytest tests/smoke/test_scraper_live.py -v -m smoke
 | `test_database.py` | 資料庫操作 |
 | `test_organizer.py` | 檔案整理邏輯 |
 | `test_video_repository.py` | 影片資料存取層 |
+| `test_frontend_lint.py` | 前端跨檔 contract（Alpine lifecycle、ESM wiring、HTML/JS 結構守衛）|
 
 ### 整合測試 (`integration/`)
 
@@ -183,6 +198,19 @@ pytest tests/smoke/test_scraper_live.py -v -m smoke
 | `test_search_e2e.py` | Detail 新欄位顯示、Sample Lightbox 互動、方向鍵導航 | 網路 + JavBus + Playwright Chromium |
 
 無網路 / JavBus 無回應時自動 SKIP（不 FAIL）。
+
+## 測試檔案放置規則
+
+新增測試時依照下表選擇目錄（權威來源：CLAUDE.md「測試檔案放置規則」段）：
+
+| 類型 | 目錄 | 說明 |
+|------|------|------|
+| 純邏輯測試（全 mock） | `tests/unit/` | parser、validator、path 處理、資料流、前端跨檔 contract |
+| API 端點測試（TestClient） | `tests/integration/` | FastAPI 端點、request/response |
+| 需外部服務（真實連線） | `tests/smoke/` | 標記 `@pytest.mark.smoke`，CI 排除 |
+| 瀏覽器端對端測試 | `tests/e2e/` | 標記 `@pytest.mark.e2e`，需 `pytest-playwright`，CI 排除 |
+
+**不要放在 `tests/` 根目錄。**
 
 ## Fixtures
 

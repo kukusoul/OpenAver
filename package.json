@@ -1,0 +1,20 @@
+{
+  "name": "openaver-lint",
+  "version": "0.0.1",
+  "private": true,
+  "description": "ESLint + stylelint devtools for OpenAver frontend",
+  "scripts": {
+    "lint": "npm run lint:js && npm run lint:css",
+    "lint:js": "eslint web/static/js/",
+    "lint:css": "stylelint \"web/static/css/**/*.css\""
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.4",
+    "@tailwindcss/cli": "^4.1.18",
+    "daisyui": "^5.5.17",
+    "eslint": "^9.39.4",
+    "stylelint": "^16.0.0",
+    "stylelint-config-standard": "^36.0.0",
+    "tailwindcss": "^4.1.18"
+  }
+}

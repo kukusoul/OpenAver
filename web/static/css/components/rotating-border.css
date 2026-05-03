@@ -61,13 +61,11 @@
   );
 
   /* 遮罩技巧：裁切出邊框（僅保留外圈，內部透明）*/
-  -webkit-mask:
-    linear-gradient(#fff 0 0) content-box,
-    linear-gradient(#fff 0 0);
+  /* stylelint-disable-next-line color-no-hex -- mask-shape gradient solid (not a paint color), 2026-05-03 */
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
-  mask:
-    linear-gradient(#fff 0 0) content-box,
-    linear-gradient(#fff 0 0);
+  /* stylelint-disable-next-line color-no-hex -- mask-shape gradient solid (not a paint color), 2026-05-03 */
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   mask-composite: exclude;
 
   /* 避免阻擋內部元素的滑鼠事件 */
@@ -81,6 +79,7 @@
 
   /* 初始狀態不可見 */
   opacity: 0;
+  /* stylelint-disable-next-line declaration-property-value-disallowed-list -- token var() with token-derived fallback (167ms = Fluent fast), 2026-05-03 */
   transition: opacity var(--fluent-duration-fast, 0.167s) ease-out;
 }
 

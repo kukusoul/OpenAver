@@ -183,6 +183,7 @@ export function stateScan() {
                                 this.dirtyCheckModalOpen = true;
                                 return false;
                             } else {
+                                // eslint-disable-next-line no-alert -- dirty-check page-leave confirm, backlog migration to fluent-modal, reviewed 2026-05-03
                                 const ok = confirm(guard.message + '確定要離開嗎？');
                                 if (ok) {
                                     // T2(40c): 離頁確認後 abort jellyfin check
@@ -697,6 +698,7 @@ export function stateScan() {
                 return;
             }
 
+            // eslint-disable-next-line no-alert -- clearLogs confirm, backlog migration to fluent-modal, reviewed 2026-05-03
             if (confirm('確定要清除所有日誌嗎？（包含歷史紀錄）')) {
                 this.clearLogs();
                 this.showToast('已清除所有日誌', 'success');

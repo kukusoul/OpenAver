@@ -46,3 +46,38 @@
 - No `console.log` left in production JavaScript (except intentional debug modes).
 - Python `except` blocks should not silently swallow errors — at minimum `logger.error()`.
 - Avoid introducing new inline `<script>` blocks in templates; prefer separate `.js` files.
+
+### Out of scope (handled by automated tooling)
+
+The following are enforced by `eslint.config.mjs` / `stylelint.config.js` within their
+configured file scopes — DO NOT flag in code review (file an eslint/stylelint config
+issue if a rule is missing or if scope needs broadening):
+
+**ESLint** (base scope `web/static/js/**/*.js` unless noted):
+- `no-alert` — no `alert()` / `confirm()` / `prompt()` anywhere in JS (global scope)
+- `no-console` — **search pages only** (`web/static/js/pages/search/**/*.js`); `console.error` and `console.warn` are allowed; all other JS directories are NOT covered
+- `no-restricted-syntax` `window.confirm` — no `window.confirm()` anywhere in JS (global scope)
+- `no-restricted-syntax` `document.createElement` — **state mixins only** (`web/static/js/pages/**/state/**/*.js`); allowed in component files outside `state/` (e.g. ghost-fly.js, tutorial.js)
+- `no-restricted-syntax` `showModal()` — **search state only** (`web/static/js/pages/search/state/**/*.js`); other page state dirs are NOT covered
+
+**Stylelint** (`web/static/css/**/*.css`, excluding `tailwind.css` and `design-system.css`):
+- `color-no-hex` — no hex color values; use design token `var(--...)` instead
+- `declaration-property-value-disallowed-list` — no bare `0.Xs` durations in `transition`; no `blur(Npx)` literals in `filter`/`backdrop-filter`; no `rgba(N...)` in `box-shadow`; no `Npx` literals in `border-radius`
+- `selector-disallowed-list` — no `:is(...manual-input...)` selector patterns
+
+**Still enforced by pytest** (NOT by lint — flag these in review if violated):
+- HTML template inline handlers (`onclick=` etc.) — `TestNoVanillaHandlers` (HTML scan, eslint does not parse `.html`)
+- HTML template `style="...display:none..."` combined with `x-show` — `TestNoInlineStyleDisplay` (HTML scan)
+- Specific Chinese `confirm()` strings in `settings/state-config.js` — `TestSettingsResetConfigNoNativeConfirm` (string fingerprint guard; `no-alert` cannot constrain string content)
+- Specific Chinese `confirm()` strings in `scanner/state-alias.js` — `TestScannerDeleteAliasGroupNoNativeConfirm` test1 (same reason)
+- Alpine state contracts (modal open class, method names, escape ladder in HTML) — `TestNoDuplicateNativeDialog` test2, `TestScannerDeleteAliasGroupNoNativeConfirm` test2/test3 (cross-language contract)
+- `navigator.clipboard?.writeText` optional-chaining guard pattern — `TestNoAlertInSearchJs` clipboard tests (guard count/presence, not expressible in eslint)
+
+(Anything outside this list — including `console.log` outside search pages, `createElement` outside `state/` dirs, formatting, unused variables, dead code — is still in code-review scope unless explicitly added to the lint config.)
+
+### Test bloat policy
+
+DO NOT request new pytest tests for issues that fit eslint/stylelint scope.
+If a regression of this class arises, the fix is:
+- Add an eslint/stylelint rule to the existing config, OR
+- If the rule cannot be expressed in eslint/stylelint (cross-file/cross-language contract), add a dedicated lint script and wire it into `npm run lint` or pre-merge — NOT a new TestNoXxx pytest class.

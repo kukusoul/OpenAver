@@ -241,6 +241,7 @@ export function searchStateFileList() {
         const file = this.fileList[index];
         if (!file) return;
 
+        // eslint-disable-next-line no-alert -- inline number edit prompt, backlog migration to fluent-modal, reviewed 2026-05-03
         const number = prompt('請輸入番號（例如：T28-650）', '');
         if (!number || !number.trim()) return;
 
