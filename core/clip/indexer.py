@@ -22,7 +22,6 @@ from typing import Callable, Optional
 
 from core.logger import get_logger
 from core.path_utils import uri_to_fs_path
-from core.clip.preprocessing import preprocess_image
 from core.clip.provider import CLIPProvider
 from core.database import VideoRepository
 
@@ -104,11 +103,8 @@ class ClipIndexer:
             try:
                 image_bytes = Path(fs_path).read_bytes()
 
-                # preprocess: bytes → (1, 3, 224, 224) float32 tensor
-                tensor = preprocess_image(image_bytes)
-
-                # embed: tensor → (512,) float32 embedding
-                embedding = await self._provider.embed(tensor)
+                # embed: image_bytes → (512,) float32 embedding
+                embedding = await self._provider.embed(image_bytes)
 
                 # serialize (explicit little-endian, CD-56A-4)
                 blob = embedding.astype('<f4').tobytes()

@@ -60,3 +60,27 @@ class TestClipSmoke:
         # cosine norm 應接近 1（CLIP output 通常已 normalize 或接近 normalize）
         norm = float(np.linalg.norm(embedding))
         assert 0.1 < norm < 100.0  # 合理值域（非 NaN、非 0）
+
+    @pytest.mark.smoke
+    async def test_provider_embed(self):
+        """實際呼叫 LocalONNXProvider.embed()，驗證回傳 (512,) float32。"""
+        if not MODEL_PATH.exists():
+            pytest.skip("CLIP model not downloaded, skip smoke test")
+
+        import io
+        from PIL import Image
+        from core.clip.provider import LocalONNXProvider
+
+        provider = LocalONNXProvider(MODEL_PATH)
+
+        img = Image.new("RGB", (200, 300), color=100)
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG")
+        image_bytes = buf.getvalue()
+
+        embedding = await provider.embed(image_bytes)
+
+        assert embedding.shape == (512,)
+        assert embedding.dtype == np.float32
+        norm = float(np.linalg.norm(embedding))
+        assert 0.1 < norm < 100.0

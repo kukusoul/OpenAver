@@ -13,6 +13,7 @@ so no top-level numpy import is needed here.
 """
 from __future__ import annotations
 
+import asyncio
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -57,6 +58,9 @@ class CLIPProvider(ABC):
     def invalidate_matrix(self) -> None:
         """通知 provider 清除 in-memory cosine matrix cache（預設 no-op，LocalONNX override）"""
 
+    def ensure_matrix_loaded(self, db_path: Path) -> None:
+        """主動觸發 matrix 懶載入（預設 no-op，LocalONNX override）。"""
+
 
 class LocalONNXProvider(CLIPProvider):
     """Local ONNX Runtime CLIP provider using Xenova/clip-vit-base-patch32."""
@@ -80,8 +84,24 @@ class LocalONNXProvider(CLIPProvider):
     # ------------------------------------------------------------------
 
     async def embed(self, image_bytes: bytes) -> "np.ndarray":
-        """T4 後補全。目前為骨架佔位。"""
-        raise NotImplementedError("embed() will be implemented in T4")
+        """將原始影像 bytes 轉換為 (512,) float32 embedding vector。
+
+        Pipeline：image_bytes → preprocess_image() → ORT inference → (512,) float32
+        使用 asyncio.to_thread 避免阻塞 event loop。
+        """
+        return await asyncio.to_thread(self._run_inference, image_bytes)
+
+    def _run_inference(self, image_bytes: bytes) -> "np.ndarray":
+        """同步推論（在 thread pool 中執行）。供 asyncio.to_thread 使用。"""
+        import numpy as np  # noqa: PLC0415
+        from core.clip.preprocessing import preprocess_image  # noqa: PLC0415
+
+        self._ensure_session()
+        tensor = preprocess_image(image_bytes)  # (1, 3, 224, 224) float32
+        input_name = self._session.get_inputs()[0].name
+        outputs = self._session.run(None, {input_name: tensor})
+        embedding = outputs[0][0]  # (512,) float32
+        return np.asarray(embedding, dtype=np.float32)
 
     @property
     def model_id(self) -> str:
@@ -106,6 +126,10 @@ class LocalONNXProvider(CLIPProvider):
         """清除 in-memory cosine matrix cache，下次查詢時重新從 DB 載入。"""
         self._embedding_matrix = None
         self._video_ids = None
+
+    def ensure_matrix_loaded(self, db_path: Path) -> None:
+        """主動觸發 matrix 懶載入。供 router 在 model_available 檢查前呼叫。"""
+        self._ensure_matrix_loaded(db_path, self.model_id)
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -205,17 +229,20 @@ class LocalONNXProvider(CLIPProvider):
         query_video_id: int,
         db_path: Path,
     ) -> list[dict]:
-        """計算 cosine similarity，回傳 top-N 結果（未套 diversity penalty）。
+        """計算 cosine similarity，回傳所有候選（排除 query video 自身）。
+
+        截取由呼叫方負責（套完 diversity penalty 後再 trim 到 limit），
+        確保 penalty 後排名正確（任何候選都有機會進入最終 top-N）。
 
         Args:
             query_embedding: shape (512,) float32 embedding vector
-            limit: 最多回傳幾筆
+            limit: 保留供呼叫方參考，本方法不截取
             query_video_id: 查詢影片本身的 id（排除在結果之外）
             db_path: SQLite DB 路徑，供 _ensure_matrix_loaded 使用
 
         Returns:
             list[dict]，每筆含 {"video_id": int, "cosine_score": float}，
-            按 cosine_score 降序排列，不含 query_video_id 本身。
+            按 cosine_score 降序排列，包含全部候選（不含 query_video_id）。
         """
         # Lazy import numpy
         import numpy as np  # noqa: PLC0415
@@ -248,8 +275,6 @@ class LocalONNXProvider(CLIPProvider):
                 continue
             results.append((float(scores[i]), vid_id))
 
-        # 按分數降序排列，取 top limit
+        # 按分數降序排列，回傳全部候選（截取由 router 在套完 diversity penalty 後負責）
         results.sort(key=lambda x: x[0], reverse=True)
-        results = results[:limit]
-
         return [{"video_id": vid_id, "cosine_score": score} for score, vid_id in results]

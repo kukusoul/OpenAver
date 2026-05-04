@@ -60,6 +60,9 @@ async def _compute_similar_covers(
     if video.clip_model_id != provider.model_id:
         raise HTTPException(status_code=422, detail="CLIP 索引模型不一致，請至設定重建索引")
 
+    # 主動觸發 matrix 懶載入，確保 model_available 反映最新狀態
+    provider.ensure_matrix_loaded(Path(get_db_path()))
+
     # State 4：model_available == False → 200 + empty results
     # （相似查詢不需要 session_loaded，防回歸 P2-1）
     if not provider.model_available:
@@ -133,6 +136,9 @@ async def _compute_similar_covers(
         target_actresses=target_actresses,
         video_actresses_map=video_actresses_map,
     )
+
+    # 截取 limit 筆（diversity penalty 後再截，確保 pool 夠大）
+    penalized = penalized[:limit]
 
     # 組裝回傳結果
     results = []
