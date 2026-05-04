@@ -388,3 +388,328 @@ class TestModelDownloader:
         assert "raw network error details" not in msg
         # must contain Chinese characters (at least one CJK char)
         assert any("一" <= ch <= "鿿" for ch in msg)
+
+
+# ---------------------------------------------------------------------------
+# T5: ClipIndexer (batch indexing runner)
+# ---------------------------------------------------------------------------
+
+import asyncio
+from unittest.mock import AsyncMock, MagicMock, call, patch
+
+import numpy as np
+
+
+class TestClipIndexer:
+    """Tests for core.clip.indexer.ClipIndexer.run_batch()."""
+
+    def _make_mock_provider(self, embedding=None):
+        provider = MagicMock()
+        provider.model_id = "clip-vit-b32-int8-xenova-v1"
+        if embedding is None:
+            embedding = np.zeros(512, dtype=np.float32)
+        provider.embed = AsyncMock(return_value=embedding)
+        provider.invalidate_matrix = MagicMock()
+        return provider
+
+    def _make_video(self, video_id, cover_path, tmp_path=None):
+        """Build a minimal Video-like object (MagicMock with required attrs)."""
+        v = MagicMock()
+        v.id = video_id
+        v.cover_path = cover_path
+        return v
+
+    def _write_cover(self, tmp_path, filename="cover.jpg"):
+        """Write a tiny fake JPEG to tmp_path and return its file:/// URI."""
+        from PIL import Image
+        img_path = tmp_path / filename
+        Image.new("RGB", (10, 10)).save(img_path)
+        from core.path_utils import to_file_uri
+        return str(to_file_uri(str(img_path))), img_path
+
+    # ------------------------------------------------------------------
+    # happy path
+    # ------------------------------------------------------------------
+
+    async def test_run_batch_indexes_pending_videos(self, tmp_path):
+        """有 pending video → embed 被呼叫，update_clip_embedding 被呼叫"""
+        from core.clip.indexer import ClipIndexer
+
+        cover_uri, _ = self._write_cover(tmp_path)
+        video = self._make_video(1, cover_uri)
+
+        mock_repo = MagicMock()
+        mock_repo.get_videos_pending_clip_indexing.return_value = [video]
+        mock_repo.update_clip_embedding.return_value = True
+
+        provider = self._make_mock_provider()
+        indexer = ClipIndexer(provider=provider, video_repo=mock_repo)
+
+        result = await indexer.run_batch()
+
+        assert result == {"indexed": 1, "skipped": 0, "errors": 0}
+        provider.embed.assert_awaited_once()
+        mock_repo.update_clip_embedding.assert_called_once_with(
+            1, provider.embed.return_value.astype('<f4').tobytes(), provider.model_id
+        )
+
+    async def test_run_batch_no_pending_videos(self, tmp_path):
+        """0 筆待索引 → indexed=0, embed 不被呼叫"""
+        from core.clip.indexer import ClipIndexer
+
+        mock_repo = MagicMock()
+        mock_repo.get_videos_pending_clip_indexing.return_value = []
+
+        provider = self._make_mock_provider()
+        indexer = ClipIndexer(provider=provider, video_repo=mock_repo)
+
+        result = await indexer.run_batch()
+
+        assert result == {"indexed": 0, "skipped": 0, "errors": 0}
+        provider.embed.assert_not_awaited()
+
+    async def test_run_batch_returns_stats(self, tmp_path):
+        """回傳 dict 含 indexed / skipped / errors key"""
+        from core.clip.indexer import ClipIndexer
+
+        mock_repo = MagicMock()
+        mock_repo.get_videos_pending_clip_indexing.return_value = []
+
+        provider = self._make_mock_provider()
+        indexer = ClipIndexer(provider=provider, video_repo=mock_repo)
+
+        result = await indexer.run_batch()
+
+        assert "indexed" in result
+        assert "skipped" in result
+        assert "errors" in result
+
+    # ------------------------------------------------------------------
+    # skipping
+    # ------------------------------------------------------------------
+
+    async def test_run_batch_skips_no_cover(self, tmp_path):
+        """cover_path 為 None → skip，embed 不被呼叫"""
+        from core.clip.indexer import ClipIndexer
+
+        video = self._make_video(1, None)
+
+        mock_repo = MagicMock()
+        mock_repo.get_videos_pending_clip_indexing.return_value = [video]
+
+        provider = self._make_mock_provider()
+        indexer = ClipIndexer(provider=provider, video_repo=mock_repo)
+
+        result = await indexer.run_batch()
+
+        assert result["skipped"] == 1
+        assert result["indexed"] == 0
+        provider.embed.assert_not_awaited()
+
+    async def test_run_batch_skips_missing_cover_file(self, tmp_path):
+        """cover_path 有值但檔案不存在 → skipped++"""
+        from core.clip.indexer import ClipIndexer
+        from core.path_utils import to_file_uri
+
+        nonexistent = tmp_path / "no_such_file.jpg"
+        cover_uri = str(to_file_uri(str(nonexistent)))
+
+        video = self._make_video(1, cover_uri)
+
+        mock_repo = MagicMock()
+        mock_repo.get_videos_pending_clip_indexing.return_value = [video]
+
+        provider = self._make_mock_provider()
+        indexer = ClipIndexer(provider=provider, video_repo=mock_repo)
+
+        result = await indexer.run_batch()
+
+        assert result["skipped"] == 1
+        assert result["indexed"] == 0
+        provider.embed.assert_not_awaited()
+
+    # ------------------------------------------------------------------
+    # errors
+    # ------------------------------------------------------------------
+
+    async def test_run_batch_embed_failure_increments_errors(self, tmp_path):
+        """embed 拋 exception → errors 計數增加，不中止 batch"""
+        from core.clip.indexer import ClipIndexer
+
+        cover_uri_1, _ = self._write_cover(tmp_path, "cover1.jpg")
+        cover_uri_2, _ = self._write_cover(tmp_path, "cover2.jpg")
+
+        video1 = self._make_video(1, cover_uri_1)
+        video2 = self._make_video(2, cover_uri_2)
+
+        mock_repo = MagicMock()
+        mock_repo.get_videos_pending_clip_indexing.return_value = [video1, video2]
+        mock_repo.update_clip_embedding.return_value = True
+
+        provider = self._make_mock_provider()
+        provider.embed = AsyncMock(side_effect=[RuntimeError("embed failed"), np.zeros(512, dtype=np.float32)])
+        indexer = ClipIndexer(provider=provider, video_repo=mock_repo)
+
+        result = await indexer.run_batch()
+
+        assert result["errors"] == 1
+        assert result["indexed"] == 1
+
+    # ------------------------------------------------------------------
+    # resume / checkpoint
+    # ------------------------------------------------------------------
+
+    async def test_run_batch_resume_after_interrupt(self, tmp_path):
+        """斷點續傳：第二次跑時已索引的 video 不重複 embed"""
+        from core.clip.indexer import ClipIndexer
+
+        cover_uri_a, _ = self._write_cover(tmp_path, "a.jpg")
+        cover_uri_b, _ = self._write_cover(tmp_path, "b.jpg")
+        cover_uri_c, _ = self._write_cover(tmp_path, "c.jpg")
+
+        video_a = self._make_video(1, cover_uri_a)
+        video_b = self._make_video(2, cover_uri_b)
+        video_c = self._make_video(3, cover_uri_c)
+
+        mock_repo = MagicMock()
+        mock_repo.get_videos_pending_clip_indexing.side_effect = [
+            [video_a, video_b],   # 第一次 run_batch
+            [video_c],             # 第二次 run_batch（模擬 a, b 已完成）
+        ]
+        mock_repo.update_clip_embedding.return_value = True
+
+        provider = self._make_mock_provider()
+        indexer = ClipIndexer(provider=provider, video_repo=mock_repo)
+
+        await indexer.run_batch()   # 第一次：embed a, b
+        await indexer.run_batch()   # 第二次：embed c only
+
+        # embed 總共應被呼叫 3 次（2 + 1），不是 5 次
+        assert provider.embed.await_count == 3
+
+    # ------------------------------------------------------------------
+    # invalidate_matrix
+    # ------------------------------------------------------------------
+
+    async def test_run_batch_calls_invalidate_matrix(self, tmp_path):
+        """完成後呼叫 provider.invalidate_matrix()"""
+        from core.clip.indexer import ClipIndexer
+
+        cover_uri, _ = self._write_cover(tmp_path)
+        video = self._make_video(1, cover_uri)
+
+        mock_repo = MagicMock()
+        mock_repo.get_videos_pending_clip_indexing.return_value = [video]
+        mock_repo.update_clip_embedding.return_value = True
+
+        provider = self._make_mock_provider()
+        indexer = ClipIndexer(provider=provider, video_repo=mock_repo)
+
+        await indexer.run_batch()
+
+        provider.invalidate_matrix.assert_called_once()
+
+    async def test_run_batch_invalidate_matrix_called_with_zero_pending(self, tmp_path):
+        """0 筆待索引時 invalidate_matrix 仍被呼叫"""
+        from core.clip.indexer import ClipIndexer
+
+        mock_repo = MagicMock()
+        mock_repo.get_videos_pending_clip_indexing.return_value = []
+
+        provider = self._make_mock_provider()
+        indexer = ClipIndexer(provider=provider, video_repo=mock_repo)
+
+        await indexer.run_batch()
+
+        provider.invalidate_matrix.assert_called_once()
+
+    # ------------------------------------------------------------------
+    # progress_cb
+    # ------------------------------------------------------------------
+
+    async def test_run_batch_progress_cb_called_for_each_video(self, tmp_path):
+        """progress_cb(done, total) 每筆完成後被呼叫，total 固定，done 遞增"""
+        from core.clip.indexer import ClipIndexer
+
+        cover_uri_1, _ = self._write_cover(tmp_path, "p1.jpg")
+        cover_uri_2, _ = self._write_cover(tmp_path, "p2.jpg")
+        video1 = self._make_video(1, cover_uri_1)
+        video2 = self._make_video(2, cover_uri_2)
+
+        mock_repo = MagicMock()
+        mock_repo.get_videos_pending_clip_indexing.return_value = [video1, video2]
+        mock_repo.update_clip_embedding.return_value = True
+
+        provider = self._make_mock_provider()
+        indexer = ClipIndexer(provider=provider, video_repo=mock_repo)
+
+        calls = []
+        await indexer.run_batch(progress_cb=lambda done, total: calls.append((done, total)))
+
+        assert calls == [(1, 2), (2, 2)]
+
+    # ------------------------------------------------------------------
+    # uri_to_fs_path usage
+    # ------------------------------------------------------------------
+
+    async def test_run_batch_uses_uri_to_fs_path(self, tmp_path):
+        """cover_path 轉換使用 uri_to_fs_path()（不手動 strip file:///）"""
+        from core.clip.indexer import ClipIndexer
+        from core.path_utils import to_file_uri
+
+        cover_uri, _ = self._write_cover(tmp_path)
+        video = self._make_video(1, cover_uri)
+
+        mock_repo = MagicMock()
+        mock_repo.get_videos_pending_clip_indexing.return_value = [video]
+        mock_repo.update_clip_embedding.return_value = True
+
+        provider = self._make_mock_provider()
+        indexer = ClipIndexer(provider=provider, video_repo=mock_repo)
+
+        with patch("core.clip.indexer.uri_to_fs_path", wraps=__import__("core.path_utils", fromlist=["uri_to_fs_path"]).uri_to_fs_path) as mock_uri:
+            await indexer.run_batch()
+            mock_uri.assert_called_once_with(cover_uri)
+
+    # ------------------------------------------------------------------
+    # DB retry
+    # ------------------------------------------------------------------
+
+    async def test_db_write_retry_once_succeeds(self, tmp_path):
+        """update_clip_embedding 第一次回 False，retry 成功 → indexed=1"""
+        from core.clip.indexer import ClipIndexer
+
+        cover_uri, _ = self._write_cover(tmp_path)
+        video = self._make_video(1, cover_uri)
+
+        mock_repo = MagicMock()
+        mock_repo.get_videos_pending_clip_indexing.return_value = [video]
+        # 第一次回 False，第二次回 True
+        mock_repo.update_clip_embedding.side_effect = [False, True]
+
+        provider = self._make_mock_provider()
+        indexer = ClipIndexer(provider=provider, video_repo=mock_repo)
+
+        result = await indexer.run_batch()
+
+        assert result == {"indexed": 1, "skipped": 0, "errors": 0}
+        assert mock_repo.update_clip_embedding.call_count == 2
+
+    async def test_db_write_retry_both_fail(self, tmp_path):
+        """update_clip_embedding 兩次都回 False → errors=1"""
+        from core.clip.indexer import ClipIndexer
+
+        cover_uri, _ = self._write_cover(tmp_path)
+        video = self._make_video(1, cover_uri)
+
+        mock_repo = MagicMock()
+        mock_repo.get_videos_pending_clip_indexing.return_value = [video]
+        mock_repo.update_clip_embedding.return_value = False
+
+        provider = self._make_mock_provider()
+        indexer = ClipIndexer(provider=provider, video_repo=mock_repo)
+
+        result = await indexer.run_batch()
+
+        assert result == {"indexed": 0, "skipped": 0, "errors": 1}
+        assert mock_repo.update_clip_embedding.call_count == 2
