@@ -54,6 +54,7 @@ from web.routers import collection as collection_router
 from web.routers import actress as actress_router
 from web.routers import actress_alias as actress_alias_router
 from web.routers import notifications as notifications_router
+from web.routers import clip as clip_router
 app.include_router(search_router.router)
 app.include_router(config_router.router)
 app.include_router(scraper_router.router)
@@ -70,6 +71,7 @@ app.include_router(collection_router.user_tags_router)
 app.include_router(actress_router.router)
 app.include_router(actress_alias_router.router)
 app.include_router(notifications_router.router)
+app.include_router(clip_router.router)
 
 
 @app.exception_handler(RequestValidationError)

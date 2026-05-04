@@ -653,6 +653,43 @@ class VideoRepository:
         finally:
             conn.close()
 
+    def get_by_id(self, video_id: int) -> Optional[Video]:
+        """根據整數 id 查詢單筆影片（供 T6 主端點使用）。
+
+        Returns:
+            Video 若找到，None 若 id 不存在
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("SELECT * FROM videos WHERE id = ?", (video_id,))
+            row = cursor.fetchone()
+            if row:
+                return Video.from_row(row, self._get_columns())
+            return None
+        finally:
+            conn.close()
+
+    def get_by_number(self, number: str) -> Optional[Video]:
+        """根據番號查詢單筆影片，大小寫不敏感（供 by-number 端點使用）。
+
+        Returns:
+            Video 若找到，None 若番號不存在
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                "SELECT * FROM videos WHERE UPPER(number) = UPPER(?) LIMIT 1",
+                (number,)
+            )
+            row = cursor.fetchone()
+            if row:
+                return Video.from_row(row, self._get_columns())
+            return None
+        finally:
+            conn.close()
+
     def get_by_numbers(self, numbers: List[str]) -> dict:
         """根據番號批次查詢（大小寫不敏感）
 

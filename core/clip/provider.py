@@ -94,8 +94,8 @@ class LocalONNXProvider(CLIPProvider):
 
     @property
     def model_available(self) -> bool:
-        """DB 中是否有可用 embedding（matrix 載入後 ≥1 row）。"""
-        return self._embedding_matrix is not None
+        """DB 中是否有可用 embedding（matrix 載入後 ≥1 row 且 model_id 匹配）。"""
+        return self._embedding_matrix is not None and len(self._embedding_matrix) > 0
 
     @property
     def session_loaded(self) -> bool:
@@ -139,13 +139,117 @@ class LocalONNXProvider(CLIPProvider):
         logger.info("CLIP session loaded, EP=%s", active_ep)
 
     def _ensure_matrix_loaded(self, db_path: Path, model_id: str) -> None:
-        """懶載入 cosine embedding matrix。T5/T6 後補全。"""
-        raise NotImplementedError("_ensure_matrix_loaded() will be implemented in T5")
+        """懶載入 cosine embedding matrix（CD-56A-6）。
+
+        若 _embedding_matrix is not None 直接 return（已載入）。
+        否則從 DB 讀取全表 embedding，stack 成 (N, 512) float32 matrix。
+
+        Args:
+            db_path: SQLite DB 路徑
+            model_id: 僅載入此 model_id 的 embedding
+        """
+        if self._embedding_matrix is not None:
+            return  # 已載入，直接 return
+
+        # Lazy import: numpy 方法體內 import（頂層是 TYPE_CHECKING guard）
+        import numpy as np  # noqa: PLC0415
+        import sqlite3  # noqa: PLC0415
+
+        conn = sqlite3.connect(str(db_path))
+        conn.execute("PRAGMA journal_mode=WAL")
+        try:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT id, clip_embedding FROM videos WHERE clip_model_id = ?",
+                (model_id,)
+            )
+            rows = cursor.fetchall()
+        finally:
+            conn.close()
+
+        if not rows:
+            logger.info("CLIP matrix: no embeddings found for model_id=%s", model_id)
+            self._embedding_matrix = np.empty((0, 512), dtype=np.float32)
+            self._video_ids = []
+            return
+
+        embeddings = []
+        video_ids = []
+        for vid_id, blob in rows:
+            if blob is None:
+                continue
+            try:
+                vec = np.frombuffer(blob, dtype="<f4")  # little-endian float32，CD-56A-4
+                if vec.shape == (512,):
+                    embeddings.append(vec)
+                    video_ids.append(vid_id)
+            except Exception:
+                logger.warning("CLIP matrix: failed to deserialize embedding for video_id=%d", vid_id)
+
+        if not embeddings:
+            self._embedding_matrix = np.empty((0, 512), dtype=np.float32)
+            self._video_ids = []
+            return
+
+        matrix = np.stack(embeddings, axis=0)  # shape (N, 512)
+        self._embedding_matrix = matrix
+        self._video_ids = video_ids
+        n = len(video_ids)
+        kb = n * 2048 // 1024
+        logger.info("CLIP matrix loaded %d rows, ~%dKB", n, kb)
 
     async def compute_similar(
         self,
         query_embedding: "np.ndarray",
         limit: int,
+        query_video_id: int,
+        db_path: Path,
     ) -> list[dict]:
-        """T6 後補全。"""
-        raise NotImplementedError("compute_similar() will be implemented in T6")
+        """計算 cosine similarity，回傳 top-N 結果（未套 diversity penalty）。
+
+        Args:
+            query_embedding: shape (512,) float32 embedding vector
+            limit: 最多回傳幾筆
+            query_video_id: 查詢影片本身的 id（排除在結果之外）
+            db_path: SQLite DB 路徑，供 _ensure_matrix_loaded 使用
+
+        Returns:
+            list[dict]，每筆含 {"video_id": int, "cosine_score": float}，
+            按 cosine_score 降序排列，不含 query_video_id 本身。
+        """
+        # Lazy import numpy
+        import numpy as np  # noqa: PLC0415
+
+        self._ensure_matrix_loaded(db_path, self.model_id)
+
+        matrix = self._embedding_matrix
+        video_ids = self._video_ids
+
+        if matrix is None or len(video_ids) == 0:
+            return []
+
+        # Cosine similarity：scores = matrix @ query_vec_normalized / (row_norms * query_norm)
+        query_vec = query_embedding.astype(np.float32)
+        query_norm = float(np.linalg.norm(query_vec))
+        if query_norm == 0.0:
+            return []
+
+        query_vec_normalized = query_vec / query_norm
+        row_norms = np.linalg.norm(matrix, axis=1)  # shape (N,)
+
+        # Avoid division by zero for any zero-norm rows
+        safe_norms = np.where(row_norms == 0.0, 1.0, row_norms)
+        scores = (matrix @ query_vec_normalized) / safe_norms  # shape (N,)
+
+        # 排除 query video 本身
+        results = []
+        for i, vid_id in enumerate(video_ids):
+            if vid_id == query_video_id:
+                continue
+            results.append((float(scores[i]), vid_id))
+
+        # 按分數降序排列，取 top limit
+        results.sort(key=lambda x: x[0], reverse=True)
+        results = results[:limit]
+
+        return [{"video_id": vid_id, "cosine_score": score} for score, vid_id in results]

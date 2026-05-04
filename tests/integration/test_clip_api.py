@@ -1,0 +1,295 @@
+"""
+tests/integration/test_clip_api.py
+TDD-lite integration tests for GET /api/similar-covers endpoint.
+Uses FastAPI TestClient + mock provider + mock VideoRepository.
+"""
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+from fastapi.testclient import TestClient
+
+
+# ---------------------------------------------------------------------------
+# Helper: build a minimal mock provider
+# ---------------------------------------------------------------------------
+
+def _make_provider(
+    is_enabled: bool = True,
+    model_available: bool = True,
+    session_loaded: bool = True,
+    model_id: str = "clip-vit-b32-int8-xenova-v1",
+    compute_similar_result: list | None = None,
+):
+    provider = MagicMock()
+    provider.is_enabled = is_enabled
+    provider.model_available = model_available
+    provider.session_loaded = session_loaded
+    provider.model_id = model_id
+    if compute_similar_result is None:
+        compute_similar_result = []
+    provider.compute_similar = AsyncMock(return_value=compute_similar_result)
+    return provider
+
+
+# ---------------------------------------------------------------------------
+# Helper: build a minimal mock Video
+# ---------------------------------------------------------------------------
+
+def _make_video(
+    video_id: int = 1,
+    number: str = "ABC-001",
+    title: str = "Test Video",
+    cover_path: str = "file:///test/cover.jpg",
+    actresses: list | None = None,
+    clip_embedding: bytes | None = b"\x00" * 2048,
+    clip_model_id: str | None = "clip-vit-b32-int8-xenova-v1",
+):
+    video = MagicMock()
+    video.id = video_id
+    video.number = number
+    video.title = title
+    video.cover_path = cover_path
+    video.actresses = actresses or []
+    video.clip_embedding = clip_embedding
+    video.clip_model_id = clip_model_id
+    return video
+
+
+# ---------------------------------------------------------------------------
+# App fixture — import app after setting up mocks
+# ---------------------------------------------------------------------------
+
+@pytest.fixture()
+def client():
+    """Return a TestClient for the FastAPI app."""
+    from web.app import app
+    return TestClient(app)
+
+
+# ---------------------------------------------------------------------------
+# Tests
+# ---------------------------------------------------------------------------
+
+class TestSimilarCoversAPI:
+    def test_get_similar_covers_200(self, client):
+        """200 正常 case：provider 有 matrix，query video 有 embedding，回傳 results"""
+        target_video = _make_video(video_id=1, actresses=["Alice"])
+        result_video = _make_video(video_id=2, number="XYZ-002", actresses=["Bob"])
+
+        provider = _make_provider(
+            compute_similar_result=[{"video_id": 2, "cosine_score": 0.85}],
+        )
+
+        def mock_get_by_id(vid):
+            return {1: target_video, 2: result_video}.get(vid)
+
+        with (
+            patch("web.routers.clip.get_provider", return_value=provider),
+            patch("web.routers.clip.VideoRepository") as MockRepo,
+        ):
+            MockRepo.return_value.get_by_id.side_effect = mock_get_by_id
+
+            resp = client.get("/api/similar-covers/1")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["video_id"] == 1
+        assert data["model_id"] == "clip-vit-b32-int8-xenova-v1"
+        assert isinstance(data["results"], list)
+
+    def test_get_similar_covers_503_not_enabled(self, client):
+        """503：is_enabled == False"""
+        provider = _make_provider(is_enabled=False)
+
+        with patch("web.routers.clip.get_provider", return_value=provider):
+            resp = client.get("/api/similar-covers/1")
+
+        assert resp.status_code == 503
+        assert resp.json()["detail"] == "CLIP 索引尚未準備好"
+
+    def test_get_similar_covers_404_no_embedding(self, client):
+        """404：query video clip_embedding IS NULL"""
+        target_video = _make_video(video_id=1, clip_embedding=None, clip_model_id=None)
+        provider = _make_provider()
+
+        with (
+            patch("web.routers.clip.get_provider", return_value=provider),
+            patch("web.routers.clip.VideoRepository") as MockRepo,
+        ):
+            MockRepo.return_value.get_by_id.return_value = target_video
+
+            resp = client.get("/api/similar-covers/1")
+
+        assert resp.status_code == 404
+        assert resp.json()["detail"] == "找不到影片或尚未建立索引"
+
+    def test_get_similar_covers_404_video_not_found(self, client):
+        """404：video_id 不存在於 DB"""
+        provider = _make_provider()
+
+        with (
+            patch("web.routers.clip.get_provider", return_value=provider),
+            patch("web.routers.clip.VideoRepository") as MockRepo,
+        ):
+            MockRepo.return_value.get_by_id.return_value = None
+
+            resp = client.get("/api/similar-covers/9999")
+
+        assert resp.status_code == 404
+        assert resp.json()["detail"] == "找不到影片或尚未建立索引"
+
+    def test_get_similar_covers_422_model_mismatch(self, client):
+        """422：query video clip_model_id 與 provider.model_id 不一致"""
+        target_video = _make_video(
+            video_id=1,
+            clip_embedding=b"\x00" * 2048,
+            clip_model_id="old-model-v0",  # 不一致
+        )
+        provider = _make_provider(model_id="clip-vit-b32-int8-xenova-v1")
+
+        with (
+            patch("web.routers.clip.get_provider", return_value=provider),
+            patch("web.routers.clip.VideoRepository") as MockRepo,
+        ):
+            MockRepo.return_value.get_by_id.return_value = target_video
+
+            resp = client.get("/api/similar-covers/1")
+
+        assert resp.status_code == 422
+        assert resp.json()["detail"] == "CLIP 索引模型不一致，請至設定重建索引"
+
+    def test_similar_covers_200_when_session_not_loaded(self, client):
+        """防回歸 P2-1：session_loaded=False + model_available=True → 仍回 200"""
+        target_video = _make_video(video_id=1, actresses=["Alice"])
+        provider = _make_provider(
+            session_loaded=False,  # session 未載入
+            model_available=True,
+            compute_similar_result=[],
+        )
+
+        with (
+            patch("web.routers.clip.get_provider", return_value=provider),
+            patch("web.routers.clip.VideoRepository") as MockRepo,
+        ):
+            MockRepo.return_value.get_by_id.return_value = target_video
+
+            resp = client.get("/api/similar-covers/1")
+
+        assert resp.status_code == 200, (
+            "P2-1 防回歸：session_loaded=False 不應阻止相似查詢（相似查詢不需要 ONNX session）"
+        )
+
+    def test_diversity_penalty_applied(self, client):
+        """diversity penalty applied：同女優候選 penalty_applied=True，cosine_score < raw score"""
+        target_video = _make_video(video_id=1, actresses=["Alice"])
+        same_actress_video = _make_video(video_id=2, actresses=["Alice", "Bob"])
+
+        raw_score = 0.9
+        provider = _make_provider(
+            compute_similar_result=[{"video_id": 2, "cosine_score": raw_score}],
+        )
+
+        def mock_get_by_id(vid):
+            return {1: target_video, 2: same_actress_video}.get(vid)
+
+        with (
+            patch("web.routers.clip.get_provider", return_value=provider),
+            patch("web.routers.clip.VideoRepository") as MockRepo,
+        ):
+            MockRepo.return_value.get_by_id.side_effect = mock_get_by_id
+
+            resp = client.get("/api/similar-covers/1")
+
+        assert resp.status_code == 200
+        results = resp.json()["results"]
+        assert len(results) == 1
+        r = results[0]
+        assert r["penalty_applied"] is True
+        assert r["cosine_score"] < raw_score
+
+    def test_by_number_200(self, client):
+        """by-number 端點 200：番號存在且有 embedding"""
+        target_video = _make_video(video_id=5, number="ABC-005", actresses=["Carol"])
+        provider = _make_provider(compute_similar_result=[])
+
+        with (
+            patch("web.routers.clip.get_provider", return_value=provider),
+            patch("web.routers.clip.VideoRepository") as MockRepo,
+        ):
+            MockRepo.return_value.get_by_number.return_value = target_video
+            MockRepo.return_value.get_by_id.return_value = target_video
+
+            resp = client.get("/api/similar-covers/by-number/ABC-005")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["video_id"] == 5
+
+    def test_by_number_404(self, client):
+        """by-number 端點 404：番號不存在"""
+        provider = _make_provider()
+
+        with (
+            patch("web.routers.clip.get_provider", return_value=provider),
+            patch("web.routers.clip.VideoRepository") as MockRepo,
+        ):
+            MockRepo.return_value.get_by_number.return_value = None
+
+            resp = client.get("/api/similar-covers/by-number/NONEXIST-999")
+
+        assert resp.status_code == 404
+        assert resp.json()["detail"] == "找不到影片或尚未建立索引"
+
+    def test_limit_parameter_respected(self, client):
+        """limit 參數傳遞給 compute_similar"""
+        target_video = _make_video(video_id=1)
+        provider = _make_provider(compute_similar_result=[])
+
+        with (
+            patch("web.routers.clip.get_provider", return_value=provider),
+            patch("web.routers.clip.VideoRepository") as MockRepo,
+        ):
+            MockRepo.return_value.get_by_id.return_value = target_video
+
+            resp = client.get("/api/similar-covers/1?limit=5")
+
+        assert resp.status_code == 200
+        # Verify compute_similar was called with limit=5
+        provider.compute_similar.assert_awaited_once()
+        call_kwargs = provider.compute_similar.call_args
+        # limit may be positional or keyword
+        called_limit = (
+            call_kwargs.kwargs.get("limit")
+            if "limit" in call_kwargs.kwargs
+            else call_kwargs.args[1] if len(call_kwargs.args) > 1 else None
+        )
+        assert called_limit == 5
+
+    def test_limit_over_50_returns_422(self, client):
+        """limit > 50 → FastAPI Query validation → 422"""
+        provider = _make_provider()
+
+        with patch("web.routers.clip.get_provider", return_value=provider):
+            resp = client.get("/api/similar-covers/1?limit=51")
+
+        assert resp.status_code == 422
+
+    def test_model_available_false_returns_empty_results(self, client):
+        """model_available=False（DB 無索引）→ 200 + results: []（不是 error）"""
+        target_video = _make_video(video_id=1)
+        provider = _make_provider(model_available=False, compute_similar_result=[])
+
+        with (
+            patch("web.routers.clip.get_provider", return_value=provider),
+            patch("web.routers.clip.VideoRepository") as MockRepo,
+        ):
+            MockRepo.return_value.get_by_id.return_value = target_video
+
+            resp = client.get("/api/similar-covers/1")
+
+        assert resp.status_code == 200
+        assert resp.json()["results"] == []
