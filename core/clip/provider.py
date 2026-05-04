@@ -62,7 +62,7 @@ class LocalONNXProvider(CLIPProvider):
     """Local ONNX Runtime CLIP provider using Xenova/clip-vit-base-patch32."""
 
     MODEL_ID: str = "clip-vit-b32-int8-xenova-v1"   # CD-56A-1 + CD-56A-5
-    MODEL_SHA256: str = "PENDING"                    # T3 釘版後填入真實 binary hash
+    MODEL_SHA256: str = "583fd1110a514667812fee7d684952aaf82a99b959760c8d7dca7e0ab9839299"  # OQ-1 verified binary sha256
 
     def __init__(self, model_path: Path) -> None:
         """初始化 LocalONNXProvider，不立即載入 ONNX session（懶載入）。

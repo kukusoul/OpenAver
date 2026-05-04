@@ -1,7 +1,9 @@
 """
 tests/unit/test_clip_provider.py
-TDD-lite tests for CLIPProvider ABC and LocalONNXProvider skeleton (T2).
+TDD-lite tests for CLIPProvider ABC, LocalONNXProvider skeleton (T2),
+and ModelDownloader helper (T3).
 """
+import hashlib
 import importlib
 import sys
 from pathlib import Path
@@ -42,11 +44,11 @@ class TestLocalONNXProviderInit:
 
         assert LocalONNXProvider.MODEL_ID == "clip-vit-b32-int8-xenova-v1"
 
-    def test_model_sha256_pending(self):
-        """LocalONNXProvider.MODEL_SHA256 == 'PENDING'（T3 填入前）"""
+    def test_model_sha256_updated(self):
+        """LocalONNXProvider.MODEL_SHA256 已更新為 T3 驗證值（非 PENDING）"""
         from core.clip.provider import LocalONNXProvider
 
-        assert LocalONNXProvider.MODEL_SHA256 == "PENDING"
+        assert LocalONNXProvider.MODEL_SHA256 == "583fd1110a514667812fee7d684952aaf82a99b959760c8d7dca7e0ab9839299"
 
     def test_lazy_load_no_session_on_init(self, tmp_path):
         """__init__ 不立即載入 session（session_loaded == False）"""
@@ -152,3 +154,237 @@ class TestGetProvider:
         p1 = clip_module.get_provider(model_path=model_path_a)
         p2 = clip_module.get_provider(model_path=model_path_b)
         assert p1 is p2
+
+
+# ---------------------------------------------------------------------------
+# T3: ModelDownloader helper
+# ---------------------------------------------------------------------------
+
+_FAKE_CONTENT = b"fake model content"
+_FAKE_SHA256 = hashlib.sha256(_FAKE_CONTENT).hexdigest()
+
+
+class TestModelDownloader:
+    """Tests for core.clip.downloader.ensure_model_downloaded."""
+
+    # ------------------------------------------------------------------
+    # helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _write_fake_file(path: Path, content: bytes = _FAKE_CONTENT) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(content)
+
+    # ------------------------------------------------------------------
+    # tests
+    # ------------------------------------------------------------------
+
+    def test_returns_path_if_exists_and_sha256_matches(self, tmp_path, mocker):
+        """檔案已存在且 sha256 正確 → 跳過下載，回傳 path（idempotent）"""
+        from core.clip.downloader import ensure_model_downloaded
+
+        target = tmp_path / "onnx" / "model.onnx"
+        self._write_fake_file(target)
+
+        mock_dl = mocker.patch("core.clip.downloader.hf_hub_download")
+
+        result = ensure_model_downloaded(
+            target_path=target,
+            expected_sha256=_FAKE_SHA256,
+        )
+
+        assert result == target
+        mock_dl.assert_not_called()
+
+    def test_downloads_if_not_exists(self, tmp_path, mocker):
+        """檔案不存在 → 呼叫 hf_hub_download，回傳 path"""
+        from core.clip.downloader import ensure_model_downloaded
+
+        target = tmp_path / "onnx" / "model.onnx"
+
+        def fake_download(repo_id, filename, local_dir=None, **kwargs):
+            # simulate hf_hub_download writing the file
+            dest = Path(local_dir) / filename
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_bytes(_FAKE_CONTENT)
+            return str(dest)
+
+        mocker.patch("core.clip.downloader.hf_hub_download", side_effect=fake_download)
+
+        result = ensure_model_downloaded(
+            target_path=target,
+            filename="onnx/model.onnx",
+            expected_sha256=_FAKE_SHA256,
+        )
+
+        assert result == target
+
+    def test_sha256_mismatch_raises_error(self, tmp_path, mocker):
+        """sha256 不符 → 刪除檔案 + 拋 ModelDownloadError"""
+        from core.clip.downloader import ModelDownloadError, ensure_model_downloaded
+
+        target = tmp_path / "onnx" / "model.onnx"
+        self._write_fake_file(target, b"corrupt content")
+
+        mocker.patch("core.clip.downloader.hf_hub_download")
+
+        with pytest.raises(ModelDownloadError):
+            ensure_model_downloaded(
+                target_path=target,
+                expected_sha256=_FAKE_SHA256,
+            )
+
+        # corrupted file should be deleted
+        assert not target.exists()
+
+    def test_pending_sha256_skips_verification(self, tmp_path, mocker):
+        """expected_sha256 == 'PENDING' → 跳過驗證，成功回傳"""
+        from core.clip.downloader import ensure_model_downloaded
+
+        target = tmp_path / "onnx" / "model.onnx"
+        self._write_fake_file(target, b"any content, no verification")
+
+        mock_dl = mocker.patch("core.clip.downloader.hf_hub_download")
+
+        result = ensure_model_downloaded(
+            target_path=target,
+            expected_sha256="PENDING",
+        )
+
+        assert result == target
+        mock_dl.assert_not_called()
+
+    def test_connection_error_raises_model_download_error(self, tmp_path, mocker):
+        """requests.ConnectionError → 包裝為 ModelDownloadError"""
+        import requests
+        from core.clip.downloader import ModelDownloadError, ensure_model_downloaded
+
+        target = tmp_path / "onnx" / "model.onnx"
+
+        mocker.patch(
+            "core.clip.downloader.hf_hub_download",
+            side_effect=requests.ConnectionError("no network"),
+        )
+
+        with pytest.raises(ModelDownloadError):
+            ensure_model_downloaded(
+                target_path=target,
+                expected_sha256=_FAKE_SHA256,
+            )
+
+    def test_hf_http_error_raises_model_download_error(self, tmp_path, mocker):
+        """HfHubHTTPError → 包裝為 ModelDownloadError"""
+        from unittest.mock import MagicMock
+        import httpx
+        from huggingface_hub.errors import HfHubHTTPError
+        from core.clip.downloader import ModelDownloadError, ensure_model_downloaded
+
+        target = tmp_path / "onnx" / "model.onnx"
+
+        mock_response = MagicMock(spec=httpx.Response)
+        mock_response.status_code = 503
+        mock_response.headers = {}
+        hf_error = HfHubHTTPError("503 Server Error", response=mock_response)
+
+        mocker.patch(
+            "core.clip.downloader.hf_hub_download",
+            side_effect=hf_error,
+        )
+
+        with pytest.raises(ModelDownloadError):
+            ensure_model_downloaded(
+                target_path=target,
+                expected_sha256=_FAKE_SHA256,
+            )
+
+    def test_repository_not_found_raises_model_download_error(self, tmp_path, mocker):
+        """RepositoryNotFoundError → 包裝為 ModelDownloadError"""
+        from unittest.mock import MagicMock
+        import httpx
+        from huggingface_hub.errors import RepositoryNotFoundError
+        from core.clip.downloader import ModelDownloadError, ensure_model_downloaded
+
+        target = tmp_path / "onnx" / "model.onnx"
+
+        mock_response = MagicMock(spec=httpx.Response)
+        mock_response.status_code = 404
+        mock_response.headers = {}
+        repo_error = RepositoryNotFoundError("not found", response=mock_response)
+
+        mocker.patch(
+            "core.clip.downloader.hf_hub_download",
+            side_effect=repo_error,
+        )
+
+        with pytest.raises(ModelDownloadError):
+            ensure_model_downloaded(
+                target_path=target,
+                expected_sha256=_FAKE_SHA256,
+            )
+
+    def test_entry_not_found_raises_model_download_error(self, tmp_path, mocker):
+        """EntryNotFoundError → 包裝為 ModelDownloadError"""
+        from huggingface_hub.errors import EntryNotFoundError
+        from core.clip.downloader import ModelDownloadError, ensure_model_downloaded
+
+        target = tmp_path / "onnx" / "model.onnx"
+
+        mocker.patch(
+            "core.clip.downloader.hf_hub_download",
+            side_effect=EntryNotFoundError("no such file"),
+        )
+
+        with pytest.raises(ModelDownloadError):
+            ensure_model_downloaded(
+                target_path=target,
+                expected_sha256=_FAKE_SHA256,
+            )
+
+    def test_creates_parent_directory(self, tmp_path, mocker):
+        """目標目錄不存在 → 自動建立，不拋錯"""
+        from core.clip.downloader import ensure_model_downloaded
+
+        # deeply nested path that does not yet exist
+        target = tmp_path / "a" / "b" / "c" / "model.onnx"
+
+        def fake_download(repo_id, filename, local_dir=None, **kwargs):
+            dest = Path(local_dir) / filename
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_bytes(_FAKE_CONTENT)
+            return str(dest)
+
+        mocker.patch("core.clip.downloader.hf_hub_download", side_effect=fake_download)
+
+        result = ensure_model_downloaded(
+            target_path=target,
+            filename="onnx/model.onnx",
+            expected_sha256=_FAKE_SHA256,
+        )
+
+        assert result == target
+        assert target.exists()
+
+    def test_model_download_error_message_is_fixed_chinese(self, tmp_path, mocker):
+        """錯誤 message 為固定中文字串，不含 exception args/traceback"""
+        import requests
+        from core.clip.downloader import ModelDownloadError, ensure_model_downloaded
+
+        target = tmp_path / "onnx" / "model.onnx"
+
+        mocker.patch(
+            "core.clip.downloader.hf_hub_download",
+            side_effect=requests.ConnectionError("raw network error details"),
+        )
+
+        with pytest.raises(ModelDownloadError) as exc_info:
+            ensure_model_downloaded(
+                target_path=target,
+                expected_sha256=_FAKE_SHA256,
+            )
+
+        msg = str(exc_info.value)
+        # should be fixed Chinese, not leaking raw exception internals
+        assert "raw network error details" not in msg
+        # must contain Chinese characters (at least one CJK char)
+        assert any("一" <= ch <= "鿿" for ch in msg)
