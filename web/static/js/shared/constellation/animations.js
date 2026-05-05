@@ -150,9 +150,12 @@ export function playSlipThrough(clickedId, prevVisible, nextVisible, cards, rail
   });
 
   // t=0.30: 新主圖內容置換（callback）+ fade-in at 0.35
+  // 56b placeholder：把被點 slot id 寫入 #main-id-label，提供 phase 2 視覺確認
+  // （56c 換真實 API 時改為 swap cover image）
   if (mainImg) {
     tl.call(() => {
-      // 56b placeholder: swap content (no-op for now, 56c will hook real API)
+      const labelEl = document.getElementById('main-id-label');
+      if (labelEl) labelEl.textContent = clickedId;
       gsap.set(mainImg, { opacity: 0 });
     }, null, 0.30);
     tl.to(mainImg, { opacity: 1, duration: 0.35, ease: 'fluent-decel' }, 0.35);

@@ -86,10 +86,10 @@
   --overlay-control:  rgba(0, 0, 0, 0.45);  /* 浮在媒體上的控制按鈕 */
   --overlay-letterbox: rgba(0, 0, 0, 0.2);  /* 媒體封面 letterbox 黑邊背景 */
 
-  /* Constellation Lab 星辰 token（56b-T1，§3 角色色白名單） */
-  --star-line-bright: oklch(0.88 0.06 85);         /* rank 1-3 rail 線色 / rank 1 卡片描邊 3px（香檳金明亮）*/
-  --star-line-fade:   oklch(0.70 0.04 85 / 0.45);  /* rank 4-8 rail 線色 / 線粗 1px（香檳金淡化帶透明度）*/
-  --star-glow:        oklch(0.92 0.09 80);          /* rank 1 卡片 glow halo / 主圖 halo（香檳金發光）*/
+  /* Constellation Lab star tokens - theme-aware, light defaults, dim overrides below */
+  --star-line-bright: oklch(0.48 0.14 75);
+  --star-line-fade:   oklch(0.60 0.10 75);
+  --star-glow:        oklch(0.55 0.16 72);
 }
 
 /* Dark Theme 陰影 - 更深的陰影 */
@@ -102,6 +102,11 @@
   --fluent-shadow-64: 0px 0px 2px rgba(0, 0, 0, 0.24), 0px 32px 64px rgba(0, 0, 0, 0.28);
 
   --fluent-smoke: rgba(0, 0, 0, 0.6);
+
+  /* Constellation Lab star tokens - dim theme overrides (bright gold on dark) */
+  --star-line-bright: oklch(0.86 0.11 80);
+  --star-line-fade:   oklch(0.70 0.08 80);
+  --star-glow:        oklch(0.88 0.14 78);
 }
 
 /* ========== Fluent Utility Classes ========== */
