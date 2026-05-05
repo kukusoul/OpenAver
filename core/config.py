@@ -32,6 +32,8 @@ class ScraperConfig(BaseModel):
     folder_layers: List[str] = ["{actor}"]
     folder_format: str = "{actor}"
     filename_format: str = "{num} {title}"
+    cover_format: str = "{num}"
+    nfo_format: str = "{num}"
     download_cover: bool = True
     cover_filename: str = "poster.jpg"
     create_nfo: bool = True

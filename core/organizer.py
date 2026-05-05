@@ -180,6 +180,7 @@ def format_string(template: str, data: Dict[str, Any], use_fallback: bool = Fals
     - {month}: 月份（2位）
     - {day}: 日（2位）
     - {suffix}: 版本後綴（Fix-1）
+    - {original}: 原始檔名（不含副檔名）
 
     Args:
         use_fallback: True 時空值使用 FALLBACKS（僅資料夾層級傳 True）。
@@ -217,6 +218,9 @@ def format_string(template: str, data: Dict[str, Any], use_fallback: bool = Fals
 
     # 後綴（Fix-1，空值就是空字串，不需 fallback）
     result = result.replace('{suffix}', data.get('suffix', ''))
+
+    # 原始檔名（不含副檔名）
+    result = result.replace('{original}', data.get('original', ''))
 
     return sanitize_filename(result.strip())
 
@@ -541,6 +545,7 @@ def organize_file(
         'actors': actors,
         'maker': metadata.get('maker', ''),
         'date': metadata.get('date', ''),
+        'original': os.path.splitext(original_filename)[0],
     }
 
     # 偵測版本後綴
@@ -661,25 +666,27 @@ def organize_file(
 
         result['new_filename'] = target_path
 
-        # 下載封面（檔名跟隨影片命名）
+        # 下載封面（使用 cover_format）
         img_url = metadata.get('cover', '')
         if img_url:
-            cover_path = os.path.join(target_dir, filename_base + '.jpg')
+            cover_base = format_string(config.get('cover_format', '{num}'), format_data)
+            cover_path = os.path.join(target_dir, cover_base + '.jpg')
             if download_image(img_url, cover_path):
                 result['cover_path'] = cover_path
 
-        # Jellyfin 模式：產生 poster + fanart
+        # Jellyfin 模式：產生 poster + fanart（共用 cover_format）
         if config.get('jellyfin_mode') and result.get('cover_path'):
             cover_jpg = result['cover_path']
+            cover_base = format_string(config.get('cover_format', '{num}'), format_data)
             # fanart = 原圖複製
-            fanart_path = os.path.join(target_dir, filename_base + '-fanart.jpg')
+            fanart_path = os.path.join(target_dir, cover_base + '-fanart.jpg')
             try:
                 shutil.copy2(cover_jpg, fanart_path)
                 result['fanart_path'] = fanart_path
             except Exception as e:
                 logger.warning(f"[!] Fanart 複製失敗: {e}")
             # poster = 裁切
-            poster_path = os.path.join(target_dir, filename_base + '-poster.jpg')
+            poster_path = os.path.join(target_dir, cover_base + '-poster.jpg')
             if crop_to_poster(cover_jpg, poster_path):
                 result['poster_path'] = poster_path
 
@@ -700,8 +707,9 @@ def organize_file(
                 except Exception as e:
                     logger.warning(f"extrafanart 目錄建立失敗: {e}")
 
-        # 生成 NFO（檔名跟隨影片命名）
-        nfo_path = os.path.join(target_dir, filename_base + '.nfo')
+        # 生成 NFO（使用 nfo_format）
+        nfo_base = format_string(config.get('nfo_format', '{num}'), format_data)
+        nfo_path = os.path.join(target_dir, nfo_base + '.nfo')
         tags = metadata.get('tags', [])
         user_tags = metadata.get('user_tags', [])
         if generate_nfo(
