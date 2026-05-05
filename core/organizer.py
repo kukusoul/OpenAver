@@ -421,7 +421,8 @@ def format_string(template: str, data: Dict[str, Any], use_fallback: bool = Fals
     - {year}: 年份
     - {month}: 月份（2位）
     - {day}: 日（2位）
-    - {suffix}: 版本後綴（Fix-1）
+    - {suffix}: 版本後綴
+    - {original}: 原始檔名（不含副檔名）
 
     Args:
         use_fallback: True 時空值使用 FALLBACKS（僅資料夾層級傳 True）。
@@ -457,8 +458,11 @@ def format_string(template: str, data: Dict[str, Any], use_fallback: bool = Fals
     result = result.replace('{month}', date[5:7] if len(date) >= 7 else fb.get('month', ''))
     result = result.replace('{day}',   date[8:10] if len(date) >= 10 else fb.get('day', ''))
 
-    # 後綴（Fix-1，空值就是空字串，不需 fallback）
+    # 後綴（空值就是空字串，不需 fallback）
     result = result.replace('{suffix}', data.get('suffix', ''))
+
+    # 原始檔名（不含副檔名）
+    result = result.replace('{original}', data.get('original', ''))
 
     return sanitize_filename(result.strip())
 
@@ -864,6 +868,7 @@ def organize_file(
         'actors': actors,
         'maker': metadata.get('maker', ''),
         'date': metadata.get('date', ''),
+        'original': os.path.splitext(original_filename)[0],
     }
 
     # 偵測版本後綴；外部模式過濾掉多段 token 避免 {suffix}+part_tail 雙寫（CD-72b-T5）
@@ -1006,10 +1011,11 @@ def organize_file(
 
         result['new_filename'] = target_path
 
-        # 下載封面（檔名跟隨影片命名）
+        # 下載封面（使用 cover_format）
         img_url = metadata.get('cover', '')
         if img_url:
-            cover_path = os.path.join(target_dir, filename_base + '.jpg')
+            cover_base = format_string(config.get('cover_format', '{num}'), format_data)
+            cover_path = os.path.join(target_dir, cover_base + '.jpg')
             if download_image(img_url, cover_path):
                 result['cover_path'] = cover_path
 
