@@ -148,8 +148,8 @@ document.addEventListener('alpine:init', () => {
         if (!card) return;
         gsap.killTweensOf(card, 'scale,opacity');
         if (id !== slotId) gsap.set(card, { opacity: 1 });
-        // clearProps: 'scale' 確保所有 card（含 clicked）從 scale=1.0 起跳（CD-T2FIX-2）
-        gsap.set(card, { clearProps: 'scale' });
+        // clearProps: 'scale,rotation' 確保所有 card（含 clicked）從 scale=1.0/rotation=0 起跳（CD-T2FIX-2 + polish）
+        gsap.set(card, { clearProps: 'scale,rotation' });
         const overlay = card.querySelector('.slot-icon-overlay');
         if (overlay) overlay.classList.remove('slot-icon--visible');
       });
