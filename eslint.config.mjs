@@ -98,4 +98,50 @@ export default [
       "no-restricted-syntax": ["error", SEL_WINDOW_CONFIRM],
     },
   },
+
+  // Group 4: clip-lab thin host — 禁止核心邏輯洩漏到 thin host（CD-56B-8 lint guard）
+  {
+    files: ["web/static/js/pages/clip-lab/main.js"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "Property[key.name='drawSVG']",
+          message:
+            "drawSVG 屬於核心層（shared/constellation/rails.js），禁止在 thin host main.js 的 GSAP property bag 直接使用。",
+        },
+        {
+          selector: "Property[key.value='drawSVG']",
+          message:
+            "drawSVG 屬於核心層（shared/constellation/rails.js），禁止在 thin host main.js 直接使用（quoted key form）。",
+        },
+        {
+          selector: "MemberExpression[property.name='drawSVG']",
+          message:
+            "drawSVG 屬於核心層，禁止在 thin host main.js 透過 member access 使用。",
+        },
+        {
+          selector: "CallExpression[callee.name='railDrawIn']",
+          message:
+            "railDrawIn 是核心函式，thin host 只能呼叫 animations.js 的 play* 函式，不能直接呼叫 railDrawIn。",
+        },
+      ],
+    },
+  },
+
+  // Group 5: animations.js 禁直接 setAttribute('x2')（rail endpoint 必須經 rails.js setRailCoords）
+  {
+    files: ["web/static/js/shared/constellation/animations.js"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector:
+            "CallExpression[callee.property.name='setAttribute'][arguments.0.value='x2']",
+          message:
+            "SVG rail x2 屬性只能在 rails.js（setRailCoords）或 breathing.js（ticker follow）內設定，不在 animations.js 直接 setAttribute。",
+        },
+      ],
+    },
+  },
 ];

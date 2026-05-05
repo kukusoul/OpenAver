@@ -901,5 +901,8 @@
     "step6_content": "Help 頁有一個指令，複製後貼給 Claude Code 或 Cursor<br>AI 就能自動幫你搜尋、刮削、整理，不用自己一步一步來",
     "step7_title": "🎯 立即體驗！",
     "step7_content": "拖放 <code>教學檔案</code> 資料夾<br>或其中任一 <code>.mp4</code> 檔案到此視窗<br><br><small class=\"text-muted\">內含 11 個真實可搜尋的範例</small>"
+  },
+  "clip_lab": {
+    "mobile_notice": "此頁僅供桌面動畫測試，請用 ≥960px 視窗開啟。"
   }
 }

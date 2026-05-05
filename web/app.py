@@ -55,6 +55,7 @@ from web.routers import actress as actress_router
 from web.routers import actress_alias as actress_alias_router
 from web.routers import notifications as notifications_router
 from web.routers import clip as clip_router
+from web.routers import clip_lab as clip_lab_router
 app.include_router(search_router.router)
 app.include_router(config_router.router)
 app.include_router(scraper_router.router)
@@ -72,6 +73,7 @@ app.include_router(actress_router.router)
 app.include_router(actress_alias_router.router)
 app.include_router(notifications_router.router)
 app.include_router(clip_router.router)
+app.include_router(clip_lab_router.router)
 
 
 @app.exception_handler(RequestValidationError)

@@ -4533,6 +4533,7 @@ class TestMotionInfra:
             Path('pages') / 'motion-lab-state.js',      # pages/motion-lab-state.js（39b-T1 Alpine state 含 GSAP 委派呼叫）
             Path('pages') / 'search' / 'animations.js', # pages/search/animations.js（T6 預先加入）
             Path('pages') / 'showcase' / 'animations.js', # pages/showcase/animations.js（B6 動畫模組）
+            Path('pages') / 'clip-lab' / 'main.js',     # pages/clip-lab/main.js（56b-T1 thin host：init DOM setup + prefers-reduced-motion 終態 gsap.set）
         }
         violations = []
 
