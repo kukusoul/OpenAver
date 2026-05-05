@@ -122,6 +122,9 @@ export default [
   // Group 4: constellation/animations.js 完整規則集（supersedes Group 3）
   // 包含：window.confirm guard + x2 setAttribute guard（rail endpoint 必須經 rails.js）
   // + BreathingManager 實例化禁令（CD-56B-T2）
+  // + starSettle caller ban（CD-T2FIX-1）：禁止 ease: 'starSettle' Property（caller 不可走回頭路）
+  //   注意：CustomEase.create('starSettle', ...) 是 CallExpression Argument（Literal），
+  //   不符合 Property[key.name='ease'] selector，自然白名單（register 保留供 56c 評估）
   {
     files: ["web/static/js/shared/constellation/animations.js"],
     rules: {
@@ -134,6 +137,11 @@ export default [
             "CallExpression[callee.property.name='setAttribute'][arguments.0.value='x2']",
           message:
             "SVG rail x2 屬性只能在 rails.js（setRailCoords）或 breathing.js（ticker follow）內設定，不在 animations.js 直接 setAttribute。",
+        },
+        {
+          selector: "Property[key.name='ease'][value.value='starSettle']",
+          message:
+            "starSettle（CD-T2FIX-1）已退役，caller 禁止走回頭路。被點卡飛中央請改用 'fluent-decel'。CustomEase.create('starSettle', ...) 是 CallExpression Argument，自然不符合此 Property selector（允許保留 register）。",
         },
       ],
     },
@@ -180,6 +188,8 @@ export default [
 
   // Group 6: 其餘非 state/ 非 main.js 非 animations.js 非 breathing.js JS（supersedes Group 3）
   // 包含：window.confirm guard + BreathingManager 實例化禁令（CD-56B-T2）
+  // + starSettle Literal ban（CD-T2FIX-1）：其他檔案完全不允許出現 'starSettle' 字串
+  //   （animations.js 在 ignores 中，所以 CustomEase.create('starSettle') 不受此影響）
   {
     files: ["web/static/js/**/*.js"],
     ignores: [
@@ -193,6 +203,11 @@ export default [
         "error",
         SEL_WINDOW_CONFIRM,
         SEL_BREATHING_MANAGER_NEW,
+        {
+          selector: "Literal[value='starSettle']",
+          message:
+            "starSettle（CD-T2FIX-1）已退役。其他檔案禁止出現 'starSettle' 字串。register 保留在 animations.js（由 Group 4 白名單保護）。",
+        },
       ],
     },
   },

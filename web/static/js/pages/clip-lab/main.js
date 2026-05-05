@@ -93,8 +93,52 @@ document.addEventListener('alpine:init', () => {
     onCardClick(slotId) {
       if (this.animating || !this.visibleSlots.has(slotId)) return;
 
+      // CRITICAL: 在呼叫任何 animation / pickEight 之前，先捕獲 prevVisible（CD-T2FIX-4 §E）
+      const prevVisible = new Set(this.visibleSlots);
+
       // host 算 nextVisible（防雙抽：animations.js 不 import pickEight）
-      const nextVisible = pickEight(slotId, this.visibleSlots, Math.random);
+      const nextVisible = pickEight(slotId, prevVisible, Math.random);
+
+      // Reduced-motion 短路（CD-T2FIX-11）：sync state update，不播任何動畫
+      if (window.OpenAver.prefersReducedMotion) {
+        // 隱藏舊批
+        prevVisible.forEach(id => {
+          const card = this.cards[id];
+          if (card) {
+            card.classList.add('slot--hidden');
+            gsap.set(card, { opacity: 0 });
+          }
+        });
+        // 顯示新批，定位至 anchor
+        nextVisible.forEach(id => {
+          const anchor = ANCHORS.find(a => a.id === id);
+          const card = this.cards[id];
+          if (anchor && card) {
+            card.classList.remove('slot--hidden');
+            gsap.set(card, { left: anchor.x, top: anchor.y, opacity: 1, width: 120, height: 150 });
+          }
+        });
+        // Rails: nextVisible 顯示，其餘隱藏（DrawSVG 禁用，使用 classList + opacity）
+        ANCHORS.forEach(a => {
+          const line = this.railLines[a.id];
+          if (!line) return;
+          if (nextVisible.has(a.id)) {
+            line.classList.remove('rail--hidden');
+            gsap.set(line, { opacity: 1, strokeWidth: 1.5 });
+          } else {
+            line.classList.add('rail--hidden');
+            gsap.set(line, { opacity: 0 });
+          }
+        });
+        // Main label
+        const labelEl = document.getElementById('main-id-label');
+        if (labelEl) labelEl.textContent = slotId;
+        this.mainSlot = slotId;
+        this.visibleSlots = nextVisible;
+        // this.animating 維持 false（short-circuit 不設 true）
+        return;
+      }
+
       this.animating = true;
 
       // 同步清 hover 殘留 tween + 視覺 state（CD-56B-T2 codex P1）
@@ -104,18 +148,18 @@ document.addEventListener('alpine:init', () => {
         if (!card) return;
         gsap.killTweensOf(card, 'scale,opacity');
         if (id !== slotId) gsap.set(card, { opacity: 1 });
+        // clearProps: 'scale' 確保所有 card（含 clicked）從 scale=1.0 起跳（CD-T2FIX-2）
+        gsap.set(card, { clearProps: 'scale' });
         const overlay = card.querySelector('.slot-icon-overlay');
         if (overlay) overlay.classList.remove('slot-icon--visible');
       });
-      // clicked 卡 scale reset（playSlipThrough 從 1.0 起跳）
-      if (this.cards[slotId]) gsap.set(this.cards[slotId], { scale: 1.0 });
 
       // 停止呼吸（slip-through 期間 ticker 不殘留）
       this.breathingManager.stop();
 
       playSlipThrough(
         slotId,
-        this.visibleSlots,
+        prevVisible,
         nextVisible,
         this.cards,
         this.railLines,
@@ -147,8 +191,8 @@ document.addEventListener('alpine:init', () => {
       // 1. 暫停此顆呼吸
       this.breathingManager.pauseOne(slotId);
 
-      // 2. Scale up
-      gsap.to(this.cards[slotId], { scale: 1.06, duration: 0.18, ease: 'fluent' });
+      // 2. Scale up（transformOrigin 確保 hit target 不位移，CD-T2FIX-2）
+      gsap.to(this.cards[slotId], { scale: 1.06, duration: 0.18, ease: 'fluent', transformOrigin: '50% 50%' });
 
       // 3. Dim 其餘 visible slots
       this.visibleSlots.forEach(id => {

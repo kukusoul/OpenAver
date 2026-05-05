@@ -22,6 +22,8 @@ if (typeof DrawSVGPlugin !== 'undefined' && !gsap.plugins.drawSVG) {
 // fluent-decel / fluent-accel / fluent 三曲線已在 motion-adapter.js 註冊，不重複 register
 // ---------------------------------------------------------------------------
 if (typeof CustomEase !== 'undefined') {
+  // 保留 register 供 56c 評估；無 caller（T2fix1 退役）
+  // CD-T2FIX-1：clicked card 已改走 fluent-decel，starSettle 退役但保留 register
   CustomEase.create('starSettle', 'M0,0 C0,0 0.6,1.4 0.8,1.05 0.9,0.95 1,1 1,1');
 }
 
@@ -96,7 +98,7 @@ export function playSlipThrough(clickedId, prevVisible, nextVisible, cards, rail
 
   const tl = gsap.timeline({ onComplete });
 
-  // t=0: 被點卡飛向中心 + 變大（CD-56B-7: 0.60s starSettle）
+  // t=0: 被點卡飛向中心 + 變大（CD-T2FIX-1: 0.46s fluent-decel，starSettle 退役）
   if (cards[clickedId]) {
     tl.to(cards[clickedId], {
       left: 480,
@@ -104,8 +106,8 @@ export function playSlipThrough(clickedId, prevVisible, nextVisible, cards, rail
       width: 200,
       height: 250,
       opacity: 1,
-      duration: 0.60,
-      ease: 'starSettle',
+      duration: 0.46,
+      ease: 'fluent-decel',
       zIndex: 150,
     }, 0);
   }
@@ -113,6 +115,10 @@ export function playSlipThrough(clickedId, prevVisible, nextVisible, cards, rail
   // t=0: 舊主圖 fade-out（CD-56B-7: 0.30s fluent-accel）
   if (mainImg) {
     tl.to(mainImg, { opacity: 0, duration: 0.30, ease: 'fluent-accel' }, 0);
+    // t=0: main glow flash 最小版（CD-T2FIX-1）— CSS variable tween
+    tl.to(mainImg, { '--main-flash-strength': 1, duration: 0.30, ease: 'fluent-decel' }, 0);
+    // t=0.30: flash 退回（接力）
+    tl.to(mainImg, { '--main-flash-strength': 0, duration: 0.22, ease: 'fluent' }, 0.30);
   }
 
   // t=0: 純離場卡沿 rail 滑出（CD-56B-7: 0.55s fluent-accel）

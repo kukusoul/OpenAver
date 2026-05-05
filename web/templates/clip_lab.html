@@ -87,8 +87,10 @@
   transform: translate(-50%, -50%);
   background: var(--color-base-100);
   border-radius: var(--fluent-radius-xl);
+  --main-flash-strength: 0;
   box-shadow:
-    0 0 28px color-mix(in oklch, var(--star-glow) 60%, transparent),
+    0 0 calc(28px + var(--main-flash-strength) * 20px)
+      color-mix(in oklch, var(--star-glow) calc(60% + var(--main-flash-strength) * 20%), transparent),
     inset 0 1px 0 color-mix(in oklch, var(--color-base-content) 10%, transparent),
     var(--fluent-shadow-28);
   cursor: pointer;
