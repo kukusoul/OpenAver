@@ -115,10 +115,11 @@ export function playSlipThrough(clickedId, prevVisible, nextVisible, cards, rail
   // t=0: 舊主圖 fade-out（CD-56B-7: 0.30s fluent-accel）
   if (mainImg) {
     tl.to(mainImg, { opacity: 0, duration: 0.30, ease: 'fluent-accel' }, 0);
-    // t=0: main glow flash 最小版（CD-T2FIX-1）— CSS variable tween
-    tl.to(mainImg, { '--main-flash-strength': 1, duration: 0.30, ease: 'fluent-decel' }, 0);
-    // t=0.30: flash 退回（接力）
-    tl.to(mainImg, { '--main-flash-strength': 0, duration: 0.22, ease: 'fluent' }, 0.30);
+    // Flash 在 fade-out 早期 peak（opacity 仍高時），避免 box-shadow 隨 element opacity
+    // 一起淡到 0。retime 後：t=0 → t=0.10 上升（opacity ~1→0.67），
+    // t=0.10 → t=0.30 與 fade-out 同步收掉。Codex r1 P2 修正。
+    tl.to(mainImg, { '--main-flash-strength': 1, duration: 0.10, ease: 'fluent-decel' }, 0);
+    tl.to(mainImg, { '--main-flash-strength': 0, duration: 0.20, ease: 'fluent' }, 0.10);
   }
 
   // t=0: 純離場卡沿 rail 滑出（CD-56B-7: 0.55s fluent-accel）
@@ -167,12 +168,13 @@ export function playSlipThrough(clickedId, prevVisible, nextVisible, cards, rail
     tl.to(mainImg, { opacity: 1, duration: 0.35, ease: 'fluent-decel' }, 0.35);
   }
 
-  // t=0.40: 被點卡 hide + reset size
+  // t=0.46: 被點卡 hide + reset size（absorb tween 結束後立即清，避免硬截最後 60ms）
+  // Codex r1 P1 修正：原 0.40 截斷 0.46 absorb 平滑收尾
   if (cards[clickedId]) {
     tl.call(() => {
       cards[clickedId].classList.add('slot--hidden');
       gsap.set(cards[clickedId], { opacity: 0, width: 120, height: 150, zIndex: 10 });
-    }, null, 0.40);
+    }, null, 0.46);
   }
 
   // t=0.20+: 新批 8 張從中心湧出（CD-56B-7: 0.55s fluent-decel，stagger 0.05s）

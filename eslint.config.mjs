@@ -41,6 +41,15 @@ const SEL_BREATHING_MANAGER_NEW = {
     "BreathingManager 只能在 pages/clip-lab/main.js 建立實例（host lifecycle 持有原則）。其他模組禁止直接 new BreathingManager（CD-56B-T2 lint guard）。",
 };
 
+// ── CD-T2FIX-1 starSettle Literal ban（共用，所有非 animations.js 檔案）────
+// Codex r1 P3 修正：原 v1 只在 Group 6 加 ban，但 Group 6 ignores state/** + clip-lab/main.js，
+// 這些檔案可繞過。改為共用 selector，由每個非 animations.js group 自帶。
+const SEL_STARSETTLE_LITERAL = {
+  selector: "Literal[value='starSettle']",
+  message:
+    "starSettle（CD-T2FIX-1）已退役。非 animations.js 檔案禁止出現 'starSettle' 字串。register 保留在 animations.js（Group 4 Property selector 白名單保護 CustomEase.create）。",
+};
+
 export default [
   // ── 全域基礎設定 ──────────────────────────────────────────────
   {
@@ -82,6 +91,7 @@ export default [
   //   Group 6 > Group 3 for 其餘非 state/非 main/非 animations JS（最後）
 
   // Group 1: search/state/** — createElement + showModal + window.confirm + BreathingManager（最嚴）
+  // + starSettle Literal ban（Codex r1 P3）
   {
     files: ["web/static/js/pages/search/state/**/*.js"],
     rules: {
@@ -91,11 +101,13 @@ export default [
         SEL_SHOW_MODAL,
         SEL_WINDOW_CONFIRM,
         SEL_BREATHING_MANAGER_NEW,
+        SEL_STARSETTLE_LITERAL,
       ],
     },
   },
 
   // Group 2: 其他 state/** — createElement + window.confirm + BreathingManager（不含 showModal）
+  // + starSettle Literal ban（Codex r1 P3）
   {
     files: ["web/static/js/pages/**/state/**/*.js"],
     ignores: ["web/static/js/pages/search/state/**/*.js"],
@@ -105,12 +117,16 @@ export default [
         SEL_CREATE_ELEMENT,
         SEL_WINDOW_CONFIRM,
         SEL_BREATHING_MANAGER_NEW,
+        SEL_STARSETTLE_LITERAL,
       ],
     },
   },
 
   // Group 3: 非 state/ JS — 只禁 window.confirm
   // （此 group 作為 base，後面 Group 4/5/6 會對特定檔案 supersede）
+  // 注意：Group 3 不加 starSettle Literal ban — 因為 animations.js 也 match Group 3（被 Group 4 supersede），
+  // 若 Group 3 有 Literal ban，Group 4 雖會替換規則，但更乾淨的做法是各 group 自帶完整清單。
+  // breathing.js / 其餘 shared/ 由 Group 6 覆寫並含 SEL_STARSETTLE_LITERAL。
   {
     files: ["web/static/js/**/*.js"],
     ignores: ["web/static/js/pages/**/state/**/*.js"],
@@ -142,6 +158,12 @@ export default [
           selector: "Property[key.name='ease'][value.value='starSettle']",
           message:
             "starSettle（CD-T2FIX-1）已退役，caller 禁止走回頭路。被點卡飛中央請改用 'fluent-decel'。CustomEase.create('starSettle', ...) 是 CallExpression Argument，自然不符合此 Property selector（允許保留 register）。",
+        },
+        {
+          // Codex r1 P3 修正：補捕 quoted key 形式 { 'ease': 'starSettle' }
+          selector: "Property[key.value='ease'][value.value='starSettle']",
+          message:
+            "starSettle（CD-T2FIX-1）已退役。{ 'ease': 'starSettle' } quoted key 形式同樣禁止。改用 'fluent-decel'。",
         },
       ],
     },
@@ -182,6 +204,8 @@ export default [
           message:
             "hover 互動走 Alpine x-on:mouseenter / x-on:mouseleave，禁止在 main.js 內使用 addEventListener('mouseenter'/'mouseleave')（CD-56B-T2 lint guard）。",
         },
+        // Codex r1 P3 修正：clip-lab/main.js 也加 starSettle Literal ban（原 Group 6 ignores 此檔導致漏網）
+        SEL_STARSETTLE_LITERAL,
       ],
     },
   },
@@ -189,7 +213,7 @@ export default [
   // Group 6: 其餘非 state/ 非 main.js 非 animations.js 非 breathing.js JS（supersedes Group 3）
   // 包含：window.confirm guard + BreathingManager 實例化禁令（CD-56B-T2）
   // + starSettle Literal ban（CD-T2FIX-1）：其他檔案完全不允許出現 'starSettle' 字串
-  //   （animations.js 在 ignores 中，所以 CustomEase.create('starSettle') 不受此影響）
+  //   （animations.js 在 ignores 中，由 Group 4 Property selector 保護）
   {
     files: ["web/static/js/**/*.js"],
     ignores: [
@@ -203,11 +227,7 @@ export default [
         "error",
         SEL_WINDOW_CONFIRM,
         SEL_BREATHING_MANAGER_NEW,
-        {
-          selector: "Literal[value='starSettle']",
-          message:
-            "starSettle（CD-T2FIX-1）已退役。其他檔案禁止出現 'starSettle' 字串。register 保留在 animations.js（由 Group 4 白名單保護）。",
-        },
+        SEL_STARSETTLE_LITERAL,
       ],
     },
   },
