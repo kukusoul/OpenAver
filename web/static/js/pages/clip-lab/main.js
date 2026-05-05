@@ -97,6 +97,19 @@ document.addEventListener('alpine:init', () => {
       const nextVisible = pickEight(slotId, this.visibleSlots, Math.random);
       this.animating = true;
 
+      // 同步清 hover 殘留 tween + 視覺 state（CD-56B-T2 codex P1）
+      // 避免 mouseleave 在 slip-through 期間觸發 restore tween 與 exit/fade 打架
+      this.visibleSlots.forEach(id => {
+        const card = this.cards[id];
+        if (!card) return;
+        gsap.killTweensOf(card, 'scale,opacity');
+        if (id !== slotId) gsap.set(card, { opacity: 1 });
+        const overlay = card.querySelector('.slot-icon-overlay');
+        if (overlay) overlay.classList.remove('slot-icon--visible');
+      });
+      // clicked 卡 scale reset（playSlipThrough 從 1.0 起跳）
+      if (this.cards[slotId]) gsap.set(this.cards[slotId], { scale: 1.0 });
+
       // 停止呼吸（slip-through 期間 ticker 不殘留）
       this.breathingManager.stop();
 
@@ -163,8 +176,10 @@ document.addEventListener('alpine:init', () => {
      * @param {string} slotId
      */
     onHoverLeave(slotId) {
-      // 不擋 animating（允許 hover leave 還原視覺）
-      if (!this.visibleSlots.has(slotId)) return;
+      // animating 或 reduced-motion 下完全 no-op（CD-56B-T2 codex P1+P2）
+      // animating 期間 onCardClick 已同步清 hover state，restore tween 多餘且會與 timeline 打架
+      // reduced-motion 與 onHoverEnter guard 對稱，hover lifecycle 全 no-op
+      if (this.animating || !this.visibleSlots.has(slotId) || window.OpenAver.prefersReducedMotion) return;
 
       // 1. Restore scale
       gsap.to(this.cards[slotId], { scale: 1.0, duration: 0.18, ease: 'fluent' });

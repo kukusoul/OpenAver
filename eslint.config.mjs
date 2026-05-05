@@ -81,7 +81,7 @@ export default [
   //   Group 5 > Group 3 for clip-lab/main.js（後，更具體）
   //   Group 6 > Group 3 for 其餘非 state/非 main/非 animations JS（最後）
 
-  // Group 1: search/state/** — createElement + showModal + window.confirm（最嚴）
+  // Group 1: search/state/** — createElement + showModal + window.confirm + BreathingManager（最嚴）
   {
     files: ["web/static/js/pages/search/state/**/*.js"],
     rules: {
@@ -90,11 +90,12 @@ export default [
         SEL_CREATE_ELEMENT,
         SEL_SHOW_MODAL,
         SEL_WINDOW_CONFIRM,
+        SEL_BREATHING_MANAGER_NEW,
       ],
     },
   },
 
-  // Group 2: 其他 state/** — createElement + window.confirm（不含 showModal）
+  // Group 2: 其他 state/** — createElement + window.confirm + BreathingManager（不含 showModal）
   {
     files: ["web/static/js/pages/**/state/**/*.js"],
     ignores: ["web/static/js/pages/search/state/**/*.js"],
@@ -103,6 +104,7 @@ export default [
         "error",
         SEL_CREATE_ELEMENT,
         SEL_WINDOW_CONFIRM,
+        SEL_BREATHING_MANAGER_NEW,
       ],
     },
   },
