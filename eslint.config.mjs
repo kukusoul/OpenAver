@@ -34,6 +34,13 @@ const SEL_WINDOW_CONFIRM = {
     "See CD-52-11 decision for migration pattern.",
 };
 
+// ── CD-56B-T2 共用 selector 物件 ────────────────────────────────
+const SEL_BREATHING_MANAGER_NEW = {
+  selector: "NewExpression[callee.name='BreathingManager']",
+  message:
+    "BreathingManager 只能在 pages/clip-lab/main.js 建立實例（host lifecycle 持有原則）。其他模組禁止直接 new BreathingManager（CD-56B-T2 lint guard）。",
+};
+
 export default [
   // ── 全域基礎設定 ──────────────────────────────────────────────
   {
@@ -62,8 +69,18 @@ export default [
     },
   },
 
-  // ── no-restricted-syntax：依 file group 切三段，避免覆蓋 ─────
+  // ── no-restricted-syntax：依 file group 切段，避免覆蓋 ────────
   //
+  // 設計原則：每個 file group 自成一段，給出該 group 完整的 no-restricted-syntax
+  // 清單（包含從上游繼承的規則），不依賴 flat config 疊加（疊加會覆蓋）。
+  //
+  // 覆蓋關係（後者 wins）：
+  //   Group 1 > Group 2 for search/state/**
+  //   Group 3 > Group 1/2 for 非 state JS（Group 3 後，但 ignores state/**）
+  //   Group 4 > Group 3 for animations.js（後，更具體）
+  //   Group 5 > Group 3 for clip-lab/main.js（後，更具體）
+  //   Group 6 > Group 3 for 其餘非 state/非 main/非 animations JS（最後）
+
   // Group 1: search/state/** — createElement + showModal + window.confirm（最嚴）
   {
     files: ["web/static/js/pages/search/state/**/*.js"],
@@ -91,6 +108,7 @@ export default [
   },
 
   // Group 3: 非 state/ JS — 只禁 window.confirm
+  // （此 group 作為 base，後面 Group 4/5/6 會對特定檔案 supersede）
   {
     files: ["web/static/js/**/*.js"],
     ignores: ["web/static/js/pages/**/state/**/*.js"],
@@ -99,12 +117,35 @@ export default [
     },
   },
 
-  // Group 4: clip-lab thin host — 禁止核心邏輯洩漏到 thin host（CD-56B-8 lint guard）
+  // Group 4: constellation/animations.js 完整規則集（supersedes Group 3）
+  // 包含：window.confirm guard + x2 setAttribute guard（rail endpoint 必須經 rails.js）
+  // + BreathingManager 實例化禁令（CD-56B-T2）
+  {
+    files: ["web/static/js/shared/constellation/animations.js"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        SEL_WINDOW_CONFIRM,
+        SEL_BREATHING_MANAGER_NEW,
+        {
+          selector:
+            "CallExpression[callee.property.name='setAttribute'][arguments.0.value='x2']",
+          message:
+            "SVG rail x2 屬性只能在 rails.js（setRailCoords）或 breathing.js（ticker follow）內設定，不在 animations.js 直接 setAttribute。",
+        },
+      ],
+    },
+  },
+
+  // Group 5: clip-lab/main.js 完整規則集（supersedes Group 3）
+  // 包含：window.confirm guard + drawSVG/railDrawIn thin-host guard（CD-56B-8）
+  // + hover addEventListener guard + BreathingManager 不禁（main.js 是合法建立者）
   {
     files: ["web/static/js/pages/clip-lab/main.js"],
     rules: {
       "no-restricted-syntax": [
         "error",
+        SEL_WINDOW_CONFIRM,
         {
           selector: "Property[key.name='drawSVG']",
           message:
@@ -125,22 +166,31 @@ export default [
           message:
             "railDrawIn 是核心函式，thin host 只能呼叫 animations.js 的 play* 函式，不能直接呼叫 railDrawIn。",
         },
+        {
+          selector:
+            "CallExpression[callee.property.name='addEventListener'][arguments.0.value=/^(mouseenter|mouseleave)$/]",
+          message:
+            "hover 互動走 Alpine x-on:mouseenter / x-on:mouseleave，禁止在 main.js 內使用 addEventListener('mouseenter'/'mouseleave')（CD-56B-T2 lint guard）。",
+        },
       ],
     },
   },
 
-  // Group 5: animations.js 禁直接 setAttribute('x2')（rail endpoint 必須經 rails.js setRailCoords）
+  // Group 6: 其餘非 state/ 非 main.js 非 animations.js 非 breathing.js JS（supersedes Group 3）
+  // 包含：window.confirm guard + BreathingManager 實例化禁令（CD-56B-T2）
   {
-    files: ["web/static/js/shared/constellation/animations.js"],
+    files: ["web/static/js/**/*.js"],
+    ignores: [
+      "web/static/js/pages/**/state/**/*.js",
+      "web/static/js/pages/clip-lab/main.js",
+      "web/static/js/shared/constellation/animations.js",
+      "web/static/js/shared/constellation/breathing.js",
+    ],
     rules: {
       "no-restricted-syntax": [
         "error",
-        {
-          selector:
-            "CallExpression[callee.property.name='setAttribute'][arguments.0.value='x2']",
-          message:
-            "SVG rail x2 屬性只能在 rails.js（setRailCoords）或 breathing.js（ticker follow）內設定，不在 animations.js 直接 setAttribute。",
-        },
+        SEL_WINDOW_CONFIRM,
+        SEL_BREATHING_MANAGER_NEW,
       ],
     },
   },

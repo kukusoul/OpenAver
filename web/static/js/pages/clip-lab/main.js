@@ -9,6 +9,7 @@
 import { ANCHORS, pickEight } from '../../shared/constellation/anchors.js';
 import { setRailCoords } from '../../shared/constellation/rails.js';
 import { playInitialExpand, playSlipThrough, playExit } from '../../shared/constellation/animations.js';
+import { BreathingManager } from '../../shared/constellation/breathing.js';
 
 document.addEventListener('alpine:init', () => {
   Alpine.data('constellationLab', () => ({
@@ -17,6 +18,7 @@ document.addEventListener('alpine:init', () => {
     mainSlot: null,
     cards: {},      // slotId -> HTMLElement
     railLines: {},  // slotId -> SVGLineElement
+    breathingManager: null,
 
     init() {
       this._gsapCtx = window.OpenAver.motion.createContext(this.$el);
@@ -38,6 +40,9 @@ document.addEventListener('alpine:init', () => {
         }
       });
 
+      // 建立 BreathingManager（即使 prefers-reduced-motion 也建立，避免 hover 觸發 null 錯誤）
+      this.breathingManager = new BreathingManager(this.cards, this.railLines, ANCHORS);
+
       // prefers-reduced-motion：直接呈現終態，跳過所有 timeline（CD-56B DoD 共通 5）
       if (window.OpenAver.prefersReducedMotion) {
         this._setInitialState();
@@ -49,12 +54,14 @@ document.addEventListener('alpine:init', () => {
       playInitialExpand(this.cards, this.railLines, initSlots, () => {
         this.visibleSlots = new Set(initSlots);
         this.animating = false;
+        this.breathingManager.start(initSlots);
       });
     },
 
     /**
      * _setInitialState — prefers-reduced-motion 終態：
      * gsap.set 直接到 anchor 位置，不建 timeline
+     * 注意：不啟動 breathing（保持「無動畫」契約）
      */
     _setInitialState() {
       const initSlots = new Set(['#01', '#02', '#03', '#04', '#05', '#06', '#07', '#08']);
@@ -73,6 +80,7 @@ document.addEventListener('alpine:init', () => {
       });
       this.visibleSlots = new Set(initSlots);
       this.animating = false;
+      // 不呼叫 breathingManager.start()（prefers-reduced-motion：無動畫契約）
     },
 
     /**
@@ -89,6 +97,9 @@ document.addEventListener('alpine:init', () => {
       const nextVisible = pickEight(slotId, this.visibleSlots, Math.random);
       this.animating = true;
 
+      // 停止呼吸（slip-through 期間 ticker 不殘留）
+      this.breathingManager.stop();
+
       playSlipThrough(
         slotId,
         this.visibleSlots,
@@ -100,8 +111,82 @@ document.addEventListener('alpine:init', () => {
           this.mainSlot = slotId;
           this.visibleSlots = nextVisible; // 與 animation 使用的批次完全一致
           this.animating = false;
+          // slip-through 完成後重啟呼吸（新批 8 顆各自相位）
+          if (!window.OpenAver.prefersReducedMotion) {
+            this.breathingManager.start(nextVisible);
+          }
         }
       );
+    },
+
+    /**
+     * onHoverEnter — 滑入 slot 卡片
+     * 1. 暫停此顆呼吸
+     * 2. scale 1.06 微放大
+     * 3. 其餘 visible slots dim 0.5
+     * 4. icon overlay 浮現（classList 操作，CSS transition 處理 opacity）
+     *
+     * @param {string} slotId
+     */
+    onHoverEnter(slotId) {
+      if (this.animating || !this.visibleSlots.has(slotId) || window.OpenAver.prefersReducedMotion) return;
+
+      // 1. 暫停此顆呼吸
+      this.breathingManager.pauseOne(slotId);
+
+      // 2. Scale up
+      gsap.to(this.cards[slotId], { scale: 1.06, duration: 0.18, ease: 'fluent' });
+
+      // 3. Dim 其餘 visible slots
+      this.visibleSlots.forEach(id => {
+        if (id !== slotId && this.cards[id]) {
+          gsap.to(this.cards[id], { opacity: 0.5, duration: 0.20, ease: 'fluent' });
+        }
+      });
+
+      // 4. Icon overlay 浮現（CSS transition）
+      const card = this.cards[slotId];
+      if (card) {
+        const overlay = card.querySelector('.slot-icon-overlay');
+        if (overlay) overlay.classList.add('slot-icon--visible');
+      }
+    },
+
+    /**
+     * onHoverLeave — 滑出 slot 卡片
+     * 1. 還原 scale 1.0
+     * 2. 還原其餘 visible slots opacity 1.0
+     * 3. icon overlay 消失
+     * 4. 若非 animating 且非 prefers-reduced-motion：恢復此顆呼吸
+     *    （animating 期間不 resume，由 slip-through onComplete 的 start() 統一負責）
+     *
+     * @param {string} slotId
+     */
+    onHoverLeave(slotId) {
+      // 不擋 animating（允許 hover leave 還原視覺）
+      if (!this.visibleSlots.has(slotId)) return;
+
+      // 1. Restore scale
+      gsap.to(this.cards[slotId], { scale: 1.0, duration: 0.18, ease: 'fluent' });
+
+      // 2. Restore others opacity
+      this.visibleSlots.forEach(id => {
+        if (id !== slotId && this.cards[id]) {
+          gsap.to(this.cards[id], { opacity: 1, duration: 0.20, ease: 'fluent' });
+        }
+      });
+
+      // 3. Icon overlay 消失（CSS transition）
+      const card = this.cards[slotId];
+      if (card) {
+        const overlay = card.querySelector('.slot-icon-overlay');
+        if (overlay) overlay.classList.remove('slot-icon--visible');
+      }
+
+      // 4. 恢復呼吸（animating 期間跳過，由 slip-through onComplete 統一處理）
+      if (!this.animating && !window.OpenAver.prefersReducedMotion) {
+        this.breathingManager.resumeOne(slotId);
+      }
     },
 
     /**
@@ -111,6 +196,10 @@ document.addEventListener('alpine:init', () => {
     onExit() {
       if (this.animating) return;
       this.animating = true;
+
+      // 停止呼吸（退出動畫期間 ticker 不殘留）
+      this.breathingManager.stop();
+
       playExit(
         this.cards,
         this.railLines,

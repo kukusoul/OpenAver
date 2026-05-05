@@ -152,6 +152,22 @@
   text-transform: uppercase;
 }
 
+/* Icon overlay — slot 右上角浮現 icon（hover 時顯示） */
+.slot-icon-overlay {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  opacity: 0;
+  transition: opacity 0.18s var(--fluent-ease-standard);
+  color: var(--star-line-bright);
+  pointer-events: none;
+  line-height: 0;
+}
+
+.slot-icon-overlay.slot-icon--visible {
+  opacity: 1;
+}
+
 /* < 960px：stage 寬 960px，視窗不足以完整顯示，隱藏 stage 並顯示提示 */
 @media (max-width: 959px) {
   .clip-lab-stage-area { display: none; }
@@ -170,7 +186,7 @@
   <!-- Header -->
   <div class="clip-lab-header">
     <h4>Constellation Lab</h4>
-    <span class="clip-lab-badge">56b-T1</span>
+    <span class="clip-lab-badge">56b-T2</span>
   </div>
 
   <!-- Mobile Notice (< 768px) -->
@@ -199,41 +215,77 @@
       </svg>
 
       <!-- 12 Slot Cards (永遠 mount，slot--hidden 控制可見性) -->
-      <div id="card-01" class="clip-lab-slot slot--hidden" @click="onCardClick('#01')">
+      <div id="card-01" class="clip-lab-slot slot--hidden" @click="onCardClick('#01')" x-on:mouseenter="onHoverEnter('#01')" x-on:mouseleave="onHoverLeave('#01')">
         <span class="clip-lab-slot-label">#01</span>
+        <div class="slot-icon-overlay" aria-hidden="true">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="9" cy="9" r="5.5" stroke="currentColor" stroke-width="1.5"/><path d="M13.5 13.5L17 17" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </div>
       </div>
-      <div id="card-02" class="clip-lab-slot slot--hidden" @click="onCardClick('#02')">
+      <div id="card-02" class="clip-lab-slot slot--hidden" @click="onCardClick('#02')" x-on:mouseenter="onHoverEnter('#02')" x-on:mouseleave="onHoverLeave('#02')">
         <span class="clip-lab-slot-label">#02</span>
+        <div class="slot-icon-overlay" aria-hidden="true">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="9" cy="9" r="5.5" stroke="currentColor" stroke-width="1.5"/><path d="M13.5 13.5L17 17" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </div>
       </div>
-      <div id="card-03" class="clip-lab-slot slot--hidden" @click="onCardClick('#03')">
+      <div id="card-03" class="clip-lab-slot slot--hidden" @click="onCardClick('#03')" x-on:mouseenter="onHoverEnter('#03')" x-on:mouseleave="onHoverLeave('#03')">
         <span class="clip-lab-slot-label">#03</span>
+        <div class="slot-icon-overlay" aria-hidden="true">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="9" cy="9" r="5.5" stroke="currentColor" stroke-width="1.5"/><path d="M13.5 13.5L17 17" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </div>
       </div>
-      <div id="card-04" class="clip-lab-slot slot--hidden" @click="onCardClick('#04')">
+      <div id="card-04" class="clip-lab-slot slot--hidden" @click="onCardClick('#04')" x-on:mouseenter="onHoverEnter('#04')" x-on:mouseleave="onHoverLeave('#04')">
         <span class="clip-lab-slot-label">#04</span>
+        <div class="slot-icon-overlay" aria-hidden="true">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="9" cy="9" r="5.5" stroke="currentColor" stroke-width="1.5"/><path d="M13.5 13.5L17 17" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </div>
       </div>
-      <div id="card-05" class="clip-lab-slot slot--hidden" @click="onCardClick('#05')">
+      <div id="card-05" class="clip-lab-slot slot--hidden" @click="onCardClick('#05')" x-on:mouseenter="onHoverEnter('#05')" x-on:mouseleave="onHoverLeave('#05')">
         <span class="clip-lab-slot-label">#05</span>
+        <div class="slot-icon-overlay" aria-hidden="true">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="9" cy="9" r="5.5" stroke="currentColor" stroke-width="1.5"/><path d="M13.5 13.5L17 17" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </div>
       </div>
-      <div id="card-06" class="clip-lab-slot slot--hidden" @click="onCardClick('#06')">
+      <div id="card-06" class="clip-lab-slot slot--hidden" @click="onCardClick('#06')" x-on:mouseenter="onHoverEnter('#06')" x-on:mouseleave="onHoverLeave('#06')">
         <span class="clip-lab-slot-label">#06</span>
+        <div class="slot-icon-overlay" aria-hidden="true">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="9" cy="9" r="5.5" stroke="currentColor" stroke-width="1.5"/><path d="M13.5 13.5L17 17" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </div>
       </div>
-      <div id="card-07" class="clip-lab-slot slot--hidden" @click="onCardClick('#07')">
+      <div id="card-07" class="clip-lab-slot slot--hidden" @click="onCardClick('#07')" x-on:mouseenter="onHoverEnter('#07')" x-on:mouseleave="onHoverLeave('#07')">
         <span class="clip-lab-slot-label">#07</span>
+        <div class="slot-icon-overlay" aria-hidden="true">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="9" cy="9" r="5.5" stroke="currentColor" stroke-width="1.5"/><path d="M13.5 13.5L17 17" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </div>
       </div>
-      <div id="card-08" class="clip-lab-slot slot--hidden" @click="onCardClick('#08')">
+      <div id="card-08" class="clip-lab-slot slot--hidden" @click="onCardClick('#08')" x-on:mouseenter="onHoverEnter('#08')" x-on:mouseleave="onHoverLeave('#08')">
         <span class="clip-lab-slot-label">#08</span>
+        <div class="slot-icon-overlay" aria-hidden="true">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="9" cy="9" r="5.5" stroke="currentColor" stroke-width="1.5"/><path d="M13.5 13.5L17 17" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </div>
       </div>
-      <div id="card-09" class="clip-lab-slot slot--hidden" @click="onCardClick('#09')">
+      <div id="card-09" class="clip-lab-slot slot--hidden" @click="onCardClick('#09')" x-on:mouseenter="onHoverEnter('#09')" x-on:mouseleave="onHoverLeave('#09')">
         <span class="clip-lab-slot-label">#09</span>
+        <div class="slot-icon-overlay" aria-hidden="true">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="9" cy="9" r="5.5" stroke="currentColor" stroke-width="1.5"/><path d="M13.5 13.5L17 17" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </div>
       </div>
-      <div id="card-10" class="clip-lab-slot slot--hidden" @click="onCardClick('#10')">
+      <div id="card-10" class="clip-lab-slot slot--hidden" @click="onCardClick('#10')" x-on:mouseenter="onHoverEnter('#10')" x-on:mouseleave="onHoverLeave('#10')">
         <span class="clip-lab-slot-label">#10</span>
+        <div class="slot-icon-overlay" aria-hidden="true">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="9" cy="9" r="5.5" stroke="currentColor" stroke-width="1.5"/><path d="M13.5 13.5L17 17" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </div>
       </div>
-      <div id="card-11" class="clip-lab-slot slot--hidden" @click="onCardClick('#11')">
+      <div id="card-11" class="clip-lab-slot slot--hidden" @click="onCardClick('#11')" x-on:mouseenter="onHoverEnter('#11')" x-on:mouseleave="onHoverLeave('#11')">
         <span class="clip-lab-slot-label">#11</span>
+        <div class="slot-icon-overlay" aria-hidden="true">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="9" cy="9" r="5.5" stroke="currentColor" stroke-width="1.5"/><path d="M13.5 13.5L17 17" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </div>
       </div>
-      <div id="card-12" class="clip-lab-slot slot--hidden" @click="onCardClick('#12')">
+      <div id="card-12" class="clip-lab-slot slot--hidden" @click="onCardClick('#12')" x-on:mouseenter="onHoverEnter('#12')" x-on:mouseleave="onHoverLeave('#12')">
         <span class="clip-lab-slot-label">#12</span>
+        <div class="slot-icon-overlay" aria-hidden="true">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="9" cy="9" r="5.5" stroke="currentColor" stroke-width="1.5"/><path d="M13.5 13.5L17 17" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </div>
       </div>
 
       <!-- Main Image Placeholder (中心) — main-id-label 由 animations.js t=0.30 callback 填入 clickedId -->
