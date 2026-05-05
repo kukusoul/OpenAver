@@ -237,6 +237,8 @@
       "folder_layer_inner": "內層",
       "preview_prefix": "預覽",
       "filename_format_label": "檔案命名格式",
+      "cover_format_label": "封面命名格式",
+      "nfo_format_label": "NFO 命名格式",
       "max_title_length_label": "標題長度限制",
       "unit_chars": "字元",
       "max_filename_length_label": "檔名長度限制",
@@ -299,7 +301,8 @@
       "year": "年份",
       "month": "月份",
       "day": "日",
-      "suffix": "後綴"
+      "suffix": "後綴",
+      "original": "原始檔名"
     },
     "dirty_modal": {
       "title": "尚未儲存的變更",

@@ -25,6 +25,8 @@ export function stateConfig() {
             folderLayer2: '',
             folderLayer3: '{num}',
             filenameFormat: '[{num}][{maker}] {title}',
+            coverFormat: '{num}',
+            nfoFormat: '{num}',
             maxTitleLength: 80,
             maxFilenameLength: 200,
             videoExtensions: '.mp4, .avi, .mkv, .wmv, .rmvb, .flv, .mov, .m4v, .ts',
@@ -85,6 +87,7 @@ export function stateConfig() {
                 { name: '{month}', label: window.t('settings.var.month') },
                 { name: '{day}', label: window.t('settings.var.day') },
                 { name: '{suffix}', label: window.t('settings.var.suffix') },
+                { name: '{original}', label: window.t('settings.var.original') },
             ];
         },
         get folderVariables() {
@@ -111,6 +114,7 @@ export function stateConfig() {
             month: '01',
             day: '15',
             suffix: '-4k',
+            original: 'SSNI-618_高清',
         },
 
         // ===== Computed Properties =====
@@ -311,6 +315,8 @@ export function stateConfig() {
                     }
 
                     this.form.filenameFormat = config.scraper.filename_format;
+                    this.form.coverFormat = config.scraper.cover_format || '{num}';
+                    this.form.nfoFormat = config.scraper.nfo_format || '{num}';
                     this.form.maxTitleLength = config.scraper.max_title_length;
                     this.form.maxFilenameLength = config.scraper.max_filename_length;
                     this.form.videoExtensions = config.scraper.video_extensions.join(', ');
@@ -382,6 +388,8 @@ export function stateConfig() {
                     folder_layers: folderLayers,
                     folder_format: folderLayers.join('/') || '{num}',
                     filename_format: this.form.filenameFormat,
+                    cover_format: this.form.coverFormat,
+                    nfo_format: this.form.nfoFormat,
                     max_title_length: this.form.maxTitleLength,
                     max_filename_length: this.form.maxFilenameLength,
                     video_extensions: this.form.videoExtensions

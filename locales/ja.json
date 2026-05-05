@@ -237,6 +237,8 @@
       "folder_layer_inner": "内層",
       "preview_prefix": "プレビュー",
       "filename_format_label": "ファイル命名形式",
+      "cover_format_label": "カバー命名形式",
+      "nfo_format_label": "NFO 命名形式",
       "max_title_length_label": "タイトル長さ制限",
       "unit_chars": "文字",
       "max_filename_length_label": "ファイル名長さ制限",
@@ -299,7 +301,8 @@
       "year": "年",
       "month": "月",
       "day": "日",
-      "suffix": "サフィックス"
+      "suffix": "サフィックス",
+      "original": "元のファイル名"
     },
     "dirty_modal": {
       "title": "未保存の変更",

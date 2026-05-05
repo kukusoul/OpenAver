@@ -525,7 +525,64 @@
                     </div>
 
                     <div class="settings-form-row">
+                        <label class="row-label">{{ t('settings.scraper.cover_format_label') }}</label>
+                        <div class="flex-1 flex flex-col gap-1">
+                            <div class="format-preview" x-show="form.coverFormat" x-html="formatPreviewHtml(form.coverFormat)"></div>
+                            <div class="variable-input-group" x-data="{ open: false }">
+                                <input type="text" class="input input-bordered input-sm flex-1" id="coverFormat"
+                                    x-ref="coverFormat"
+                                    x-model="form.coverFormat" placeholder="{num}">
+                                <div class="variable-dropdown">
+                                    <button class="btn-variable" type="button"
+                                        @click="open = !open" :aria-expanded="open">
+                                        <i class="bi bi-braces"></i> {{ t('settings.action.variable') }}
+                                    </button>
+                                    <div x-show="open" @click.outside="open = false" x-transition class="variable-menu">
+                                        <template x-for="v in formatVariables" :key="v.name">
+                                            <span class="variable-badge" @click="insertVariable('coverFormat', v.name); open = false"
+                                                  x-text="v.label" :title="v.name"></span>
+                                        </template>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="settings-form-row">
+                        <label class="row-label">{{ t('settings.scraper.nfo_format_label') }}</label>
+                        <div class="flex-1 flex flex-col gap-1">
+                            <div class="format-preview" x-show="form.nfoFormat" x-html="formatPreviewHtml(form.nfoFormat)"></div>
+                            <div class="variable-input-group" x-data="{ open: false }">
+                                <input type="text" class="input input-bordered input-sm flex-1" id="nfoFormat"
+                                    x-ref="nfoFormat"
+                                    x-model="form.nfoFormat" placeholder="{num}">
+                                <div class="variable-dropdown">
+                                    <button class="btn-variable" type="button"
+                                        @click="open = !open" :aria-expanded="open">
+                                        <i class="bi bi-braces"></i> {{ t('settings.action.variable') }}
+                                    </button>
+                                    <div x-show="open" @click.outside="open = false" x-transition class="variable-menu">
+                                        <template x-for="v in formatVariables" :key="v.name">
+                                            <span class="variable-badge" @click="insertVariable('nfoFormat', v.name); open = false"
+                                                  x-text="v.label" :title="v.name"></span>
+                                        </template>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="settings-form-row">
                         <label class="row-label">{{ t('settings.scraper.max_title_length_label') }}</label>
+                        <div class="input-group-inline">
+                            <input type="number" class="input input-bordered input-sm" id="maxTitleLength"
+                                x-model.number="form.maxTitleLength" min="20" max="200">
+                            <span class="input-suffix">{{ t('settings.scraper.unit_chars') }}</span>
+                        </div>
+                    </div>
+
+                    <div class="settings-form-row">
+                        <label class="row-label">{{ t('settings.scraper.max_filename_length_label') }}</label>
                         <div class="input-group-inline">
                             <input type="number" class="input input-bordered input-sm" id="maxTitleLength"
                                 x-model.number="form.maxTitleLength" min="20" max="200">

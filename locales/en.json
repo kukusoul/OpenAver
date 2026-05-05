@@ -237,6 +237,8 @@
       "folder_layer_inner": "Inner",
       "preview_prefix": "Preview",
       "filename_format_label": "File Naming Format",
+      "cover_format_label": "Cover Naming Format",
+      "nfo_format_label": "NFO Naming Format",
       "max_title_length_label": "Title Length Limit",
       "unit_chars": "chars",
       "max_filename_length_label": "Filename Length Limit",
@@ -299,7 +301,8 @@
       "year": "Year",
       "month": "Month",
       "day": "Day",
-      "suffix": "Suffix"
+      "suffix": "Suffix",
+      "original": "Original filename"
     },
     "dirty_modal": {
       "title": "Unsaved Changes",
