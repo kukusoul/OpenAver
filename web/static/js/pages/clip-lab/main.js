@@ -7,7 +7,7 @@
  */
 
 import { ANCHORS, pickEight } from '../../shared/constellation/anchors.js';
-import { setRailCoords } from '../../shared/constellation/rails.js';
+import { setRailCoords, railFocusPulse, railSweep, resetSweepLine } from '../../shared/constellation/rails.js';
 import { playInitialExpand, playSlipThrough, playExit } from '../../shared/constellation/animations.js';
 import { BreathingManager } from '../../shared/constellation/breathing.js';
 
@@ -16,8 +16,9 @@ document.addEventListener('alpine:init', () => {
     animating: false,
     visibleSlots: new Set(),
     mainSlot: null,
-    cards: {},      // slotId -> HTMLElement
-    railLines: {},  // slotId -> SVGLineElement
+    cards: {},       // slotId -> HTMLElement
+    railLines: {},   // slotId -> SVGLineElement
+    sweepLines: {},  // slotId -> SVGLineElement（sweep overlay）
     breathingManager: null,
 
     init() {
@@ -28,6 +29,7 @@ document.addEventListener('alpine:init', () => {
         const num = a.id.slice(1); // '#01' → '01'
         this.cards[a.id] = document.getElementById(`card-${num}`);
         this.railLines[a.id] = document.getElementById(`rail-${num}`);
+        this.sweepLines[a.id] = document.getElementById(`sweep-${num}`);
 
         // 設定 rail 端點座標
         if (this.railLines[a.id]) {
@@ -139,6 +141,18 @@ document.addEventListener('alpine:init', () => {
         return;
       }
 
+      // sweep / focused rail 殘留清理（避 hover→click race，CD-T2FIX-3）
+      this.visibleSlots.forEach(id => {
+        const sw = this.sweepLines[id];
+        if (sw) resetSweepLine(sw);
+        const rl = this.railLines[id];
+        if (rl) {
+          gsap.killTweensOf(rl, 'strokeWidth');
+          gsap.set(rl, { strokeWidth: 1.5 });
+          rl.classList.remove('rail--bright');
+        }
+      });
+
       this.animating = true;
 
       // 同步清 hover 殘留 tween + 視覺 state（CD-56B-T2 codex P1）
@@ -201,6 +215,12 @@ document.addEventListener('alpine:init', () => {
         }
       });
 
+      // Rail 能量感（CD-T2FIX-3）
+      const focusedLine = this.railLines[slotId];
+      const sweepLine = this.sweepLines[slotId];
+      if (focusedLine) railFocusPulse(focusedLine);
+      if (focusedLine && sweepLine) railSweep(sweepLine, focusedLine);
+
       // 4. Icon overlay 浮現（CSS transition）
       const card = this.cards[slotId];
       if (card) {
@@ -224,6 +244,16 @@ document.addEventListener('alpine:init', () => {
       // animating 期間 onCardClick 已同步清 hover state，restore tween 多餘且會與 timeline 打架
       // reduced-motion 與 onHoverEnter guard 對稱，hover lifecycle 全 no-op
       if (this.animating || !this.visibleSlots.has(slotId) || window.OpenAver.prefersReducedMotion) return;
+
+      // 清 sweep 殘留 + rail 還原 bright（CD-T2FIX-3）
+      const sweepLineLeave = this.sweepLines[slotId];
+      if (sweepLineLeave) resetSweepLine(sweepLineLeave);
+      const focusedLineLeave = this.railLines[slotId];
+      if (focusedLineLeave) {
+        gsap.killTweensOf(focusedLineLeave, 'strokeWidth');
+        gsap.set(focusedLineLeave, { strokeWidth: 1.5 });
+        focusedLineLeave.classList.remove('rail--bright');
+      }
 
       // 1. Restore scale
       gsap.to(this.cards[slotId], { scale: 1.0, duration: 0.18, ease: 'fluent' });

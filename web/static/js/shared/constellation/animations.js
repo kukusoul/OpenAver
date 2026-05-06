@@ -7,7 +7,7 @@
  */
 
 import { ANCHORS, railEndpoint } from './anchors.js';
-import { railRole, setRailCoords, railDrawIn, railDrawOut } from './rails.js';
+import { railRole, setRailCoords, railDrawIn, railDrawOut, railClickedPulse } from './rails.js';
 
 // ---------------------------------------------------------------------------
 // DrawSVGPlugin idempotent register guard（CD-56B-4）
@@ -112,6 +112,11 @@ export function playSlipThrough(clickedId, prevVisible, nextVisible, cards, rail
     }, 0);
   }
 
+  // t=0: clicked rail 脈衝收掉（CD-T2FIX-3）
+  if (railLines[clickedId]) {
+    railClickedPulse(railLines[clickedId], tl, 0);
+  }
+
   // t=0: 舊主圖 fade-out（CD-56B-7: 0.30s fluent-accel）
   if (mainImg) {
     tl.to(mainImg, { opacity: 0, duration: 0.30, ease: 'fluent-accel' }, 0);
@@ -145,8 +150,10 @@ export function playSlipThrough(clickedId, prevVisible, nextVisible, cards, rail
 
   // t=0: rail exit fade（CD-56B-7: 0.35s fluent-accel）
   // Determine exit rails using railRole
+  // Codex r2 F3：clicked rail 已由 railClickedPulse 獨佔處理，跳過避免 opacity tween 重疊
   ANCHORS.forEach(anchor => {
     const id = anchor.id;
+    if (id === clickedId) return; // railClickedPulse 已接管，勿雙寫
     const line = railLines[id];
     if (!line) return;
     const role = railRole(id, prevVisible, newBatch);

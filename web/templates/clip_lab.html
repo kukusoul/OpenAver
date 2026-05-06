@@ -76,6 +76,21 @@
   pointer-events: none;
 }
 
+/* Sweep-line：overlay bright stroke，初始不可見 */
+.clip-lab-rail-sweep {
+  stroke: var(--star-line-bright);
+  stroke-width: 2;
+  stroke-linecap: round;
+  fill: none;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Rail 亮色態（hover focused） */
+.clip-lab-rail.rail--bright {
+  stroke: var(--star-line-bright);
+}
+
 /* Main image placeholder — center of stage */
 /* 主圖略亮一階突顯（base-100 vs slot base-100 — main 多加 inset 光邊 + 較強陰影）*/
 .clip-lab-main {
@@ -200,20 +215,32 @@
   <div class="clip-lab-stage-area">
     <div class="clip-lab-stage">
 
-      <!-- SVG Rail Lines (12 lines, rail--hidden 初始隱藏) -->
+      <!-- SVG Rail Lines (12 lines, rail--hidden 初始隱藏) + sweep-line siblings -->
       <svg class="clip-lab-rails" viewBox="0 0 960 620" xmlns="http://www.w3.org/2000/svg">
         <line id="rail-01" class="clip-lab-rail rail--hidden" x1="480" y1="310" x2="480" y2="310" />
+        <line id="sweep-01" class="clip-lab-rail-sweep" x1="480" y1="310" x2="480" y2="310" />
         <line id="rail-02" class="clip-lab-rail rail--hidden" x1="480" y1="310" x2="480" y2="310" />
+        <line id="sweep-02" class="clip-lab-rail-sweep" x1="480" y1="310" x2="480" y2="310" />
         <line id="rail-03" class="clip-lab-rail rail--hidden" x1="480" y1="310" x2="480" y2="310" />
+        <line id="sweep-03" class="clip-lab-rail-sweep" x1="480" y1="310" x2="480" y2="310" />
         <line id="rail-04" class="clip-lab-rail rail--hidden" x1="480" y1="310" x2="480" y2="310" />
+        <line id="sweep-04" class="clip-lab-rail-sweep" x1="480" y1="310" x2="480" y2="310" />
         <line id="rail-05" class="clip-lab-rail rail--hidden" x1="480" y1="310" x2="480" y2="310" />
+        <line id="sweep-05" class="clip-lab-rail-sweep" x1="480" y1="310" x2="480" y2="310" />
         <line id="rail-06" class="clip-lab-rail rail--hidden" x1="480" y1="310" x2="480" y2="310" />
+        <line id="sweep-06" class="clip-lab-rail-sweep" x1="480" y1="310" x2="480" y2="310" />
         <line id="rail-07" class="clip-lab-rail rail--hidden" x1="480" y1="310" x2="480" y2="310" />
+        <line id="sweep-07" class="clip-lab-rail-sweep" x1="480" y1="310" x2="480" y2="310" />
         <line id="rail-08" class="clip-lab-rail rail--hidden" x1="480" y1="310" x2="480" y2="310" />
+        <line id="sweep-08" class="clip-lab-rail-sweep" x1="480" y1="310" x2="480" y2="310" />
         <line id="rail-09" class="clip-lab-rail rail--hidden" x1="480" y1="310" x2="480" y2="310" />
+        <line id="sweep-09" class="clip-lab-rail-sweep" x1="480" y1="310" x2="480" y2="310" />
         <line id="rail-10" class="clip-lab-rail rail--hidden" x1="480" y1="310" x2="480" y2="310" />
+        <line id="sweep-10" class="clip-lab-rail-sweep" x1="480" y1="310" x2="480" y2="310" />
         <line id="rail-11" class="clip-lab-rail rail--hidden" x1="480" y1="310" x2="480" y2="310" />
+        <line id="sweep-11" class="clip-lab-rail-sweep" x1="480" y1="310" x2="480" y2="310" />
         <line id="rail-12" class="clip-lab-rail rail--hidden" x1="480" y1="310" x2="480" y2="310" />
+        <line id="sweep-12" class="clip-lab-rail-sweep" x1="480" y1="310" x2="480" y2="310" />
       </svg>
 
       <!-- 12 Slot Cards (永遠 mount，slot--hidden 控制可見性) -->

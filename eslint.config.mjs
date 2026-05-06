@@ -165,6 +165,13 @@ export default [
           message:
             "starSettle（CD-T2FIX-1）已退役。{ 'ease': 'starSettle' } quoted key 形式同樣禁止。改用 'fluent-decel'。",
         },
+        {
+          // CD-T2FIX-3：SVG rail y2 屬性只能在 rails.js / breathing.js 內設定
+          selector:
+            "CallExpression[callee.property.name='setAttribute'][arguments.0.value='y2']",
+          message:
+            "SVG rail y2 屬性只能在 rails.js（setRailCoords）或 breathing.js（ticker follow）內設定，不在 animations.js 直接 setAttribute。",
+        },
       ],
     },
   },
@@ -206,6 +213,15 @@ export default [
         },
         // Codex r1 P3 修正：clip-lab/main.js 也加 starSettle Literal ban（原 Group 6 ignores 此檔導致漏網）
         SEL_STARSETTLE_LITERAL,
+        {
+          // Codex r2 F2：y2 setAttribute ban（plan §11 / task card §9 契約）
+          // Group 5 加 ban；Group 6 不加（catch-all 會打到 rails.js 自己的 railSweep）
+          // 取捨：Group 6 暫不加，待 ESLint 有更精細 file scoping 機制再補
+          selector:
+            "CallExpression[callee.property.name='setAttribute'][arguments.0.value='y2']",
+          message:
+            "SVG rail y2 屬性只能在 rails.js（setRailCoords）或 breathing.js（ticker follow）內設定，不在 main.js 直接 setAttribute（CD-T2FIX-3）。",
+        },
       ],
     },
   },
@@ -228,6 +244,14 @@ export default [
         SEL_WINDOW_CONFIRM,
         SEL_BREATHING_MANAGER_NEW,
         SEL_STARSETTLE_LITERAL,
+        {
+          // CD-T2FIX-3：Set.prototype.intersection 為 ES2025 API，尚未進入 OpenAver baseline
+          // Codex r2 F1：改用 MemberExpression[property.name='intersection'] 以同時捕捉
+          // setA.intersection(setB)（object 為 Identifier）和 new Set().intersection(...)
+          selector: "MemberExpression[property.name='intersection']",
+          message:
+            "Set.prototype.intersection 為 ES2025 API，尚未進入 OpenAver baseline。請改用 [...setA].filter(x => setB.has(x))。",
+        },
       ],
     },
   },
