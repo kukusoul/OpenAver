@@ -352,14 +352,31 @@ document.addEventListener('alpine:init', () => {
     },
 
     /**
-     * _playSurvivorShimmer — carry-over 卡片 glow 脈衝（T2fix4 預埋 stub）
-     * 目前 no-op，T2fix4 負責實作
+     * _playSurvivorShimmer — carry-over 卡片 glow 雙脈衝 + rail strokeWidth 雙脈衝
+     *
+     * 每張 carry-over card：`--card-glow-opacity` 0→0.85（0.25s）→0（0.40s）。
+     * 每條 rail line：strokeWidth 1.5→1.7（0.18s）→1.5（0.20s）。
+     * 連點時先 killTweensOf 清掉前一輪 pending tween，避免 `--card-glow-opacity` 殘留。
+     * reduced-motion：no-op。
      *
      * @param {string[]} carryIds
      */
     _playSurvivorShimmer(carryIds) {
-      // T2fix4 負責實作；目前 no-op
-      void carryIds;
+      if (window.OpenAver.prefersReducedMotion) return;
+      carryIds.forEach(id => {
+        const card = this.cards[id];
+        const line = this.railLines[id];
+        if (card) {
+          gsap.killTweensOf(card, '--card-glow-opacity');
+          gsap.to(card, { '--card-glow-opacity': 0.85, duration: 0.25, ease: 'fluent-decel' });
+          gsap.to(card, { '--card-glow-opacity': 0, duration: 0.40, ease: 'fluent', delay: 0.25 });
+        }
+        if (line) {
+          gsap.killTweensOf(line, 'strokeWidth');
+          gsap.to(line, { strokeWidth: 1.7, duration: 0.18, ease: 'fluent' });
+          gsap.to(line, { strokeWidth: 1.5, duration: 0.20, ease: 'fluent', delay: 0.18 });
+        }
+      });
     },
   }));
 });

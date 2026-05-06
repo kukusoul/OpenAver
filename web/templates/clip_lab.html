@@ -85,10 +85,25 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  overflow: hidden;
+  --card-glow-opacity: 0;
+  overflow: visible;
   border: 1px solid color-mix(in oklch, var(--color-base-content) 15%, transparent);
   transition: box-shadow var(--fluent-duration-fast) var(--fluent-ease-standard);
   z-index: 10;
+}
+
+.clip-lab-slot::before {
+  content: '';
+  position: absolute;
+  inset: -8px;
+  border-radius: calc(var(--fluent-radius-xl) + 4px);
+  background: radial-gradient(ellipse at 50% 50%,
+    color-mix(in oklch, var(--star-glow) 55%, transparent) 0%,
+    transparent 70%);
+  opacity: var(--card-glow-opacity);
+  pointer-events: none;
+  z-index: -1;
+  will-change: opacity;
 }
 
 .clip-lab-slot:hover {
