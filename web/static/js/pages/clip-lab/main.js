@@ -6,7 +6,7 @@
  * 雙抽防護：host onCardClick 算 nextVisible，再傳 animations；animations 不 import pickEight
  */
 
-import { ANCHORS, pickEight } from '../../shared/constellation/anchors.js';
+import { ANCHORS, pickEight, nearestNeighbors } from '../../shared/constellation/anchors.js';
 import { setRailCoords, railFocusPulse, railSweep, resetSweepLine } from '../../shared/constellation/rails.js';
 import { playInitialExpand, playSlipThrough, playExit } from '../../shared/constellation/animations.js';
 import { BreathingManager } from '../../shared/constellation/breathing.js';
@@ -21,6 +21,8 @@ document.addEventListener('alpine:init', () => {
     sweepLines: {},  // slotId -> SVGLineElement（sweep overlay）
     breathingManager: null,
     _mainBreathTween: null,
+    _activeFocusedRailId: null,    // hover focus 的 slotId（用於 _resetHoverRails cleanup）
+    _activeNeighborRailIds: [],    // hover 觸發的 neighbor slotIds
 
     init() {
       this._gsapCtx = window.OpenAver.motion.createContext(this.$el);
@@ -104,7 +106,9 @@ document.addEventListener('alpine:init', () => {
       const nextVisible = pickEight(slotId, prevVisible, Math.random);
 
       // Reduced-motion 短路（CD-T2FIX-11）：sync state update，不播任何動畫
+      // _resetHoverRails 防禦（切換 reduced-motion 後 hover 再 click 的極端情形）
       if (window.OpenAver.prefersReducedMotion) {
+        this._resetHoverRails();
         // 隱藏舊批
         prevVisible.forEach(id => {
           const card = this.cards[id];
@@ -157,16 +161,12 @@ document.addEventListener('alpine:init', () => {
         gsap.to('#main-halo-outer', { '--main-halo-opacity': 0.55, duration: 0.55, ease: 'fluent', delay: 1.4 });
       }
 
-      // sweep / focused rail 殘留清理（避 hover→click race，CD-T2FIX-3）
+      // sweep / focused / neighbor rail 殘留清理（避 hover→click race，CD-T2FIX-3 + T2fix5）
+      this._resetHoverRails();
+      // 防守性 classList 掃描：清除未追蹤到的殘留（不含 tween kill，無效能疑慮）
       this.visibleSlots.forEach(id => {
-        const sw = this.sweepLines[id];
-        if (sw) resetSweepLine(sw);
         const rl = this.railLines[id];
-        if (rl) {
-          gsap.killTweensOf(rl, 'strokeWidth');
-          gsap.set(rl, { strokeWidth: 1.5 });
-          rl.classList.remove('rail--bright');
-        }
+        if (rl) rl.classList.remove('rail--bright', 'rail--neighbor');
       });
 
       this.animating = true;
@@ -223,6 +223,9 @@ document.addEventListener('alpine:init', () => {
     onHoverEnter(slotId) {
       if (this.animating || !this.visibleSlots.has(slotId) || window.OpenAver.prefersReducedMotion) return;
 
+      // 防 enter→enter 直跳殘留（CD-T2FIX-6）
+      this._resetHoverRails();
+
       // 1. 暫停此顆呼吸
       this.breathingManager.pauseOne(slotId);
 
@@ -241,6 +244,20 @@ document.addEventListener('alpine:init', () => {
       const sweepLine = this.sweepLines[slotId];
       if (focusedLine) railFocusPulse(focusedLine);
       if (focusedLine && sweepLine) railSweep(sweepLine, focusedLine);
+
+      // 追蹤 focused rail（用於 _resetHoverRails cleanup，CD-T2FIX-6）
+      this._activeFocusedRailId = slotId;
+
+      // Neighbor highlight（CD-T2FIX-6 / TASK-T2fix5）
+      const neighbors = nearestNeighbors(slotId, [...this.visibleSlots], 3);
+      neighbors.forEach(nid => {
+        const nline = this.railLines[nid];
+        if (nline) {
+          gsap.to(nline, { strokeWidth: 1.8, duration: 0.20, ease: 'fluent' });
+          nline.classList.add('rail--neighbor');
+        }
+      });
+      this._activeNeighborRailIds = neighbors;
 
       // 4. Icon overlay 浮現（CSS transition）
       const card = this.cards[slotId];
@@ -266,16 +283,6 @@ document.addEventListener('alpine:init', () => {
       // reduced-motion 與 onHoverEnter guard 對稱，hover lifecycle 全 no-op
       if (this.animating || !this.visibleSlots.has(slotId) || window.OpenAver.prefersReducedMotion) return;
 
-      // 清 sweep 殘留 + rail 還原 bright（CD-T2FIX-3）
-      const sweepLineLeave = this.sweepLines[slotId];
-      if (sweepLineLeave) resetSweepLine(sweepLineLeave);
-      const focusedLineLeave = this.railLines[slotId];
-      if (focusedLineLeave) {
-        gsap.killTweensOf(focusedLineLeave, 'strokeWidth');
-        gsap.set(focusedLineLeave, { strokeWidth: 1.5 });
-        focusedLineLeave.classList.remove('rail--bright');
-      }
-
       // 1. Restore scale
       gsap.to(this.cards[slotId], { scale: 1.0, duration: 0.18, ease: 'fluent' });
 
@@ -293,6 +300,9 @@ document.addEventListener('alpine:init', () => {
         if (overlay) overlay.classList.remove('slot-icon--visible');
       }
 
+      // 清 sweep / focused rail + neighbor rails（CD-T2FIX-3 + T2fix5 整合）
+      this._resetHoverRails();
+
       // 4. 恢復呼吸（animating 期間跳過，由 slip-through onComplete 統一處理）
       if (!this.animating && !window.OpenAver.prefersReducedMotion) {
         this.breathingManager.resumeOne(slotId);
@@ -306,6 +316,9 @@ document.addEventListener('alpine:init', () => {
     onExit() {
       if (this.animating) return;
       this.animating = true;
+
+      // 清 hover rails 殘留（退出動畫期間不應殘留 neighbor strokeWidth，CD-T2FIX-6）
+      this._resetHoverRails();
 
       // T2fix3: 停止 main 自呼吸（退出前 scale 強制 reset）
       this._stopMainBreath();
@@ -377,6 +390,37 @@ document.addEventListener('alpine:init', () => {
           gsap.to(line, { strokeWidth: 1.5, duration: 0.20, ease: 'fluent', delay: 0.18 });
         }
       });
+    },
+
+    /**
+     * _resetHoverRails — hover 清理 helper（CD-T2FIX-6 / TASK-T2fix5）
+     * 整合 T2fix2/3 既有 focused rail / sweep 清理 + 新增 neighbor 清理
+     *
+     * 不接觸：#main-img、halo DOM、breathingManager、animating flag
+     */
+    _resetHoverRails() {
+      // 清 focused rail（railFocusPulse + railSweep 殘留）
+      if (this._activeFocusedRailId) {
+        const line = this.railLines[this._activeFocusedRailId];
+        if (line) {
+          gsap.killTweensOf(line, 'strokeWidth,opacity');
+          gsap.set(line, { strokeWidth: 1.5 });
+          line.classList.remove('rail--bright');
+        }
+        const sw = this.sweepLines[this._activeFocusedRailId];
+        if (sw) resetSweepLine(sw);
+        this._activeFocusedRailId = null;
+      }
+      // 清 neighbor rails
+      this._activeNeighborRailIds.forEach(nid => {
+        const nline = this.railLines[nid];
+        if (nline) {
+          gsap.killTweensOf(nline, 'strokeWidth');
+          gsap.set(nline, { strokeWidth: 1.5 });
+          nline.classList.remove('rail--neighbor');
+        }
+      });
+      this._activeNeighborRailIds = [];
     },
   }));
 });

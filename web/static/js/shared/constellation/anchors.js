@@ -109,3 +109,30 @@ export function railEndpoint(anchor) {
     y: Math.round(CY + (anchor.y - CY) * 1.4),
   };
 }
+
+/**
+ * nearestNeighbors — 從 candidateIds 中找距 slotId 最近的 k 個
+ * CD-T2FIX-6 / TASK-T2fix5 契約：pure function，不讀寫任何 state
+ *
+ * @param {string} slotId - 基準點 slot id
+ * @param {Iterable<string>} candidateIds - 候選 slot ids（可 Set 或 Array）
+ * @param {number} [k=3] - 取最近幾個
+ * @returns {string[]} 按距離升序排列的 slot id 陣列（長度 ≤ k）
+ */
+export function nearestNeighbors(slotId, candidateIds, k = 3) {
+  const self = ANCHORS.find(a => a.id === slotId);
+  if (!self) return [];
+
+  const distPairs = [];
+  for (const cid of candidateIds) {
+    if (cid === slotId) continue;
+    const anchor = ANCHORS.find(a => a.id === cid);
+    if (!anchor) continue; // filter(Boolean) equivalent — skip unknown ids
+    const dx = anchor.x - self.x;
+    const dy = anchor.y - self.y;
+    distPairs.push([Math.hypot(dx, dy), cid]);
+  }
+
+  distPairs.sort((a, b) => a[0] - b[0]);
+  return distPairs.slice(0, k).map(p => p[1]);
+}
