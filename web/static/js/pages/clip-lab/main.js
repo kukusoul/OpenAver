@@ -23,6 +23,7 @@ document.addEventListener('alpine:init', () => {
     _mainBreathTween: null,
     _activeFocusedRailId: null,    // hover focus 的 slotId（用於 _resetHoverRails cleanup）
     _activeNeighborRailIds: [],    // hover 觸發的 neighbor slotIds
+    _activeHoverSlot: null,        // 當前 hover 的 slotId（防 enter→enter 殘留，T2fix5 Codex P2）
 
     init() {
       this._gsapCtx = window.OpenAver.motion.createContext(this.$el);
@@ -108,6 +109,10 @@ document.addEventListener('alpine:init', () => {
       // Reduced-motion 短路（CD-T2FIX-11）：sync state update，不播任何動畫
       // _resetHoverRails 防禦（切換 reduced-motion 後 hover 再 click 的極端情形）
       if (window.OpenAver.prefersReducedMotion) {
+        if (this._activeHoverSlot !== null) {
+          this._resetHoverCard(this._activeHoverSlot);
+          this._activeHoverSlot = null;
+        }
         this._resetHoverRails();
         // 隱藏舊批
         prevVisible.forEach(id => {
@@ -162,6 +167,11 @@ document.addEventListener('alpine:init', () => {
       }
 
       // sweep / focused / neighbor rail 殘留清理（避 hover→click race，CD-T2FIX-3 + T2fix5）
+      // 清 hover card 殘留（scale / opacity / icon / breathing，Codex T2fix5 P2 Finding 1）
+      if (this._activeHoverSlot !== null) {
+        this._resetHoverCard(this._activeHoverSlot);
+        this._activeHoverSlot = null;
+      }
       this._resetHoverRails();
       // 防守性 classList 掃描：清除未追蹤到的殘留（不含 tween kill，無效能疑慮）
       this.visibleSlots.forEach(id => {
@@ -223,7 +233,13 @@ document.addEventListener('alpine:init', () => {
     onHoverEnter(slotId) {
       if (this.animating || !this.visibleSlots.has(slotId) || window.OpenAver.prefersReducedMotion) return;
 
-      // 防 enter→enter 直跳殘留（CD-T2FIX-6）
+      // 防 enter→enter 直跳殘留（Codex T2fix5 P2 Finding 1）：
+      // 若上一張 hover 未 leave 就直接 hover 到新張，先清舊張 card 狀態再進入
+      if (this._activeHoverSlot && this._activeHoverSlot !== slotId) {
+        this._resetHoverCard(this._activeHoverSlot);
+      }
+
+      // 清 rail state（focused/sweep/neighbor）
       this._resetHoverRails();
 
       // 1. 暫停此顆呼吸
@@ -240,9 +256,13 @@ document.addEventListener('alpine:init', () => {
       });
 
       // Rail 能量感（CD-T2FIX-3）
+      // kill any pending shimmer strokeWidth tween before hover tweens（Codex T2fix5 P2 Finding 2）
       const focusedLine = this.railLines[slotId];
       const sweepLine = this.sweepLines[slotId];
-      if (focusedLine) railFocusPulse(focusedLine);
+      if (focusedLine) {
+        gsap.killTweensOf(focusedLine, 'strokeWidth');
+        railFocusPulse(focusedLine);
+      }
       if (focusedLine && sweepLine) railSweep(sweepLine, focusedLine);
 
       // 追蹤 focused rail（用於 _resetHoverRails cleanup，CD-T2FIX-6）
@@ -253,11 +273,16 @@ document.addEventListener('alpine:init', () => {
       neighbors.forEach(nid => {
         const nline = this.railLines[nid];
         if (nline) {
+          // kill pending shimmer strokeWidth tween before neighbor hover tween（Codex T2fix5 P2 Finding 2）
+          gsap.killTweensOf(nline, 'strokeWidth');
           gsap.to(nline, { strokeWidth: 1.8, duration: 0.20, ease: 'fluent' });
           nline.classList.add('rail--neighbor');
         }
       });
       this._activeNeighborRailIds = neighbors;
+
+      // 追蹤當前 hover slot（防 enter→enter 殘留，Codex T2fix5 P2 Finding 1）
+      this._activeHoverSlot = slotId;
 
       // 4. Icon overlay 浮現（CSS transition）
       const card = this.cards[slotId];
@@ -283,30 +308,19 @@ document.addEventListener('alpine:init', () => {
       // reduced-motion 與 onHoverEnter guard 對稱，hover lifecycle 全 no-op
       if (this.animating || !this.visibleSlots.has(slotId) || window.OpenAver.prefersReducedMotion) return;
 
-      // 1. Restore scale
-      gsap.to(this.cards[slotId], { scale: 1.0, duration: 0.18, ease: 'fluent' });
+      // Stale guard（Codex T2fix5 P2 Finding 1）：瀏覽器可能延遲送出舊張的 leave 事件，
+      // 此時 _activeHoverSlot 已換成新張，忽略延遲 leave 避免清掉新 hover state
+      if (this._activeHoverSlot !== slotId) return;
 
-      // 2. Restore others opacity
-      this.visibleSlots.forEach(id => {
-        if (id !== slotId && this.cards[id]) {
-          gsap.to(this.cards[id], { opacity: 1, duration: 0.20, ease: 'fluent' });
-        }
-      });
-
-      // 3. Icon overlay 消失（CSS transition）
-      const card = this.cards[slotId];
-      if (card) {
-        const overlay = card.querySelector('.slot-icon-overlay');
-        if (overlay) overlay.classList.remove('slot-icon--visible');
-      }
+      // 1-4: Restore card scale / opacity / icon / breathing（共用 helper）
+      // _resetHoverCard 內部已處理 resumeOne，此處不再重複
+      this._resetHoverCard(slotId);
 
       // 清 sweep / focused rail + neighbor rails（CD-T2FIX-3 + T2fix5 整合）
       this._resetHoverRails();
 
-      // 4. 恢復呼吸（animating 期間跳過，由 slip-through onComplete 統一處理）
-      if (!this.animating && !window.OpenAver.prefersReducedMotion) {
-        this.breathingManager.resumeOne(slotId);
-      }
+      // 歸零 hover slot 追蹤
+      this._activeHoverSlot = null;
     },
 
     /**
@@ -317,6 +331,11 @@ document.addEventListener('alpine:init', () => {
       if (this.animating) return;
       this.animating = true;
 
+      // 清 hover card 殘留（scale / opacity / icon / breathing，Codex T2fix5 P2 Finding 1）
+      if (this._activeHoverSlot !== null) {
+        this._resetHoverCard(this._activeHoverSlot);
+        this._activeHoverSlot = null;
+      }
       // 清 hover rails 殘留（退出動畫期間不應殘留 neighbor strokeWidth，CD-T2FIX-6）
       this._resetHoverRails();
 
@@ -390,6 +409,52 @@ document.addEventListener('alpine:init', () => {
           gsap.to(line, { strokeWidth: 1.5, duration: 0.20, ease: 'fluent', delay: 0.18 });
         }
       });
+    },
+
+    /**
+     * _resetHoverCard — hover card 視覺還原 helper（Codex T2fix5 P2 Finding 1）
+     * 還原指定 slot 的 card scale / 其餘卡片 opacity / icon overlay / breathing。
+     * 供 onHoverLeave、onHoverEnter（enter→enter）、onCardClick、onExit 共用。
+     * reduced-motion 下：用 gsap.set 同步歸位（不 tween），接受邊緣不處理。
+     *
+     * 不負責：rail 清理（由 _resetHoverRails 負責）、_activeHoverSlot 歸零（由呼叫方負責）
+     *
+     * @param {string} slotId
+     */
+    _resetHoverCard(slotId) {
+      const card = this.cards[slotId];
+      const useSet = window.OpenAver.prefersReducedMotion;
+
+      // 1. Restore scale
+      if (card) {
+        if (useSet) {
+          gsap.set(card, { scale: 1.0 });
+        } else {
+          gsap.to(card, { scale: 1.0, duration: 0.18, ease: 'fluent' });
+        }
+      }
+
+      // 2. Restore others opacity
+      this.visibleSlots.forEach(id => {
+        if (id !== slotId && this.cards[id]) {
+          if (useSet) {
+            gsap.set(this.cards[id], { opacity: 1 });
+          } else {
+            gsap.to(this.cards[id], { opacity: 1, duration: 0.20, ease: 'fluent' });
+          }
+        }
+      });
+
+      // 3. Icon overlay 消失
+      if (card) {
+        const overlay = card.querySelector('.slot-icon-overlay');
+        if (overlay) overlay.classList.remove('slot-icon--visible');
+      }
+
+      // 4. 恢復呼吸（animating 期間跳過，由 slip-through onComplete 統一處理）
+      if (!this.animating && !window.OpenAver.prefersReducedMotion) {
+        this.breathingManager.resumeOne(slotId);
+      }
     },
 
     /**
