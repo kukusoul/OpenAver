@@ -91,8 +91,42 @@
   stroke: var(--star-line-bright);
 }
 
+/* Main halo sibling DOM（T2fix3）— outer glow + inner ring */
+/* sibling 而非 ::before，因 .clip-lab-main 有 overflow:hidden，::before 會被裁切 */
+.clip-lab-main-halo {
+  position: absolute;
+  left: 480px;
+  top: 310px;
+  pointer-events: none;
+  border-radius: var(--fluent-radius-xl);
+  transform: translate(-50%, -50%) scale(var(--main-halo-scale, 1));
+  opacity: var(--main-halo-opacity, 0.55);
+  transition: none; /* GSAP 控 */
+  will-change: transform, opacity;
+}
+.clip-lab-main-halo--outer {
+  --main-halo-scale: 1;
+  --main-halo-opacity: 0.55;
+  width: 272px;   /* 200 + 36*2 */
+  height: 322px;  /* 250 + 36*2 */
+  background: radial-gradient(ellipse at 50% 50%,
+    color-mix(in oklch, var(--star-glow) 35%, transparent) 0%,
+    transparent 65%);
+  z-index: 18;    /* cards(10) < halo-outer(18) < halo-inner(19) < main-img(20) */
+}
+.clip-lab-main-halo--inner {
+  --main-halo-scale: 1;
+  --main-halo-opacity: 0.6;
+  width: 212px;   /* 200 + 6*2 */
+  height: 262px;  /* 250 + 6*2 */
+  border: 2px solid color-mix(in oklch, var(--star-line-bright) 50%, transparent);
+  background: transparent;
+  z-index: 19;    /* 緊貼 main-img */
+}
+
 /* Main image placeholder — center of stage */
 /* 主圖略亮一階突顯（base-100 vs slot base-100 — main 多加 inset 光邊 + 較強陰影）*/
+/* T2fix3：退役 --main-flash-strength 動態計算，改為靜態 baseline */
 .clip-lab-main {
   position: absolute;
   left: 480px;
@@ -102,10 +136,8 @@
   transform: translate(-50%, -50%);
   background: var(--color-base-100);
   border-radius: var(--fluent-radius-xl);
-  --main-flash-strength: 0;
   box-shadow:
-    0 0 calc(28px + var(--main-flash-strength) * 20px)
-      color-mix(in oklch, var(--star-glow) calc(60% + var(--main-flash-strength) * 20%), transparent),
+    0 0 28px color-mix(in oklch, var(--star-glow) 60%, transparent),
     inset 0 1px 0 color-mix(in oklch, var(--color-base-content) 10%, transparent),
     var(--fluent-shadow-28);
   cursor: pointer;
@@ -316,6 +348,10 @@
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="9" cy="9" r="5.5" stroke="currentColor" stroke-width="1.5"/><path d="M13.5 13.5L17 17" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
         </div>
       </div>
+
+      <!-- Main Halo sibling DOM（T2fix3）— outer glow + inner ring，z-index 18/19，低於 main-img(20) -->
+      <div id="main-halo-outer" class="clip-lab-main-halo clip-lab-main-halo--outer" aria-hidden="true"></div>
+      <div id="main-halo-inner" class="clip-lab-main-halo clip-lab-main-halo--inner" aria-hidden="true"></div>
 
       <!-- Main Image Placeholder (中心) — main-id-label 由 animations.js t=0.30 callback 填入 clickedId -->
       <div id="main-img" class="clip-lab-main" @click="onExit()">

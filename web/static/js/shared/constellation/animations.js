@@ -120,11 +120,15 @@ export function playSlipThrough(clickedId, prevVisible, nextVisible, cards, rail
   // t=0: 舊主圖 fade-out（CD-56B-7: 0.30s fluent-accel）
   if (mainImg) {
     tl.to(mainImg, { opacity: 0, duration: 0.30, ease: 'fluent-accel' }, 0);
-    // Flash 在 fade-out 早期 peak（opacity 仍高時），避免 box-shadow 隨 element opacity
-    // 一起淡到 0。retime 後：t=0 → t=0.10 上升（opacity ~1→0.67），
-    // t=0.10 → t=0.30 與 fade-out 同步收掉。Codex r1 P2 修正。
-    tl.to(mainImg, { '--main-flash-strength': 1, duration: 0.10, ease: 'fluent-decel' }, 0);
-    tl.to(mainImg, { '--main-flash-strength': 0, duration: 0.20, ease: 'fluent' }, 0.10);
+    // T2fix3：halo expand/收回（替換 T2fix1 的 --main-flash-strength 最小版）
+    // t=0.00: outer halo 擴張接收（CD-T2FIX-4 §D）
+    tl.to('#main-halo-outer', { '--main-halo-opacity': 0.85, '--main-halo-scale': 1.06, duration: 0.30, ease: 'fluent-decel' }, 0);
+    // t=0.30: outer halo 收回
+    tl.to('#main-halo-outer', { '--main-halo-opacity': 0.55, '--main-halo-scale': 1, duration: 0.22, ease: 'fluent' }, 0.30);
+    // t=0.35: main heartbeat（接收脈衝）
+    tl.to(mainImg, { scale: 1.025, duration: 0.14, ease: 'fluent' }, 0.35);
+    // t=0.49: heartbeat 還原
+    tl.to(mainImg, { scale: 1, duration: 0.14, ease: 'fluent' }, 0.49);
   }
 
   // t=0: 純離場卡沿 rail 滑出（CD-56B-7: 0.55s fluent-accel）

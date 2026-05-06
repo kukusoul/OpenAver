@@ -20,6 +20,7 @@ document.addEventListener('alpine:init', () => {
     railLines: {},   // slotId -> SVGLineElement
     sweepLines: {},  // slotId -> SVGLineElement（sweep overlay）
     breathingManager: null,
+    _mainBreathTween: null,
 
     init() {
       this._gsapCtx = window.OpenAver.motion.createContext(this.$el);
@@ -57,6 +58,7 @@ document.addEventListener('alpine:init', () => {
         this.visibleSlots = new Set(initSlots);
         this.animating = false;
         this.breathingManager.start(initSlots);
+        this._startMainBreath();
       });
     },
 
@@ -141,6 +143,20 @@ document.addEventListener('alpine:init', () => {
         return;
       }
 
+      // T2fix3: 停止 main 自呼吸（absorb 期間無 yoyo 殘留，_stopMainBreath 強制 reset scale=1）
+      this._stopMainBreath();
+      // T2fix3 P2: kill 上一輪 carry-bump delayed tween，避免在新 absorb 的 0.55→0.85 expand 進行中
+      // 拉回 opacity=0.55 蓋掉新 flash（race window：animating=false 後 ~1.4s 內再點）
+      gsap.killTweensOf('#main-halo-outer');
+
+      // T2fix3: carry-over ≥5 時 outer halo 略亮（CD-T2FIX-4 §E）
+      // 不用 Set.intersection（ES2025 ban，ESLint Group 6 守衛）
+      const carryCount = [...nextVisible].filter(id => prevVisible.has(id) && id !== slotId).length;
+      if (carryCount >= 5 && !window.OpenAver.prefersReducedMotion) {
+        gsap.to('#main-halo-outer', { '--main-halo-opacity': 0.65, duration: 0.45, ease: 'fluent-decel', delay: 0.6 });
+        gsap.to('#main-halo-outer', { '--main-halo-opacity': 0.55, duration: 0.55, ease: 'fluent', delay: 1.4 });
+      }
+
       // sweep / focused rail 殘留清理（避 hover→click race，CD-T2FIX-3）
       this.visibleSlots.forEach(id => {
         const sw = this.sweepLines[id];
@@ -185,6 +201,11 @@ document.addEventListener('alpine:init', () => {
           // slip-through 完成後重啟呼吸（新批 8 顆各自相位）
           if (!window.OpenAver.prefersReducedMotion) {
             this.breathingManager.start(nextVisible);
+            // T2fix3: 重啟 main 自呼吸
+            this._startMainBreath();
+            // T2fix4 預埋：carry-over survivor shimmer（closure 捕獲 prevVisible，不讀 this.visibleSlots）
+            const carryIds = [...prevVisible].filter(id => id !== slotId && nextVisible.has(id));
+            this._playSurvivorShimmer(carryIds);
           }
         }
       );
@@ -286,6 +307,9 @@ document.addEventListener('alpine:init', () => {
       if (this.animating) return;
       this.animating = true;
 
+      // T2fix3: 停止 main 自呼吸（退出前 scale 強制 reset）
+      this._stopMainBreath();
+
       // 停止呼吸（退出動畫期間 ticker 不殘留）
       this.breathingManager.stop();
 
@@ -298,6 +322,44 @@ document.addEventListener('alpine:init', () => {
           location.reload();
         }
       );
+    },
+
+    /**
+     * _startMainBreath — main 圖自呼吸（scale 1→1.018，5.6s sine.inOut yoyo）
+     * reduced-motion guard：prefersReducedMotion 時直接 return，不建 tween
+     */
+    _startMainBreath() {
+      if (window.OpenAver.prefersReducedMotion) return;
+      this._mainBreathTween = gsap.to('#main-img', {
+        scale: 1.018,
+        duration: 5.6,
+        ease: 'sine.inOut',
+        yoyo: true,
+        repeat: -1,
+      });
+    },
+
+    /**
+     * _stopMainBreath — kill main 呼吸 tween + 強制 reset scale=1
+     * gsap.set 強制歸位：kill 不自動 reset，yoyo 中段被 kill 會殘留 scale
+     */
+    _stopMainBreath() {
+      if (this._mainBreathTween) {
+        this._mainBreathTween.kill();
+        this._mainBreathTween = null;
+      }
+      gsap.set('#main-img', { scale: 1 });
+    },
+
+    /**
+     * _playSurvivorShimmer — carry-over 卡片 glow 脈衝（T2fix4 預埋 stub）
+     * 目前 no-op，T2fix4 負責實作
+     *
+     * @param {string[]} carryIds
+     */
+    _playSurvivorShimmer(carryIds) {
+      // T2fix4 負責實作；目前 no-op
+      void carryIds;
     },
   }));
 });
