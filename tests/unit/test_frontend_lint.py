@@ -4533,7 +4533,7 @@ class TestMotionInfra:
             Path('pages') / 'motion-lab-state.js',      # pages/motion-lab-state.js（39b-T1 Alpine state 含 GSAP 委派呼叫）
             Path('pages') / 'search' / 'animations.js', # pages/search/animations.js（T6 預先加入）
             Path('pages') / 'showcase' / 'animations.js', # pages/showcase/animations.js（B6 動畫模組）
-            Path('pages') / 'clip-lab' / 'main.js',     # pages/clip-lab/main.js（56b-T1 thin host：init DOM setup + prefers-reduced-motion 終態 gsap.set）
+            Path('pages') / 'motion-lab' / 'constellation-host.js',  # 56b-T3 thin host（從 pages/clip-lab/main.js 搬遷）
         }
         violations = []
 
@@ -7075,3 +7075,40 @@ class TestScannerCopyFailModal:
         for expected in ['copy_fail_modal.title', 'copy-fail-pre',
                          'copyFailModalOpen && closeCopyFailModal']:
             assert expected in html, f"scanner.html missing: {expected!r}"
+
+
+class TestClipLabHostRemoved:
+    """56b-T3: 驗證 clip-lab thin host 已完全移除（檔案 / 目錄 / app.py import / i18n key）"""
+
+    PROJECT_ROOT = Path(__file__).parent.parent.parent
+
+    def test_clip_lab_router_file_not_exists(self):
+        """web/routers/clip_lab.py 不應存在"""
+        path = self.PROJECT_ROOT / "web" / "routers" / "clip_lab.py"
+        assert not path.exists(), f"56b-T3 違規：{path} 仍存在，應已刪除"
+
+    def test_clip_lab_template_not_exists(self):
+        """web/templates/clip_lab.html 不應存在"""
+        path = self.PROJECT_ROOT / "web" / "templates" / "clip_lab.html"
+        assert not path.exists(), f"56b-T3 違規：{path} 仍存在，應已刪除"
+
+    def test_clip_lab_pages_dir_not_exists(self):
+        """web/static/js/pages/clip-lab/ 目錄不應存在"""
+        path = self.PROJECT_ROOT / "web" / "static" / "js" / "pages" / "clip-lab"
+        assert not path.exists(), f"56b-T3 違規：{path} 目錄仍存在，應已刪除"
+
+    def test_app_py_no_clip_lab_import(self):
+        """web/app.py 內容不應含 'clip_lab' 字串（import / include_router 皆已移除）"""
+        path = self.PROJECT_ROOT / "web" / "app.py"
+        content = path.read_text(encoding="utf-8")
+        assert "clip_lab" not in content, (
+            "56b-T3 違規：web/app.py 仍含 'clip_lab' 字串（import / include_router 未清乾淨）"
+        )
+
+    def test_zh_tw_no_clip_lab_namespace(self):
+        """locales/zh_TW.json 解析後不應有 'clip_lab' top-level key"""
+        path = self.PROJECT_ROOT / "locales" / "zh_TW.json"
+        data = json.loads(path.read_text(encoding="utf-8"))
+        assert "clip_lab" not in data, (
+            "56b-T3 違規：locales/zh_TW.json 仍含 'clip_lab' top-level namespace"
+        )

@@ -38,11 +38,11 @@ const SEL_WINDOW_CONFIRM = {
 const SEL_BREATHING_MANAGER_NEW = {
   selector: "NewExpression[callee.name='BreathingManager']",
   message:
-    "BreathingManager 只能在 pages/clip-lab/main.js 建立實例（host lifecycle 持有原則）。其他模組禁止直接 new BreathingManager（CD-56B-T2 lint guard）。",
+    "BreathingManager 只能在 pages/motion-lab/constellation-host.js 建立實例（host lifecycle 持有原則）。其他模組禁止直接 new BreathingManager（CD-56B-T2 lint guard）。",
 };
 
 // ── CD-T2FIX-1 starSettle Literal ban（共用，所有非 animations.js 檔案）────
-// Codex r1 P3 修正：原 v1 只在 Group 6 加 ban，但 Group 6 ignores state/** + clip-lab/main.js，
+// Codex r1 P3 修正：原 v1 只在 Group 6 加 ban，但 Group 6 ignores state/** + constellation host，
 // 這些檔案可繞過。改為共用 selector，由每個非 animations.js group 自帶。
 const SEL_STARSETTLE_LITERAL = {
   selector: "Literal[value='starSettle']",
@@ -87,7 +87,7 @@ export default [
   //   Group 1 > Group 2 for search/state/**
   //   Group 3 > Group 1/2 for 非 state JS（Group 3 後，但 ignores state/**）
   //   Group 4 > Group 3 for animations.js（後，更具體）
-  //   Group 5 > Group 3 for clip-lab/main.js（後，更具體）
+  //   Group 5 > Group 3 for motion-lab/constellation-host.js（後，更具體）
   //   Group 6 > Group 3 for 其餘非 state/非 main/非 animations JS（最後）
 
   // Group 1: search/state/** — createElement + showModal + window.confirm + BreathingManager（最嚴）
@@ -176,11 +176,12 @@ export default [
     },
   },
 
-  // Group 5: clip-lab/main.js 完整規則集（supersedes Group 3）
+  // Group 5: motion-lab/constellation-host.js 完整規則集（supersedes Group 3）
+  // 56b-T3：thin host 從 pages/clip-lab/main.js 搬遷至 pages/motion-lab/constellation-host.js
   // 包含：window.confirm guard + drawSVG/railDrawIn thin-host guard（CD-56B-8）
-  // + hover addEventListener guard + BreathingManager 不禁（main.js 是合法建立者）
+  // + hover addEventListener guard + BreathingManager 不禁（host 是合法建立者）
   {
-    files: ["web/static/js/pages/clip-lab/main.js"],
+    files: ["web/static/js/pages/motion-lab/constellation-host.js"],
     rules: {
       "no-restricted-syntax": [
         "error",
@@ -188,17 +189,17 @@ export default [
         {
           selector: "Property[key.name='drawSVG']",
           message:
-            "drawSVG 屬於核心層（shared/constellation/rails.js），禁止在 thin host main.js 的 GSAP property bag 直接使用。",
+            "drawSVG 屬於核心層（shared/constellation/rails.js），禁止在 thin host constellation-host.js 的 GSAP property bag 直接使用。",
         },
         {
           selector: "Property[key.value='drawSVG']",
           message:
-            "drawSVG 屬於核心層（shared/constellation/rails.js），禁止在 thin host main.js 直接使用（quoted key form）。",
+            "drawSVG 屬於核心層（shared/constellation/rails.js），禁止在 thin host constellation-host.js 直接使用（quoted key form）。",
         },
         {
           selector: "MemberExpression[property.name='drawSVG']",
           message:
-            "drawSVG 屬於核心層，禁止在 thin host main.js 透過 member access 使用。",
+            "drawSVG 屬於核心層，禁止在 thin host constellation-host.js 透過 member access 使用。",
         },
         {
           selector: "CallExpression[callee.name='railDrawIn']",
@@ -209,9 +210,9 @@ export default [
           selector:
             "CallExpression[callee.property.name='addEventListener'][arguments.0.value=/^(mouseenter|mouseleave)$/]",
           message:
-            "hover 互動走 Alpine x-on:mouseenter / x-on:mouseleave，禁止在 main.js 內使用 addEventListener('mouseenter'/'mouseleave')（CD-56B-T2 lint guard）。",
+            "hover 互動走 Alpine x-on:mouseenter / x-on:mouseleave，禁止在 constellation-host.js 內使用 addEventListener('mouseenter'/'mouseleave')（CD-56B-T2 lint guard）。",
         },
-        // Codex r1 P3 修正：clip-lab/main.js 也加 starSettle Literal ban（原 Group 6 ignores 此檔導致漏網）
+        // Codex r1 P3 修正：constellation-host.js 也加 starSettle Literal ban（原 Group 6 ignores 此檔導致漏網）
         SEL_STARSETTLE_LITERAL,
         {
           // Codex r2 F2：y2 setAttribute ban（plan §11 / task card §9 契約）
@@ -220,7 +221,7 @@ export default [
           selector:
             "CallExpression[callee.property.name='setAttribute'][arguments.0.value='y2']",
           message:
-            "SVG rail y2 屬性只能在 rails.js（setRailCoords）或 breathing.js（ticker follow）內設定，不在 main.js 直接 setAttribute（CD-T2FIX-3）。",
+            "SVG rail y2 屬性只能在 rails.js（setRailCoords）或 breathing.js（ticker follow）內設定，不在 constellation-host.js 直接 setAttribute（CD-T2FIX-3）。",
         },
       ],
     },
@@ -234,7 +235,7 @@ export default [
     files: ["web/static/js/**/*.js"],
     ignores: [
       "web/static/js/pages/**/state/**/*.js",
-      "web/static/js/pages/clip-lab/main.js",
+      "web/static/js/pages/motion-lab/constellation-host.js",
       "web/static/js/shared/constellation/animations.js",
       "web/static/js/shared/constellation/breathing.js",
     ],

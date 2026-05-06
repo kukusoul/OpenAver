@@ -1,9 +1,16 @@
 /**
- * pages/clip-lab/main.js — Thin host：Alpine.data('constellationLab', ...)
+ * pages/motion-lab/constellation-host.js — Thin host：Alpine.data('constellationLab', ...)
+ *
+ * 56b-T3：從 pages/clip-lab/main.js 等價搬遷至 motion-lab Constellation tab。
+ * import 路徑深度多一層（../../shared/constellation/...），其餘行為與舊 host 等價。
+ *
  * CD-56B-8 thin host 規範：
  *   - 只做：import shared 模組、Alpine.data 宣告、init + click dispatch
  *   - 禁做：座標計算、rail 邏輯、timeline 建構
  * 雙抽防護：host onCardClick 算 nextVisible，再傳 animations；animations 不 import pickEight
+ *
+ * D-4：Constellation tab panel 用 x-if，mount/destroy 觸發 Alpine init / destroy lifecycle。
+ *      destroy() 內呼叫 breathingManager.stop() + _gsapCtx.revert()，避免 ticker / tween 殘留。
  */
 
 import { ANCHORS, pickEight, nearestNeighbors } from '../../shared/constellation/anchors.js';
@@ -21,6 +28,7 @@ document.addEventListener('alpine:init', () => {
     sweepLines: {},  // slotId -> SVGLineElement（sweep overlay）
     breathingManager: null,
     _mainBreathTween: null,
+    _activeTimeline: null,         // 當前 play* 回傳的 timeline，destroy 時 kill（Codex T3 P1）
     _activeFocusedRailId: null,    // hover focus 的 slotId（用於 _resetHoverRails cleanup）
     _activeNeighborRailIds: [],    // hover 觸發的 neighbor slotIds
     _activeHoverSlot: null,        // 當前 hover 的 slotId（防 enter→enter 殘留，T2fix5 Codex P2）
@@ -55,14 +63,58 @@ document.addEventListener('alpine:init', () => {
         return;
       }
 
+      this._playInitialExpand();
+    },
+
+    /**
+     * _playInitialExpand — 啟動初始 8 顆展開（init 與 onExit 重置共用）
+     * Codex T3 P1：timeline reference 存進 _activeTimeline，destroy 時 kill
+     * Codex T3 P1：onComplete 內加 destroyed guard（_gsapCtx 已 null 表示 tab 已切走），
+     *              避免在已銷毀 DOM 上呼叫 breathingManager.start。
+     */
+    _playInitialExpand() {
       const initSlots = new Set(['#01', '#02', '#03', '#04', '#05', '#06', '#07', '#08']);
       this.animating = true;
-      playInitialExpand(this.cards, this.railLines, initSlots, () => {
+      this._activeTimeline = playInitialExpand(this.cards, this.railLines, initSlots, () => {
+        if (!this._gsapCtx) return; // destroyed during animation — stop here
+        this._activeTimeline = null;
         this.visibleSlots = new Set(initSlots);
         this.animating = false;
         this.breathingManager.start(initSlots);
         this._startMainBreath();
       });
+    },
+
+    /**
+     * destroy — Alpine x-if mount/destroy lifecycle hook（D-4）
+     * tab 切走時 x-if=false → DOM 銷毀 → Alpine 觸發 destroy()。
+     * 關鍵：停 BreathingManager ticker（gsap.ticker.remove）+ revert GSAP context（清所有 tween / inline style）。
+     */
+    destroy() {
+      // Codex T3 P1：kill 當前 play* timeline（gsap.context 不收 host 模組層建立的 timeline，
+      // 不 kill 會讓 onComplete 在 DOM 銷毀後仍重啟 breathing ticker）
+      if (this._activeTimeline) {
+        this._activeTimeline.kill();
+        this._activeTimeline = null;
+      }
+      this.breathingManager?.stop();
+      this._stopMainBreath();
+      // Codex T3 P2 follow-up #2：createContext(this.$el) 用空 fn 建立，host 之後直呼 gsap.to() 的 tween
+      // （carry-bump halo / survivor shimmer / hover card+rail / neighbor strokeWidth 等）不會被 ctx 自動收。
+      // tab 切走時若有 delayed/in-flight tween，會在已銷毀 DOM 上繼續跑。
+      // → 在 ctx.revert 前對所有 host 持有的 DOM 與 halo 全 killTweensOf。
+      gsap.killTweensOf('#main-halo-outer');
+      gsap.killTweensOf('#main-halo-inner');
+      gsap.killTweensOf('#main-img');
+      ANCHORS.forEach(a => {
+        if (this.cards[a.id]) gsap.killTweensOf(this.cards[a.id]);
+        if (this.railLines[a.id]) gsap.killTweensOf(this.railLines[a.id]);
+        if (this.sweepLines[a.id]) gsap.killTweensOf(this.sweepLines[a.id]);
+      });
+      if (this._gsapCtx) {
+        this._gsapCtx.revert();
+        this._gsapCtx = null;
+      }
     },
 
     /**
@@ -197,7 +249,7 @@ document.addEventListener('alpine:init', () => {
       // 停止呼吸（slip-through 期間 ticker 不殘留）
       this.breathingManager.stop();
 
-      playSlipThrough(
+      this._activeTimeline = playSlipThrough(
         slotId,
         prevVisible,
         nextVisible,
@@ -205,6 +257,8 @@ document.addEventListener('alpine:init', () => {
         this.railLines,
         document.getElementById('main-img'),
         () => {
+          if (!this._gsapCtx) return; // destroyed during slip-through (Codex T3 P1)
+          this._activeTimeline = null;
           this.mainSlot = slotId;
           this.visibleSlots = nextVisible; // 與 animation 使用的批次完全一致
           this.animating = false;
@@ -325,7 +379,10 @@ document.addEventListener('alpine:init', () => {
 
     /**
      * onExit — 點擊主圖 / 背景觸發退出動畫
-     * 退出後刷新頁面（56b standalone 模式）
+     * Codex T3 P2：原 standalone 模式 location.reload() 不適用 motion-lab tab 場景
+     * （會把整頁 reload 回 default search tab）。改為退出動畫完成後本地 reset：
+     * 清 visibleSlots / mainSlot，重跑 _playInitialExpand 讓 sandbox 可繼續探索。
+     * Codex T3 P1：timeline reference 存 _activeTimeline，destroy 時 kill。
      */
     onExit() {
       if (this.animating) return;
@@ -345,13 +402,24 @@ document.addEventListener('alpine:init', () => {
       // 停止呼吸（退出動畫期間 ticker 不殘留）
       this.breathingManager.stop();
 
-      playExit(
+      this._activeTimeline = playExit(
         this.cards,
         this.railLines,
         this.visibleSlots,
         document.getElementById('main-img'),
         () => {
-          location.reload();
+          if (!this._gsapCtx) return; // destroyed during exit (Codex T3 P1)
+          this._activeTimeline = null;
+          // Reset state，重新展開（取代 standalone reload）
+          // playExit 把 main-img 設為 opacity:0 / scale:0.95，須還原為初始 visible 1.0
+          gsap.set('#main-img', { opacity: 1, scale: 1 });
+          this.visibleSlots = new Set();
+          this.mainSlot = null;
+          this.animating = false;
+          // Codex T3 P2 follow-up：上一輪若有 #09-#12 visible，playExit 後仍 opacity:0 但無 slot--hidden，
+          // 形成隱形 hover/click 目標。_playInitialExpand 只初始化 #01-#08，需先把 12 個全 reset。
+          this._resetAllSlotsToBaseline();
+          this._playInitialExpand();
         }
       );
     },
@@ -463,6 +531,46 @@ document.addEventListener('alpine:init', () => {
      *
      * 不接觸：#main-img、halo DOM、breathingManager、animating flag
      */
+    /**
+     * _resetAllSlotsToBaseline — 把 12 個 slot / rail / sweep 全部回到「init 前」baseline
+     * Codex T3 P2 follow-up：onExit 後若上一輪 visibleSlots 含 #09-#12，這些 slot 在 playExit
+     * 結束後會留下 opacity:0 但無 .slot--hidden，pointer-events 仍 active；rail 同理。
+     * _playInitialExpand 只初始化 #01-#08，碰不到 #09-#12 殘留 → 產生隱形 hover/click 目標。
+     * 本 helper 與 init() 開頭的 DOM 建立段落同義（card 居中 + 全 hidden / rail+sweep hidden）。
+     */
+    _resetAllSlotsToBaseline() {
+      ANCHORS.forEach(a => {
+        const card = this.cards[a.id];
+        const line = this.railLines[a.id];
+        const sweep = this.sweepLines[a.id];
+        if (card) {
+          gsap.killTweensOf(card);
+          card.classList.add('slot--hidden');
+          card.classList.remove('rail--bright', 'rail--neighbor'); // 防呆（class 應掛 rail，不會在 card；但保險清）
+          gsap.set(card, {
+            left: 480,
+            top: 310,
+            width: 120,
+            height: 150,
+            opacity: 0,
+            zIndex: '',
+            clearProps: 'scale,rotation,transform,--card-glow-opacity',
+          });
+          const overlay = card.querySelector('.slot-icon-overlay');
+          if (overlay) overlay.classList.remove('slot-icon--visible');
+        }
+        if (line) {
+          gsap.killTweensOf(line);
+          line.classList.add('rail--hidden');
+          line.classList.remove('rail--bright', 'rail--neighbor');
+          gsap.set(line, { opacity: 0, strokeWidth: 1.5 });
+        }
+        if (sweep) resetSweepLine(sweep);
+      });
+      this._activeFocusedRailId = null;
+      this._activeNeighborRailIds = [];
+    },
+
     _resetHoverRails() {
       // 清 focused rail（railFocusPulse + railSweep 殘留）
       if (this._activeFocusedRailId) {

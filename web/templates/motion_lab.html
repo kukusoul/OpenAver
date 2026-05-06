@@ -771,6 +771,11 @@
                     @click="tab = 'special-motion'; onResetStaging(); onResetHero(); onResetPicker()">
                 §5 Special Motion 白名單
             </button>
+            <button class="motion-lab-tab"
+                    :class="{ active: tab === 'constellation' }"
+                    @click="tab = 'constellation'; onResetStaging(); onResetHero(); onResetPicker()">
+                Constellation
+            </button>
         </div>
     </div>
 
@@ -2368,6 +2373,195 @@
             </div>
         </div>
 
+        <!-- ===== Constellation tab（56b-T3：從 /clip-lab 沉澱進來）===== -->
+        <!-- D-4：用 x-if 而非 x-show，切走時 DOM 銷毀 → Alpine destroy() 統一 cleanup
+                  breathingManager + GSAP context（避 ticker / tween 殘留）。 -->
+        <template x-if="tab === 'constellation'">
+            <div x-data="constellationLab" class="constellation-tab-panel" x-cloak>
+                <div class="clip-lab-stage-area">
+                    <div class="clip-lab-stage">
+
+                        <!-- Dust particle layer — 60 static circles, seed=56, z-index 0 -->
+                        <svg class="clip-lab-dust" viewBox="0 0 960 620" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                            <circle cx="888" cy="593" r="0.61" opacity="0.099"/>
+                            <circle cx="328" cy="575" r="1.59" opacity="0.085"/>
+                            <circle cx="256" cy="116" r="0.97" opacity="0.064"/>
+                            <circle cx="678" cy="281" r="1.59" opacity="0.072"/>
+                            <circle cx="797" cy="235" r="0.65" opacity="0.095"/>
+                            <circle cx="160" cy="413" r="1.28" opacity="0.116"/>
+                            <circle cx="414" cy="272" r="0.79" opacity="0.097"/>
+                            <circle cx="592" cy="243" r="1.04" opacity="0.103"/>
+                            <circle cx="148" cy="84" r="1.38" opacity="0.092"/>
+                            <circle cx="204" cy="214" r="0.78" opacity="0.093"/>
+                            <circle cx="773" cy="389" r="0.61" opacity="0.1"/>
+                            <circle cx="617" cy="397" r="0.6" opacity="0.094"/>
+                            <circle cx="20" cy="558" r="1.15" opacity="0.097"/>
+                            <circle cx="414" cy="388" r="1.08" opacity="0.082"/>
+                            <circle cx="546" cy="495" r="1.15" opacity="0.101"/>
+                            <circle cx="718" cy="236" r="0.78" opacity="0.107"/>
+                            <circle cx="498" cy="166" r="0.61" opacity="0.078"/>
+                            <circle cx="616" cy="277" r="1.06" opacity="0.115"/>
+                            <circle cx="50" cy="319" r="1.46" opacity="0.07"/>
+                            <circle cx="541" cy="112" r="0.65" opacity="0.095"/>
+                            <circle cx="730" cy="315" r="1.2" opacity="0.084"/>
+                            <circle cx="753" cy="78" r="1.11" opacity="0.098"/>
+                            <circle cx="571" cy="328" r="1.21" opacity="0.063"/>
+                            <circle cx="731" cy="441" r="0.73" opacity="0.07"/>
+                            <circle cx="656" cy="576" r="1.39" opacity="0.069"/>
+                            <circle cx="674" cy="41" r="0.64" opacity="0.101"/>
+                            <circle cx="517" cy="287" r="0.71" opacity="0.068"/>
+                            <circle cx="282" cy="172" r="1.37" opacity="0.116"/>
+                            <circle cx="600" cy="137" r="1.59" opacity="0.084"/>
+                            <circle cx="759" cy="257" r="0.81" opacity="0.067"/>
+                            <circle cx="341" cy="157" r="1.14" opacity="0.118"/>
+                            <circle cx="775" cy="593" r="0.71" opacity="0.074"/>
+                            <circle cx="786" cy="428" r="1.32" opacity="0.072"/>
+                            <circle cx="263" cy="314" r="0.7" opacity="0.118"/>
+                            <circle cx="678" cy="102" r="1.54" opacity="0.072"/>
+                            <circle cx="66" cy="459" r="1.14" opacity="0.077"/>
+                            <circle cx="639" cy="166" r="1.44" opacity="0.094"/>
+                            <circle cx="692" cy="574" r="0.98" opacity="0.084"/>
+                            <circle cx="269" cy="83" r="1.39" opacity="0.087"/>
+                            <circle cx="794" cy="407" r="1.48" opacity="0.081"/>
+                            <circle cx="407" cy="334" r="0.7" opacity="0.087"/>
+                            <circle cx="460" cy="389" r="1.06" opacity="0.071"/>
+                            <circle cx="651" cy="41" r="1.31" opacity="0.086"/>
+                            <circle cx="465" cy="49" r="0.89" opacity="0.097"/>
+                            <circle cx="259" cy="64" r="1.01" opacity="0.068"/>
+                            <circle cx="424" cy="346" r="1.6" opacity="0.109"/>
+                            <circle cx="822" cy="281" r="0.65" opacity="0.095"/>
+                            <circle cx="889" cy="247" r="0.96" opacity="0.107"/>
+                            <circle cx="46" cy="496" r="0.77" opacity="0.103"/>
+                            <circle cx="653" cy="116" r="1.51" opacity="0.107"/>
+                            <circle cx="381" cy="467" r="0.79" opacity="0.089"/>
+                            <circle cx="156" cy="594" r="1.46" opacity="0.087"/>
+                            <circle cx="26" cy="437" r="0.82" opacity="0.104"/>
+                            <circle cx="741" cy="502" r="1.1" opacity="0.114"/>
+                            <circle cx="237" cy="502" r="1.48" opacity="0.082"/>
+                            <circle cx="260" cy="417" r="1.57" opacity="0.089"/>
+                            <circle cx="684" cy="435" r="1.17" opacity="0.073"/>
+                            <circle cx="324" cy="503" r="1.22" opacity="0.094"/>
+                            <circle cx="71" cy="125" r="1.09" opacity="0.092"/>
+                            <circle cx="709" cy="142" r="1.57" opacity="0.079"/>
+                        </svg>
+
+                        <!-- SVG Rail Lines (12 lines, rail--hidden 初始隱藏) + sweep-line siblings -->
+                        <svg class="clip-lab-rails" viewBox="0 0 960 620" xmlns="http://www.w3.org/2000/svg">
+                            <line id="rail-01" class="clip-lab-rail rail--hidden" x1="480" y1="310" x2="480" y2="310" />
+                            <line id="sweep-01" class="clip-lab-rail-sweep" x1="480" y1="310" x2="480" y2="310" />
+                            <line id="rail-02" class="clip-lab-rail rail--hidden" x1="480" y1="310" x2="480" y2="310" />
+                            <line id="sweep-02" class="clip-lab-rail-sweep" x1="480" y1="310" x2="480" y2="310" />
+                            <line id="rail-03" class="clip-lab-rail rail--hidden" x1="480" y1="310" x2="480" y2="310" />
+                            <line id="sweep-03" class="clip-lab-rail-sweep" x1="480" y1="310" x2="480" y2="310" />
+                            <line id="rail-04" class="clip-lab-rail rail--hidden" x1="480" y1="310" x2="480" y2="310" />
+                            <line id="sweep-04" class="clip-lab-rail-sweep" x1="480" y1="310" x2="480" y2="310" />
+                            <line id="rail-05" class="clip-lab-rail rail--hidden" x1="480" y1="310" x2="480" y2="310" />
+                            <line id="sweep-05" class="clip-lab-rail-sweep" x1="480" y1="310" x2="480" y2="310" />
+                            <line id="rail-06" class="clip-lab-rail rail--hidden" x1="480" y1="310" x2="480" y2="310" />
+                            <line id="sweep-06" class="clip-lab-rail-sweep" x1="480" y1="310" x2="480" y2="310" />
+                            <line id="rail-07" class="clip-lab-rail rail--hidden" x1="480" y1="310" x2="480" y2="310" />
+                            <line id="sweep-07" class="clip-lab-rail-sweep" x1="480" y1="310" x2="480" y2="310" />
+                            <line id="rail-08" class="clip-lab-rail rail--hidden" x1="480" y1="310" x2="480" y2="310" />
+                            <line id="sweep-08" class="clip-lab-rail-sweep" x1="480" y1="310" x2="480" y2="310" />
+                            <line id="rail-09" class="clip-lab-rail rail--hidden" x1="480" y1="310" x2="480" y2="310" />
+                            <line id="sweep-09" class="clip-lab-rail-sweep" x1="480" y1="310" x2="480" y2="310" />
+                            <line id="rail-10" class="clip-lab-rail rail--hidden" x1="480" y1="310" x2="480" y2="310" />
+                            <line id="sweep-10" class="clip-lab-rail-sweep" x1="480" y1="310" x2="480" y2="310" />
+                            <line id="rail-11" class="clip-lab-rail rail--hidden" x1="480" y1="310" x2="480" y2="310" />
+                            <line id="sweep-11" class="clip-lab-rail-sweep" x1="480" y1="310" x2="480" y2="310" />
+                            <line id="rail-12" class="clip-lab-rail rail--hidden" x1="480" y1="310" x2="480" y2="310" />
+                            <line id="sweep-12" class="clip-lab-rail-sweep" x1="480" y1="310" x2="480" y2="310" />
+                        </svg>
+
+                        <!-- 12 Slot Cards (永遠 mount，slot--hidden 控制可見性) -->
+                        <div id="card-01" class="clip-lab-slot slot--hidden" @click="onCardClick('#01')" x-on:mouseenter="onHoverEnter('#01')" x-on:mouseleave="onHoverLeave('#01')">
+                            <span class="clip-lab-slot-label">#01</span>
+                            <div class="slot-icon-overlay" aria-hidden="true">
+                                <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="9" cy="9" r="5.5" stroke="currentColor" stroke-width="1.5"/><path d="M13.5 13.5L17 17" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                            </div>
+                        </div>
+                        <div id="card-02" class="clip-lab-slot slot--hidden" @click="onCardClick('#02')" x-on:mouseenter="onHoverEnter('#02')" x-on:mouseleave="onHoverLeave('#02')">
+                            <span class="clip-lab-slot-label">#02</span>
+                            <div class="slot-icon-overlay" aria-hidden="true">
+                                <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="9" cy="9" r="5.5" stroke="currentColor" stroke-width="1.5"/><path d="M13.5 13.5L17 17" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                            </div>
+                        </div>
+                        <div id="card-03" class="clip-lab-slot slot--hidden" @click="onCardClick('#03')" x-on:mouseenter="onHoverEnter('#03')" x-on:mouseleave="onHoverLeave('#03')">
+                            <span class="clip-lab-slot-label">#03</span>
+                            <div class="slot-icon-overlay" aria-hidden="true">
+                                <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="9" cy="9" r="5.5" stroke="currentColor" stroke-width="1.5"/><path d="M13.5 13.5L17 17" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                            </div>
+                        </div>
+                        <div id="card-04" class="clip-lab-slot slot--hidden" @click="onCardClick('#04')" x-on:mouseenter="onHoverEnter('#04')" x-on:mouseleave="onHoverLeave('#04')">
+                            <span class="clip-lab-slot-label">#04</span>
+                            <div class="slot-icon-overlay" aria-hidden="true">
+                                <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="9" cy="9" r="5.5" stroke="currentColor" stroke-width="1.5"/><path d="M13.5 13.5L17 17" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                            </div>
+                        </div>
+                        <div id="card-05" class="clip-lab-slot slot--hidden" @click="onCardClick('#05')" x-on:mouseenter="onHoverEnter('#05')" x-on:mouseleave="onHoverLeave('#05')">
+                            <span class="clip-lab-slot-label">#05</span>
+                            <div class="slot-icon-overlay" aria-hidden="true">
+                                <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="9" cy="9" r="5.5" stroke="currentColor" stroke-width="1.5"/><path d="M13.5 13.5L17 17" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                            </div>
+                        </div>
+                        <div id="card-06" class="clip-lab-slot slot--hidden" @click="onCardClick('#06')" x-on:mouseenter="onHoverEnter('#06')" x-on:mouseleave="onHoverLeave('#06')">
+                            <span class="clip-lab-slot-label">#06</span>
+                            <div class="slot-icon-overlay" aria-hidden="true">
+                                <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="9" cy="9" r="5.5" stroke="currentColor" stroke-width="1.5"/><path d="M13.5 13.5L17 17" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                            </div>
+                        </div>
+                        <div id="card-07" class="clip-lab-slot slot--hidden" @click="onCardClick('#07')" x-on:mouseenter="onHoverEnter('#07')" x-on:mouseleave="onHoverLeave('#07')">
+                            <span class="clip-lab-slot-label">#07</span>
+                            <div class="slot-icon-overlay" aria-hidden="true">
+                                <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="9" cy="9" r="5.5" stroke="currentColor" stroke-width="1.5"/><path d="M13.5 13.5L17 17" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                            </div>
+                        </div>
+                        <div id="card-08" class="clip-lab-slot slot--hidden" @click="onCardClick('#08')" x-on:mouseenter="onHoverEnter('#08')" x-on:mouseleave="onHoverLeave('#08')">
+                            <span class="clip-lab-slot-label">#08</span>
+                            <div class="slot-icon-overlay" aria-hidden="true">
+                                <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="9" cy="9" r="5.5" stroke="currentColor" stroke-width="1.5"/><path d="M13.5 13.5L17 17" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                            </div>
+                        </div>
+                        <div id="card-09" class="clip-lab-slot slot--hidden" @click="onCardClick('#09')" x-on:mouseenter="onHoverEnter('#09')" x-on:mouseleave="onHoverLeave('#09')">
+                            <span class="clip-lab-slot-label">#09</span>
+                            <div class="slot-icon-overlay" aria-hidden="true">
+                                <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="9" cy="9" r="5.5" stroke="currentColor" stroke-width="1.5"/><path d="M13.5 13.5L17 17" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                            </div>
+                        </div>
+                        <div id="card-10" class="clip-lab-slot slot--hidden" @click="onCardClick('#10')" x-on:mouseenter="onHoverEnter('#10')" x-on:mouseleave="onHoverLeave('#10')">
+                            <span class="clip-lab-slot-label">#10</span>
+                            <div class="slot-icon-overlay" aria-hidden="true">
+                                <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="9" cy="9" r="5.5" stroke="currentColor" stroke-width="1.5"/><path d="M13.5 13.5L17 17" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                            </div>
+                        </div>
+                        <div id="card-11" class="clip-lab-slot slot--hidden" @click="onCardClick('#11')" x-on:mouseenter="onHoverEnter('#11')" x-on:mouseleave="onHoverLeave('#11')">
+                            <span class="clip-lab-slot-label">#11</span>
+                            <div class="slot-icon-overlay" aria-hidden="true">
+                                <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="9" cy="9" r="5.5" stroke="currentColor" stroke-width="1.5"/><path d="M13.5 13.5L17 17" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                            </div>
+                        </div>
+                        <div id="card-12" class="clip-lab-slot slot--hidden" @click="onCardClick('#12')" x-on:mouseenter="onHoverEnter('#12')" x-on:mouseleave="onHoverLeave('#12')">
+                            <span class="clip-lab-slot-label">#12</span>
+                            <div class="slot-icon-overlay" aria-hidden="true">
+                                <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="9" cy="9" r="5.5" stroke="currentColor" stroke-width="1.5"/><path d="M13.5 13.5L17 17" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                            </div>
+                        </div>
+
+                        <!-- Main Halo sibling DOM（T2fix3）— outer glow + inner ring，z-index 18/19，低於 main-img(20) -->
+                        <div id="main-halo-outer" class="clip-lab-main-halo clip-lab-main-halo--outer" aria-hidden="true"></div>
+                        <div id="main-halo-inner" class="clip-lab-main-halo clip-lab-main-halo--inner" aria-hidden="true"></div>
+
+                        <!-- Main Image Placeholder (中心) — main-id-label 由 animations.js t=0.30 callback 填入 clickedId -->
+                        <div id="main-img" class="clip-lab-main" @click="onExit()">
+                            <span style="font-size:0.7rem; font-weight:700; color: var(--text-muted); opacity:0.6;">MAIN</span>
+                            <span id="main-id-label" style="font-size:0.65rem; color: var(--star-glow); font-family: monospace; letter-spacing:0.6px; margin-top:2px;"></span>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        </template>
+
     </div>
 
 </div>
@@ -2938,7 +3132,223 @@
     opacity: 0.85;
 }
 
+/* ========== Constellation tab（56b-T3：從 clip_lab.html 搬遷）==========
+   star token 定義在 input.css :root + [data-theme="dim"]，本檔不重複宣告
+   保留 .clip-lab-* class 命名以對齊 shared/constellation/ 模組 selector。 */
+
+.constellation-tab-panel {
+    display: flex;
+    justify-content: center;
+    padding: 1.5rem 1rem;
+}
+
+/* Stage container: 960×620 absolute positioning canvas */
+.clip-lab-stage {
+    position: relative;
+    width: 960px;
+    height: 620px;
+    margin: 0 auto;
+    overflow: visible;
+    background:
+        radial-gradient(ellipse at 30% 40%, color-mix(in oklch, var(--star-line-bright) 8%, transparent) 0%, transparent 55%),
+        radial-gradient(ellipse at 70% 65%, color-mix(in oklch, var(--star-glow) 6%, transparent) 0%, transparent 50%),
+        var(--color-base-200);
+    border-radius: var(--fluent-radius-xl);
+    box-shadow: var(--fluent-shadow-16);
+}
+
+.clip-lab-stage::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    z-index: 1;
+    background: radial-gradient(ellipse at 50% 50%,
+        transparent 35%,
+        color-mix(in oklch, var(--color-base-300) 60%, transparent) 100%);
+}
+
+[data-theme="dim"] .clip-lab-stage::before {
+    background: radial-gradient(ellipse at 50% 50%,
+        transparent 30%,
+        rgba(0, 0, 0, 0.45) 100%);
+}
+
+.clip-lab-dust {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.7;
+    z-index: 0;
+}
+.clip-lab-dust circle { fill: var(--star-line-fade); }
+[data-theme="dim"] .clip-lab-dust circle { fill: var(--star-line-bright); opacity: 0.5; }
+
+.clip-lab-rails {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    overflow: visible;
+    z-index: 2;
+}
+
+.clip-lab-rail {
+    stroke: var(--star-line-fade);
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    fill: none;
+}
+
+.clip-lab-slot {
+    position: absolute;
+    width: 120px;
+    height: 150px;
+    transform: translate(-50%, -50%);
+    background: var(--color-base-100);
+    border-radius: var(--fluent-radius-xl);
+    box-shadow: var(--fluent-shadow-4);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    --card-glow-opacity: 0;
+    overflow: visible;
+    border: 1px solid color-mix(in oklch, var(--color-base-content) 15%, transparent);
+    transition: box-shadow var(--fluent-duration-fast) var(--fluent-ease-standard);
+    z-index: 10;
+}
+
+.clip-lab-slot::before {
+    content: '';
+    position: absolute;
+    inset: -8px;
+    border-radius: var(--fluent-radius-xl);
+    background: radial-gradient(ellipse at 50% 50%,
+        color-mix(in oklch, var(--star-glow) 55%, transparent) 0%,
+        transparent 70%);
+    opacity: var(--card-glow-opacity);
+    pointer-events: none;
+    z-index: -1;
+    will-change: opacity;
+}
+
+.clip-lab-slot:hover {
+    box-shadow: var(--fluent-shadow-8);
+}
+
+.slot--hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.rail--hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.clip-lab-rail-sweep {
+    stroke: var(--star-line-bright);
+    stroke-width: 2;
+    stroke-linecap: round;
+    fill: none;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.clip-lab-rail.rail--bright {
+    stroke: var(--star-line-bright);
+}
+
+.clip-lab-rail.rail--neighbor {
+    stroke: var(--star-line-bright);
+}
+
+.clip-lab-main-halo {
+    position: absolute;
+    left: 480px;
+    top: 310px;
+    pointer-events: none;
+    border-radius: var(--fluent-radius-xl);
+    transform: translate(-50%, -50%) scale(var(--main-halo-scale, 1));
+    opacity: var(--main-halo-opacity, 0.55);
+    transition: none;
+    will-change: transform, opacity;
+}
+.clip-lab-main-halo--outer {
+    --main-halo-scale: 1;
+    --main-halo-opacity: 0.55;
+    width: 272px;
+    height: 322px;
+    background: radial-gradient(ellipse at 50% 50%,
+        color-mix(in oklch, var(--star-glow) 35%, transparent) 0%,
+        transparent 65%);
+    z-index: 18;
+}
+.clip-lab-main-halo--inner {
+    --main-halo-scale: 1;
+    --main-halo-opacity: 0.6;
+    width: 212px;
+    height: 262px;
+    border: 2px solid color-mix(in oklch, var(--star-line-bright) 50%, transparent);
+    background: transparent;
+    z-index: 19;
+}
+
+.clip-lab-main {
+    position: absolute;
+    left: 480px;
+    top: 310px;
+    width: 200px;
+    height: 250px;
+    transform: translate(-50%, -50%);
+    background: var(--color-base-100);
+    border-radius: var(--fluent-radius-xl);
+    box-shadow:
+        0 0 28px color-mix(in oklch, var(--star-glow) 60%, transparent),
+        inset 0 1px 0 color-mix(in oklch, var(--color-base-content) 10%, transparent),
+        var(--fluent-shadow-28);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 20;
+    overflow: hidden;
+    border: 2px solid var(--star-line-bright);
+}
+
+.clip-lab-slot-label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: color-mix(in oklch, var(--color-base-content) 60%, transparent);
+    user-select: none;
+}
+
+.slot-icon-overlay {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    opacity: 0;
+    transition: opacity 0.18s var(--fluent-ease-standard);
+    color: var(--star-line-bright);
+    pointer-events: none;
+    line-height: 0;
+}
+
+.slot-icon-overlay.slot-icon--visible {
+    opacity: 1;
+}
+
+/* < 960px：stage 寬 960px，視窗不足以完整顯示，隱藏 stage（沿用 motion-lab 慣例：無 mobile notice） */
+@media (max-width: 959px) {
+    .clip-lab-stage-area { display: none; }
+}
+
 </style>
+{% endblock %}
+
+{% block pre_alpine_module %}
+<script type="module" src="/static/js/pages/motion-lab/constellation-host.js"></script>
 {% endblock %}
 
 {% block extra_js %}
