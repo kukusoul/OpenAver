@@ -241,10 +241,11 @@ document.addEventListener('alpine:init', () => {
           if (!line) return;
           if (nextVisible.has(a.id)) {
             line.classList.remove('rail--hidden');
-            gsap.set(line, { opacity: 1, strokeWidth: 1.5 });
+            // T4fix §I：strokeOpacity inline 一律清，由 CSS baseline (.clip-lab-rail) 接管
+            gsap.set(line, { opacity: 1, clearProps: 'strokeOpacity' });
           } else {
             line.classList.add('rail--hidden');
-            gsap.set(line, { opacity: 0 });
+            gsap.set(line, { opacity: 0, clearProps: 'strokeOpacity' });
           }
         });
         // T4: sync main image swap（reduced-motion 下無 0.30s 延遲）
@@ -283,6 +284,19 @@ document.addEventListener('alpine:init', () => {
       this.visibleSlots.forEach(id => {
         const rl = this.railLines[id];
         if (rl) rl.classList.remove('rail--bright', 'rail--neighbor');
+      });
+
+      // T4fix codex round 4 P2-1：kill 上一輪 survivor shimmer 的 untracked strokeOpacity tween
+      // shimmer 啟動時 animating 已為 false（slip-through onComplete 內），其 0.14s + 0.24s tween
+      // 無 class、無 _activeXxxId 追蹤，_resetHoverRails 不涵蓋。連點時新 click 的
+      // railClickedPulse / railDrawOut / railDrawIn 會與舊 shimmer tween 賽跑同一條 strokeOpacity。
+      // 把 §I（strokeOpacity reset contract）覆蓋範圍從 hover state 擴大到 shimmer state。
+      prevVisible.forEach(id => {
+        const line = this.railLines[id];
+        if (line) {
+          gsap.killTweensOf(line, 'strokeOpacity');
+          gsap.set(line, { clearProps: 'strokeOpacity' });
+        }
       });
 
       this.animating = true;
@@ -366,11 +380,11 @@ document.addEventListener('alpine:init', () => {
       });
 
       // Rail 能量感（CD-T2FIX-3）
-      // kill any pending shimmer strokeWidth tween before hover tweens（Codex T2fix5 P2 Finding 2）
+      // T4fix：kill any pending strokeOpacity tween before hover（previously strokeWidth）
       const focusedLine = this.railLines[slotId];
       const sweepLine = this.sweepLines[slotId];
       if (focusedLine) {
-        gsap.killTweensOf(focusedLine, 'strokeWidth');
+        gsap.killTweensOf(focusedLine, 'strokeOpacity');
         railFocusPulse(focusedLine);
       }
       if (focusedLine && sweepLine) railSweep(sweepLine, focusedLine);
@@ -383,10 +397,17 @@ document.addEventListener('alpine:init', () => {
       neighbors.forEach(nid => {
         const nline = this.railLines[nid];
         if (nline) {
-          // kill pending shimmer strokeWidth tween before neighbor hover tween（Codex T2fix5 P2 Finding 2）
-          gsap.killTweensOf(nline, 'strokeWidth');
-          gsap.to(nline, { strokeWidth: 1.8, duration: 0.20, ease: 'fluent' });
+          // T4fix（§C state model）：CSS class .rail--neighbor 接 steady (0.55)；
+          // GSAP 短 entry pulse peak 0.70 → clearProps，class 接管 hover 期間 steady
+          gsap.killTweensOf(nline, 'strokeOpacity');
           nline.classList.add('rail--neighbor');
+          gsap.set(nline, { strokeOpacity: 0.70 });
+          gsap.to(nline, {
+            strokeOpacity: 0.55,
+            duration: 0.20,
+            ease: 'fluent-decel',
+            onComplete: () => gsap.set(nline, { clearProps: 'strokeOpacity' }),
+          });
         }
       });
       this._activeNeighborRailIds = neighbors;
@@ -508,10 +529,11 @@ document.addEventListener('alpine:init', () => {
     },
 
     /**
-     * _playSurvivorShimmer — carry-over 卡片 glow 雙脈衝 + rail strokeWidth 雙脈衝
+     * _playSurvivorShimmer — carry-over 卡片 glow 雙脈衝 + rail strokeOpacity 短脈衝
      *
      * 每張 carry-over card：`--card-glow-opacity` 0→0.85（0.25s）→0（0.40s）。
-     * 每條 rail line：strokeWidth 1.5→1.7（0.18s）→1.5（0.20s）。
+     * 每條 rail line（T4fix §C state model，shimmer peak 0.50）：
+     *   strokeOpacity 0.30→0.50（0.14s）→0.30（0.24s）→ clearProps（CSS baseline 接管）
      * 連點時先 killTweensOf 清掉前一輪 pending tween，避免 `--card-glow-opacity` 殘留。
      * reduced-motion：no-op。
      *
@@ -528,9 +550,16 @@ document.addEventListener('alpine:init', () => {
           gsap.to(card, { '--card-glow-opacity': 0, duration: 0.40, ease: 'fluent', delay: 0.25 });
         }
         if (line) {
-          gsap.killTweensOf(line, 'strokeWidth');
-          gsap.to(line, { strokeWidth: 1.7, duration: 0.18, ease: 'fluent' });
-          gsap.to(line, { strokeWidth: 1.5, duration: 0.20, ease: 'fluent', delay: 0.18 });
+          // T4fix：rail shimmer 走 strokeOpacity（§C state model peak 0.50），無 class，純脈衝後 clearProps
+          gsap.killTweensOf(line, 'strokeOpacity');
+          gsap.to(line, { strokeOpacity: 0.50, duration: 0.14, ease: 'fluent' });
+          gsap.to(line, {
+            strokeOpacity: 0.30,
+            duration: 0.24,
+            ease: 'fluent',
+            delay: 0.14,
+            onComplete: () => gsap.set(line, { clearProps: 'strokeOpacity' }),
+          });
         }
       });
     },
@@ -619,7 +648,8 @@ document.addEventListener('alpine:init', () => {
           gsap.killTweensOf(line);
           line.classList.add('rail--hidden');
           line.classList.remove('rail--bright', 'rail--neighbor');
-          gsap.set(line, { opacity: 0, strokeWidth: 1.5 });
+          // T4fix §I：strokeOpacity inline 必清，由 CSS .clip-lab-rail baseline (0.30) 接管
+          gsap.set(line, { opacity: 0, clearProps: 'strokeOpacity' });
         }
         if (sweep) resetSweepLine(sweep);
       });
@@ -628,13 +658,15 @@ document.addEventListener('alpine:init', () => {
     },
 
     _resetHoverRails() {
+      // T4fix §I：所有 rail strokeOpacity inline 必清，由 CSS baseline (0.30) 或
+      // 殘留 class 接管；class 在 leave 時一併移除，回到 baseline
       // 清 focused rail（railFocusPulse + railSweep 殘留）
       if (this._activeFocusedRailId) {
         const line = this.railLines[this._activeFocusedRailId];
         if (line) {
-          gsap.killTweensOf(line, 'strokeWidth,opacity');
-          gsap.set(line, { strokeWidth: 1.5 });
+          gsap.killTweensOf(line, 'strokeOpacity,opacity');
           line.classList.remove('rail--bright');
+          gsap.set(line, { clearProps: 'strokeOpacity' });
         }
         const sw = this.sweepLines[this._activeFocusedRailId];
         if (sw) resetSweepLine(sw);
@@ -644,9 +676,9 @@ document.addEventListener('alpine:init', () => {
       this._activeNeighborRailIds.forEach(nid => {
         const nline = this.railLines[nid];
         if (nline) {
-          gsap.killTweensOf(nline, 'strokeWidth');
-          gsap.set(nline, { strokeWidth: 1.5 });
+          gsap.killTweensOf(nline, 'strokeOpacity');
           nline.classList.remove('rail--neighbor');
+          gsap.set(nline, { clearProps: 'strokeOpacity' });
         }
       });
       this._activeNeighborRailIds = [];
