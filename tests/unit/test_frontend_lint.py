@@ -7112,3 +7112,75 @@ class TestClipLabHostRemoved:
         assert "clip_lab" not in data, (
             "56b-T3 違規：locales/zh_TW.json 仍含 'clip_lab' top-level namespace"
         )
+
+
+class TestConstellationRealCovers:
+    """56b-T4 visual probe：motion-lab Constellation 已使用本地靜態 sc-N.jpg 模擬 prod 視覺。
+
+    守衛範圍刻意降 brittleness（codex review 點 4）：
+      - 不檢 IMAGE_POOL.length === 20 字面字
+      - 不檢 sc-1..sc-20 完整列表
+      - 改檢「機制 / 結構 / 簽名」是否在位
+    """
+
+    PROJECT_ROOT = Path(__file__).parent.parent.parent
+
+    def test_constellation_dom_has_real_cover_imgs(self):
+        """motion_lab.html 12 個 .clip-lab-slot-img + 1 個 #main-img-photo；無 #XX label / "MAIN" 文字殘留"""
+        path = self.PROJECT_ROOT / "web" / "templates" / "motion_lab.html"
+        content = path.read_text(encoding="utf-8")
+        slot_img_count = content.count('class="clip-lab-slot-img"')
+        assert slot_img_count == 12, (
+            f"56b-T4 違規：motion_lab.html 應含 12 個 .clip-lab-slot-img，實際 {slot_img_count}"
+        )
+        assert 'id="main-img-photo"' in content, (
+            "56b-T4 違規：motion_lab.html 缺少 #main-img-photo（中央主圖 <img>）"
+        )
+        # #XX slot label 殘留檢查（T4 後不應再出現）
+        for n in range(1, 13):
+            label = f'>#{n:02d}</span>'
+            assert label not in content, (
+                f"56b-T4 違規：motion_lab.html 仍含舊 slot label '{label}'，應已移除"
+            )
+        # MAIN 文字殘留（T4 後主圖不再有 MAIN 字樣）
+        assert ">MAIN<" not in content, (
+            "56b-T4 違規：motion_lab.html 仍含 'MAIN' 文字節點，應已被 <img> 取代"
+        )
+
+    def test_constellation_host_no_hardcoded_image_paths(self):
+        """constellation-host.js 用 IMAGE_BASE 常數 + 模板字串，不硬編碼 sc-N.jpg 完整路徑陣列"""
+        path = (
+            self.PROJECT_ROOT / "web" / "static" / "js"
+            / "pages" / "motion-lab" / "constellation-host.js"
+        )
+        content = path.read_text(encoding="utf-8")
+        # 必須有 IMAGE_BASE / IMAGE_COUNT 常數識別字
+        assert "IMAGE_BASE" in content, (
+            "56b-T4 違規：constellation-host.js 缺 IMAGE_BASE 常數（圖路徑應常數化）"
+        )
+        assert "IMAGE_COUNT" in content, (
+            "56b-T4 違規：constellation-host.js 缺 IMAGE_COUNT 常數"
+        )
+        # /static/img/showcase/sc- 字面字不可硬編 12 條/20 條（容許 IMAGE_BASE = '...' 那一行）
+        # 我們允許出現上限為 1（IMAGE_BASE 賦值該行）
+        hardcoded_count = content.count("/static/img/showcase/sc-")
+        assert hardcoded_count <= 1, (
+            f"56b-T4 違規：constellation-host.js 含 {hardcoded_count} 處 '/static/img/showcase/sc-' 字面字，"
+            "應只在 IMAGE_BASE 常數定義出現（≤ 1）；其餘走模板字串組合"
+        )
+
+    def test_shared_animations_has_on_main_swap_hook(self):
+        """shared/constellation/animations.js playSlipThrough 必須含 onMainSwap hook 機制"""
+        path = (
+            self.PROJECT_ROOT / "web" / "static" / "js" / "shared"
+            / "constellation" / "animations.js"
+        )
+        content = path.read_text(encoding="utf-8")
+        # 簽名末加 options 參數
+        assert "options = {}" in content, (
+            "56b-T4 違規：animations.js playSlipThrough 應有 options = {} 末參數（onMainSwap hook 機制）"
+        )
+        # callback 內呼叫 hook
+        assert "options.onMainSwap" in content, (
+            "56b-T4 違規：animations.js 應在 t=0.30 callback 呼叫 options.onMainSwap?.()"
+        )

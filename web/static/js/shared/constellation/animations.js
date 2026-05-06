@@ -85,9 +85,10 @@ export function playInitialExpand(cards, railLines, initSlots, onComplete) {
  * @param {Object<string, SVGLineElement>} railLines
  * @param {HTMLElement} mainImg
  * @param {() => void} onComplete
+ * @param {{onMainSwap?: (clickedId: string) => void}} [options]  - T4 visual probe hook：t=0.30 同 frame 呼叫，供 host 在主圖 fade-out 點切 src（56c 接真實 cover swap 也走此 hook）
  * @returns {gsap.core.Timeline}
  */
-export function playSlipThrough(clickedId, prevVisible, nextVisible, cards, railLines, mainImg, onComplete) {
+export function playSlipThrough(clickedId, prevVisible, nextVisible, cards, railLines, mainImg, onComplete, options = {}) {
   const newBatch = nextVisible;
   const carryOverIds = [...prevVisible].filter(
     id => id !== clickedId && newBatch.has(id)
@@ -172,6 +173,8 @@ export function playSlipThrough(clickedId, prevVisible, nextVisible, cards, rail
   // （56c 換真實 API 時改為 swap cover image）
   if (mainImg) {
     tl.call(() => {
+      // T4: host 注入 hook 切主圖 src（56c 將以同一 hook 接真實 cover swap）
+      options.onMainSwap?.(clickedId);
       const labelEl = document.getElementById('main-id-label');
       if (labelEl) labelEl.textContent = clickedId;
       gsap.set(mainImg, { opacity: 0 });

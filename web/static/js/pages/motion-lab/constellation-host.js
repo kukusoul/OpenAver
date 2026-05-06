@@ -18,6 +18,11 @@ import { setRailCoords, railFocusPulse, railSweep, resetSweepLine } from '../../
 import { playInitialExpand, playSlipThrough, playExit } from '../../shared/constellation/animations.js';
 import { BreathingManager } from '../../shared/constellation/breathing.js';
 
+// T4 visual probe（56c-preflight）：本地靜態 sc-{1..N}.jpg 模擬 prod 真實封面
+// spec-56.md §3 Phase 56b Non-Goals 例外允許；不接 API、不碰 Showcase
+const IMAGE_BASE = '/static/img/showcase/';
+const IMAGE_COUNT = 20;
+
 document.addEventListener('alpine:init', () => {
   Alpine.data('constellationLab', () => ({
     animating: false,
@@ -32,6 +37,7 @@ document.addEventListener('alpine:init', () => {
     _activeFocusedRailId: null,    // hover focus 的 slotId（用於 _resetHoverRails cleanup）
     _activeNeighborRailIds: [],    // hover 觸發的 neighbor slotIds
     _activeHoverSlot: null,        // 當前 hover 的 slotId（防 enter→enter 殘留，T2fix5 Codex P2）
+    _slotImages: {},               // T4: slotId -> imageUrl（host 自管，shared/* 不感知）
 
     init() {
       this._gsapCtx = window.OpenAver.motion.createContext(this.$el);
@@ -57,6 +63,9 @@ document.addEventListener('alpine:init', () => {
       // 建立 BreathingManager（即使 prefers-reduced-motion 也建立，避免 hover 觸發 null 錯誤）
       this.breathingManager = new BreathingManager(this.cards, this.railLines, ANCHORS);
 
+      // T4 visual probe：12 slot + main 全部預綁圖（含 hidden #09-#12，避免第一次 slip-through LCP 抖動）
+      this._assignAllImages();
+
       // prefers-reduced-motion：直接呈現終態，跳過所有 timeline（CD-56B DoD 共通 5）
       if (window.OpenAver.prefersReducedMotion) {
         this._setInitialState();
@@ -65,6 +74,42 @@ document.addEventListener('alpine:init', () => {
 
       this._playInitialExpand();
     },
+
+    // ---- T4 visual probe helpers ---------------------------------------
+    /**
+     * _randomImageUrl — 從 sc-{1..N}.jpg 隨機抽一張
+     * 用戶確認「圖片挑選順序沒差」，無 pool / 無 reshuffle / 無排重
+     */
+    _randomImageUrl() {
+      const n = 1 + Math.floor(Math.random() * IMAGE_COUNT);
+      return `${IMAGE_BASE}sc-${n}.jpg`;
+    },
+    /**
+     * _setSlotImage — 寫 slot 卡片內 <img> src，並更新 _slotImages map
+     */
+    _setSlotImage(slotId, url) {
+      this._slotImages[slotId] = url;
+      const num = slotId.slice(1); // '#01' → '01'
+      const card = this.cards[slotId] || document.getElementById(`card-${num}`);
+      const imgEl = card?.querySelector('.clip-lab-slot-img');
+      if (imgEl) imgEl.src = url;
+    },
+    /**
+     * _setMainImage — 寫中央主圖 <img> src（onMainSwap hook 與 reduced-motion 短路共用）
+     */
+    _setMainImage(url) {
+      const mainImgEl = document.getElementById('main-img-photo');
+      if (mainImgEl && url) mainImgEl.src = url;
+    },
+    /**
+     * _assignAllImages — 12 slot + main 全部抽一張（init / x-if remount 時呼叫）
+     */
+    _assignAllImages() {
+      ANCHORS.forEach(a => this._setSlotImage(a.id, this._randomImageUrl()));
+      this._setMainImage(this._randomImageUrl());
+    },
+    // --------------------------------------------------------------------
+
 
     /**
      * _playInitialExpand — 啟動初始 8 顆展開（init 與 onExit 重置共用）
@@ -158,6 +203,13 @@ document.addEventListener('alpine:init', () => {
       // host 算 nextVisible（防雙抽：animations.js 不 import pickEight）
       const nextVisible = pickEight(slotId, prevVisible, Math.random);
 
+      // T4: enter slot 重抽圖（role === enter，nextVisible \ prevVisible）；persist / exit 維持原圖
+      // 提前重抽安全：enter slot 上一輪 hidden（slot--hidden + opacity:0），用戶看不到 src 變更
+      const enterIds = [...nextVisible].filter(id => !prevVisible.has(id));
+      enterIds.forEach(id => this._setSlotImage(id, this._randomImageUrl()));
+      // T4: 捕獲 clicked image（之後傳給 onMainSwap，或 reduced-motion 短路 sync 寫）
+      const clickedImage = this._slotImages[slotId];
+
       // Reduced-motion 短路（CD-T2FIX-11）：sync state update，不播任何動畫
       // _resetHoverRails 防禦（切換 reduced-motion 後 hover 再 click 的極端情形）
       if (window.OpenAver.prefersReducedMotion) {
@@ -195,7 +247,9 @@ document.addEventListener('alpine:init', () => {
             gsap.set(line, { opacity: 0 });
           }
         });
-        // Main label
+        // T4: sync main image swap（reduced-motion 下無 0.30s 延遲）
+        this._setMainImage(clickedImage);
+        // Main label（T4 後 #main-id-label DOM 已移除，labelEl 為 null → no-op；保留供 56c reuse）
         const labelEl = document.getElementById('main-id-label');
         if (labelEl) labelEl.textContent = slotId;
         this.mainSlot = slotId;
@@ -271,7 +325,9 @@ document.addEventListener('alpine:init', () => {
             const carryIds = [...prevVisible].filter(id => id !== slotId && nextVisible.has(id));
             this._playSurvivorShimmer(carryIds);
           }
-        }
+        },
+        // T4 visual probe：t=0.30 同 frame 切主圖 src（與既有 main fade-out / fade-in 對齊）
+        { onMainSwap: () => this._setMainImage(clickedImage) }
       );
     },
 
