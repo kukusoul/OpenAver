@@ -3287,6 +3287,15 @@
     --dust-base: 0.70;
 }
 
+/* T7 (CD-T7-3 / Codex round-2 P1-3)：pulse 期間暫停 CSS dust-twinkle，
+   讓 GSAP inline opacity / scale 生效。
+   CSS active animation 對 animated property 的優先權高於 inline style，
+   若不暫停，gsap.to(el, { opacity: 0.95 }) 會被 dust-twinkle / dust-twinkle-bright
+   keyframe 覆蓋變不可見。 */
+.clip-lab-dust circle.dust-pulsing {
+    animation: none;
+}
+
 .clip-lab-rails {
     position: absolute;
     inset: 0;

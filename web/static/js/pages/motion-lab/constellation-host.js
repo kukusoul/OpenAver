@@ -172,23 +172,149 @@ document.addEventListener('alpine:init', () => {
     },
 
     /**
-     * _startIdleAcknowledge — T7 CD-T7-2 替換為實作：
+     * _startIdleAcknowledge — T7 CD-T7-2 實作：
      *   setTimeout 8-15s 隨機 → 觸發 idle pulse（dust micro-twinkle / star-of-the-moment）。
-     *   PRM guard 也在 T7 加（reduced-motion 下不啟動 timer）。
-     * T5 stub：no-op，保 init() 與 4 處 wire 不報 TypeError。
+     *   PRM guard：reduced-motion 下首行 return，timer 永不啟動。
+     *   遞迴重啟：pulse 結束後重新計時（無連鎖、無 stack growth — setTimeout async 排程）。
      */
     _startIdleAcknowledge() {
-      // T7 替換點 — 不要在 T5 內加邏輯，T7 直接 swap method body
+      if (window.OpenAver.prefersReducedMotion) return; // C4: PRM 不啟動
+      this._cancelIdleAcknowledge();
+      const delay = Math.random() * 7000 + 8000; // 8000-15000 ms（spec §5.2 8-15s）
+      this._idleAcknowledgeTimer = setTimeout(() => {
+        this._fireIdlePulse();
+        this._startIdleAcknowledge(); // 遞迴重啟（pulse 結束後重新計時）
+      }, delay);
     },
 
     /**
-     * _cancelIdleAcknowledge — T7 CD-T7-2 替換為實作：
+     * _cancelIdleAcknowledge — T7 CD-T7-2 實作：
      *   clearTimeout(this._idleAcknowledgeTimer); this._idleAcknowledgeTimer = null;
-     * T5 stub：no-op。在 destroy / onCardClick / onExit / onHoverEnter 共 4 處呼叫，
-     * T7 替換後自動生效（不需動 4 處 wire）。
+     * 在 destroy / onCardClick / onExit / onHoverEnter 共 4 處呼叫（T5 已 wire）。
+     * 注意：本 method 只清下一次 setTimeout，不清正在進行的 pulse tween（pulse 0.40s
+     * 短，自然跑完即可；destroy 才需主動 killTweensOf 補強保護）。
      */
     _cancelIdleAcknowledge() {
-      // T7 替換點 — 不要在 T5 內加邏輯，T7 直接 swap method body
+      if (this._idleAcknowledgeTimer) {
+        clearTimeout(this._idleAcknowledgeTimer);
+        this._idleAcknowledgeTimer = null;
+      }
+    },
+
+    // ---- T7 Phase Acknowledge methods（CD-T7-1 / CD-T7-3 + plan §5.3 G）----
+    /**
+     * _getKeystoneStars — CD-T7-1：keystone = corridor stars 中距離 anchor 端最近的 N 顆
+     * 純幾何 helper，無副作用。
+     *   - anchor 端最近：spec §5.2「接近卡片那端優先」+ 視覺語義（pulse 在「視線連到的終點」）
+     *   - graceful fallback：anchor 不存在 / corridor 空 → return []
+     *
+     * @param {string} slotId
+     * @param {number} count - default 2（最多 2 顆）
+     * @returns {Element[]} corridor stars，按距 anchor 升序排序前 N
+     */
+    _getKeystoneStars(slotId, count = 2) {
+      const anchor = ANCHORS.find(a => a.id === slotId);
+      if (!anchor) return [];
+      const stars = this._railStarMap[slotId] || [];
+      if (stars.length === 0) return [];
+      return [...stars]
+        .map(el => {
+          const cx = parseFloat(el.getAttribute('cx'));
+          const cy = parseFloat(el.getAttribute('cy'));
+          const d = Math.hypot(cx - anchor.x, cy - anchor.y);
+          return { el, d };
+        })
+        .sort((a, b) => a.d - b.d)
+        .slice(0, count)
+        .map(item => item.el);
+    },
+
+    /**
+     * _fireKeystonePulse — CD-T7-3：slip-through 完成後，新主圖最近 rail corridor 端 1-2 顆
+     * dust 套 0.40s 隱性 pulse（rise 0.20s decel + fall 0.20s accel，peak opacity 0.95 / scale 1.10）。
+     *
+     * P3-2: gsap.killTweensOf(el) 不限定 property — pulse 同 timeline tween opacity + scale，
+     *       killTweensOf(el, 'opacity') 會留下舊 scale tween 殘留。
+     * Codex round-2 P1-3: el.classList.add('dust-pulsing') 暫停 CSS twinkle，
+     *       否則 GSAP inline opacity 會被 dust-twinkle keyframe 覆蓋變不可見。
+     *
+     * @param {string} slotId
+     */
+    _fireKeystonePulse(slotId) {
+      const stars = this._getKeystoneStars(slotId, 2);
+      if (stars.length === 0) return; // graceful fallback
+      stars.forEach(el => {
+        gsap.killTweensOf(el);
+        el.classList.add('dust-pulsing');
+        const baseSeed = parseFloat(el.style.getPropertyValue('--dust-base-seed')) || 0.08;
+        gsap.timeline({
+          onComplete: () => {
+            gsap.set(el, { clearProps: 'opacity,scale,transform' });
+            el.classList.remove('dust-pulsing'); // 還原 CSS twinkle / bright
+          },
+        })
+          .to(el, {
+            opacity: 0.95, scale: 1.10, duration: 0.20,
+            ease: 'fluent-decel', transformOrigin: '50% 50%',
+          })
+          .to(el, {
+            opacity: baseSeed, scale: 1.0, duration: 0.20,
+            ease: 'fluent-accel',
+          });
+      });
+    },
+
+    /**
+     * _fireIdlePulse — CD-T7-3：idle 期間每 8-15s 隨機抽 1 顆非 hover-bright dust 微亮
+     * （peak opacity 0.95 / scale 1.08 — 比 keystone 1.10 略小，保持「不爆閃」§2.1 母約束）。
+     *
+     * P3-3: filter 掉 .in-constellation dust（bright 在 0.70-1.00 區間 twinkle，
+     *       再蓋 0.95 idle pulse 視覺無感且會強制把 bright twinkle 暫停）。
+     */
+    _fireIdlePulse() {
+      const dustEls = [...document.querySelectorAll('.clip-lab-dust circle')]
+        .filter(el => !el.classList.contains('in-constellation'));
+      if (dustEls.length === 0) return;
+      const target = dustEls[Math.floor(Math.random() * dustEls.length)];
+      const baseSeed = parseFloat(target.style.getPropertyValue('--dust-base-seed')) || 0.08;
+      gsap.killTweensOf(target);
+      target.classList.add('dust-pulsing');
+      gsap.timeline({
+        onComplete: () => {
+          gsap.set(target, { clearProps: 'opacity,scale,transform' });
+          target.classList.remove('dust-pulsing');
+        },
+      })
+        .to(target, {
+          opacity: 0.95, scale: 1.08, duration: 0.20,
+          ease: 'fluent-decel', transformOrigin: '50% 50%',
+        })
+        .to(target, {
+          opacity: baseSeed, scale: 1.0, duration: 0.20,
+          ease: 'fluent-accel',
+        });
+    },
+
+    /**
+     * _abortActiveDustPulses — Codex round-3 P2 hover-pulse race fix：
+     * onHoverEnter 在 add('in-constellation') 之前呼叫，主動清 corridor 內仍在 pulse 的 dust。
+     * 若不清，bright twinkle 會凍結在 pulse inline opacity 0.95 直到 pulse fall 完。
+     *
+     * 範圍只限 corridor（非全 100 顆）：keystone pulse 在 slip-through onComplete 觸發，
+     * 當下 hover 已被 onCardClick 開頭的 _resetHoverRails 清掉；只 idle pulse 需此處理，
+     * 且 idle pulse 隨機打單顆 dust，corridor 外的 dust 即使在 pulse 中也不會被 hover 觸發疊加。
+     *
+     * @param {string} slotId
+     */
+    _abortActiveDustPulses(slotId) {
+      const corridor = this._railStarMap[slotId] || [];
+      corridor.forEach(el => {
+        if (el.classList.contains('dust-pulsing')) {
+          gsap.killTweensOf(el); // 殺 opacity / scale tween
+          gsap.set(el, { clearProps: 'opacity,scale,transform' });
+          el.classList.remove('dust-pulsing'); // 還原 CSS animation
+        }
+      });
     },
     // --------------------------------------------------------------------
 
@@ -239,6 +365,14 @@ document.addEventListener('alpine:init', () => {
         if (this.cards[a.id]) gsap.killTweensOf(this.cards[a.id]);
         if (this.railLines[a.id]) gsap.killTweensOf(this.railLines[a.id]);
         if (this.sweepLines[a.id]) gsap.killTweensOf(this.sweepLines[a.id]);
+      });
+      // T7 (plan §5.3 F)：補強保護 — destroy 中途若有 idle / keystone pulse 在跑，
+      // host 直呼的 gsap.to / gsap.timeline 不在 _gsapCtx scope，revert 不收 →
+      // 切 tab 後返回會看到 orphan inline opacity / scale 殘留。主動清所有 dust circle。
+      document.querySelectorAll('.clip-lab-dust circle').forEach(el => {
+        gsap.killTweensOf(el);
+        gsap.set(el, { clearProps: 'opacity,scale,transform' });
+        el.classList.remove('dust-pulsing');
       });
       if (this._gsapCtx) {
         this._gsapCtx.revert();
@@ -435,8 +569,11 @@ document.addEventListener('alpine:init', () => {
               }
             });
           }
-          // T5 (CD-T5-2)：重新排程 idle acknowledge timer（NO-OP in T5；T7 替換為 setTimeout 8-15s）
-          // PRM guard 在 T7 實作內加，T5 stub 永遠 no-op
+          // T7 (CD-T7-3)：keystone pulse — 新主圖 landed 隱性節拍（最近 anchor 端 1-2 顆 dust）
+          // 必須在 _startIdleAcknowledge 之前呼叫（pulse 是 keystone 事件，timer 從 keystone 後開始計時）
+          this._fireKeystonePulse(slotId);
+          // T5 (CD-T5-2)：重新排程 idle acknowledge timer（T7 替換為 setTimeout 8-15s）
+          // PRM guard 在 _startIdleAcknowledge 首行（PRM 下 timer 不啟動）
           this._startIdleAcknowledge();
         },
         // T4 visual probe：t=0.30 同 frame 切主圖 src（與既有 main fade-out / fade-in 對齊）
@@ -478,6 +615,10 @@ document.addEventListener('alpine:init', () => {
       // T5 (CD-T5-2)：cancel idle acknowledge timer（NO-OP in T5；T7 替換為 clearTimeout）
       // user is interacting → 取消 idle pulse 排程，避免 hover 期間突然 idle pulse 干擾
       this._cancelIdleAcknowledge();
+
+      // T7 (Codex round-3 P2)：hover-pulse race fix — 主動清 corridor 內仍在 pulse 的 dust，
+      // 否則 .in-constellation bright twinkle 會被 .dust-pulsing inline opacity 0.95 凍結
+      this._abortActiveDustPulses(slotId);
 
       // ── State 操作（PRM 下也執行，C3 契約）──────────────────────────
       // 1. Dust class swap：corridor 內 dust 切到 .in-constellation bright twinkle
@@ -585,6 +726,10 @@ document.addEventListener('alpine:init', () => {
 
       // 歸零 hover slot 追蹤
       this._activeHoverSlot = null;
+
+      // T7 (CD-T7-2)：hover 結束 → idle 重新計時（user 不再互動，恢復隱性節拍排程）
+      // PRM guard 在 _startIdleAcknowledge 首行（PRM 下 timer 不啟動）
+      this._startIdleAcknowledge();
     },
 
     /**
