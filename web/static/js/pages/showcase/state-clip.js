@@ -97,6 +97,7 @@ export function stateClip() {
     _clipActiveHoverSlot: null,
     _clipMainBreathTween: null,
     _clipLastDrilledNumber: null,   // T5/T6 closeClipMode silent switch 用（T4 不讀）
+    clipModeMobileOpen: false,     // 56c-T7：手機 x-collapse toggle
 
     // 揭露給 Alpine template（x-for="anchor in CLIP_ANCHORS"）
     CLIP_ANCHORS,
@@ -223,6 +224,26 @@ export function stateClip() {
       if (this.clipModeAnimating) return;
       if (this.showFavoriteActresses) return;     // CD-56C-13 fail-safe
       if (!this.currentLightboxVideo) return;     // 無 lightbox video metadata 時 no-op
+
+      // 56c-T7：手機降級 — viewport < 768px 不進 constellation
+      if (window.innerWidth < 768) {
+        if (this.clipModeAnimating) return;
+        if (this.clipModeMobileOpen) {
+          this.clipModeMobileOpen = false;   // toggle：再點收合
+          return;
+        }
+        this.clipModeAnimating = true;
+        try {
+          const data = await this._fetchClipResults(this.currentLightboxVideo.number);
+          this.clipResults = data.results;
+          this.clipQueryVideo = data.query_video;
+          this.clipModeMobileOpen = true;    // 展開 x-collapse
+        } catch (_err) {
+          // _fetchClipResults 已 showToast；clipModeMobileOpen 保持 false
+        }
+        this.clipModeAnimating = false;
+        return;
+      }
 
       this.clipModeAnimating = true;
 
@@ -402,6 +423,7 @@ export function stateClip() {
 
       // 5. unmount stage（x-effect 觸發 destroyClipStage cleanup）
       this.clipModeOpen = false;
+      this.clipModeMobileOpen = false;  // 56c-T7：關閉 clip mode 時 reset，避免下次開 lightbox 殘留
 
       this.clipModeAnimating = false;
     },
@@ -1097,6 +1119,23 @@ export function stateClip() {
     },
 
     // ── T5 新增 method ─────────────────────────────────────────────────────
+
+    /**
+     * onClipMobileCardClick — 手機 mobile card 點擊：fetch 新一批 + swap + silent switch
+     * 56c-T7 CD-56C-8：手機無動畫 takeover，直接 reactive swap + silent switch（同 CD-56C-12 邏輯）
+     */
+    onClipMobileCardClick(item) {
+      if (this.clipModeAnimating) return;
+      if (!item) return;
+      this._fetchClipResults(item.number).then(data => {
+        this.clipResults = data.results;
+        this.clipQueryVideo = data.query_video;
+        // Alpine x-for 自動 reactive，畫面 swap
+        this._silentSwitchLightboxByNumber(item.number);
+      }).catch(() => {
+        // _fetchClipResults 已 showToast；x-for 不刷新，留原 4 張
+      });
+    },
 
     /**
      * _fetchClipResults — fetch /api/similar-covers/by-number/{number}

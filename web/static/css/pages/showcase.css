@@ -843,6 +843,71 @@
     line-height: 1;
 }
 
+/* 56c-T7：手機降級 mobile clip grid =========================================*/
+.lightbox-clip-mobile {
+    margin-top: 0.75rem;         /* --space-3 不存在，用 raw 0.75rem */
+    padding: 0.75rem;
+    background: rgba(255,255,255,0.06);  /* 低於 .lb-action-btn 0.15，輕量區分 */
+    border-radius: var(--fluent-radius-lg);  /* 8px，對齊卡片 radius */
+}
+
+.clip-mobile-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.5rem;                  /* --space-2 不存在，用 raw 0.5rem */
+}
+
+.clip-mobile-card {
+    cursor: pointer;
+    border-radius: var(--fluent-radius-md);  /* 4px */
+    overflow: hidden;
+    transition: transform var(--fluent-duration-fast) var(--fluent-ease-standard);
+}
+
+.clip-mobile-card:hover {
+    transform: scale(1.02);
+}
+
+/* 手機觸控回饋：active 態往下縮，給拇指觸感確認 */
+.clip-mobile-card:active {
+    transform: scale(0.97);
+    opacity: 0.85;
+}
+
+.clip-mobile-card img {
+    width: 100%;
+    aspect-ratio: 4/5;
+    object-fit: cover;
+    object-position: right center;  /* CSS layer crop，右半邊視覺 — 非 ghost-fly cropMode（不違反 lint rule）*/
+    /* 圖片載入中骨架：lazy img 在 loaded 前顯示淺灰漸層 */
+    background: linear-gradient(135deg, rgba(255,255,255,0.06) 25%, rgba(255,255,255,0.12) 50%, rgba(255,255,255,0.06) 75%);
+    background-size: 200% 100%;
+}
+
+.clip-mobile-meta {
+    padding: 0.5rem;
+    font-size: 0.8125rem;         /* --text-sm 不存在，對齊 .lb-otitle 同值 */
+}
+
+.clip-mobile-number {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+}
+
+.clip-mobile-title {
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* 確保 mobile collapse 只在小螢幕渲染（桌面應永遠 clipModeMobileOpen = false） */
+@media (min-width: 768px) {
+    .lightbox-clip-mobile {
+        display: none !important;   /* 桌面安全網：即使 state 殘留也不顯示 */
+    }
+}
+
 /* 56c-T3fix: Sparkle burst overlay — 10 顆四角星 ring 分佈，GSAP 操作 opacity/scale/rotation
  * 容器 .sparkle-burst 與 .lightbox-cover 內 <img> 同層 absolute overlay；
  * inset:0 自動覆蓋封面區（不擴及 metadata），無需 hardcoded size。

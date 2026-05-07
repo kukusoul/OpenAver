@@ -799,6 +799,24 @@
                             </div>
 
                         </div>
+
+                        <!-- 56c-T7：手機 < 768px cosine 前 4 張 collapse（x-collapse 需 @alpinejs/collapse plugin，已在 base.html 行 640 載入） -->
+                        <div class="lightbox-clip-mobile"
+                             x-show="clipModeMobileOpen"
+                             x-collapse>
+                          <div class="clip-mobile-grid">
+                            <template x-for="item in clipResults.slice(0, 4)" :key="item.video_id">
+                              <div class="clip-mobile-card"
+                                   @click="onClipMobileCardClick(item)">
+                                <img :src="item.cover_url" :alt="item.title" loading="lazy">
+                                <div class="clip-mobile-meta">
+                                  <div class="clip-mobile-number" x-text="item.number"></div>
+                                  <div class="clip-mobile-title" x-text="item.title"></div>
+                                </div>
+                              </div>
+                            </template>
+                          </div>
+                        </div>
                     </div>
                 </template>
 

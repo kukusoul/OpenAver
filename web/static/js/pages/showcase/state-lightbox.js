@@ -301,6 +301,11 @@ export function stateLightbox() {
                 });
             }
 
+            // 56c-T7：手機路徑 lightbox close 時 reset clipModeMobileOpen，避免下次開 lightbox 殘留展開
+            if (typeof this.clipModeMobileOpen !== 'undefined') {
+                this.clipModeMobileOpen = false;
+            }
+
             // F2: delay state clearing until CSS transition completes (250ms)
             var self = this;
             var gen = this._lightboxGeneration;  // capture current generation
