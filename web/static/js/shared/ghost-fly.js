@@ -257,14 +257,22 @@
     /**
      * 56c-T2 (CD-56C-2): Clip Scan Preview — lightbox 點 .bi-magic 時的 0.4s 預覽動畫
      *
-     * overlay 三層子元素（beam / leftDim / rightGlow）跑 0.4s timeline：
-     *   - 0 → 0.30s: beam 從左掃到右 + leftDim fade-in
-     *   - 0.30 → 0.40s: rightGlow scale pulse 鎖定
+     * 56c-T3fix: 改為 sparkle burst（10 顆四角星，stagger fade-in + scale + rotate + sine yoyo + accel fade-out）
+     * 對應 magic.png 視覺隱喻；廢棄舊三層光帶（left dim / beam / right glow）。
+     *
+     * Timeline 0.4s 切片：
+     *   0    → 0.20s: stagger fade-in + scale 0→1 + rotate +90deg
+     *   0.20 → 0.30s: sine.inOut yoyo scale 1→1.15→1（閃爍感）
+     *   0.25 → 0.40s: fade-out + scale 0.6（accel ease）
+     *   0.40s: callback 絕對時刻觸發（與 56c-T2 契約一致）
+     *
+     * DOM 結構（56c-T3fix）：`coverEl` = `.lightbox-cover`，內含 `.sparkle-burst` overlay
+     * （與 `<img x-ref="lightboxCoverImg">` 同層 absolute sibling）。inset:0 自動覆蓋封面區
+     * 不擴及 metadata。Magic 按鈕另搬至 `.lightbox-content` 與 `.lightbox-close` 鏡射對稱。
      *
      * caller 責任：reduced-motion 由 caller 決定是否呼叫；本 helper 內**不 short-circuit**。
-     * DOM 由 56c-T3 加（本 task 開發時 .clip-scan-overlay 不存在 → graceful return）。
      *
-     * @param {HTMLElement} coverEl - .lightbox-cover 容器
+     * @param {HTMLElement} coverEl - .lightbox-cover 容器（內含 .sparkle-burst overlay）
      * @param {Function} [onComplete] - 動畫完成 callback（缺 DOM 時也會立即觸發）
      * @returns {gsap.core.Timeline|null}
      */
@@ -274,50 +282,48 @@
         if (!coverEl) { done(); return null; }
         if (typeof gsap === 'undefined') { done(); return null; }
 
-        var overlay = coverEl.querySelector('.clip-scan-overlay');
-        if (!overlay) { done(); return null; }
-        var beam = overlay.querySelector('.clip-scan-beam');
-        var leftDim = overlay.querySelector('.clip-scan-left-dim');
-        var rightGlow = overlay.querySelector('.clip-scan-right-glow');
-        if (!beam || !leftDim || !rightGlow) { done(); return null; }
+        // 56c-T3fix: .sparkle-burst 與 <img> 同層在 .lightbox-cover 內
+        var burst = coverEl.querySelector('.sparkle-burst');
+        if (!burst) { done(); return null; }
+        var stars = burst.querySelectorAll('.sparkle-star');
+        if (!stars || stars.length === 0) { done(); return null; }
 
-        // race 防護（Codex P2-A）：連點時 kill 舊 timeline + 把子元素 reset 到 baseline，
-        // 新 timeline 從乾淨狀態起，避免 fromTo 與殘留 inline style 疊加閃爍
-        gsap.killTweensOf([overlay, beam, leftDim, rightGlow]);
-        gsap.set([beam, leftDim, rightGlow], { clearProps: 'all' });
-        gsap.set(overlay, { opacity: 0 });
+        // race 防護（Codex P2-A 沿用）：連點時 kill 舊 timeline + reset stars，
+        // 避免 fromTo 與殘留 inline style 疊加閃爍。clearProps 採精確列表（對齊既有
+        // ghost-fly.js pattern），避免未來 stars 加 inline style 被誤清。
+        gsap.killTweensOf([burst, stars]);
+        gsap.set(stars, { clearProps: 'opacity,scale,rotation,transform' });
+        gsap.set(burst, { opacity: 0 });
 
-        var tl = gsap.timeline({ id: 'clipScanPreview' });
+        var tl = gsap.timeline({ id: 'clipSparkleBurst' });
+        tl.set(burst, { opacity: 1 });
+        tl.set(stars, { opacity: 0, scale: 0, rotation: 'random(-30, 30)' });
 
-        // t=0: overlay fade-in（瞬間顯示，內部子元素再淡入）
-        tl.set(overlay, { opacity: 1 });
+        // Stagger fade-in + scale + rotate (0 → 0.20s, 10 顆 * 0.012 ≈ 0.12s 全部進場)
+        tl.to(stars, {
+            opacity: 1, scale: 1, rotation: '+=90',
+            duration: 0.20, ease: 'fluent-decel',
+            stagger: { each: 0.012, from: 'random' }
+        }, 0);
 
-        // t=0 → 0.30s: 光帶從左掃到右 + 左半 darken
-        tl.fromTo(beam,
-            { x: '-60px', opacity: 0 },
-            { x: 'calc(100% + 60px)', opacity: 1, duration: 0.30, ease: 'fluent' },
-            0
-        );
-        tl.fromTo(leftDim,
-            { opacity: 0 },
-            { opacity: 1, duration: 0.20, ease: 'fluent-decel' },
-            0
-        );
+        // 中段 sine.inOut yoyo (0.20 → 0.30s) — 閃爍感
+        tl.to(stars, {
+            scale: 1.15,
+            duration: 0.05, ease: 'sine.inOut',
+            yoyo: true, repeat: 1
+        }, 0.20);
 
-        // t=0.30 → 0.40s: 右半 glow + scale pulse 鎖定
-        tl.fromTo(rightGlow,
-            { opacity: 0, scale: 1 },
-            { opacity: 1, scale: 1.02, duration: 0.10, ease: 'fluent-decel' },
-            0.30
-        );
+        // Fade-out (0.25 → 0.40s)
+        tl.to(stars, {
+            opacity: 0, scale: 0.6,
+            duration: 0.15, ease: 'fluent-accel'
+        }, 0.25);
 
-        // Codex P3: callback 在 0.40s 觸發（rightGlow 完成位置），T4 將以此啟動
-        // constellation enter；overlay fade-out 後台繼續跑到 0.50s 不阻塞 callback
+        // Codex P3 沿用：callback 在 0.40s 絕對時刻觸發（與 56c-T2 契約一致）
         tl.call(done, null, 0.40);
 
-        // 56c-T3 follow-up fix: timeline 收尾 — overlay opacity 回 0
-        // 避免連點 5 次殘留半透明遮蔽（DoD #6）
-        tl.to(overlay, { opacity: 0, duration: 0.10, ease: 'fluent-accel' }, '>');
+        // 收尾：burst 容器 opacity 回 0（防殘留）
+        tl.to(burst, { opacity: 0, duration: 0.05 }, '>');
 
         return tl;
     }

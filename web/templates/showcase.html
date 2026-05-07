@@ -527,6 +527,14 @@
                     <i class="bi bi-x-lg"></i>
                 </button>
 
+                <!-- 56c-T3fix: Magic 按鈕（與 .lightbox-close 鏡射對稱，video mode only） -->
+                <button class="lightbox-clip-btn"
+                        x-show="currentLightboxVideo && !currentLightboxActress && !showFavoriteActresses"
+                        @click="onClipMagicClick()"
+                        :aria-label="t('clip_mode.button_aria_label')">
+                    <i class="bi bi-magic" aria-hidden="true"></i>
+                </button>
+
                 <!-- 44a T4: Actress Lightbox Branch -->
                 <template x-if="currentLightboxActress">
                     <div style="display:contents">
@@ -632,25 +640,27 @@
                     <div style="display:contents">
                         <!-- Cover Image -->
                         <div class="lightbox-cover">
-                            <!-- 56c-T3: Clip Mode 入口（video mode only；actress mode 隱藏 CD-56C-13） -->
-                            <button class="lightbox-clip-btn"
-                                    x-show="!showFavoriteActresses"
-                                    @click="onClipMagicClick()"
-                                    :aria-label="t('clip_mode.button_aria_label')">
-                                <i class="bi bi-magic" aria-hidden="true"></i>
-                            </button>
-
-                            <!-- 56c-T3: Scan preview overlay（GSAP 操作三層子元素） -->
-                            <div class="clip-scan-overlay" aria-hidden="true">
-                                <div class="clip-scan-left-dim"></div>
-                                <div class="clip-scan-beam"></div>
-                                <div class="clip-scan-right-glow"></div>
-                            </div>
-
+                            <!-- 56c-T3fix: magic 按鈕已搬至 .lightbox-content（與 .lightbox-close sibling 鏡射對稱）；sparkle-burst overlay 留在 .lightbox-cover 以便 inset:0 精準覆蓋封面區（不擴及 metadata） -->
                             <img x-ref="lightboxCoverImg"
                                  :src="currentLightboxVideo?.cover_url"
                                  :alt="currentLightboxVideo?.number"
                                  @error="handleCoverError(currentLightboxVideo, $event)">
+
+                            <!-- 56c-T3fix: Sparkle burst overlay（10 顆四角星，ring 分佈在封面區） -->
+                            <div class="sparkle-burst"
+                                 x-show="!showFavoriteActresses"
+                                 aria-hidden="true">
+                                <svg class="sparkle-star" data-sparkle-size="lg" style="--cx: 22%; --cy: 14%;" viewBox="-12 -12 24 24"><polygon points="0,-10 2,-2 10,0 2,2 0,10 -2,2 -10,0 -2,-2"/></svg>
+                                <svg class="sparkle-star" data-sparkle-size="lg" style="--cx: 64%; --cy: 28%;" viewBox="-12 -12 24 24"><polygon points="0,-10 2,-2 10,0 2,2 0,10 -2,2 -10,0 -2,-2"/></svg>
+                                <svg class="sparkle-star" data-sparkle-size="lg" style="--cx: 38%; --cy: 82%;" viewBox="-12 -12 24 24"><polygon points="0,-10 2,-2 10,0 2,2 0,10 -2,2 -10,0 -2,-2"/></svg>
+                                <svg class="sparkle-star" data-sparkle-size="md" style="--cx: 11%; --cy: 48%;" viewBox="-12 -12 24 24"><polygon points="0,-10 2,-2 10,0 2,2 0,10 -2,2 -10,0 -2,-2"/></svg>
+                                <svg class="sparkle-star" data-sparkle-size="md" style="--cx: 48%; --cy: 8%;" viewBox="-12 -12 24 24"><polygon points="0,-10 2,-2 10,0 2,2 0,10 -2,2 -10,0 -2,-2"/></svg>
+                                <svg class="sparkle-star" data-sparkle-size="md" style="--cx: 82%; --cy: 58%;" viewBox="-12 -12 24 24"><polygon points="0,-10 2,-2 10,0 2,2 0,10 -2,2 -10,0 -2,-2"/></svg>
+                                <svg class="sparkle-star" data-sparkle-size="md" style="--cx: 28%; --cy: 64%;" viewBox="-12 -12 24 24"><polygon points="0,-10 2,-2 10,0 2,2 0,10 -2,2 -10,0 -2,-2"/></svg>
+                                <svg class="sparkle-star" data-sparkle-size="sm" style="--cx: 72%; --cy: 12%;" viewBox="-12 -12 24 24"><polygon points="0,-10 2,-2 10,0 2,2 0,10 -2,2 -10,0 -2,-2"/></svg>
+                                <svg class="sparkle-star" data-sparkle-size="sm" style="--cx: 90%; --cy: 84%;" viewBox="-12 -12 24 24"><polygon points="0,-10 2,-2 10,0 2,2 0,10 -2,2 -10,0 -2,-2"/></svg>
+                                <svg class="sparkle-star" data-sparkle-size="sm" style="--cx: 56%; --cy: 92%;" viewBox="-12 -12 24 24"><polygon points="0,-10 2,-2 10,0 2,2 0,10 -2,2 -10,0 -2,-2"/></svg>
+                            </div>
                             <!-- Cover Action Buttons -->
                             <div class="cover-actions">
                                 <button class="lb-action-btn" @click="playVideo(currentLightboxVideo?.path)" data-tooltip="{{ t('showcase.action.play') }}" aria-label="{{ t('showcase.action.play') }}">
