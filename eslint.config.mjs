@@ -108,6 +108,7 @@ export default [
 
   // Group 2: 其他 state/** — createElement + window.confirm + BreathingManager（不含 showModal）
   // + starSettle Literal ban（Codex r1 P3）
+  // + closeClipMode 定義唯一性守衛（CD-56C-4）：state-clip.js 白名單（Group 5b），其餘 state 禁止定義
   {
     files: ["web/static/js/pages/**/state/**/*.js"],
     ignores: ["web/static/js/pages/search/state/**/*.js"],
@@ -118,6 +119,14 @@ export default [
         SEL_WINDOW_CONFIRM,
         SEL_BREATHING_MANAGER_NEW,
         SEL_STARSETTLE_LITERAL,
+        {
+          selector: [
+            "Property[key.name='closeClipMode']",
+            "MethodDefinition[key.name='closeClipMode']",
+          ].join(', '),
+          message:
+            "closeClipMode 只能在 state-clip.js 定義（CD-56C-4 單一定義原則）。其他檔案可呼叫 this.closeClipMode()，但不可定義同名 method。",
+        },
       ],
     },
   },
@@ -281,6 +290,7 @@ export default [
   // + starSettle Literal ban（CD-T2FIX-1）：其他檔案完全不允許出現 'starSettle' 字串
   //   （animations.js 在 ignores 中，由 Group 4 Property selector 保護）
   //   （state-clip.js 在 ignores 中，由 Group 5b 完整覆寫並允許 new BreathingManager）
+  // + closeClipMode 定義唯一性守衛（CD-56C-4）：state-clip.js 在 ignores 中（Group 5b 白名單）
   {
     files: ["web/static/js/**/*.js"],
     ignores: [
@@ -303,6 +313,14 @@ export default [
           selector: "MemberExpression[property.name='intersection']",
           message:
             "Set.prototype.intersection 為 ES2025 API，尚未進入 OpenAver baseline。請改用 [...setA].filter(x => setB.has(x))。",
+        },
+        {
+          selector: [
+            "Property[key.name='closeClipMode']",
+            "MethodDefinition[key.name='closeClipMode']",
+          ].join(', '),
+          message:
+            "closeClipMode 只能在 state-clip.js 定義（CD-56C-4 單一定義原則）。其他檔案可呼叫 this.closeClipMode()，但不可定義同名 method。",
         },
       ],
     },
