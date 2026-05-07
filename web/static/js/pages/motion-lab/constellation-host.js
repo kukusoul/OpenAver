@@ -675,10 +675,11 @@ document.addEventListener('alpine:init', () => {
         // 2. Scale up（transformOrigin 確保 hit target 不位移，CD-T2FIX-2）
         gsap.to(this.cards[slotId], { scale: 1.06, duration: 0.18, ease: 'fluent', transformOrigin: '50% 50%' });
 
-        // 3. Dim 其餘 visible slots
+        // 3. Dim 其餘 visible slots（T7fix CD-T7FIX-1：filter brightness 替代 opacity；
+        // 卡片保持完全不透明，下方 rail 不再透出，spec §2.4「rail 永遠不是主角」恢復）
         this.visibleSlots.forEach(id => {
           if (id !== slotId && this.cards[id]) {
-            gsap.to(this.cards[id], { opacity: 0.5, duration: 0.20, ease: 'fluent' });
+            gsap.to(this.cards[id], { filter: 'brightness(0.5)', duration: 0.20, ease: 'fluent' });
           }
         });
 
@@ -705,7 +706,7 @@ document.addEventListener('alpine:init', () => {
         // PRM：state 同步（scale / dim 用 gsap.set，不 tween）
         if (this.cards[slotId]) gsap.set(this.cards[slotId], { scale: 1.06 });
         this.visibleSlots.forEach(id => {
-          if (id !== slotId && this.cards[id]) gsap.set(this.cards[id], { opacity: 0.5 });
+          if (id !== slotId && this.cards[id]) gsap.set(this.cards[id], { filter: 'brightness(0.5)' });
         });
         // PRM 下不啟動 neighbor pulse（無 tween 可省）；_activeNeighborRailIds 保持空
       }
@@ -903,13 +904,20 @@ document.addEventListener('alpine:init', () => {
         }
       }
 
-      // 2. Restore others opacity
+      // 2. Restore others brightness（T7fix CD-T7FIX-1：與 dim 路徑對稱，filter brightness 取代 opacity）
+      // PRM：直接 clearProps（同步歸位 + 確保無 inline 殘留）
+      // non-PRM：tween 到 brightness(1) 平順還原 + onComplete clearProps 防 inline filter 殘留
       this.visibleSlots.forEach(id => {
         if (id !== slotId && this.cards[id]) {
           if (useSet) {
-            gsap.set(this.cards[id], { opacity: 1 });
+            gsap.set(this.cards[id], { clearProps: 'filter' });
           } else {
-            gsap.to(this.cards[id], { opacity: 1, duration: 0.20, ease: 'fluent' });
+            gsap.to(this.cards[id], {
+              filter: 'brightness(1)',
+              duration: 0.20,
+              ease: 'fluent',
+              onComplete: () => gsap.set(this.cards[id], { clearProps: 'filter' }),
+            });
           }
         }
       });
@@ -955,7 +963,7 @@ document.addEventListener('alpine:init', () => {
             height: 150,
             opacity: 0,
             zIndex: '',
-            clearProps: 'scale,rotation,transform,--card-glow-opacity',
+            clearProps: 'scale,rotation,transform,--card-glow-opacity,filter',
           });
           const overlay = card.querySelector('.slot-icon-overlay');
           if (overlay) overlay.classList.remove('slot-icon--visible');
