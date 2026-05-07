@@ -493,6 +493,11 @@
     "batch_enrich_done_with_errors": "批次補完（部分失敗）",
     "batch_enrich_failed": "批次補完中斷"
   },
+  "clip_mode": {
+    "button_aria_label": "探索視覺相似",
+    "close": "關閉",
+    "fetch_failed": "載入失敗"
+  },
   "showcase": {
     "page_title": "影片瀏覽",
     "placeholder": {

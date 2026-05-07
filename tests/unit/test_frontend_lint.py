@@ -1136,6 +1136,31 @@ class TestScrapeToastI18nGuard:
                     f"{locale}.json {dotted!r} must not be empty string"
 
 
+class TestClipModeI18nGuard:
+    """56c-T3: 守衛 Clip Mode 入口按鈕 i18n key（zh_TW.json）"""
+
+    def _locale(self, name):
+        return json.loads((LOCALES_ROOT / name).read_text(encoding="utf-8"))
+
+    def _get_nested(self, d, dotted_key):
+        keys = dotted_key.split(".")
+        cur = d
+        for k in keys:
+            if not isinstance(cur, dict) or k not in cur:
+                return None
+            cur = cur[k]
+        return cur
+
+    def test_zh_tw_has_clip_mode_button_aria_label(self):
+        """zh_TW.json 必須有 clip_mode.button_aria_label，且為非空字串"""
+        data = self._locale("zh_TW.json")
+        val = self._get_nested(data, "clip_mode.button_aria_label")
+        assert val is not None, \
+            "zh_TW.json missing: 'clip_mode.button_aria_label'"
+        assert isinstance(val, str) and len(val) > 0, \
+            "zh_TW.json 'clip_mode.button_aria_label' must not be empty string"
+
+
 SEARCH_STATE_DIR = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "search" / "state"
 
 

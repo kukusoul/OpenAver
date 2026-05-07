@@ -632,7 +632,23 @@
                     <div style="display:contents">
                         <!-- Cover Image -->
                         <div class="lightbox-cover">
-                            <img :src="currentLightboxVideo?.cover_url"
+                            <!-- 56c-T3: Clip Mode 入口（video mode only；actress mode 隱藏 CD-56C-13） -->
+                            <button class="lightbox-clip-btn"
+                                    x-show="!showFavoriteActresses"
+                                    @click="onClipMagicClick($event)"
+                                    :aria-label="t('clip_mode.button_aria_label')">
+                                <i class="bi bi-magic" aria-hidden="true"></i>
+                            </button>
+
+                            <!-- 56c-T3: Scan preview overlay（GSAP 操作三層子元素） -->
+                            <div class="clip-scan-overlay" aria-hidden="true">
+                                <div class="clip-scan-left-dim"></div>
+                                <div class="clip-scan-beam"></div>
+                                <div class="clip-scan-right-glow"></div>
+                            </div>
+
+                            <img x-ref="lightboxCoverImg"
+                                 :src="currentLightboxVideo?.cover_url"
                                  :alt="currentLightboxVideo?.number"
                                  @error="handleCoverError(currentLightboxVideo, $event)">
                             <!-- Cover Action Buttons -->

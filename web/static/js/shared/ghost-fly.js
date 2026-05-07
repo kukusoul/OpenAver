@@ -305,6 +305,10 @@
             0.30
         );
 
+        // 56c-T3 follow-up fix: timeline 收尾 — overlay opacity 回 0
+        // 避免連點 5 次殘留半透明遮蔽（DoD #6）
+        tl.to(overlay, { opacity: 0, duration: 0.10, ease: 'fluent-accel' }, '>');
+
         return tl;
     }
 

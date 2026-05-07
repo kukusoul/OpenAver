@@ -214,6 +214,24 @@ export function stateLightbox() {
             });
         },
 
+        // 56c-T3: Clip Mode 入口按鈕 click handler — placeholder（T4 接通 openClipMode）
+        // 觸發 0.4s 光帶預演（純視覺）；PRM 短路；GhostFly/gsap 缺失時 helper 內 graceful return
+        onClipMagicClick(event) {
+            var coverEl = (this.$refs && this.$refs.lightboxCoverImg)
+                ? this.$refs.lightboxCoverImg.closest('.lightbox-cover')
+                : document.querySelector('.lightbox-cover');
+            if (!coverEl) return;
+            if (window.OpenAver && window.OpenAver.prefersReducedMotion) {
+                // PRM：跳過光帶（56c-T4 接通後改為直接 this.openClipMode()）
+                return;
+            }
+            if (window.GhostFly && typeof window.GhostFly.play56cClipScanPreview === 'function') {
+                window.GhostFly.play56cClipScanPreview(coverEl, function () {
+                    // 56c-T3 placeholder; 56c-T4 將整個 method 搬到 state-clip.js 變 openClipMode
+                });
+            }
+        },
+
         closeLightbox() {
             // F2: cancel pending delayed clear from previous close / searchFromMetadata
             if (this.lightboxCloseTimer) {

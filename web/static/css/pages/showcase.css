@@ -792,6 +792,102 @@
     }
 }
 
+/* ─── 56c-T3: Clip Mode 入口按鈕 + 以圖搜圖光帶預演 ────────────────────────
+ * .lightbox-clip-btn — 玻璃材質圓鈕，左上角，沿用 .lb-action-btn 玻璃配方
+ *   尺寸 36×36（比 .lb-action-btn 的 46×46 略小，避免搶 cover-actions 視覺）
+ *   icon 用 --star-glow 香檳金，呼應 56b 星空主題（CD-56B-6）
+ * .clip-scan-overlay — GSAP 操作的三層光帶容器（pointer-events:none, opacity:0 預設）
+ */
+.lightbox-clip-btn {
+    position: absolute;
+    top: 1rem;
+    left: 1rem;
+    z-index: 10;
+    width: 36px; height: 36px;
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(var(--fluent-blur-light));
+    -webkit-backdrop-filter: blur(var(--fluent-blur-light));
+    box-shadow: var(--fluent-shadow-8);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    transition: background var(--duration-fast) var(--ease-out),
+                border-color var(--duration-fast) var(--ease-out),
+                transform var(--duration-fast) var(--ease-out),
+                box-shadow var(--duration-fast) var(--ease-out);
+}
+
+.lightbox-clip-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+    border-color: rgba(255, 255, 255, 0.6);
+    transform: scale(1.08);
+    box-shadow: var(--fluent-shadow-16);
+}
+
+.lightbox-clip-btn:active {
+    transform: scale(0.95);
+}
+
+.lightbox-clip-btn:focus-visible {
+    outline: 2px solid var(--star-glow);
+    outline-offset: 2px;
+}
+
+.lightbox-clip-btn i {
+    color: var(--star-glow);
+    font-size: 1.1rem;
+    line-height: 1;
+}
+
+/* Scan preview overlay — 三層光帶（GSAP 操作 opacity / x / scale） */
+.clip-scan-overlay {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0;
+    z-index: 5;
+    border-radius: inherit;
+    overflow: hidden;
+}
+
+.clip-scan-left-dim {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to right,
+        rgba(0, 0, 0, 0.55) 0%,
+        rgba(0, 0, 0, 0.55) 50%,
+        transparent 50%);
+    opacity: 0;
+}
+
+.clip-scan-beam {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 60px;
+    background: linear-gradient(to right,
+        transparent 0%,
+        var(--star-line-bright) 50%,
+        transparent 100%);
+    filter: blur(2px);
+    opacity: 0;
+}
+
+.clip-scan-right-glow {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 50%;
+    box-shadow: inset 0 0 40px var(--star-glow);
+    opacity: 0;
+}
+
 /* CSS Tooltip — 桌機輔助，觸控裝置不依賴 */
 .lb-action-btn[data-tooltip]::after {
     content: attr(data-tooltip);
