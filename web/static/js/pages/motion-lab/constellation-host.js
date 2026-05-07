@@ -316,6 +316,25 @@ document.addEventListener('alpine:init', () => {
         }
       });
     },
+
+    /**
+     * _abortAllActiveDustPulses — Codex review P2-2 fix：
+     * spec §5.2「Slip-through 動畫進行中 | idle acknowledge 強制暫停」契約實作。
+     *
+     * `_cancelIdleAcknowledge()` 只清下一次 setTimeout（plan §G 既有設計），
+     * 但 phase transition（slip-through / exit）開始時，正在跑的 idle / keystone
+     * pulse tween 不會被打斷，導致 dust pulse 仍可動最多 0.4s（違反「強制暫停」契約）。
+     *
+     * 範圍：全 100 顆（不限 corridor）— phase transition 是全域事件，與 corridor-only
+     * 的 `_abortActiveDustPulses(slotId)`（hover-pulse race fix）區隔。
+     */
+    _abortAllActiveDustPulses() {
+      document.querySelectorAll('.clip-lab-dust circle.dust-pulsing').forEach(el => {
+        gsap.killTweensOf(el);
+        gsap.set(el, { clearProps: 'opacity,scale,transform' });
+        el.classList.remove('dust-pulsing');
+      });
+    },
     // --------------------------------------------------------------------
 
 
@@ -417,6 +436,10 @@ document.addEventListener('alpine:init', () => {
 
       // T5 (CD-T5-2)：cancel idle acknowledge timer（NO-OP in T5；T7 替換為 clearTimeout）
       this._cancelIdleAcknowledge();
+      // T7 (Codex review P2-2)：spec §5.2「slip-through 期間 idle acknowledge 強制暫停」契約。
+      // _cancelIdleAcknowledge 只清下一次 setTimeout，正在跑的 pulse tween 仍會動到 0.4s 結束。
+      // 此處主動 abort 所有正在跑的 dust pulse（全 100 顆，不限 corridor）。
+      this._abortAllActiveDustPulses();
 
       // CRITICAL: 在呼叫任何 animation / pickEight 之前，先捕獲 prevVisible（CD-T2FIX-4 §E）
       const prevVisible = new Set(this.visibleSlots);
@@ -628,12 +651,15 @@ document.addEventListener('alpine:init', () => {
       // 2. Guide rail 終態（CD-T6-3）：strokeOpacity 0 → 0.10 浮現極淡引導線
       //    T6 不再呼叫 railFocusPulse（後者把 strokeOpacity 拉到 0.85，是 T4fix 能量感脈衝；
       //    T6 是「rail 永遠不是主角」語義 spec §2.4）。ESLint Group 5 守此契約。
+      //    Codex review P3-4：plan §C / §6 釘版 stroke-width 1.0px（比 idle baseline 1.5 細，更輕盈）。
+      //    inline strokeWidth 蓋過 CSS baseline 1.5；leave 時於 _resetHoverRails clearProps:'strokeWidth'。
       const guideLine = this.railLines[slotId];
       if (guideLine) {
-        gsap.killTweensOf(guideLine, 'strokeOpacity');
+        gsap.killTweensOf(guideLine, 'strokeOpacity,strokeWidth');
         if (isPRM) {
-          gsap.set(guideLine, { strokeOpacity: 0.10 });
+          gsap.set(guideLine, { strokeOpacity: 0.10, strokeWidth: 1.0 });
         } else {
+          gsap.set(guideLine, { strokeWidth: 1.0 });
           gsap.to(guideLine, { strokeOpacity: 0.10, duration: 0.25, ease: 'fluent-decel' });
         }
       }
@@ -745,6 +771,9 @@ document.addEventListener('alpine:init', () => {
 
       // T5 (CD-T5-2)：cancel idle acknowledge timer（NO-OP in T5；T7 替換為 clearTimeout）
       this._cancelIdleAcknowledge();
+      // T7 (Codex review P2-2)：onExit 同 slip-through 屬「phase transition」，
+      // idle acknowledge 強制暫停（spec §5.2）。abort 所有正在跑的 dust pulse tween。
+      this._abortAllActiveDustPulses();
 
       // 清 hover card 殘留（scale / opacity / icon / breathing，Codex T2fix5 P2 Finding 1）
       if (this._activeHoverSlot !== null) {
@@ -778,6 +807,12 @@ document.addEventListener('alpine:init', () => {
           // 形成隱形 hover/click 目標。_playInitialExpand 只初始化 #01-#08，需先把 12 個全 reset。
           this._resetAllSlotsToBaseline();
           this._playInitialExpand();
+          // T7 (Codex review P2-1): reset expand 後重啟 idle acknowledge timer
+          // onExit 開頭呼叫 _cancelIdleAcknowledge() 清掉舊 timer，但 _playInitialExpand 不重啟，
+          // 導致用戶 exit 一次後 idle pulses 在該 remount session 內停止（直到下次 slip-through / hover leave）。
+          // 此處 mirror init() 的「expand 前啟動 timer」順序（init 在 L99 _startIdleAcknowledge → L107 _playInitialExpand）。
+          // PRM guard 在 _startIdleAcknowledge 首行（PRM 下 timer 不啟動）。
+          this._startIdleAcknowledge();
         }
       );
     },
@@ -930,7 +965,8 @@ document.addEventListener('alpine:init', () => {
           line.classList.add('rail--hidden');
           line.classList.remove('rail--bright', 'rail--neighbor');
           // T4fix §I：strokeOpacity inline 必清，由 CSS .clip-lab-rail baseline (0.30) 接管
-          gsap.set(line, { opacity: 0, clearProps: 'strokeOpacity' });
+          // Codex review P3-4：strokeWidth inline 同清，回到 CSS baseline 1.5
+          gsap.set(line, { opacity: 0, clearProps: 'strokeOpacity,strokeWidth' });
         }
         if (sweep) resetSweepLine(sweep);
       });
@@ -947,17 +983,25 @@ document.addEventListener('alpine:init', () => {
         const focusedId = this._activeFocusedRailId;
         const line = this.railLines[focusedId];
         if (line) {
-          gsap.killTweensOf(line, 'strokeOpacity,opacity');
+          gsap.killTweensOf(line, 'strokeOpacity,opacity,strokeWidth');
           line.classList.remove('rail--bright');   // 防呆保留（T6 不 add rail--bright）
-          // T6: fade-out tween 0.20s fluent-accel（leave 比 enter 0.25s 略快，乾淨）
-          // 不分 PRM：PRM 下 GSAP tween 仍會跑（duration 短不擾人），結束後 clearProps
-          // 統一行為避免 PRM 與 non-PRM clearProps 時序分歧
-          gsap.to(line, {
-            strokeOpacity: 0,
-            duration: 0.20,
-            ease: 'fluent-accel',
-            onComplete: () => gsap.set(line, { clearProps: 'strokeOpacity' }),
-          });
+          // T6: fade-out（leave 比 enter 0.25s 略快，乾淨）
+          // PRM 路徑（C3 契約 / spec §2.6 C3）：「不播 tween、不註冊 ticker、不觸發 GSAP transition」，
+          //   仍同步執行 state（strokeOpacity 直接落 0 + clearProps 接 CSS baseline 0）。
+          // non-PRM：0.20s fluent-accel tween，結束後 clearProps。
+          // Codex review P3-4：onHoverEnter 把 strokeWidth set 1.0（plan §C），此處 clearProps 還
+          // CSS baseline 1.5。strokeWidth 不 tween（idle baseline 變化會擾動視線，per plan §C 設計）。
+          if (window.OpenAver.prefersReducedMotion) {
+            gsap.set(line, { strokeOpacity: 0, clearProps: 'strokeOpacity,strokeWidth' });
+          } else {
+            gsap.set(line, { clearProps: 'strokeWidth' });
+            gsap.to(line, {
+              strokeOpacity: 0,
+              duration: 0.20,
+              ease: 'fluent-accel',
+              onComplete: () => gsap.set(line, { clearProps: 'strokeOpacity' }),
+            });
+          }
         }
         const sw = this.sweepLines[focusedId];
         if (sw) resetSweepLine(sw);
