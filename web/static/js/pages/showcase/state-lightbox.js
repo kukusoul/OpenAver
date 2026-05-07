@@ -33,6 +33,7 @@ export function stateLightbox() {
 
         _lightboxAnimating: false,      // B16: Lightbox 動畫進行中 guard
         _lightboxGeneration: 0,         // B19: invalidation token for deferred $nextTick lightbox callbacks
+        _clipScanAnimating: false,      // 56c-T3 (Codex P2-A): clip scan preview in-flight guard
 
         // Sample Gallery 狀態 (T7)
         sampleGalleryOpen: false,
@@ -216,7 +217,9 @@ export function stateLightbox() {
 
         // 56c-T3: Clip Mode 入口按鈕 click handler — placeholder（T4 接通 openClipMode）
         // 觸發 0.4s 光帶預演（純視覺）；PRM 短路；GhostFly/gsap 缺失時 helper 內 graceful return
-        onClipMagicClick(event) {
+        onClipMagicClick() {
+            // Codex P2-A: in-flight guard，避免連點重複建 timeline 導致 race
+            if (this._clipScanAnimating) return;
             var coverEl = (this.$refs && this.$refs.lightboxCoverImg)
                 ? this.$refs.lightboxCoverImg.closest('.lightbox-cover')
                 : document.querySelector('.lightbox-cover');
@@ -226,8 +229,11 @@ export function stateLightbox() {
                 return;
             }
             if (window.GhostFly && typeof window.GhostFly.play56cClipScanPreview === 'function') {
+                var self = this;
+                self._clipScanAnimating = true;
                 window.GhostFly.play56cClipScanPreview(coverEl, function () {
-                    // 56c-T3 placeholder; 56c-T4 將整個 method 搬到 state-clip.js 變 openClipMode
+                    self._clipScanAnimating = false;
+                    // 56c-T3 placeholder; 56c-T4 將以此 callback 啟動 self.openClipMode()
                 });
             }
         },

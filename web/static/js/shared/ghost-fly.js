@@ -144,19 +144,19 @@
         var rect = coverImgEl.getBoundingClientRect();
         var src = coverImgEl.src;
 
-        // 隱藏原 lightbox cover img（避免 ghost 飛行時雙圖重疊；走 cleanupGhost 還原路徑）
-        coverImgEl.setAttribute('data-ghost-hidden', 'true');
-        gsap.set(coverImgEl, { opacity: 0 });
-
-        // 建立 right-half ghost
+        // 1) 先建 ghost（createCoverGhost 內部 cleanupStaleGhosts() 會還原所有
+        //    [data-ghost-hidden] 元素 opacity，故必須在 hide 之前呼叫；對齊
+        //    playGridToLightbox 既有 pattern）
         var ghost = createCoverGhost(src, rect, { cropMode: 'right-half' });
         if (!ghost) {
-            // 還原 cover opacity，避免殘留隱藏狀態
-            gsap.set(coverImgEl, { opacity: 1 });
-            coverImgEl.removeAttribute('data-ghost-hidden');
-            if (typeof opts.onComplete === 'function') opts.onComplete();
+            if (typeof opts.onComplete === 'function') opts.onComplete(null);
             return null;
         }
+
+        // 2) 再 hide 原 lightbox cover img（cleanupStaleGhosts 已跑完，不會被還原）
+        //    避免 ghost 飛行時雙圖重疊；onInterrupt 走 cleanupGhost 還原路徑
+        coverImgEl.setAttribute('data-ghost-hidden', 'true');
+        gsap.set(coverImgEl, { opacity: 0 });
 
         // 計算目標位置（CD-56C-11：design-space (480, 310) 中央，main img 200×250）
         var stageRect = stageInnerEl.getBoundingClientRect();
@@ -281,7 +281,13 @@
         var rightGlow = overlay.querySelector('.clip-scan-right-glow');
         if (!beam || !leftDim || !rightGlow) { done(); return null; }
 
-        var tl = gsap.timeline({ id: 'clipScanPreview', onComplete: done });
+        // race 防護（Codex P2-A）：連點時 kill 舊 timeline + 把子元素 reset 到 baseline，
+        // 新 timeline 從乾淨狀態起，避免 fromTo 與殘留 inline style 疊加閃爍
+        gsap.killTweensOf([overlay, beam, leftDim, rightGlow]);
+        gsap.set([beam, leftDim, rightGlow], { clearProps: 'all' });
+        gsap.set(overlay, { opacity: 0 });
+
+        var tl = gsap.timeline({ id: 'clipScanPreview' });
 
         // t=0: overlay fade-in（瞬間顯示，內部子元素再淡入）
         tl.set(overlay, { opacity: 1 });
@@ -304,6 +310,10 @@
             { opacity: 1, scale: 1.02, duration: 0.10, ease: 'fluent-decel' },
             0.30
         );
+
+        // Codex P3: callback 在 0.40s 觸發（rightGlow 完成位置），T4 將以此啟動
+        // constellation enter；overlay fade-out 後台繼續跑到 0.50s 不阻塞 callback
+        tl.call(done, null, 0.40);
 
         // 56c-T3 follow-up fix: timeline 收尾 — overlay opacity 回 0
         // 避免連點 5 次殘留半透明遮蔽（DoD #6）
