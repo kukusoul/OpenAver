@@ -1161,6 +1161,69 @@ class TestClipModeI18nGuard:
             "zh_TW.json 'clip_mode.button_aria_label' must not be empty string"
 
 
+class TestClipStageGuard:
+    """56c-T4: 守衛 state-clip.js 整合 contract — 確保新 mixin 串入 main.js mergeState
+    鏈、CLIP_ANCHORS 揭露給 Alpine template、.clip-stage sibling DOM 在 showcase.html 對齊。
+    """
+
+    SHOWCASE_DIR = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "showcase"
+    STATE_CLIP_JS = SHOWCASE_DIR / "state-clip.js"
+    MAIN_JS = SHOWCASE_DIR / "main.js"
+
+    def _html(self):
+        return SHOWCASE_HTML.read_text(encoding="utf-8")
+
+    def _state_clip(self):
+        return self.STATE_CLIP_JS.read_text(encoding="utf-8")
+
+    def _main(self):
+        return self.MAIN_JS.read_text(encoding="utf-8")
+
+    def test_state_clip_file_exists(self):
+        """state-clip.js 必須存在（56c-T4 新建）"""
+        assert self.STATE_CLIP_JS.exists(), \
+            f"state-clip.js missing at {self.STATE_CLIP_JS!s}"
+
+    def test_main_js_imports_and_merges_state_clip(self):
+        """main.js 必須 import stateClip 並插入 mergeState 鏈（v0.8.4 descriptor-preserving 規範）"""
+        src = self._main()
+        assert "from '@/showcase/state-clip.js'" in src, \
+            "main.js missing: import { stateClip } from '@/showcase/state-clip.js'"
+        # mergeState 鏈整合：stateClip.call(this) 必須出現
+        assert "stateClip.call(this)" in src, \
+            "main.js mergeState chain missing: stateClip.call(this)"
+
+    def test_state_clip_exports_clip_anchors(self):
+        """CLIP_ANCHORS 必須 export（Alpine template x-for 用：'anchor in CLIP_ANCHORS'）"""
+        src = self._state_clip()
+        assert "export const CLIP_ANCHORS" in src, \
+            "state-clip.js missing: export const CLIP_ANCHORS = ANCHORS.map(...)"
+
+    def test_state_clip_exposes_clip_mode_methods(self):
+        """state-clip.js 必須 export stateClip factory 並含 4 主流程 method（CD-56C-6）"""
+        src = self._state_clip()
+        assert re.search(r"export\s+function\s+stateClip\s*\(", src), \
+            "state-clip.js missing: export function stateClip()"
+        for method in ("openClipMode", "closeClipMode", "initClipStage", "destroyClipStage"):
+            assert method in src, \
+                f"state-clip.js missing method: {method}"
+
+    def test_clip_stage_sibling_dom_in_showcase_html(self):
+        """showcase.html 必須含 .clip-stage sibling DOM（z-index 1501，x-effect lifecycle）"""
+        html = self._html()
+        # backdrop class
+        assert "clip-stage" in html, "showcase.html missing: .clip-stage sibling div"
+        # x-effect lifecycle 觸發 init/destroy（必須沿用 plan §6 §B 範例）
+        assert "initClipStage()" in html and "destroyClipStage()" in html, \
+            "showcase.html missing x-effect: clipModeOpen ? initClipStage() : destroyClipStage()"
+        # 960×620 inner stage（spec §1 CD-56C-11）
+        assert "clip-stage-inner" in html, \
+            "showcase.html missing: .clip-stage-inner (960×620 design-space container)"
+        # Alpine x-for 對齊 CLIP_ANCHORS export
+        assert "CLIP_ANCHORS" in html, \
+            "showcase.html missing: CLIP_ANCHORS reference (x-for=\"anchor in CLIP_ANCHORS\")"
+
+
 SEARCH_STATE_DIR = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "search" / "state"
 
 
@@ -4559,6 +4622,7 @@ class TestMotionInfra:
             Path('pages') / 'search' / 'animations.js', # pages/search/animations.js（T6 預先加入）
             Path('pages') / 'showcase' / 'animations.js', # pages/showcase/animations.js（B6 動畫模組）
             Path('pages') / 'motion-lab' / 'constellation-host.js',  # 56b-T3 thin host（從 pages/clip-lab/main.js 搬遷）
+            Path('pages') / 'showcase' / 'state-clip.js',  # 56c-T4 showcase clip mode host（per-host BreathingManager / GSAP context lifecycle，CD-56C-6）
         }
         violations = []
 

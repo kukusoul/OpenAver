@@ -2418,3 +2418,403 @@ body.sidebar-collapsed .showcase-footer {
         var(--fluent-shadow-2),
         0 0 0 4px var(--glow-primary);
 }
+
+/* ─── 56c-T4: Clip Stage Sibling — fullscreen takeover (z-index:1501) ────────
+ * 從 motion_lab.html inline <style> 搬遷對映，selector 改名見 plan §6 §E 表：
+ *   .clip-lab-stage          → .clip-stage / .clip-stage-inner（拆分 backdrop + 960×620 inner）
+ *   .clip-lab-close          → .clip-close-btn（玻璃配方沿用 .lb-action-btn）
+ *   .clip-lab-dust           → .clip-stage-dust
+ *   .clip-lab-rails          → .clip-stage-rails
+ *   .clip-lab-rail           → .clip-rail
+ *   .clip-lab-rail-sweep     → .clip-rail-sweep
+ *   .clip-lab-slot           → .clip-slot
+ *   .clip-lab-slot-img       → .clip-slot-img
+ *   .clip-lab-main           → .clip-main-overlay（簡化：56c 主圖是 ghost-fly ghost，不再要本地 img）
+ * 沿用既有 token：--overlay-modal / --fluent-blur / --fluent-duration-fast /
+ *   --fluent-ease-standard / --star-line-bright / --star-line-fade / --star-glow
+ *   / --fluent-radius-xl / --fluent-shadow-* / --color-base-100 / --color-base-content。
+ * 不擴 token 範圍（spec §0.1 codex P2 教訓）。
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+/* fullscreen backdrop（spec §1 CD-56C-1）*/
+.clip-stage {
+    position: fixed;
+    inset: 0;
+    z-index: 1501;  /* > sample-gallery 1500 > showcase-lightbox 1000 */
+    /* 56c-T4: 星空 backdrop 全屏鋪滿（從 .clip-stage-inner 搬上來，
+       避免 inner box 與外圍 backdrop 兩種灰色） */
+    background:
+        radial-gradient(ellipse at 30% 40%, color-mix(in oklch, var(--star-line-bright) 8%, transparent) 0%, transparent 55%),
+        radial-gradient(ellipse at 70% 65%, color-mix(in oklch, var(--star-glow) 6%, transparent) 0%, transparent 50%),
+        var(--color-base-200);
+
+    /* 初始隱藏（與 sample-gallery 一致 pattern） */
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity var(--fluent-duration-fast) var(--fluent-ease-standard),
+                visibility var(--fluent-duration-fast) var(--fluent-ease-standard);
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* 56c-T4: vignette 覆蓋整個 viewport（從 .clip-stage-inner::before 搬上來） */
+.clip-stage::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background: radial-gradient(ellipse at 50% 50%,
+        transparent 35%,
+        rgba(0, 0, 0, 0.45) 100%);
+}
+
+.clip-stage.show {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: all;
+    transition-delay: 0s;
+}
+
+/* inner stage 960×620 design-space（spec §1 CD-56C-11）
+   data-theme="dim" 強制 dust dim variant（搬遷自 motion-lab .clip-lab-stage[data-theme="dim"]） */
+.clip-stage-inner {
+    position: relative;
+    width: 960px;
+    height: 620px;
+    overflow: visible;
+    /* 56c-T4: 純座標容器，背景/box-shadow/border-radius 已搬到 .clip-stage 全屏層 */
+    /* 56c-T4: 視窗等比放大充滿 viewport（design-space 不動，視覺層 scale） */
+    transform: scale(var(--clip-stage-scale, 1));
+    transform-origin: center center;
+}
+
+/* X 關閉按鈕（backdrop scope 不在 inner 內，玻璃配方對齊 .lb-action-btn） */
+.clip-close-btn {
+    position: absolute;
+    top: 0.75rem;
+    right: 0.75rem;
+    z-index: 10;
+    width: 2.25rem;
+    height: 2.25rem;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 50%;
+    background: var(--overlay-control);
+    backdrop-filter: blur(var(--fluent-blur-light));
+    -webkit-backdrop-filter: blur(var(--fluent-blur-light));
+    color: rgba(255, 255, 255, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 1rem;
+    transition: background var(--fluent-duration-fast) var(--fluent-ease-standard),
+                color var(--fluent-duration-fast) var(--fluent-ease-standard);
+}
+
+.clip-close-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    color: rgba(255, 255, 255, 1);
+}
+
+.clip-close-btn:focus-visible {
+    outline: 2px solid var(--star-glow);
+    outline-offset: 2px;
+}
+
+/* lightbox 內容隱藏（既有 takeover pattern） */
+.showcase-lightbox.clip-mode-active .lightbox-content {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 200ms ease;
+}
+
+/* ── Dust particle layer（搬遷自 .clip-lab-dust）─────────────────────────────
+ * indirection 模型：inline 寫 --dust-base-seed，CSS rule 用 --dust-base 計算
+ * resolved value，dim selector 才能 override --dust-base 而非永遠輸給 inline */
+.clip-stage-dust {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.7;
+    z-index: 0;
+}
+
+.clip-stage-dust circle {
+    --dust-base: var(--dust-base-seed, 0.08);
+    fill: var(--star-line-fade);
+    opacity: var(--dust-base);
+    animation: dust-twinkle var(--dust-cycle, 6s) ease-in-out var(--dust-delay, 0s) infinite;
+}
+
+@keyframes dust-twinkle {
+    0%, 100% { opacity: var(--dust-base); }
+    50%      { opacity: calc(var(--dust-base) * 1.5); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .clip-stage-dust circle {
+        animation: none;
+        opacity: var(--dust-base);
+    }
+}
+
+/* dim theme override（clip-stage 永遠暗底 — Constellation 是星空場景） */
+[data-theme="dim"] .clip-stage-dust circle,
+.clip-stage .clip-stage-dust circle {
+    fill: var(--star-line-bright);
+    --dust-base: 0.10;
+}
+
+/* T6 Hover constellation bright state — corridor dust 切到 .in-constellation
+   覆寫 stylesheet 級 --dust-base（不動 inline --dust-base-seed）；
+   keyframe dust-twinkle-bright 引用 var(--dust-base)，自動拉高 peak。 */
+.clip-stage-dust circle.in-constellation {
+    --dust-base: 0.70;
+    --dust-halo-opacity: 0.45;
+    filter: drop-shadow(0 0 4px rgba(232, 201, 137, var(--dust-halo-opacity)));
+    transition: filter var(--fluent-duration-slow) var(--fluent-ease-standard);
+    animation-name: dust-twinkle-bright;
+}
+
+@keyframes dust-twinkle-bright {
+    0%, 100% { opacity: var(--dust-base); }
+    50%      { opacity: 1.00; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .clip-stage-dust circle.in-constellation {
+        animation: none;
+        opacity: var(--dust-base);
+    }
+}
+
+/* T7 pulse 期間暫停 CSS dust-twinkle，讓 GSAP inline opacity / scale 生效 */
+.clip-stage-dust circle.dust-pulsing {
+    animation: none;
+}
+
+/* ── Rails（搬遷自 .clip-lab-rails / .clip-lab-rail / .clip-lab-rail-sweep）── */
+.clip-stage-rails {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    overflow: visible;
+    z-index: 2;
+}
+
+.clip-rail {
+    stroke: var(--star-line-fade);
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    stroke-opacity: 0;
+    fill: none;
+    /* 注意：禁加 transition: stroke-opacity（gotchas C21）— GSAP 直接動，
+       CSS transition 會與 GSAP tick 賽跑，抹平 ease */
+}
+
+.clip-rail.rail--bright {
+    stroke: var(--star-line-bright);
+    stroke-opacity: 0.85;
+}
+
+.clip-rail.rail--neighbor {
+    stroke: var(--star-line-bright);
+    stroke-opacity: 0.55;
+}
+
+.clip-rail-sweep {
+    stroke: var(--star-line-bright);
+    stroke-width: 2;
+    stroke-linecap: round;
+    fill: none;
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* Rail 初始隱藏狀態（搬遷自 motion-lab .rail--hidden，namespaced 避免污染全域）
+   SVG <line> opacity 影響顯示；pointer-events 對 SVG 預設無關但保留無害 */
+.clip-rail.rail--hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* ── Slot cards（搬遷自 .clip-lab-slot）─────────────────────────────────
+ * 注意：禁加 transition: transform（gotchas C21）— hover scale 走 GSAP，
+ * CSS transition 會與 GSAP tick 賽跑。box-shadow 走 CSS transition 安全。 */
+.clip-slot {
+    position: absolute;
+    width: 120px;
+    height: 150px;
+    transform: translate(-50%, -50%);
+    background: var(--color-base-100);
+    border-radius: var(--fluent-radius-xl);
+    box-shadow: var(--fluent-shadow-4);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    --card-glow-opacity: 0;
+    overflow: visible;
+    border: 1px solid color-mix(in oklch, var(--color-base-content) 15%, transparent);
+    transition: box-shadow var(--fluent-duration-fast) var(--fluent-ease-standard);
+    z-index: 10;
+}
+
+.clip-slot::before {
+    content: '';
+    position: absolute;
+    inset: -8px;
+    border-radius: var(--fluent-radius-xl);
+    background: radial-gradient(ellipse at 50% 50%,
+        color-mix(in oklch, var(--star-glow) 55%, transparent) 0%,
+        transparent 70%);
+    opacity: var(--card-glow-opacity);
+    pointer-events: none;
+    z-index: -1;
+    will-change: opacity;
+}
+
+.clip-slot:hover {
+    box-shadow: var(--fluent-shadow-8);
+}
+
+.clip-slot-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: 100% 20%;
+    display: block;
+    border-radius: inherit;
+    pointer-events: none;
+}
+
+/* Slot 初始隱藏狀態（搬遷自 motion-lab .slot--hidden，namespaced 避免污染全域） */
+.clip-slot.slot--hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* Slot icon overlay — hover 顯示的右上角 icon（搬遷自 motion-lab .slot-icon-overlay） */
+.clip-slot .slot-icon-overlay {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    opacity: 0;
+    transition: opacity 0.18s var(--fluent-ease-standard);
+    color: var(--star-line-bright);
+    pointer-events: none;
+    line-height: 0;
+}
+
+.clip-slot .slot-icon-overlay.slot-icon--visible {
+    opacity: 1;
+}
+
+/* 56c-T4: main image visual center anchor — single source of truth
+   for ghost-fly enter target rect。invisible / non-interactive，
+   design-space 480/310 200×250 居中，吃 .clip-stage-inner 的 transform: scale */
+.clip-main-anchor {
+    position: absolute;
+    left: 480px;
+    top: 310px;
+    width: 200px;
+    height: 250px;
+    transform: translate(-50%, -50%);
+    transform-origin: center center;
+    pointer-events: none;
+    opacity: 0;
+    /* z-index 不指定 — 純座標 anchor 不需參與堆疊 */
+}
+
+/* 56c-T4: clip mode 停留期間的 main image — .clip-stage-inner 子元素，
+   與 8 cards 走同一 design-space layout 路徑，resize 自動跟隨 inner scale。
+   codex 改良：不用 transform: translate(-50%,-50%)，避免與 GSAP scale tween
+   混疊；改 left:380 top:185（中心點數學等價於 design-space (480, 310)）。 */
+.clip-main-static {
+    position: absolute;
+    left: 380px;
+    top: 185px;
+    width: 200px;
+    height: 250px;
+    object-fit: cover;
+    object-position: right center;  /* 沿用 cropMode: 'right-half' 視覺一致 */
+    transform-origin: center center;
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+    z-index: 11;  /* > .clip-slot z=10，< .clip-main-overlay z=2001 */
+    pointer-events: none;
+}
+
+/* ── Main overlay + play button（簡化版，56c 主圖由 ghost-fly ghost 接管） ──
+   56c-T4: 從 .clip-stage-inner 移出到 .clip-stage 直屬層，脫離 inner 的
+   transform: scale stacking context；play button z-index 才能升上 ghost (z=2000) 之上 */
+.clip-main-overlay {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 200px;
+    height: 250px;
+    transform: translate(-50%, -50%) scale(var(--clip-stage-scale, 1));
+    transform-origin: center center;
+    border-radius: var(--fluent-radius-xl);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2001;  /* > ghost-fly ghost z-index 2000，play button 才看得到 */
+    /* 透明 hit area — 中央 ghost img 由 ghost-fly 管理 z-index:2000 浮在上層；
+       此 overlay 提供 click target 給 onClipMainImgClick（CD-56C-4） */
+}
+
+/* 56c-T4: play button 在 .clip-stage-inner 內 design-space coords，
+   位置 main image (480,310) 下方中央 (480,410)；inverse scale 抵消 inner
+   transform: scale，維持 44×44 視覺尺寸；對齊 lightbox cover 內 play
+   button 的視覺語意（在主圖下方而非 viewport 下方） */
+.clip-play-button {
+    position: absolute;
+    left: 480px;
+    top: 410px;
+    transform: translate(-50%, -50%) scale(calc(1 / var(--clip-stage-scale, 1)));
+    transform-origin: center center;
+    width: 44px;
+    height: 44px;
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    border-radius: 50%;
+    background: var(--overlay-control);
+    backdrop-filter: blur(var(--fluent-blur-light));
+    -webkit-backdrop-filter: blur(var(--fluent-blur-light));
+    color: white;
+    font-size: 1.25rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: var(--fluent-shadow-8);
+    z-index: 12;  /* > .clip-main-static z=11 (inner stacking)；ghost 飛行期間蓋過 acceptable */
+    transition: background var(--fluent-duration-fast) var(--fluent-ease-standard),
+                border-color var(--fluent-duration-fast) var(--fluent-ease-standard),
+                box-shadow var(--fluent-duration-fast) var(--fluent-ease-standard);
+}
+
+.clip-play-button:hover {
+    background: rgba(0, 0, 0, 0.5);
+    border-color: rgba(255, 255, 255, 0.6);
+    box-shadow: var(--fluent-shadow-16);
+    transform: translate(-50%, -50%) scale(calc(1.1 / var(--clip-stage-scale, 1)));
+}
+
+.clip-play-button:focus-visible {
+    outline: 2px solid var(--star-glow);
+    outline-offset: 2px;
+}
+
+/* < 960px：clip-stage-inner 寬 960px，視窗不足以完整顯示
+   56c-T7 才實作手機 < 768px 降級（x-collapse 平面化）；本 task 桌面優先，
+   < 960px 暫時隱藏（沿用 motion-lab 慣例） */
+@media (max-width: 959px) {
+    .clip-stage-inner { display: none; }
+}

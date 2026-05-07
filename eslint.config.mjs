@@ -254,15 +254,39 @@ export default [
     },
   },
 
+  // Group 5b (56c-T4)：showcase/state-clip.js 完整規則集（supersedes Group 3）
+  // 56c clip mode 與 motion-lab Constellation tab 是雙 host：constellation-host.js 是
+  // motion-lab sandbox 的 thin host；state-clip.js 是 showcase lightbox takeover 的 host。
+  // 兩者都是合法的 BreathingManager 建立者（per-host lifecycle 持有原則，CD-56B-T2 同源延伸）。
+  // 規則繼承 Group 6 base：window.confirm + Set.intersection（ES2025） + starSettle Literal
+  // 但允許 new BreathingManager（host 持有 lifecycle）。
+  {
+    files: ["web/static/js/pages/showcase/state-clip.js"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        SEL_WINDOW_CONFIRM,
+        SEL_STARSETTLE_LITERAL,
+        {
+          selector: "MemberExpression[property.name='intersection']",
+          message:
+            "Set.prototype.intersection 為 ES2025 API，尚未進入 OpenAver baseline。請改用 [...setA].filter(x => setB.has(x))。",
+        },
+      ],
+    },
+  },
+
   // Group 6: 其餘非 state/ 非 main.js 非 animations.js 非 breathing.js JS（supersedes Group 3）
   // 包含：window.confirm guard + BreathingManager 實例化禁令（CD-56B-T2）
   // + starSettle Literal ban（CD-T2FIX-1）：其他檔案完全不允許出現 'starSettle' 字串
   //   （animations.js 在 ignores 中，由 Group 4 Property selector 保護）
+  //   （state-clip.js 在 ignores 中，由 Group 5b 完整覆寫並允許 new BreathingManager）
   {
     files: ["web/static/js/**/*.js"],
     ignores: [
       "web/static/js/pages/**/state/**/*.js",
       "web/static/js/pages/motion-lab/constellation-host.js",
+      "web/static/js/pages/showcase/state-clip.js",
       "web/static/js/shared/constellation/animations.js",
       "web/static/js/shared/constellation/breathing.js",
     ],

@@ -683,7 +683,11 @@ document.addEventListener('alpine:init', () => {
         // 卡片保持完全不透明，下方 rail 不再透出，spec §2.4「rail 永遠不是主角」恢復）
         this.visibleSlots.forEach(id => {
           if (id !== slotId && this.cards[id]) {
-            gsap.to(this.cards[id], { filter: 'brightness(0.5)', duration: 0.20, ease: 'fluent' });
+            const otherCard = this.cards[id];
+            // 56c-T4fix6 (round 2 revert): 只 kill 前輪 leave tween，不 clearProps —
+            // clearProps 把 inline brightness(0.5) 砍回 1.0 反而創造 enter→enter 變黑動畫
+            gsap.killTweensOf(otherCard, 'filter');
+            gsap.to(otherCard, { filter: 'brightness(0.5)', duration: 0.20, ease: 'fluent' });
           }
         });
 
@@ -692,8 +696,8 @@ document.addEventListener('alpine:init', () => {
         neighbors.forEach(nid => {
           const nline = this.railLines[nid];
           if (nline) {
-            // T4fix（§C state model）：CSS class .rail--neighbor 接 steady (0.55)；
-            // GSAP 短 entry pulse peak 0.70 → clearProps，class 接管 hover 期間 steady
+            // 56c-T4fix6 (round 2 revert): 還原 SET 0.70 entry pulse + tween 0.55 終態
+            // CSS class .rail--neighbor 接 steady (0.55)；entry pulse 0.70 是 design intent
             gsap.killTweensOf(nline, 'strokeOpacity');
             nline.classList.add('rail--neighbor');
             gsap.set(nline, { strokeOpacity: 0.70 });

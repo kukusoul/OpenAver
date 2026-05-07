@@ -35,9 +35,14 @@
      * 且 CSS objectPosition = 'right center'，瀏覽器 GPU 層裁切（零效能損耗）。
      * 既有 caller 不傳 options → 走 default 'full' 分支零回歸。
      *
+     * 56c-T4: 第三參數 options.parent 預設 `document.body`（向後相容）；
+     * 56c clip mode 傳入 `.clip-stage`，讓 ghost 進入 .clip-stage 自己建立的
+     * stacking context — 同 stacking context 內 main-overlay z=2001 才能正確
+     * 蓋過 ghost z=2000。其他 callers 不傳 → 走 default body → 行為不變。
+     *
      * @param {string} src - 圖片來源 URL
      * @param {DOMRect} rect - 來源元素的 bounding rect
-     * @param {object} [options] - { cropMode: 'full' | 'right-half' }
+     * @param {object} [options] - { cropMode: 'full' | 'right-half', parent?: Element }
      * @returns {HTMLImageElement|null} ghost element，或 null（建立失敗）
      */
     function createCoverGhost(src, rect, options) {
@@ -76,7 +81,11 @@
             ghost.style.objectPosition = 'right center';
         }
 
-        document.body.appendChild(ghost);
+        // 56c-T4: parent 預設 body 維持向後相容；56c 傳 .clip-stage 讓 ghost
+        // 進入 .clip-stage stacking context，main-overlay z=2001 在同 context 下
+        // 才能正確蓋過 ghost z=2000
+        var parent = options.parent || document.body;
+        parent.appendChild(ghost);
 
         // 以 GSAP 定位至來源位置（cropMode 'right-half' 時用裁切後 ghostRect）
         if (typeof gsap !== 'undefined') {
@@ -147,7 +156,13 @@
         // 1) 先建 ghost（createCoverGhost 內部 cleanupStaleGhosts() 會還原所有
         //    [data-ghost-hidden] 元素 opacity，故必須在 hide 之前呼叫；對齊
         //    playGridToLightbox 既有 pattern）
-        var ghost = createCoverGhost(src, rect, { cropMode: 'right-half' });
+        // 56c-T4: 取 .clip-stage 作為 ghost parent，讓 ghost 進入 .clip-stage
+        // stacking context → main-overlay z=2001 在 .clip-stage 內可以正確蓋過 ghost z=2000
+        var stageEl = stageInnerEl.closest('.clip-stage');
+        var ghost = createCoverGhost(src, rect, {
+            cropMode: 'right-half',
+            parent: stageEl || document.body  // fallback safety
+        });
         if (!ghost) {
             if (typeof opts.onComplete === 'function') opts.onComplete(null);
             return null;
@@ -158,12 +173,26 @@
         coverImgEl.setAttribute('data-ghost-hidden', 'true');
         gsap.set(coverImgEl, { opacity: 0 });
 
-        // 計算目標位置（CD-56C-11：design-space (480, 310) 中央，main img 200×250）
-        var stageRect = stageInnerEl.getBoundingClientRect();
-        var targetW = 200;
-        var targetH = 250;
-        var targetX = stageRect.left + 480 - targetW / 2;
-        var targetY = stageRect.top + 310 - targetH / 2;
+        // 56c-T4: single source of truth — 直接吃 .clip-main-anchor 的 native rect
+        // （瀏覽器 transform: scale 後回傳 scaled rect），與 cards design-space 480/310
+        // 完全同步，避免再算 480*scale 公式漂移
+        var targetX, targetY, targetW, targetH;
+        var anchorEl = stageInnerEl.querySelector('.clip-main-anchor');
+        if (anchorEl) {
+            var anchorRect = anchorEl.getBoundingClientRect();
+            targetX = anchorRect.left;
+            targetY = anchorRect.top;
+            targetW = anchorRect.width;
+            targetH = anchorRect.height;
+        } else {
+            // graceful fallback: 找不到 anchor（DOM 老版 / motion-lab sandbox）退回舊公式
+            var stageRect = stageInnerEl.getBoundingClientRect();
+            var scale = stageRect.width > 0 ? stageRect.width / 960 : 1;
+            targetW = 200 * scale;
+            targetH = 250 * scale;
+            targetX = stageRect.left + 480 * scale - targetW / 2;
+            targetY = stageRect.top + 310 * scale - targetH / 2;
+        }
 
         // duration guard chain（與 motion-lab.js:1327-1328 既有 pattern 一致，避免 ?. 在
         // 較舊瀏覽器/lint 設定下出問題）
