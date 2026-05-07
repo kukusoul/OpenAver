@@ -937,6 +937,7 @@ export function stateClip() {
      * 56c-T4fix7: _applyClipHoverDim — 一次性設定 8 卡目標 dim 狀態
      * 取代 filter brightness 兩段式 race，消除 enter→enter 亮閃。
      * activeSlotId：hover 中的卡（dim=0）；其餘 7 卡 dim=1。
+     * activeSlotId === null：reset 全還原（8 卡全部 dim=0），由 _resetClipHoverDim 呼叫。
      * overwrite: 'auto' 自動 stomp 前一輪同 property tween（取代 killTweensOf）。
      */
     _applyClipHoverDim(activeSlotId) {
@@ -944,7 +945,7 @@ export function stateClip() {
       this.clipVisibleSlots.forEach(id => {
         const card = this.clipCards[id];
         if (!card) return;
-        const target = id === activeSlotId ? 0 : 1;
+        const target = activeSlotId === null ? 0 : (id === activeSlotId ? 0 : 1);
         if (isPRM) {
           gsap.set(card, { '--slot-dim-opacity': target });
         } else {
