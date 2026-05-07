@@ -1082,17 +1082,17 @@
                  跟著 inner scale；CSS inverse scale 維持視覺 44×44；位置 main static 下方中央 -->
             <button class="clip-play-button"
                     x-show="clipModeOpen"
-                    @click="playClipMainVideo && playClipMainVideo()"
+                    @click.stop="playClipMainVideo && playClipMainVideo()"
                     :aria-label="t('showcase.action.play')">
                 <i class="bi bi-play-fill" aria-hidden="true"></i>
             </button>
 
         </div><!-- /.clip-stage-inner -->
 
-        <!-- main-overlay 維持 hit area 在 .clip-stage 直屬層（提供 click target 給 onClipMainImgClick） -->
-        <div class="clip-main-overlay" x-show="clipModeOpen" @click="onClipMainImgClick($event)">
-            <!-- 透明 hit area，play button 已抽離至 inner sibling -->
-        </div>
+        <!-- 56c-T4 (codex P1-2): .clip-main-overlay 已移除。
+             原 hit area 改由 _buildClipMainStatic 在 <img> 上直接掛 click listener，
+             同 stacking context 內 main static z=11 < play button z=12 → 點 button
+             命中 button、點 main static 非 button 區命中 onClipMainImgClick → closeClipMode。 -->
     </div><!-- /.clip-stage -->
 
     <!-- TASK-52.3.3: Remove Actress Confirm Modal（取代原 window.confirm）

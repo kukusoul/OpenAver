@@ -1080,6 +1080,18 @@ export function stateLightbox() {
             // 1. 輸入框中不處理快捷鍵
             if (e.target.tagName === 'INPUT') return;
 
+            // 56c-T4 (codex P1-1)：clip mode 最高優先（高於 sample-gallery / lightbox）
+            // ESC → closeClipMode；其他鍵在 clip mode 期間獨佔（不傳給 lightbox），
+            // 避免箭頭鍵在 constellation 底下偷偷 navigate 隱藏的 lightbox（plan-56c §1 CD-56C-4）
+            if (this.clipModeOpen) {
+                const clipKey = (e.key || '').toUpperCase();
+                if (clipKey === 'ESCAPE') {
+                    e.preventDefault();
+                    this.closeClipMode();
+                }
+                return;
+            }
+
             // T3.3: Remove Actress modal 開啟時，Esc 優先關閉 modal
             if (e.key === 'Escape' && this.removeActressModalOpen) {
                 this.cancelRemoveActressModal();

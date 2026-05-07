@@ -2733,7 +2733,9 @@ body.sidebar-collapsed .showcase-footer {
 /* 56c-T4: clip mode 停留期間的 main image — .clip-stage-inner 子元素，
    與 8 cards 走同一 design-space layout 路徑，resize 自動跟隨 inner scale。
    codex 改良：不用 transform: translate(-50%,-50%)，避免與 GSAP scale tween
-   混疊；改 left:380 top:185（中心點數學等價於 design-space (480, 310)）。 */
+   混疊；改 left:380 top:185（中心點數學等價於 design-space (480, 310)）。
+   codex P1-2：pointer-events 改 auto（從 _buildClipMainStatic 接 click → onClipMainImgClick），
+   同 stacking context 內 z=11 < play button z=12，play button 仍在上層命中正確。 */
 .clip-main-static {
     position: absolute;
     left: 380px;
@@ -2745,30 +2747,16 @@ body.sidebar-collapsed .showcase-footer {
     transform-origin: center center;
     border-radius: 8px;
     box-shadow: 0 4px 16px rgba(0,0,0,0.25);
-    z-index: 11;  /* > .clip-slot z=10，< .clip-main-overlay z=2001 */
-    pointer-events: none;
+    z-index: 11;  /* > .clip-slot z=10；play button z=12 > 11 → button 在上 */
+    cursor: pointer;
 }
 
-/* ── Main overlay + play button（簡化版，56c 主圖由 ghost-fly ghost 接管） ──
-   56c-T4: 從 .clip-stage-inner 移出到 .clip-stage 直屬層，脫離 inner 的
-   transform: scale stacking context；play button z-index 才能升上 ghost (z=2000) 之上 */
-.clip-main-overlay {
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    width: 200px;
-    height: 250px;
-    transform: translate(-50%, -50%) scale(var(--clip-stage-scale, 1));
-    transform-origin: center center;
-    border-radius: var(--fluent-radius-xl);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 2001;  /* > ghost-fly ghost z-index 2000，play button 才看得到 */
-    /* 透明 hit area — 中央 ghost img 由 ghost-fly 管理 z-index:2000 浮在上層；
-       此 overlay 提供 click target 給 onClipMainImgClick（CD-56C-4） */
-}
+/* 56c-T4 (codex P1-2)：.clip-main-overlay 已移除。
+   原本是 .clip-stage 直屬子層 z=2001，會在 root stacking context 蓋住
+   被 .clip-stage-inner transform stacking context 囚禁的 play button (z=12)，
+   導致點擊 play button 實際打到 overlay → onClipMainImgClick → closeClipMode，
+   而非 playClipMainVideo。改用 main static 直接接 click（同 inner stacking 內，
+   play button z=12 仍在 main static z=11 之上），點擊命中正確。 */
 
 /* 56c-T4: play button 在 .clip-stage-inner 內 design-space coords，
    位置 main image (480,310) 下方中央 (480,410)；inverse scale 抵消 inner

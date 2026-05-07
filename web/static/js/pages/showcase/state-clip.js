@@ -531,9 +531,26 @@ export function stateClip() {
           this._fireClipKeystonePulse(slotId);
           this._startClipIdleAcknowledge();
         },
-        // T4 onMainSwap：t=0.30 callback。T4 mock data 已在 openClipMode 設定，
-        // 此 hook 留空 / no-op（T5 改為 reassign clipResults + clipQueryVideo）
-        { onMainSwap: () => { /* T5 接 API 時填 */ } }
+        // T4 onMainSwap：t=0.30 callback（main img fade-out 點 swap src）。
+        // codex P1-3 修：原 no-op 導致 slip-through 後主圖 src 不變，違反「無限探索」spec
+        // (DoD 6)。T4 mock 階段先做 src swap + queryVideo 更新；T5 接 API 後再升級
+        // 為 fetch 新 12 筆 + reassign clipResults。
+        {
+          onMainSwap: (clickedId) => {
+            if (generation !== this._clipGeneration) return;
+            const item = this._getSlotItem(clickedId);
+            if (!item) return;
+            if (this._clipMainStatic && item.cover_url) {
+              this._clipMainStatic.src = item.cover_url;
+            }
+            this.clipQueryVideo = {
+              video_id: item.video_id,
+              number: item.number,
+              title: item.title,
+              cover_url: item.cover_url,
+            };
+          },
+        }
       );
     },
 
@@ -669,7 +686,14 @@ export function stateClip() {
 
     /**
      * 56c-T4: 在 .clip-stage-inner 內建 main img static element
-     * 取代 fixed ghost，享受 inner scale + flex centering 的 layout-driven resize 跟隨
+     * 取代 fixed ghost，享受 inner scale + flex centering 的 layout-driven resize 跟隨。
+     *
+     * codex P1-2 修：原本 hit area 走 .clip-main-overlay (z=2001 在 .clip-stage 直屬層)，
+     * 但 .clip-play-button (z=12) 被 .clip-stage-inner 的 transform stacking context 囚禁，
+     * overlay 在 root level 蓋過 play button → 點擊 button 實際打到 overlay。
+     * 改在 main static <img> 直接掛 click → onClipMainImgClick；同 inner stacking 內
+     * play button z=12 > main static z=11，button 仍在 main static 之上命中正確。
+     * @click.stop 防冒泡的責任由 play button 的 Alpine handler 負責（已在 template）。
      */
     _buildClipMainStatic(src) {
       const stageInner = document.querySelector('.clip-stage-inner');
@@ -679,6 +703,9 @@ export function stateClip() {
       img.src = src || '';
       img.alt = '';
       img.setAttribute('aria-hidden', 'true');
+      // codex P1-2: 取代已移除的 .clip-main-overlay click handler。
+      // closeClipMode 會 .remove() 此 element，listener 隨 GC 一起清。
+      img.addEventListener('click', (e) => this.onClipMainImgClick(e));
       stageInner.appendChild(img);
       return img;
     },
