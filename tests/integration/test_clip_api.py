@@ -293,3 +293,176 @@ class TestSimilarCoversAPI:
 
         assert resp.status_code == 200
         assert resp.json()["results"] == []
+
+
+# ---------------------------------------------------------------------------
+# 56c-T1: response shape — query_video + cover_url
+# ---------------------------------------------------------------------------
+
+class TestSimilarCoversResponseShape:
+    """56c-T1 contract: response 增補 query_video（頂層中央主圖 metadata）
+    與 cover_url（每筆 result）。前端零 path 邏輯。
+    """
+
+    def test_query_video_present(self, client):
+        """response.query_video 含 video_id / number / title / cover_url 4 欄位"""
+        target_video = _make_video(
+            video_id=1,
+            number="ABC-001",
+            title="Test Video",
+            cover_path="file:///test/cover.jpg",
+            actresses=["Alice"],
+        )
+        result_video = _make_video(video_id=2, number="XYZ-002", actresses=["Bob"])
+        provider = _make_provider(
+            compute_similar_result=[{"video_id": 2, "cosine_score": 0.85}],
+        )
+
+        def mock_get_by_id(vid):
+            return {1: target_video, 2: result_video}.get(vid)
+
+        with (
+            patch("web.routers.clip.get_provider", return_value=provider),
+            patch("web.routers.clip.VideoRepository") as MockRepo,
+        ):
+            MockRepo.return_value.get_by_id.side_effect = mock_get_by_id
+            resp = client.get("/api/similar-covers/1")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "query_video" in data
+        qv = data["query_video"]
+        assert qv["video_id"] == 1
+        assert qv["number"] == "ABC-001"
+        assert qv["title"] == "Test Video"
+        assert "cover_url" in qv
+        assert isinstance(qv["cover_url"], str)
+
+    def test_cover_url_form(self, client):
+        """query_video.cover_url 與 results[i].cover_url 皆以 /api/gallery/image?path= 開頭，URL-encoded"""
+        # cover_path 含特殊字元（空白 + 中文），驗 URL-encode safe=''
+        target_video = _make_video(
+            video_id=1,
+            number="ABC-001",
+            cover_path="file:///media/影片 庫/cover one.jpg",
+            actresses=["Alice"],
+        )
+        result_video = _make_video(
+            video_id=2,
+            number="XYZ-002",
+            cover_path="file:///media/影片 庫/cover two.jpg",
+            actresses=["Bob"],
+        )
+        provider = _make_provider(
+            compute_similar_result=[{"video_id": 2, "cosine_score": 0.85}],
+        )
+
+        def mock_get_by_id(vid):
+            return {1: target_video, 2: result_video}.get(vid)
+
+        with (
+            patch("web.routers.clip.get_provider", return_value=provider),
+            patch("web.routers.clip.VideoRepository") as MockRepo,
+        ):
+            MockRepo.return_value.get_by_id.side_effect = mock_get_by_id
+            resp = client.get("/api/similar-covers/1")
+
+        assert resp.status_code == 200
+        data = resp.json()
+
+        # query_video.cover_url
+        qv_url = data["query_video"]["cover_url"]
+        assert qv_url.startswith("/api/gallery/image?path=")
+        # safe='' 表示空白與中文都需要 encode → encoded 結果不應含 raw 空白或 raw 中文
+        qs = qv_url.split("path=", 1)[1]
+        assert " " not in qs  # 原始空白被 encoded 為 %20
+        assert "影" not in qs  # 原始中文被 encoded
+
+        # results[i].cover_url
+        results = data["results"]
+        assert len(results) == 1
+        r_url = results[0]["cover_url"]
+        assert r_url.startswith("/api/gallery/image?path=")
+        r_qs = r_url.split("path=", 1)[1]
+        assert " " not in r_qs
+        assert "影" not in r_qs
+
+    def test_results_count_12(self, client):
+        """預設不帶 limit 時，傳給 provider.compute_similar 的 limit=12"""
+        target_video = _make_video(video_id=1)
+        provider = _make_provider(compute_similar_result=[])
+
+        with (
+            patch("web.routers.clip.get_provider", return_value=provider),
+            patch("web.routers.clip.VideoRepository") as MockRepo,
+        ):
+            MockRepo.return_value.get_by_id.return_value = target_video
+            resp = client.get("/api/similar-covers/1")
+
+        assert resp.status_code == 200
+        provider.compute_similar.assert_awaited_once()
+        call_kwargs = provider.compute_similar.call_args
+        called_limit = (
+            call_kwargs.kwargs.get("limit")
+            if "limit" in call_kwargs.kwargs
+            else call_kwargs.args[1] if len(call_kwargs.args) > 1 else None
+        )
+        assert called_limit == 12
+
+    def test_each_result_has_cover_url(self, client):
+        """results 非空時每筆都含 cover_url 欄位（form 同 #2）"""
+        target_video = _make_video(video_id=1, actresses=["Alice"])
+        v2 = _make_video(video_id=2, number="V2", cover_path="file:///a/b/v2.jpg", actresses=["B"])
+        v3 = _make_video(video_id=3, number="V3", cover_path="file:///a/b/v3.jpg", actresses=["C"])
+        provider = _make_provider(
+            compute_similar_result=[
+                {"video_id": 2, "cosine_score": 0.85},
+                {"video_id": 3, "cosine_score": 0.80},
+            ],
+        )
+
+        def mock_get_by_id(vid):
+            return {1: target_video, 2: v2, 3: v3}.get(vid)
+
+        with (
+            patch("web.routers.clip.get_provider", return_value=provider),
+            patch("web.routers.clip.VideoRepository") as MockRepo,
+        ):
+            MockRepo.return_value.get_by_id.side_effect = mock_get_by_id
+            resp = client.get("/api/similar-covers/1")
+
+        assert resp.status_code == 200
+        results = resp.json()["results"]
+        assert len(results) == 2
+        for item in results:
+            assert "cover_url" in item
+            assert item["cover_url"].startswith("/api/gallery/image?path=")
+
+    def test_cover_path_still_present(self, client):
+        """向後相容：results[i].cover_path 仍存在 = DB file:/// URI"""
+        target_video = _make_video(video_id=1, actresses=["Alice"])
+        result_video = _make_video(
+            video_id=2,
+            number="XYZ-002",
+            cover_path="file:///test/result-cover.jpg",
+            actresses=["Bob"],
+        )
+        provider = _make_provider(
+            compute_similar_result=[{"video_id": 2, "cosine_score": 0.85}],
+        )
+
+        def mock_get_by_id(vid):
+            return {1: target_video, 2: result_video}.get(vid)
+
+        with (
+            patch("web.routers.clip.get_provider", return_value=provider),
+            patch("web.routers.clip.VideoRepository") as MockRepo,
+        ):
+            MockRepo.return_value.get_by_id.side_effect = mock_get_by_id
+            resp = client.get("/api/similar-covers/1")
+
+        assert resp.status_code == 200
+        results = resp.json()["results"]
+        assert len(results) == 1
+        # cover_path 必須仍存在，且為 DB 原 file:/// URI
+        assert results[0]["cover_path"] == "file:///test/result-cover.jpg"

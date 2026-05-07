@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from urllib.parse import quote
 
 from fastapi import APIRouter, HTTPException, Query
 
@@ -24,10 +25,30 @@ from core.clip import get_provider
 from core.clip.ranking import apply_diversity_penalty
 from core.database import VideoRepository, get_db_path
 from core.logger import get_logger
+from core.path_utils import uri_to_fs_path
 
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api", tags=["clip"])
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _build_cover_url(cover_path: str) -> str:
+    """file:/// URI → /api/gallery/image?path=<URL-encoded local FS path>。
+
+    沿用 web/routers/showcase.py:26-29 既有 pattern。uri_to_fs_path 已封裝
+    file:/// URI 偵測（path_utils.py:376-392），呼叫端零 startswith / 零手動 strip /
+    零手動 file:/// 構造，符合 CLAUDE.md P0 路徑規則。
+
+    邊界：cover_path 為空字串 / None → 回傳空字串（對齊 showcase.py:26-29）。
+    """
+    if not cover_path:
+        return ""
+    local_path = uri_to_fs_path(cover_path)
+    return f"/api/gallery/image?path={quote(local_path, safe='')}"
 
 
 # ---------------------------------------------------------------------------
@@ -69,6 +90,12 @@ async def _compute_similar_covers(
         return {
             "video_id": video_id,
             "model_id": provider.model_id,
+            "query_video": {
+                "video_id": video.id,
+                "number": video.number,
+                "title": video.title,
+                "cover_url": _build_cover_url(video.cover_path),
+            },
             "results": [],
         }
 
@@ -98,6 +125,12 @@ async def _compute_similar_covers(
         return {
             "video_id": video_id,
             "model_id": provider.model_id,
+            "query_video": {
+                "video_id": video.id,
+                "number": video.number,
+                "title": video.title,
+                "cover_url": _build_cover_url(video.cover_path),
+            },
             "results": [],
         }
 
@@ -152,7 +185,8 @@ async def _compute_similar_covers(
             "video_id": cid,
             "number": v.number,
             "title": v.title,
-            "cover_path": v.cover_path,  # file:/// URI 格式，直接從 DB 取出不轉換
+            "cover_path": v.cover_path,  # file:/// URI 格式，直接從 DB 取出不轉換（向後相容）
+            "cover_url": _build_cover_url(v.cover_path),  # /api/gallery/image?path=...
             "cosine_score": item["cosine_score"],
             "penalty_applied": item["penalty_applied"],
             "actresses": actresses_list,
@@ -161,6 +195,12 @@ async def _compute_similar_covers(
     return {
         "video_id": video_id,
         "model_id": provider.model_id,
+        "query_video": {
+            "video_id": video.id,
+            "number": video.number,
+            "title": video.title,
+            "cover_url": _build_cover_url(video.cover_path),
+        },
         "results": results,
     }
 
