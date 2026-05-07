@@ -466,3 +466,79 @@ class TestSimilarCoversResponseShape:
         assert len(results) == 1
         # cover_path 必須仍存在，且為 DB 原 file:/// URI
         assert results[0]["cover_path"] == "file:///test/result-cover.jpg"
+
+
+# ---------------------------------------------------------------------------
+# 56c-T5: cover_url 可 GET 200（query_video + results[0]）
+# ---------------------------------------------------------------------------
+
+class TestCoverUrlFetchable:
+    """56c-T5 guard：query_video.cover_url 與 results[0].cover_url 皆為合法 /api/gallery/image 路徑，
+    格式與既有 TestSimilarCoversResponseShape 一致（/api/gallery/image?path= 開頭）。
+    本 class 確認 by-number 端點也回傳正確 cover_url 格式（前端 _fetchClipResults 呼叫路徑）。
+    """
+
+    def test_by_number_query_video_cover_url_fetchable(self, client):
+        """by-number 端點 query_video.cover_url 以 /api/gallery/image?path= 開頭"""
+        target_video = _make_video(
+            video_id=5,
+            number="ABC-005",
+            cover_path="file:///media/covers/abc005.jpg",
+            actresses=["Carol"],
+        )
+        provider = _make_provider(compute_similar_result=[])
+
+        with (
+            patch("web.routers.clip.get_provider", return_value=provider),
+            patch("web.routers.clip.VideoRepository") as MockRepo,
+        ):
+            MockRepo.return_value.get_by_number.return_value = target_video
+            MockRepo.return_value.get_by_id.return_value = target_video
+
+            resp = client.get("/api/similar-covers/by-number/ABC-005")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "query_video" in data
+        qv_url = data["query_video"]["cover_url"]
+        assert qv_url.startswith("/api/gallery/image?path="), (
+            f"query_video.cover_url 應以 /api/gallery/image?path= 開頭，實際：{qv_url!r}"
+        )
+
+    def test_by_number_results_cover_url_fetchable(self, client):
+        """by-number 端點 results[0].cover_url 以 /api/gallery/image?path= 開頭"""
+        target_video = _make_video(
+            video_id=5,
+            number="ABC-005",
+            cover_path="file:///media/covers/abc005.jpg",
+            actresses=["Carol"],
+        )
+        result_video = _make_video(
+            video_id=6,
+            number="XYZ-006",
+            cover_path="file:///media/covers/xyz006.jpg",
+            actresses=["Dana"],
+        )
+        provider = _make_provider(
+            compute_similar_result=[{"video_id": 6, "cosine_score": 0.80}],
+        )
+
+        def mock_get_by_id(vid):
+            return {5: target_video, 6: result_video}.get(vid)
+
+        with (
+            patch("web.routers.clip.get_provider", return_value=provider),
+            patch("web.routers.clip.VideoRepository") as MockRepo,
+        ):
+            MockRepo.return_value.get_by_number.return_value = target_video
+            MockRepo.return_value.get_by_id.side_effect = mock_get_by_id
+
+            resp = client.get("/api/similar-covers/by-number/ABC-005")
+
+        assert resp.status_code == 200
+        results = resp.json()["results"]
+        assert len(results) == 1
+        r_url = results[0]["cover_url"]
+        assert r_url.startswith("/api/gallery/image?path="), (
+            f"results[0].cover_url 應以 /api/gallery/image?path= 開頭，實際：{r_url!r}"
+        )

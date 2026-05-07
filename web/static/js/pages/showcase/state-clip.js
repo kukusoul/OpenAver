@@ -24,6 +24,7 @@
  * 一致；ESM 命名 export 不可用 — ghost-fly 對外只有 `export { GhostFly }` namespace）。
  */
 
+import { _filteredVideos } from '@/showcase/state-base.js';
 import {
   ANCHORS,
   pickEight,
@@ -225,38 +226,15 @@ export function stateClip() {
 
       this.clipModeAnimating = true;
 
-      // 1. 56c-T4 mock data（對齊 SimilarCoversResponse contract，T5 改 API fetch）
-      // TODO(T5): backend clip.py `query_video` + `results` 補 `path: v.path` 欄位後，
-      // 本 mock 段加 `path: '/path/to/mock/video.mp4'` real path、onMainSwap callback 寫入
-      // `clipQueryVideo.path = item.path`、playClipMainVideo 升級為
-      // `this.clipQueryVideo?.path || this.currentLightboxVideo?.path` fallback 鏈。
-      // T4 mock 階段不偽造 path 字串：playVideo() 會 silent fail（找不到檔案 toast），
-      // 與 DoD「play button 可播」不符。維持 fallback to currentLightboxVideo 即可。
-      this.clipResults = Array.from({ length: 12 }, (_, i) => ({
-        video_id: i + 1,
-        number: 'MOCK-' + String(i + 1).padStart(3, '0'),
-        title: 'Mock Video ' + (i + 1),
-        cover_url: '/static/img/showcase/sc-' + ((i % 20) + 1) + '.jpg',
-        cover_path: '',
-        cosine_score: 0.95 - i * 0.05,
-        penalty_applied: false,
-        actresses: [],
-        model_id: 'mock',
-      }));
-      this.clipQueryVideo = {
-        video_id: 0,
-        number: this.currentLightboxVideo.number || 'MOCK-000',
-        title: this.currentLightboxVideo.title || 'Mock Query',
-        cover_url: this.currentLightboxVideo.cover_url || '/static/img/showcase/sc-1.jpg',
-      };
-      this._clipLastDrilledNumber = null;
-
       const coverEl = (this.$refs && this.$refs.lightboxCoverImg) || null;
       const lightboxEl = document.querySelector('.showcase-lightbox');
       const isPRM = !!(window.OpenAver && window.OpenAver.prefersReducedMotion);
 
+      // 1. 並行：先發 fetch（縮短 perceived latency）+ sparkle burst（PRM 跳過）
+      const fetchPromise = this._fetchClipResults(this.currentLightboxVideo.number);
+
       // 2. Sparkle burst 0.4s（PRM 跳過）— C23 per-callsite PRM guard
-      await new Promise(resolve => {
+      const scanPromise = new Promise(resolve => {
         if (isPRM) return resolve();
         if (!coverEl) return resolve();
         const coverContainer = coverEl.closest('.lightbox-cover');
@@ -268,14 +246,32 @@ export function stateClip() {
         }
       });
 
-      // 3. lightbox content fade-out + stage mount（cards/rails 仍 hidden；dust 開始閃爍）
+      // Promise.all 等兩者完成；fetchPromise reject 則 Promise.all 立即 reject → catch 段攔截
+      let data;
+      try {
+        [data] = await Promise.all([fetchPromise, scanPromise]);
+      } catch (_err) {
+        // _fetchClipResults 已 showToast，此處只重置 animating guard 並提前退出
+        this.clipModeAnimating = false;
+        return;
+      }
+
+      // 3. 填入 API 資料 + 重置鑽入歷史
+      this.clipResults = data.results;
+      this.clipQueryVideo = data.query_video;
+      this._clipLastDrilledNumber = null;
+
+      // 4. Preload 前 8 張封面圖（避免空白幀）
+      await this._preloadImages(data.results.slice(0, 8).map(r => r.cover_url));
+
+      // 5. lightbox content fade-out + stage mount（cards/rails 仍 hidden；dust 開始閃爍）
       //    順序鐵律（spec §1 CD-56C-11）：先 mount stage 才能取 stageInner rect。
       if (lightboxEl) lightboxEl.classList.add('clip-mode-active');
       this.clipModeOpen = true;
       // 等 layout flush（讓 .clip-stage.show 生效，stageInner getBoundingClientRect 才有值）
       await new Promise(r => requestAnimationFrame(r));
 
-      // 3.5. 56c-T4: 算 scale + 寫 CSS variable（必須在 ghost-fly enter 之前，
+      // 5.5. 56c-T4: 算 scale + 寫 CSS variable（必須在 ghost-fly enter 之前，
       //      因 ghost-fly target 公式從 scaled stageRect 反推 scale）
       const stageEl = document.querySelector('.clip-stage');
       if (stageEl) {
@@ -285,7 +281,7 @@ export function stateClip() {
         await new Promise(r => requestAnimationFrame(r));
       }
 
-      // 4. ghost-fly enter（C22 顯式檢查，禁用 ?.() 短路：fail open 會讓 stage 永遠 mount 不起來）
+      // 6. ghost-fly enter（C22 顯式檢查，禁用 ?.() 短路：fail open 會讓 stage 永遠 mount 不起來）
       // 56c-T4: 進場後 ghost park 成 .clip-stage-inner 子元素（resize-safe）
       const stageInnerEl = document.querySelector('.clip-stage-inner');
       if (isPRM) {
@@ -390,16 +386,21 @@ export function stateClip() {
         this._clipMainStatic = null;
       }
 
-      // 3. lightbox content fade-in
+      // 3. silent switch lightbox to last drilled-into video（T5：CD-56C-12）
+      // 必須在 clip-mode-active 移除前完成，確保 currentLightboxVideo 已更新
+      // 才觸發 lightbox content fade-in（顯示正確影片）
+      this._silentSwitchLightboxByNumber(this._clipLastDrilledNumber);
+
+      // 3.5. lightbox content fade-in（silent switch 完成後才移除 active class）
       if (lightboxEl) lightboxEl.classList.remove('clip-mode-active');
 
-      // 3.5. 56c-T4: cleanup CSS variable（lifecycle 衛生，避免殘留）
+      // 3.6. 56c-T4: cleanup CSS variable（lifecycle 衛生，避免殘留；與 lightbox 顯示無關）
       const stageEl = document.querySelector('.clip-stage');
       if (stageEl) {
         stageEl.style.removeProperty('--clip-stage-scale');
       }
 
-      // 4. unmount stage（x-effect 觸發 destroyClipStage cleanup）
+      // 5. unmount stage（x-effect 觸發 destroyClipStage cleanup）
       this.clipModeOpen = false;
 
       this.clipModeAnimating = false;
@@ -412,24 +413,44 @@ export function stateClip() {
      * 56c-T4：mock 隨機重抽 12 筆（已在 openClipMode 寫入，此處 onMainSwap 無實質 swap）
      * 56c-T5：改為 API fetch + image preload + onMainSwap 在 t=0.30 替換 clipResults
      */
-    onClipCardClick(slotId) {
+    async onClipCardClick(slotId) {
       if (this.clipModeAnimating || !this.clipVisibleSlots.has(slotId)) return;
 
+      // 取得被點卡的 item（fetch 前先取，避免 slip-through 期間 clipResults 已被替換）
+      const clickedItem = this._getSlotItem(slotId);
+      if (!clickedItem) return;
+
+      // 確認 clickedItem 有效後才中止 idle / dust（避免 early return 洩漏 UI 狀態）
       this._cancelClipIdleAcknowledge();
       // T7 phase transition：abort 全 100 顆 dust pulse（spec §5.2 強制暫停）
       this._abortAllClipDustPulses();
+
+      // T5: clipModeAnimating = true 在 fetch await 之前設定（race guard：防連點穿透）
+      this.clipModeAnimating = true;
+
+      // T5: fetch + preload（PRM 不跳過 fetch，只動畫路徑走 PRM 短路）
+      let newData;
+      try {
+        newData = await this._fetchClipResults(clickedItem.number);
+      } catch (_err) {
+        // _fetchClipResults 已 showToast；clip mode 保持開啟，只放棄本次 slip-through
+        this.clipModeAnimating = false;
+        return;
+      }
+      await this._preloadImages(newData.results.slice(0, 8).map(r => r.cover_url));
 
       const prevVisible = new Set(this.clipVisibleSlots);
       const nextVisible = pickEight(slotId, prevVisible, Math.random);
       const isPRM = !!(window.OpenAver && window.OpenAver.prefersReducedMotion);
 
-      // 56c-T4: mock 重抽（T5 改為 fetch + onMainSwap 內替換）
-      // 提前重抽安全：enter slot 上一輪 hidden（slot--hidden + opacity:0），用戶看不到 src 變更
-      // T4 使用 :src binding 讀 _getSlotItem(...)?.cover_url，無需手動 setSlotImage；
-      // 真實 swap 動作交給 onMainSwap 內 reassign clipResults（T5）。
-
       // PRM 短路（C23 per-callsite）：sync state update，不播動畫
       if (isPRM) {
+        // PRM 路徑也需要完成資料替換（fetch 已做，這裡同步更新 clipResults / clipQueryVideo）
+        this.clipResults = newData.results;
+        this.clipQueryVideo = newData.query_video;
+        if (this._clipMainStatic && clickedItem.cover_url) {
+          this._clipMainStatic.src = clickedItem.cover_url;
+        }
         if (this._clipActiveHoverSlot !== null) {
           this._resetClipHoverCard(this._clipActiveHoverSlot);
           this._clipActiveHoverSlot = null;
@@ -464,6 +485,8 @@ export function stateClip() {
         });
         this.clipMainSlot = slotId;
         this.clipVisibleSlots = nextVisible;
+        this._clipLastDrilledNumber = clickedItem.number;
+        this.clipModeAnimating = false;
         return;
       }
 
@@ -490,8 +513,6 @@ export function stateClip() {
           gsap.set(line, { clearProps: 'strokeOpacity' });
         }
       });
-
-      this.clipModeAnimating = true;
 
       // 同步清 hover card dim / scale 殘留（C26 精確 clearProps，禁用 'all'）
       // 56c-T4fix7: filter → --slot-dim-opacity（dim 路徑已改 CSS var）
@@ -521,6 +542,8 @@ export function stateClip() {
           this.clipMainSlot = slotId;
           this.clipVisibleSlots = nextVisible;
           this.clipModeAnimating = false;
+          // T5: onComplete 內賦值（closure 抓 clickedItem ref，不從 this.clipResults 重抓）
+          this._clipLastDrilledNumber = clickedItem.number;
           if (this.clipBreathingManager) this.clipBreathingManager.start(nextVisible);
           this._startClipMainBreath();
 
@@ -540,24 +563,17 @@ export function stateClip() {
           this._fireClipKeystonePulse(slotId);
           this._startClipIdleAcknowledge();
         },
-        // T4 onMainSwap：t=0.30 callback（main img fade-out 點 swap src）。
-        // codex P1-3 修：原 no-op 導致 slip-through 後主圖 src 不變，違反「無限探索」spec
-        // (DoD 6)。T4 mock 階段先做 src swap + queryVideo 更新；T5 接 API 後再升級
-        // 為 fetch 新 12 筆 + reassign clipResults。
+        // T5 onMainSwap：t=0.30 callback（main img fade-out 點同 frame 換 clipResults）
+        // T5: 升級為 fetch 新 12 筆 + reassign clipResults（API 資料已在 fetch await 取得）
         {
-          onMainSwap: (clickedId) => {
+          onMainSwap: () => {
             if (generation !== this._clipGeneration) return;
-            const item = this._getSlotItem(clickedId);
-            if (!item) return;
-            if (this._clipMainStatic && item.cover_url) {
-              this._clipMainStatic.src = item.cover_url;
+            // T5: 用 newData（closure 捕獲）替換整批 clipResults，不從 this.clipResults 重抓
+            if (this._clipMainStatic && clickedItem.cover_url) {
+              this._clipMainStatic.src = clickedItem.cover_url;
             }
-            this.clipQueryVideo = {
-              video_id: item.video_id,
-              number: item.number,
-              title: item.title,
-              cover_url: item.cover_url,
-            };
+            this.clipResults = newData.results;
+            this.clipQueryVideo = newData.query_video;
           },
         }
       );
@@ -1078,6 +1094,48 @@ export function stateClip() {
         // C26：clearProps 精確列表（static 用 left/top 定位，scale 由 GSAP 直設）
         gsap.set(this._clipMainStatic, { scale: 1 });
       }
+    },
+
+    // ── T5 新增 method ─────────────────────────────────────────────────────
+
+    /**
+     * _fetchClipResults — fetch /api/similar-covers/by-number/{number}
+     * 非 2xx → showToast + throw（呼叫端 catch 決定 fallback 行為）
+     * T5 CD-56C-5：by-number 端點，limit=12
+     */
+    async _fetchClipResults(number) {
+      const url = '/api/similar-covers/by-number/' + encodeURIComponent(number) + '?limit=12';
+      const resp = await fetch(url);
+      if (!resp.ok) {
+        this.showToast(window.t('clip_mode.fetch_failed'), 'error');
+        throw new Error('clip fetch failed: ' + resp.status);
+      }
+      return resp.json();
+    },
+
+    /**
+     * _preloadImages — Promise.all 預載 urls 陣列
+     * onerror = resolve：圖不存在也不阻塞；timeout 依賴 browser 預設行為
+     */
+    _preloadImages(urls) {
+      return Promise.all((urls || []).map(url => new Promise(resolve => {
+        if (!url) return resolve();
+        const img = new Image();
+        img.onload = img.onerror = resolve;
+        img.src = url;
+      })));
+    },
+
+    /**
+     * _silentSwitchLightboxByNumber — closeClipMode 末尾呼叫，silent 切換 lightbox 到最後鑽入的影片
+     * number = null → no-op（沒有鑽入過，留在原 lightbox 影片）
+     * 找不到（被 filter 排除 / 不在 _filteredVideos 範圍）→ 靜默 no-op，不報錯
+     * CD-56C-12
+     */
+    _silentSwitchLightboxByNumber(number) {
+      if (!number) return;
+      const idx = _filteredVideos.findIndex(v => v.number === number);
+      if (idx >= 0) this._setLightboxIndex(idx);
     },
   };
 }
