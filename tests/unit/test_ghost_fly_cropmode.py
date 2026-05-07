@@ -27,6 +27,13 @@ CALLER_SCOPE_FILES = [
     SHOWCASE_DIR / "state-base.js",
 ]
 
+# 合法 caller 白名單：這些檔案可持有 cropMode / 'right-half' / objectPosition: right，
+# 因為它們透過 GhostFly API 呼叫而非自行實作 strip 邏輯。
+# 新增條件見 TASK-56c-T4fix8 Maintainer Note。
+CROPMODE_CALLER_WHITELIST = {
+    SHOWCASE_DIR / "state-clip.js",  # 56c-T4: createCoverGhost({ cropMode: 'full' }) + flyGhost objectPosition
+}
+
 import re
 
 
@@ -47,6 +54,8 @@ class TestGhostFlyCropModeBoundary:
         for js_path in self._all_js_files():
             if js_path.resolve() == GHOST_FLY_JS.resolve():
                 continue
+            if js_path.resolve() in {p.resolve() for p in CROPMODE_CALLER_WHITELIST}:
+                continue
             content = js_path.read_text(encoding="utf-8")
             if "cropMode" in content:
                 offenders.append(str(js_path.relative_to(JS_ROOT)))
@@ -63,6 +72,8 @@ class TestGhostFlyCropModeBoundary:
         for js_path in self._all_js_files():
             if js_path.resolve() == GHOST_FLY_JS.resolve():
                 continue
+            if js_path.resolve() in {p.resolve() for p in CROPMODE_CALLER_WHITELIST}:
+                continue
             content = js_path.read_text(encoding="utf-8")
             if any(p in content for p in patterns):
                 offenders.append(str(js_path.relative_to(JS_ROOT)))
@@ -78,6 +89,13 @@ class TestGhostFlyCropModeBoundary:
         若 caller 需要 right-half 視覺，必須走 `createCoverGhost(..., { cropMode: 'right-half' })`，
         不可自設 inline `objectPosition = 'right ...'`。
         """
+        if caller_path.resolve() in {p.resolve() for p in CROPMODE_CALLER_WHITELIST}:
+            pytest.skip(
+                f"{caller_path.name} is a whitelisted cropMode caller "
+                f"(uses GhostFly API, not raw strip logic). "
+                f"See CROPMODE_CALLER_WHITELIST in this file."
+            )
+
         if not caller_path.is_file():
             pytest.skip(f"{caller_path.name} not yet created (56c-T5 will add)")
 
