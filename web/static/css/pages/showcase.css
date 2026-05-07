@@ -2683,6 +2683,8 @@ body.sidebar-collapsed .showcase-footer {
 }
 
 .clip-slot-img {
+    position: relative;
+    z-index: 0;
     width: 100%;
     height: 100%;
     object-fit: cover;
@@ -2692,26 +2694,26 @@ body.sidebar-collapsed .showcase-footer {
     pointer-events: none;
 }
 
+/* 56c-T4fix7: dim overlay — ::after opacity tween via --slot-dim-opacity CSS var。
+   取代 filter: brightness() 兩段式 race，消除 enter→enter 亮閃。
+   gotchas C21：transition: none — 動畫純走 GSAP CSS var tween，禁加 CSS transition。
+   z-index 1 蓋在 .clip-slot-img (z=0) 之上；::before halo 既有 z=-1 不受影響。 */
+.clip-slot::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: rgba(0, 0, 0, 0.45);
+    opacity: var(--slot-dim-opacity, 0);
+    pointer-events: none;
+    z-index: 1;
+    transition: none;
+}
+
 /* Slot 初始隱藏狀態（搬遷自 motion-lab .slot--hidden，namespaced 避免污染全域） */
 .clip-slot.slot--hidden {
     opacity: 0;
     pointer-events: none;
-}
-
-/* Slot icon overlay — hover 顯示的右上角 icon（搬遷自 motion-lab .slot-icon-overlay） */
-.clip-slot .slot-icon-overlay {
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    opacity: 0;
-    transition: opacity 0.18s var(--fluent-ease-standard);
-    color: var(--star-line-bright);
-    pointer-events: none;
-    line-height: 0;
-}
-
-.clip-slot .slot-icon-overlay.slot-icon--visible {
-    opacity: 1;
 }
 
 /* 56c-T4: main image visual center anchor — single source of truth

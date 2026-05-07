@@ -186,8 +186,12 @@ export function stateClip() {
       this._abortAllClipDustPulses();
 
       // 主動 killTweensOf host 直呼的 tween（gsap.context 不收 host module 層 tween）
+      // 56c-T4fix7: 補清 --slot-dim-opacity inline style（ctx.revert 不清 CSS var inline）
       ANCHORS.forEach(a => {
-        if (this.clipCards[a.id]) gsap.killTweensOf(this.clipCards[a.id]);
+        if (this.clipCards[a.id]) {
+          gsap.killTweensOf(this.clipCards[a.id]);
+          gsap.set(this.clipCards[a.id], { clearProps: '--slot-dim-opacity' });
+        }
         if (this.clipRailLines[a.id]) gsap.killTweensOf(this.clipRailLines[a.id]);
         if (this.clipSweepLines[a.id]) gsap.killTweensOf(this.clipSweepLines[a.id]);
       });
@@ -222,6 +226,12 @@ export function stateClip() {
       this.clipModeAnimating = true;
 
       // 1. 56c-T4 mock data（對齊 SimilarCoversResponse contract，T5 改 API fetch）
+      // TODO(T5): backend clip.py `query_video` + `results` 補 `path: v.path` 欄位後，
+      // 本 mock 段加 `path: '/path/to/mock/video.mp4'` real path、onMainSwap callback 寫入
+      // `clipQueryVideo.path = item.path`、playClipMainVideo 升級為
+      // `this.clipQueryVideo?.path || this.currentLightboxVideo?.path` fallback 鏈。
+      // T4 mock 階段不偽造 path 字串：playVideo() 會 silent fail（找不到檔案 toast），
+      // 與 DoD「play button 可播」不符。維持 fallback to currentLightboxVideo 即可。
       this.clipResults = Array.from({ length: 12 }, (_, i) => ({
         video_id: i + 1,
         number: 'MOCK-' + String(i + 1).padStart(3, '0'),
@@ -483,15 +493,14 @@ export function stateClip() {
 
       this.clipModeAnimating = true;
 
-      // 同步清 hover card filter / scale 殘留（C26 精確 clearProps，禁用 'all'）
+      // 同步清 hover card dim / scale 殘留（C26 精確 clearProps，禁用 'all'）
+      // 56c-T4fix7: filter → --slot-dim-opacity（dim 路徑已改 CSS var）
       this.clipVisibleSlots.forEach(id => {
         const card = this.clipCards[id];
         if (!card) return;
-        gsap.killTweensOf(card, 'scale,opacity,filter');
+        gsap.killTweensOf(card, 'scale,opacity,--slot-dim-opacity');
         if (id !== slotId) gsap.set(card, { opacity: 1 });
-        gsap.set(card, { clearProps: 'scale,rotation,filter' });
-        const overlay = card.querySelector('.slot-icon-overlay');
-        if (overlay) overlay.classList.remove('slot-icon--visible');
+        gsap.set(card, { clearProps: 'scale,rotation,--slot-dim-opacity' });
       });
 
       // 停呼吸（slip-through 期間 ticker 不殘留）
@@ -597,51 +606,35 @@ export function stateClip() {
         gsap.to(this.clipCards[slotId], {
           scale: 1.06, duration: 0.18, ease: 'fluent', transformOrigin: '50% 50%',
         });
-        this.clipVisibleSlots.forEach(id => {
-          if (id !== slotId && this.clipCards[id]) {
-            const otherCard = this.clipCards[id];
-            // 56c-T4: 只 kill 前輪 leave tween，不 clearProps —
-            // clearProps 會把 inline brightness(0.5) 砍回 1.0，反而創造 enter→enter 的「變黑」動畫
-            gsap.killTweensOf(otherCard, 'filter');
-            gsap.to(otherCard, {
-              filter: 'brightness(0.5)', duration: 0.20, ease: 'fluent',
-            });
-          }
-        });
+        // 56c-T4fix7: 改用 _applyHoverDim 一次性設定 8 卡目標 dim 狀態，
+        // 取代 filter brightness 兩段式 race + compositing layer 重建
+        this._applyClipHoverDim(slotId);
         const neighbors = nearestNeighbors(slotId, [...this.clipVisibleSlots], 3);
         neighbors.forEach(nid => {
           const nline = this.clipRailLines[nid];
           if (nline) {
+            // 56c-T4fix7: 改 fromTo 去掉 entry pulse 0.70 瞬閃，消除 set→to 兩段閃感
             gsap.killTweensOf(nline, 'strokeOpacity');
             nline.classList.add('rail--neighbor');
-            // 56c-T4: 還原 SET 0.70 entry pulse + tween 0.55 終態
-            // entry pulse 0.70 是 design intent — fromTo 0.30→0.55 反而平淡無 entry signal
-            gsap.set(nline, { strokeOpacity: 0.70 });
-            gsap.to(nline, {
-              strokeOpacity: 0.55,
-              duration: 0.20,
-              ease: 'fluent-decel',
-              onComplete: () => gsap.set(nline, { clearProps: 'strokeOpacity' }),
-            });
+            gsap.fromTo(nline,
+              { strokeOpacity: 0 },
+              {
+                strokeOpacity: 0.55,
+                duration: 0.20,
+                ease: 'fluent-decel',
+                onComplete: () => gsap.set(nline, { clearProps: 'strokeOpacity' }),
+              }
+            );
           }
         });
         this._clipActiveNeighborRailIds = neighbors;
       } else {
         if (this.clipCards[slotId]) gsap.set(this.clipCards[slotId], { scale: 1.06 });
-        this.clipVisibleSlots.forEach(id => {
-          if (id !== slotId && this.clipCards[id]) {
-            gsap.set(this.clipCards[id], { filter: 'brightness(0.5)' });
-          }
-        });
+        // PRM：_applyClipHoverDim 內 isPRM 分支走 gsap.set
+        this._applyClipHoverDim(slotId);
       }
 
       this._clipActiveHoverSlot = slotId;
-
-      const card = this.clipCards[slotId];
-      if (card) {
-        const overlay = card.querySelector('.slot-icon-overlay');
-        if (overlay) overlay.classList.add('slot-icon--visible');
-      }
     },
 
     /**
@@ -672,9 +665,14 @@ export function stateClip() {
     /**
      * 56c-T4 (codex P2): 播放 clip mode 中央主圖對應的影片
      *
-     * T4 mock 階段：fallback 沿用 currentLightboxVideo?.path（即進入 clip mode 前
-     * 的 lightbox 影片）。一旦 user 鑽入 slip-through，主圖視覺已切換但 path 仍指
-     * 原 lightbox 影片 — T5 接 API 後升級為 clipQueryVideo?.path 即可無縫銜接。
+     * T4 mock 階段：固定 fallback 到 currentLightboxVideo.path（即進入 clip mode 前的 lightbox 影片）。
+     * slip-through 後主圖視覺已切換，但 path 仍指原 lightbox 影片 — mock 階段預期行為；
+     * T5 backend 補 path 欄位後升級為 fallback 鏈，見 mock data 上方 TODO。
+     *
+     * hit-test 診斷（T4fix7 待用戶手動驗證）：
+     * 1. 進 clip mode → devtools console: document.elementFromPoint(視覺中心 X, 視覺中心 Y)
+     * 2. 若回傳 .clip-play-button → hit area OK，問題在 handler/path
+     * 3. 若回傳其他 → hit area 被覆蓋，需搬層（見 TASK-56c-T4fix7 §技術要點 1 fallback 方案）
      */
     playClipMainVideo() {
       const path = this.currentLightboxVideo?.path;
@@ -875,7 +873,8 @@ export function stateClip() {
     },
 
     /**
-     * _resetClipHoverCard — hover card 視覺還原（scale + brightness + icon + breathing）
+     * _resetClipHoverCard — hover card 視覺還原（scale + dim + breathing）
+     * 56c-T4fix7: 移除 filter brightness 路徑，改呼叫 _resetClipHoverDim
      */
     _resetClipHoverCard(slotId) {
       const card = this.clipCards[slotId];
@@ -888,25 +887,8 @@ export function stateClip() {
           gsap.to(card, { scale: 1.0, duration: 0.18, ease: 'fluent' });
         }
       }
-      this.clipVisibleSlots.forEach(id => {
-        if (id !== slotId && this.clipCards[id]) {
-          if (useSet) {
-            gsap.set(this.clipCards[id], { clearProps: 'filter' });
-          } else {
-            const target = this.clipCards[id];
-            gsap.to(target, {
-              filter: 'brightness(1)',
-              duration: 0.20,
-              ease: 'fluent',
-              onComplete: () => gsap.set(target, { clearProps: 'filter' }),
-            });
-          }
-        }
-      });
-      if (card) {
-        const overlay = card.querySelector('.slot-icon-overlay');
-        if (overlay) overlay.classList.remove('slot-icon--visible');
-      }
+      // 56c-T4fix7: 一次性還原 8 卡 --slot-dim-opacity → 0
+      this._resetClipHoverDim();
       if (!this.clipModeAnimating && !useSet && this.clipBreathingManager) {
         this.clipBreathingManager.resumeOne(slotId);
       }
@@ -952,6 +934,39 @@ export function stateClip() {
     },
 
     /**
+     * 56c-T4fix7: _applyClipHoverDim — 一次性設定 8 卡目標 dim 狀態
+     * 取代 filter brightness 兩段式 race，消除 enter→enter 亮閃。
+     * activeSlotId：hover 中的卡（dim=0）；其餘 7 卡 dim=1。
+     * overwrite: 'auto' 自動 stomp 前一輪同 property tween（取代 killTweensOf）。
+     */
+    _applyClipHoverDim(activeSlotId) {
+      const isPRM = !!(window.OpenAver && window.OpenAver.prefersReducedMotion);
+      this.clipVisibleSlots.forEach(id => {
+        const card = this.clipCards[id];
+        if (!card) return;
+        const target = id === activeSlotId ? 0 : 1;
+        if (isPRM) {
+          gsap.set(card, { '--slot-dim-opacity': target });
+        } else {
+          gsap.to(card, {
+            '--slot-dim-opacity': target,
+            duration: 0.20,
+            ease: 'fluent',
+            overwrite: 'auto',
+          });
+        }
+      });
+    },
+
+    /**
+     * 56c-T4fix7: _resetClipHoverDim — hover leave 全還原（8 卡 dim → 0）
+     * 對稱 _applyClipHoverDim，由 _resetClipHoverCard 呼叫。
+     */
+    _resetClipHoverDim() {
+      this._applyClipHoverDim(null);
+    },
+
+    /**
      * _resetAllClipSlotsToBaseline — 12 個 slot / rail / sweep 全回到 init 前 baseline
      * （onExit 後若上一輪含 #09-#12 殘留，避免成為隱形 hover/click 目標）
      */
@@ -971,10 +986,9 @@ export function stateClip() {
             height: 150,
             opacity: 0,
             zIndex: '',
-            clearProps: 'scale,rotation,transform,--card-glow-opacity,filter',
+            // 56c-T4fix7: 移除 filter，加 --slot-dim-opacity（C26 精確列表）
+            clearProps: 'scale,rotation,transform,--card-glow-opacity,--slot-dim-opacity',
           });
-          const overlay = card.querySelector('.slot-icon-overlay');
-          if (overlay) overlay.classList.remove('slot-icon--visible');
         }
         if (line) {
           gsap.killTweensOf(line);

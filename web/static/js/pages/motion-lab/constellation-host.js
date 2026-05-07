@@ -380,8 +380,12 @@ document.addEventListener('alpine:init', () => {
       gsap.killTweensOf('#main-halo-outer');
       gsap.killTweensOf('#main-halo-inner');
       gsap.killTweensOf('#main-img');
+      // 56c-T4fix7: 補清 --slot-dim-opacity inline style（ctx.revert 不清 CSS var inline）
       ANCHORS.forEach(a => {
-        if (this.cards[a.id]) gsap.killTweensOf(this.cards[a.id]);
+        if (this.cards[a.id]) {
+          gsap.killTweensOf(this.cards[a.id]);
+          gsap.set(this.cards[a.id], { clearProps: '--slot-dim-opacity' });
+        }
         if (this.railLines[a.id]) gsap.killTweensOf(this.railLines[a.id]);
         if (this.sweepLines[a.id]) gsap.killTweensOf(this.sweepLines[a.id]);
       });
@@ -547,19 +551,14 @@ document.addEventListener('alpine:init', () => {
 
       // 同步清 hover 殘留 tween + 視覺 state（CD-56B-T2 codex P1）
       // 避免 mouseleave 在 slip-through 期間觸發 restore tween 與 exit/fade 打架
-      // T7fix codex P3：filter 加入 kill/clearProps 清單。
-      // _resetHoverCard 的 0.20s `filter: brightness(1)` restore tween 在此 tick 才剛被建立，
-      // 若不同步 kill + clearProps，slip-through / exit 動畫前 ~0.2s 內非 clicked 7 顆會帶
-      // brightness(0.5) inline filter 殘留進場（spec §2.4「rail 永遠不是主角」反例）。
+      // 56c-T4fix7: filter → --slot-dim-opacity（dim 路徑已改 CSS var）
       this.visibleSlots.forEach(id => {
         const card = this.cards[id];
         if (!card) return;
-        gsap.killTweensOf(card, 'scale,opacity,filter');
+        gsap.killTweensOf(card, 'scale,opacity,--slot-dim-opacity');
         if (id !== slotId) gsap.set(card, { opacity: 1 });
-        // clearProps: 'scale,rotation,filter' 確保所有 card（含 clicked）從 scale=1.0/rotation=0/filter=none 起跳（CD-T2FIX-2 + polish + T7fix P3）
-        gsap.set(card, { clearProps: 'scale,rotation,filter' });
-        const overlay = card.querySelector('.slot-icon-overlay');
-        if (overlay) overlay.classList.remove('slot-icon--visible');
+        // clearProps: 'scale,rotation,--slot-dim-opacity' 確保所有 card 從 scale=1.0/rotation=0/dim=0 起跳
+        gsap.set(card, { clearProps: 'scale,rotation,--slot-dim-opacity' });
       });
 
       // 停止呼吸（slip-through 期間 ticker 不殘留）
@@ -679,55 +678,41 @@ document.addEventListener('alpine:init', () => {
         // 2. Scale up（transformOrigin 確保 hit target 不位移，CD-T2FIX-2）
         gsap.to(this.cards[slotId], { scale: 1.06, duration: 0.18, ease: 'fluent', transformOrigin: '50% 50%' });
 
-        // 3. Dim 其餘 visible slots（T7fix CD-T7FIX-1：filter brightness 替代 opacity；
-        // 卡片保持完全不透明，下方 rail 不再透出，spec §2.4「rail 永遠不是主角」恢復）
-        this.visibleSlots.forEach(id => {
-          if (id !== slotId && this.cards[id]) {
-            const otherCard = this.cards[id];
-            // 56c-T4fix6 (round 2 revert): 只 kill 前輪 leave tween，不 clearProps —
-            // clearProps 把 inline brightness(0.5) 砍回 1.0 反而創造 enter→enter 變黑動畫
-            gsap.killTweensOf(otherCard, 'filter');
-            gsap.to(otherCard, { filter: 'brightness(0.5)', duration: 0.20, ease: 'fluent' });
-          }
-        });
+        // 3. Dim 其餘 visible slots
+        // 56c-T4fix7: 改用 _applyHoverDim 一次性設定 8 卡目標 dim 狀態，
+        // 取代 filter brightness 兩段式 race + compositing layer 重建
+        this._applyHoverDim(slotId);
 
         // Neighbor highlight（CD-T2FIX-6 / TASK-T2fix5）
         const neighbors = nearestNeighbors(slotId, [...this.visibleSlots], 3);
         neighbors.forEach(nid => {
           const nline = this.railLines[nid];
           if (nline) {
-            // 56c-T4fix6 (round 2 revert): 還原 SET 0.70 entry pulse + tween 0.55 終態
-            // CSS class .rail--neighbor 接 steady (0.55)；entry pulse 0.70 是 design intent
+            // 56c-T4fix7: 改 fromTo 去掉 entry pulse 0.70 瞬閃，消除 set→to 兩段閃感
             gsap.killTweensOf(nline, 'strokeOpacity');
             nline.classList.add('rail--neighbor');
-            gsap.set(nline, { strokeOpacity: 0.70 });
-            gsap.to(nline, {
-              strokeOpacity: 0.55,
-              duration: 0.20,
-              ease: 'fluent-decel',
-              onComplete: () => gsap.set(nline, { clearProps: 'strokeOpacity' }),
-            });
+            gsap.fromTo(nline,
+              { strokeOpacity: 0 },
+              {
+                strokeOpacity: 0.55,
+                duration: 0.20,
+                ease: 'fluent-decel',
+                onComplete: () => gsap.set(nline, { clearProps: 'strokeOpacity' }),
+              }
+            );
           }
         });
         this._activeNeighborRailIds = neighbors;
       } else {
         // PRM：state 同步（scale / dim 用 gsap.set，不 tween）
         if (this.cards[slotId]) gsap.set(this.cards[slotId], { scale: 1.06 });
-        this.visibleSlots.forEach(id => {
-          if (id !== slotId && this.cards[id]) gsap.set(this.cards[id], { filter: 'brightness(0.5)' });
-        });
+        // PRM：_applyHoverDim 內 isPRM 分支走 gsap.set
+        this._applyHoverDim(slotId);
         // PRM 下不啟動 neighbor pulse（無 tween 可省）；_activeNeighborRailIds 保持空
       }
 
       // 追蹤當前 hover slot（防 enter→enter 殘留，Codex T2fix5 P2 Finding 1）
       this._activeHoverSlot = slotId;
-
-      // 4. Icon overlay 浮現（CSS transition，PRM 下也保留 — CSS transition 非 animation）
-      const card = this.cards[slotId];
-      if (card) {
-        const overlay = card.querySelector('.slot-icon-overlay');
-        if (overlay) overlay.classList.add('slot-icon--visible');
-      }
     },
 
     /**
@@ -789,14 +774,12 @@ document.addEventListener('alpine:init', () => {
         this._resetHoverCard(this._activeHoverSlot);
         this._activeHoverSlot = null;
       }
-      // T7fix codex P3：同步 kill `_resetHoverCard` 剛建立的 0.20s `filter: brightness(1)`
-      // restore tween，避免 playExit 動畫前 ~0.2s 內 non-hovered 7 顆帶 brightness(0.5) inline
-      // 殘留進入 exit phase（與 onCardClick L550 同 race window）。
+      // 56c-T4fix7: 同步清 --slot-dim-opacity tween 殘留（_resetHoverCard 後仍可能有 overwrite: auto tween）
       this.visibleSlots.forEach(id => {
         const card = this.cards[id];
         if (!card) return;
-        gsap.killTweensOf(card, 'filter');
-        gsap.set(card, { clearProps: 'filter' });
+        gsap.killTweensOf(card, '--slot-dim-opacity');
+        gsap.set(card, { clearProps: '--slot-dim-opacity' });
       });
       // 清 hover rails 殘留（退出動畫期間不應殘留 neighbor strokeWidth，CD-T2FIX-6）
       this._resetHoverRails();
@@ -921,34 +904,47 @@ document.addEventListener('alpine:init', () => {
         }
       }
 
-      // 2. Restore others brightness（T7fix CD-T7FIX-1：與 dim 路徑對稱，filter brightness 取代 opacity）
-      // PRM：直接 clearProps（同步歸位 + 確保無 inline 殘留）
-      // non-PRM：tween 到 brightness(1) 平順還原 + onComplete clearProps 防 inline filter 殘留
-      this.visibleSlots.forEach(id => {
-        if (id !== slotId && this.cards[id]) {
-          if (useSet) {
-            gsap.set(this.cards[id], { clearProps: 'filter' });
-          } else {
-            gsap.to(this.cards[id], {
-              filter: 'brightness(1)',
-              duration: 0.20,
-              ease: 'fluent',
-              onComplete: () => gsap.set(this.cards[id], { clearProps: 'filter' }),
-            });
-          }
-        }
-      });
+      // 2. 還原 8 卡 --slot-dim-opacity → 0
+      // 56c-T4fix7: 移除 filter brightness 路徑，改呼叫 _resetHoverDim
+      this._resetHoverDim();
 
-      // 3. Icon overlay 消失
-      if (card) {
-        const overlay = card.querySelector('.slot-icon-overlay');
-        if (overlay) overlay.classList.remove('slot-icon--visible');
-      }
-
-      // 4. 恢復呼吸（animating 期間跳過，由 slip-through onComplete 統一處理）
+      // 3. 恢復呼吸（animating 期間跳過，由 slip-through onComplete 統一處理）
       if (!this.animating && !window.OpenAver.prefersReducedMotion) {
         this.breathingManager.resumeOne(slotId);
       }
+    },
+
+    /**
+     * 56c-T4fix7: _applyHoverDim — 一次性設定 8 卡目標 dim 狀態
+     * 取代 filter brightness 兩段式 race，消除 enter→enter 亮閃。
+     * activeSlotId：hover 中的卡（dim=0）；其餘 7 卡 dim=1。
+     * overwrite: 'auto' 自動 stomp 前一輪同 property tween（取代 killTweensOf）。
+     */
+    _applyHoverDim(activeSlotId) {
+      const isPRM = window.OpenAver.prefersReducedMotion;
+      this.visibleSlots.forEach(id => {
+        const card = this.cards[id];
+        if (!card) return;
+        const target = id === activeSlotId ? 0 : 1;
+        if (isPRM) {
+          gsap.set(card, { '--slot-dim-opacity': target });
+        } else {
+          gsap.to(card, {
+            '--slot-dim-opacity': target,
+            duration: 0.20,
+            ease: 'fluent',
+            overwrite: 'auto',
+          });
+        }
+      });
+    },
+
+    /**
+     * 56c-T4fix7: _resetHoverDim — hover leave 全還原（8 卡 dim → 0）
+     * 對稱 _applyHoverDim，由 _resetHoverCard 呼叫。
+     */
+    _resetHoverDim() {
+      this._applyHoverDim(null);
     },
 
     /**
@@ -980,10 +976,9 @@ document.addEventListener('alpine:init', () => {
             height: 150,
             opacity: 0,
             zIndex: '',
-            clearProps: 'scale,rotation,transform,--card-glow-opacity,filter',
+            // 56c-T4fix7: 移除 filter，加 --slot-dim-opacity（C26 精確列表）
+            clearProps: 'scale,rotation,transform,--card-glow-opacity,--slot-dim-opacity',
           });
-          const overlay = card.querySelector('.slot-icon-overlay');
-          if (overlay) overlay.classList.remove('slot-icon--visible');
         }
         if (line) {
           gsap.killTweensOf(line);
