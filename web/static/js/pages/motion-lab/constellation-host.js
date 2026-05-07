@@ -547,13 +547,17 @@ document.addEventListener('alpine:init', () => {
 
       // 同步清 hover 殘留 tween + 視覺 state（CD-56B-T2 codex P1）
       // 避免 mouseleave 在 slip-through 期間觸發 restore tween 與 exit/fade 打架
+      // T7fix codex P3：filter 加入 kill/clearProps 清單。
+      // _resetHoverCard 的 0.20s `filter: brightness(1)` restore tween 在此 tick 才剛被建立，
+      // 若不同步 kill + clearProps，slip-through / exit 動畫前 ~0.2s 內非 clicked 7 顆會帶
+      // brightness(0.5) inline filter 殘留進場（spec §2.4「rail 永遠不是主角」反例）。
       this.visibleSlots.forEach(id => {
         const card = this.cards[id];
         if (!card) return;
-        gsap.killTweensOf(card, 'scale,opacity');
+        gsap.killTweensOf(card, 'scale,opacity,filter');
         if (id !== slotId) gsap.set(card, { opacity: 1 });
-        // clearProps: 'scale,rotation' 確保所有 card（含 clicked）從 scale=1.0/rotation=0 起跳（CD-T2FIX-2 + polish）
-        gsap.set(card, { clearProps: 'scale,rotation' });
+        // clearProps: 'scale,rotation,filter' 確保所有 card（含 clicked）從 scale=1.0/rotation=0/filter=none 起跳（CD-T2FIX-2 + polish + T7fix P3）
+        gsap.set(card, { clearProps: 'scale,rotation,filter' });
         const overlay = card.querySelector('.slot-icon-overlay');
         if (overlay) overlay.classList.remove('slot-icon--visible');
       });
@@ -781,6 +785,15 @@ document.addEventListener('alpine:init', () => {
         this._resetHoverCard(this._activeHoverSlot);
         this._activeHoverSlot = null;
       }
+      // T7fix codex P3：同步 kill `_resetHoverCard` 剛建立的 0.20s `filter: brightness(1)`
+      // restore tween，避免 playExit 動畫前 ~0.2s 內 non-hovered 7 顆帶 brightness(0.5) inline
+      // 殘留進入 exit phase（與 onCardClick L550 同 race window）。
+      this.visibleSlots.forEach(id => {
+        const card = this.cards[id];
+        if (!card) return;
+        gsap.killTweensOf(card, 'filter');
+        gsap.set(card, { clearProps: 'filter' });
+      });
       // 清 hover rails 殘留（退出動畫期間不應殘留 neighbor strokeWidth，CD-T2FIX-6）
       this._resetHoverRails();
 
