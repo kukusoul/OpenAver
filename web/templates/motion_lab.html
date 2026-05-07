@@ -3254,6 +3254,39 @@
     --dust-base: 0.10;
 }
 
+/* T6 (CD-T6-2)：Hover constellation bright state — C2 indirection 模型
+   覆寫 stylesheet 級 --dust-base（不動 inline --dust-base-seed）；
+   keyframe dust-twinkle-bright 引用 var(--dust-base)，自動拉高 peak。
+   add/remove .in-constellation 即可切換，無需 GSAP tween opacity。 */
+.clip-lab-dust circle.in-constellation {
+    --dust-base: 0.70;
+    --dust-halo-opacity: 0.45;
+    filter: drop-shadow(0 0 4px rgba(232, 201, 137, var(--dust-halo-opacity)));
+    /* Fluent token：0.30s ≈ var(--fluent-duration-slow) (300ms)；ease 走 standard 曲線 */
+    transition: filter var(--fluent-duration-slow) var(--fluent-ease-standard);
+    animation-name: dust-twinkle-bright;
+}
+
+@keyframes dust-twinkle-bright {
+    0%, 100% { opacity: var(--dust-base); }
+    50%      { opacity: 1.00; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .clip-lab-dust circle.in-constellation {
+        animation: none;
+        opacity: var(--dust-base);
+    }
+}
+
+/* T6 (CD-T6-2)：dim theme + .in-constellation specificity tie 防呆 (0,3,1)
+   既有 [data-theme="dim"] .clip-lab-dust circle (0,2,1) 與
+   .clip-lab-dust circle.in-constellation (0,2,1) 同階 tie；本規則 (0,3,1)
+   勝出，order-independent 確保 dim + bright 不被夾死 */
+[data-theme="dim"] .clip-lab-dust circle.in-constellation {
+    --dust-base: 0.70;
+}
+
 .clip-lab-rails {
     position: absolute;
     inset: 0;

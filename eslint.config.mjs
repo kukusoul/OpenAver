@@ -236,6 +236,20 @@ export default [
           message:
             "T5 決策（CD-T5-5 / spec §4.3）：hover 不再呼叫 railSweep()，引導線改由 strokeOpacity tween + dust class swap 表達（T6）。railSweep 保留供 slip-through enter 使用（host onComplete 補呼叫）。",
         },
+        {
+          // T6 (CD-T6-3 / spec §4.2 / §2.4)：hover guide 改用 strokeOpacity 0→0.10 tween（極淡引導線）。
+          // railFocusPulse 把 strokeOpacity 拉到 0.85（粗線 + bright），是 T4fix「能量感脈衝」語義；
+          // T6 是「rail 永遠不是主角」極淡引導線語義（spec §2.4），兩者互斥。
+          // 兩個 selector 同時覆蓋（與 T5 railSweep ban 同形）：
+          //   - Property 形式（Alpine data object literal shorthand method）
+          //   - MethodDefinition 形式（ES class method，未來可能改寫）
+          selector: [
+            "MethodDefinition[key.name='onHoverEnter'] CallExpression[callee.name='railFocusPulse']",
+            "Property[key.name='onHoverEnter'] CallExpression[callee.name='railFocusPulse']",
+          ].join(', '),
+          message:
+            "T6 決策（CD-T6-3 / spec §4.2）：hover guide 改用 strokeOpacity 0→0.10 tween（極淡引導線），禁止在 onHoverEnter 呼叫 railFocusPulse()——後者把 strokeOpacity 拉到 0.85（粗線 + bright），不符 T6「rail 永遠不是主角」語義（spec §2.4）。",
+        },
       ],
     },
   },

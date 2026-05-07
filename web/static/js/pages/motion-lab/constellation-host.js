@@ -13,8 +13,8 @@
  *      destroy() 內呼叫 breathingManager.stop() + _gsapCtx.revert()，避免 ticker / tween 殘留。
  */
 
-import { ANCHORS, pickEight, nearestNeighbors } from '../../shared/constellation/anchors.js';
-import { setRailCoords, railFocusPulse, railSweep, resetSweepLine } from '../../shared/constellation/rails.js';
+import { ANCHORS, pickEight, nearestNeighbors, railEndpoint } from '../../shared/constellation/anchors.js';
+import { setRailCoords, railSweep, resetSweepLine } from '../../shared/constellation/rails.js';
 import { playInitialExpand, playSlipThrough, playExit } from '../../shared/constellation/animations.js';
 import { BreathingManager } from '../../shared/constellation/breathing.js';
 
@@ -22,6 +22,30 @@ import { BreathingManager } from '../../shared/constellation/breathing.js';
 // spec-56.md §3 Phase 56b Non-Goals 例外允許；不接 API、不碰 Showcase
 const IMAGE_BASE = '/static/img/showcase/';
 const IMAGE_COUNT = 20;
+
+// T6 (CD-T6-1)：hover corridor half-width（mockup E 量測值）
+// 30px 太窄、50px 太寬；40px 下 per-rail 期望 4-6 顆，中央 dust 跨多 rail（Polaris 感）
+const HOVER_DISTANCE = 40;
+
+/**
+ * pointToSegmentDist — 點到線段最短距離（T6 CD-T6-1）
+ * 與 tests/unit/test_constellation_host_T6.py 內的 Python re-implement 同義
+ *
+ * @param {number} px - 點 x
+ * @param {number} py - 點 y
+ * @param {number} x1 - 線段端點 1 x
+ * @param {number} y1 - 線段端點 1 y
+ * @param {number} x2 - 線段端點 2 x
+ * @param {number} y2 - 線段端點 2 y
+ * @returns {number} 距離（px）
+ */
+function pointToSegmentDist(px, py, x1, y1, x2, y2) {
+  const dx = x2 - x1, dy = y2 - y1;
+  const len2 = dx * dx + dy * dy;
+  if (len2 === 0) return Math.hypot(px - x1, py - y1);
+  const t = Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / len2));
+  return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
+}
 
 document.addEventListener('alpine:init', () => {
   Alpine.data('constellationLab', () => ({
@@ -125,13 +149,26 @@ document.addEventListener('alpine:init', () => {
     // T7 plan §「替換 stub 為實作」（不是「新增方法」），保留 method 名稱 stable。
 
     /**
-     * _buildRailStarMap — T6 CD-T6-5 替換為實作：
-     *   for each ANCHOR rail，計算 stage 內 dust circle 是否落在「rail 線段 40px corridor」內，
+     * _buildRailStarMap — T6 CD-T6-1 / CD-T6-5 實作：
+     *   for each ANCHOR rail，計算 stage 內 dust circle 是否落在「rail 線段 HOVER_DISTANCE corridor」內，
      *   結果存 this._railStarMap[a.id] = [circleEl, ...]，供 hover 時 class swap 用。
-     * T5 stub：清 map（占位）。
+     *
+     *   - line segment：center (480, 310) → railEndpoint(anchor)（從 center 朝 anchor 方向延伸 1.4×）
+     *   - HOVER_DISTANCE = 40 px（CD-T6-1，mockup E 量測值）
+     *   - pre-compute 在 init() 末尾呼叫一次（dust DOM x-if mount 時已就位）
+     *   - 不另外維護 `_currentConstellationStars` 影子欄位（CD-T6-5），cleanup 時用 _activeFocusedRailId 取
      */
     _buildRailStarMap() {
+      const dustEls = [...document.querySelectorAll('.clip-lab-dust circle')];
       this._railStarMap = {};
+      ANCHORS.forEach(a => {
+        const ep = railEndpoint(a);
+        this._railStarMap[a.id] = dustEls.filter(el => {
+          const cx = parseFloat(el.getAttribute('cx'));
+          const cy = parseFloat(el.getAttribute('cy'));
+          return pointToSegmentDist(cx, cy, 480, 310, ep.x, ep.y) <= HOVER_DISTANCE;
+        });
+      });
     },
 
     /**
@@ -417,71 +454,99 @@ document.addEventListener('alpine:init', () => {
      * @param {string} slotId
      */
     onHoverEnter(slotId) {
-      if (this.animating || !this.visibleSlots.has(slotId) || window.OpenAver.prefersReducedMotion) return;
+      // T6 (CD-T6-4 / spec §2.6 C3)：移除 PRM 短路。
+      // PRM 下 state（dust class swap / guide rail set / _activeFocusedRailId 設定）必執行；
+      // motion（GSAP tween / breathing pause / scale / dim / neighbor）才條件跳過。
+      if (this.animating || !this.visibleSlots.has(slotId)) return;
+
+      const isPRM = window.OpenAver.prefersReducedMotion;
 
       // 防 enter→enter 直跳殘留（Codex T2fix5 P2 Finding 1）：
       // 若上一張 hover 未 leave 就直接 hover 到新張，先清舊張 card 狀態再進入
       if (this._activeHoverSlot && this._activeHoverSlot !== slotId) {
         this._resetHoverCard(this._activeHoverSlot);
+        // T6 (plan §4.3 G)：同步 remove 舊 slotId 的 dust class
+        // 不變式：_activeHoverSlot 與 _activeFocusedRailId 在 enter lifecycle 內同步影子（C1 釐清）；
+        // 顯式 remove 保險，且讓「enter→enter 邊界」可讀性高
+        (this._railStarMap[this._activeHoverSlot] || [])
+          .forEach(el => el.classList.remove('in-constellation'));
       }
 
-      // 清 rail state（focused/sweep/neighbor）
+      // 清 rail state（focused/sweep/neighbor）— T6 內含 focused rail dust class remove + guide rail fadeout
       this._resetHoverRails();
 
       // T5 (CD-T5-2)：cancel idle acknowledge timer（NO-OP in T5；T7 替換為 clearTimeout）
       // user is interacting → 取消 idle pulse 排程，避免 hover 期間突然 idle pulse 干擾
       this._cancelIdleAcknowledge();
 
-      // 1. 暫停此顆呼吸
-      this.breathingManager.pauseOne(slotId);
+      // ── State 操作（PRM 下也執行，C3 契約）──────────────────────────
+      // 1. Dust class swap：corridor 內 dust 切到 .in-constellation bright twinkle
+      //    （bright class 走 CSS variable indirection，覆寫 --dust-base，不破壞 inline --dust-base-seed）
+      (this._railStarMap[slotId] || []).forEach(el => el.classList.add('in-constellation'));
 
-      // 2. Scale up（transformOrigin 確保 hit target 不位移，CD-T2FIX-2）
-      gsap.to(this.cards[slotId], { scale: 1.06, duration: 0.18, ease: 'fluent', transformOrigin: '50% 50%' });
-
-      // 3. Dim 其餘 visible slots
-      this.visibleSlots.forEach(id => {
-        if (id !== slotId && this.cards[id]) {
-          gsap.to(this.cards[id], { opacity: 0.5, duration: 0.20, ease: 'fluent' });
+      // 2. Guide rail 終態（CD-T6-3）：strokeOpacity 0 → 0.10 浮現極淡引導線
+      //    T6 不再呼叫 railFocusPulse（後者把 strokeOpacity 拉到 0.85，是 T4fix 能量感脈衝；
+      //    T6 是「rail 永遠不是主角」語義 spec §2.4）。ESLint Group 5 守此契約。
+      const guideLine = this.railLines[slotId];
+      if (guideLine) {
+        gsap.killTweensOf(guideLine, 'strokeOpacity');
+        if (isPRM) {
+          gsap.set(guideLine, { strokeOpacity: 0.10 });
+        } else {
+          gsap.to(guideLine, { strokeOpacity: 0.10, duration: 0.25, ease: 'fluent-decel' });
         }
-      });
-
-      // Rail 能量感（CD-T2FIX-3）
-      // T4fix：kill any pending strokeOpacity tween before hover（previously strokeWidth）
-      // T5 (CD-T5-5 / spec §4.3)：hover 不再呼叫 railSweep —— 引導線改由 strokeOpacity tween + dust class swap 表達（T6）。
-      // railSweep 保留供 slip-through enter 使用（onCardClick onComplete 補呼叫）。
-      const focusedLine = this.railLines[slotId];
-      if (focusedLine) {
-        gsap.killTweensOf(focusedLine, 'strokeOpacity');
-        railFocusPulse(focusedLine);
       }
 
       // 追蹤 focused rail（用於 _resetHoverRails cleanup，CD-T2FIX-6）
       this._activeFocusedRailId = slotId;
 
-      // Neighbor highlight（CD-T2FIX-6 / TASK-T2fix5）
-      const neighbors = nearestNeighbors(slotId, [...this.visibleSlots], 3);
-      neighbors.forEach(nid => {
-        const nline = this.railLines[nid];
-        if (nline) {
-          // T4fix（§C state model）：CSS class .rail--neighbor 接 steady (0.55)；
-          // GSAP 短 entry pulse peak 0.70 → clearProps，class 接管 hover 期間 steady
-          gsap.killTweensOf(nline, 'strokeOpacity');
-          nline.classList.add('rail--neighbor');
-          gsap.set(nline, { strokeOpacity: 0.70 });
-          gsap.to(nline, {
-            strokeOpacity: 0.55,
-            duration: 0.20,
-            ease: 'fluent-decel',
-            onComplete: () => gsap.set(nline, { clearProps: 'strokeOpacity' }),
-          });
-        }
-      });
-      this._activeNeighborRailIds = neighbors;
+      // ── Motion 操作（PRM 下跳過 / 用 gsap.set 同步終態）─────────────
+      if (!isPRM) {
+        // 1. 暫停此顆呼吸
+        this.breathingManager.pauseOne(slotId);
+
+        // 2. Scale up（transformOrigin 確保 hit target 不位移，CD-T2FIX-2）
+        gsap.to(this.cards[slotId], { scale: 1.06, duration: 0.18, ease: 'fluent', transformOrigin: '50% 50%' });
+
+        // 3. Dim 其餘 visible slots
+        this.visibleSlots.forEach(id => {
+          if (id !== slotId && this.cards[id]) {
+            gsap.to(this.cards[id], { opacity: 0.5, duration: 0.20, ease: 'fluent' });
+          }
+        });
+
+        // Neighbor highlight（CD-T2FIX-6 / TASK-T2fix5）
+        const neighbors = nearestNeighbors(slotId, [...this.visibleSlots], 3);
+        neighbors.forEach(nid => {
+          const nline = this.railLines[nid];
+          if (nline) {
+            // T4fix（§C state model）：CSS class .rail--neighbor 接 steady (0.55)；
+            // GSAP 短 entry pulse peak 0.70 → clearProps，class 接管 hover 期間 steady
+            gsap.killTweensOf(nline, 'strokeOpacity');
+            nline.classList.add('rail--neighbor');
+            gsap.set(nline, { strokeOpacity: 0.70 });
+            gsap.to(nline, {
+              strokeOpacity: 0.55,
+              duration: 0.20,
+              ease: 'fluent-decel',
+              onComplete: () => gsap.set(nline, { clearProps: 'strokeOpacity' }),
+            });
+          }
+        });
+        this._activeNeighborRailIds = neighbors;
+      } else {
+        // PRM：state 同步（scale / dim 用 gsap.set，不 tween）
+        if (this.cards[slotId]) gsap.set(this.cards[slotId], { scale: 1.06 });
+        this.visibleSlots.forEach(id => {
+          if (id !== slotId && this.cards[id]) gsap.set(this.cards[id], { opacity: 0.5 });
+        });
+        // PRM 下不啟動 neighbor pulse（無 tween 可省）；_activeNeighborRailIds 保持空
+      }
 
       // 追蹤當前 hover slot（防 enter→enter 殘留，Codex T2fix5 P2 Finding 1）
       this._activeHoverSlot = slotId;
 
-      // 4. Icon overlay 浮現（CSS transition）
+      // 4. Icon overlay 浮現（CSS transition，PRM 下也保留 — CSS transition 非 animation）
       const card = this.cards[slotId];
       if (card) {
         const overlay = card.querySelector('.slot-icon-overlay');
@@ -500,20 +565,22 @@ document.addEventListener('alpine:init', () => {
      * @param {string} slotId
      */
     onHoverLeave(slotId) {
-      // animating 或 reduced-motion 下完全 no-op（CD-56B-T2 codex P1+P2）
-      // animating 期間 onCardClick 已同步清 hover state，restore tween 多餘且會與 timeline 打架
-      // reduced-motion 與 onHoverEnter guard 對稱，hover lifecycle 全 no-op
-      if (this.animating || !this.visibleSlots.has(slotId) || window.OpenAver.prefersReducedMotion) return;
+      // T6 (CD-T6-4 / reviewer P2-1)：移除 PRM 短路。
+      // PRM 下 onHoverEnter 已加 .in-constellation class，onHoverLeave 必須對稱 remove —
+      // 否則 bright dust 永遠殘留（DoD 必 fail）。dust class remove + scale/opacity 還原走
+      // _resetHoverRails / _resetHoverCard 統一執行（內部各自有 PRM 分流）。
+      //
+      // animating guard 保留：animating 期間 onCardClick 已同步清 hover state，restore tween 多餘
+      if (this.animating || !this.visibleSlots.has(slotId)) return;
 
       // Stale guard（Codex T2fix5 P2 Finding 1）：瀏覽器可能延遲送出舊張的 leave 事件，
       // 此時 _activeHoverSlot 已換成新張，忽略延遲 leave 避免清掉新 hover state
       if (this._activeHoverSlot !== slotId) return;
 
-      // 1-4: Restore card scale / opacity / icon / breathing（共用 helper）
-      // _resetHoverCard 內部已處理 resumeOne，此處不再重複
+      // 1-4: Restore card scale / opacity / icon / breathing（共用 helper，內部已處理 PRM 分流）
       this._resetHoverCard(slotId);
 
-      // 清 sweep / focused rail + neighbor rails（CD-T2FIX-3 + T2fix5 整合）
+      // 清 focused rail + dust class + neighbor rails（CD-T2FIX-3 + T2fix5 + T6 整合）
       this._resetHoverRails();
 
       // 歸零 hover slot 追蹤
@@ -727,18 +794,33 @@ document.addEventListener('alpine:init', () => {
     },
 
     _resetHoverRails() {
-      // T4fix §I：所有 rail strokeOpacity inline 必清，由 CSS baseline (0.30) 或
+      // T4fix §I：所有 rail strokeOpacity inline 必清，由 CSS baseline (0) 或
       // 殘留 class 接管；class 在 leave 時一併移除，回到 baseline
-      // 清 focused rail（railFocusPulse + railSweep 殘留）
+      // T6 (CD-T6-3 / CD-T6-5 / plan §4.3 F)：guide rail strokeOpacity fade-out tween（避瞬切）
+      //   + dust class remove（focused rail corridor 內所有 dust 還原 idle）
       if (this._activeFocusedRailId) {
-        const line = this.railLines[this._activeFocusedRailId];
+        const focusedId = this._activeFocusedRailId;
+        const line = this.railLines[focusedId];
         if (line) {
           gsap.killTweensOf(line, 'strokeOpacity,opacity');
-          line.classList.remove('rail--bright');
-          gsap.set(line, { clearProps: 'strokeOpacity' });
+          line.classList.remove('rail--bright');   // 防呆保留（T6 不 add rail--bright）
+          // T6: fade-out tween 0.20s fluent-accel（leave 比 enter 0.25s 略快，乾淨）
+          // 不分 PRM：PRM 下 GSAP tween 仍會跑（duration 短不擾人），結束後 clearProps
+          // 統一行為避免 PRM 與 non-PRM clearProps 時序分歧
+          gsap.to(line, {
+            strokeOpacity: 0,
+            duration: 0.20,
+            ease: 'fluent-accel',
+            onComplete: () => gsap.set(line, { clearProps: 'strokeOpacity' }),
+          });
         }
-        const sw = this.sweepLines[this._activeFocusedRailId];
+        const sw = this.sweepLines[focusedId];
         if (sw) resetSweepLine(sw);
+
+        // T6 (CD-T6-5)：dust class remove（focused rail corridor 內所有 dust 還原 idle twinkle）
+        (this._railStarMap[focusedId] || [])
+          .forEach(el => el.classList.remove('in-constellation'));
+
         this._activeFocusedRailId = null;
       }
       // 清 neighbor rails
