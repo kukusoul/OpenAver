@@ -38,6 +38,9 @@ document.addEventListener('alpine:init', () => {
     _activeNeighborRailIds: [],    // hover 觸發的 neighbor slotIds
     _activeHoverSlot: null,        // 當前 hover 的 slotId（防 enter→enter 殘留，T2fix5 Codex P2）
     _slotImages: {},               // T4: slotId -> imageUrl（host 自管，shared/* 不感知）
+    // T5 (CD-T5-2 / round-2 P1-2)：T6/T7 替換為實作；T5 引入 NO-OP stub + state field 避 init() TypeError
+    _railStarMap: {},              // T6 CD-T6-5：{ '#01': [circleEl, ...] } rail × dust 距離 pre-compute
+    _idleAcknowledgeTimer: null,   // T7 CD-T7-2：setTimeout handle for 8-15s 隨機 idle pulse
 
     init() {
       this._gsapCtx = window.OpenAver.motion.createContext(this.$el);
@@ -65,6 +68,11 @@ document.addEventListener('alpine:init', () => {
 
       // T4 visual probe：12 slot + main 全部預綁圖（含 hidden #09-#12，避免第一次 slip-through LCP 抖動）
       this._assignAllImages();
+
+      // T5 (CD-T5-2 / round-2 P1-2)：build rail × dust corridor map（T6 用）+ 啟動 idle acknowledge timer（T7 用）
+      // 兩者在 T5 都是 NO-OP stub，僅佔 method 名稱，避 T6/T7 commit 卡 method 不存在
+      this._buildRailStarMap();
+      this._startIdleAcknowledge();
 
       // prefers-reduced-motion：直接呈現終態，跳過所有 timeline（CD-56B DoD 共通 5）
       if (window.OpenAver.prefersReducedMotion) {
@@ -110,6 +118,43 @@ document.addEventListener('alpine:init', () => {
     },
     // --------------------------------------------------------------------
 
+    // ---- T5 NO-OP stubs（T6/T7 替換為實作）------------------------------
+    // 切片獨立性（CD-T5-2 / round-2 P1-2）：T5 commit 後 init() 直接呼叫這些方法，
+    // destroy() / onCardClick() / onExit() / onHoverEnter() 也呼叫 _cancelIdleAcknowledge()。
+    // 若 T6/T7 才新增方法，T5 commit → motion-lab Constellation tab mount 即 TypeError。
+    // T7 plan §「替換 stub 為實作」（不是「新增方法」），保留 method 名稱 stable。
+
+    /**
+     * _buildRailStarMap — T6 CD-T6-5 替換為實作：
+     *   for each ANCHOR rail，計算 stage 內 dust circle 是否落在「rail 線段 40px corridor」內，
+     *   結果存 this._railStarMap[a.id] = [circleEl, ...]，供 hover 時 class swap 用。
+     * T5 stub：清 map（占位）。
+     */
+    _buildRailStarMap() {
+      this._railStarMap = {};
+    },
+
+    /**
+     * _startIdleAcknowledge — T7 CD-T7-2 替換為實作：
+     *   setTimeout 8-15s 隨機 → 觸發 idle pulse（dust micro-twinkle / star-of-the-moment）。
+     *   PRM guard 也在 T7 加（reduced-motion 下不啟動 timer）。
+     * T5 stub：no-op，保 init() 與 4 處 wire 不報 TypeError。
+     */
+    _startIdleAcknowledge() {
+      // T7 替換點 — 不要在 T5 內加邏輯，T7 直接 swap method body
+    },
+
+    /**
+     * _cancelIdleAcknowledge — T7 CD-T7-2 替換為實作：
+     *   clearTimeout(this._idleAcknowledgeTimer); this._idleAcknowledgeTimer = null;
+     * T5 stub：no-op。在 destroy / onCardClick / onExit / onHoverEnter 共 4 處呼叫，
+     * T7 替換後自動生效（不需動 4 處 wire）。
+     */
+    _cancelIdleAcknowledge() {
+      // T7 替換點 — 不要在 T5 內加邏輯，T7 直接 swap method body
+    },
+    // --------------------------------------------------------------------
+
 
     /**
      * _playInitialExpand — 啟動初始 8 顆展開（init 與 onExit 重置共用）
@@ -136,6 +181,8 @@ document.addEventListener('alpine:init', () => {
      * 關鍵：停 BreathingManager ticker（gsap.ticker.remove）+ revert GSAP context（清所有 tween / inline style）。
      */
     destroy() {
+      // T5 (CD-T5-2)：cancel idle acknowledge timer（NO-OP in T5；T7 替換為 clearTimeout）
+      this._cancelIdleAcknowledge();
       // Codex T3 P1：kill 當前 play* timeline（gsap.context 不收 host 模組層建立的 timeline，
       // 不 kill 會讓 onComplete 在 DOM 銷毀後仍重啟 breathing ticker）
       if (this._activeTimeline) {
@@ -196,6 +243,9 @@ document.addEventListener('alpine:init', () => {
      */
     onCardClick(slotId) {
       if (this.animating || !this.visibleSlots.has(slotId)) return;
+
+      // T5 (CD-T5-2)：cancel idle acknowledge timer（NO-OP in T5；T7 替換為 clearTimeout）
+      this._cancelIdleAcknowledge();
 
       // CRITICAL: 在呼叫任何 animation / pickEight 之前，先捕獲 prevVisible（CD-T2FIX-4 §E）
       const prevVisible = new Set(this.visibleSlots);
@@ -338,7 +388,19 @@ document.addEventListener('alpine:init', () => {
             // T2fix4 預埋：carry-over survivor shimmer（closure 捕獲 prevVisible，不讀 this.visibleSlots）
             const carryIds = [...prevVisible].filter(id => id !== slotId && nextVisible.has(id));
             this._playSurvivorShimmer(carryIds);
+            // T5 (CD-T5-5)：slip-through enter rails 補一次 sweep feedback（hover 不再呼叫 sweep，
+            // 統一收到 enter feedback 用途）。host onComplete 補呼叫，不改 animations.js 簽名。
+            // 重算 enterIds（onCardClick 開頭那次已用於圖片重抽，函式 scope 仍可見，但這裡重算更明確）
+            const enterRailIds = [...nextVisible].filter(id => !prevVisible.has(id));
+            enterRailIds.forEach(id => {
+              if (this.sweepLines[id] && this.railLines[id]) {
+                railSweep(this.sweepLines[id], this.railLines[id]);
+              }
+            });
           }
+          // T5 (CD-T5-2)：重新排程 idle acknowledge timer（NO-OP in T5；T7 替換為 setTimeout 8-15s）
+          // PRM guard 在 T7 實作內加，T5 stub 永遠 no-op
+          this._startIdleAcknowledge();
         },
         // T4 visual probe：t=0.30 同 frame 切主圖 src（與既有 main fade-out / fade-in 對齊）
         { onMainSwap: () => this._setMainImage(clickedImage) }
@@ -366,6 +428,10 @@ document.addEventListener('alpine:init', () => {
       // 清 rail state（focused/sweep/neighbor）
       this._resetHoverRails();
 
+      // T5 (CD-T5-2)：cancel idle acknowledge timer（NO-OP in T5；T7 替換為 clearTimeout）
+      // user is interacting → 取消 idle pulse 排程，避免 hover 期間突然 idle pulse 干擾
+      this._cancelIdleAcknowledge();
+
       // 1. 暫停此顆呼吸
       this.breathingManager.pauseOne(slotId);
 
@@ -381,13 +447,13 @@ document.addEventListener('alpine:init', () => {
 
       // Rail 能量感（CD-T2FIX-3）
       // T4fix：kill any pending strokeOpacity tween before hover（previously strokeWidth）
+      // T5 (CD-T5-5 / spec §4.3)：hover 不再呼叫 railSweep —— 引導線改由 strokeOpacity tween + dust class swap 表達（T6）。
+      // railSweep 保留供 slip-through enter 使用（onCardClick onComplete 補呼叫）。
       const focusedLine = this.railLines[slotId];
-      const sweepLine = this.sweepLines[slotId];
       if (focusedLine) {
         gsap.killTweensOf(focusedLine, 'strokeOpacity');
         railFocusPulse(focusedLine);
       }
-      if (focusedLine && sweepLine) railSweep(sweepLine, focusedLine);
 
       // 追蹤 focused rail（用於 _resetHoverRails cleanup，CD-T2FIX-6）
       this._activeFocusedRailId = slotId;
@@ -464,6 +530,9 @@ document.addEventListener('alpine:init', () => {
     onExit() {
       if (this.animating) return;
       this.animating = true;
+
+      // T5 (CD-T5-2)：cancel idle acknowledge timer（NO-OP in T5；T7 替換為 clearTimeout）
+      this._cancelIdleAcknowledge();
 
       // 清 hover card 殘留（scale / opacity / icon / breathing，Codex T2fix5 P2 Finding 1）
       if (this._activeHoverSlot !== null) {

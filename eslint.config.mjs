@@ -223,6 +223,19 @@ export default [
           message:
             "SVG rail y2 屬性只能在 rails.js（setRailCoords）或 breathing.js（ticker follow）內設定，不在 constellation-host.js 直接 setAttribute（CD-T2FIX-3）。",
         },
+        {
+          // T5 (CD-T5-5 / spec §4.3)：hover 不再呼叫 railSweep。引導線改由 strokeOpacity tween +
+          // dust class swap 表達（T6）。railSweep 保留供 slip-through enter feedback（host onComplete 補呼叫）。
+          // 兩個 selector 同時覆蓋：
+          //   - Property 形式（Alpine data object literal shorthand method）
+          //   - MethodDefinition 形式（ES class method，未來可能改寫）
+          selector: [
+            "MethodDefinition[key.name='onHoverEnter'] CallExpression[callee.name='railSweep']",
+            "Property[key.name='onHoverEnter'] CallExpression[callee.name='railSweep']",
+          ].join(', '),
+          message:
+            "T5 決策（CD-T5-5 / spec §4.3）：hover 不再呼叫 railSweep()，引導線改由 strokeOpacity tween + dust class swap 表達（T6）。railSweep 保留供 slip-through enter 使用（host onComplete 補呼叫）。",
+        },
       ],
     },
   },

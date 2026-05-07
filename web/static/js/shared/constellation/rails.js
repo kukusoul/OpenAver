@@ -51,7 +51,10 @@ export function railDrawIn(line, tl, pos) {
   if (typeof DrawSVGPlugin !== 'undefined') {
     tl.call(() => {
       line.classList.remove('rail--hidden');
-      gsap.set(line, { drawSVG: '0%', opacity: 1 });
+      // T5 (CD-T5-2)：CSS baseline 已改為 stroke-opacity:0；DrawSVG 進場必須注入
+      // strokeOpacity:0.10，否則在透明線上畫畫＝完全看不見。clearProps 在 pos+0.55
+      // 會清掉，rail 自動落回 baseline 0（spec §3.2「動畫結束消失」）。
+      gsap.set(line, { drawSVG: '0%', opacity: 1, strokeOpacity: 0.10 });
     }, null, Math.max(0, pos - 0.01));
     tl.to(line, { drawSVG: '0% 100%', duration: 0.55, ease: 'fluent-decel' }, pos);
     // T4fix §F option 1：DrawSVG 完成後還 CSS baseline（dasharray 點珠 + strokeOpacity 0.30）
@@ -63,7 +66,11 @@ export function railDrawIn(line, tl, pos) {
     // Fallback：opacity 0 → 1（無 DrawSVG，dasharray baseline 不會被覆寫；strokeOpacity 仍清）
     tl.call(() => {
       line.classList.remove('rail--hidden');
-      gsap.set(line, { opacity: 0 });
+      // T5 (CD-T5-2 symmetry guard)：DrawSVG 與 Fallback 兩 branch 對稱注入 strokeOpacity:0.10。
+      // 起點 element opacity:0 不可見，加 strokeOpacity 在那一刻無視覺差異；tween opacity 升到 1
+      // 那刻 element 浮現、strokeOpacity 已就緒、rail 立刻可見。clearProps 在 pos+0.55 清掉，
+      // rail 落回 CSS baseline 0（spec §3.2）。
+      gsap.set(line, { opacity: 0, strokeOpacity: 0.10 });
     }, null, Math.max(0, pos - 0.01));
     tl.to(line, { opacity: 1, duration: 0.55, ease: 'fluent-decel' }, pos);
     tl.set(line, { clearProps: 'strokeOpacity' }, pos + 0.55);
