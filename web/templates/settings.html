@@ -57,100 +57,102 @@
             </div>
             <div class="card-body">
 
-                <div class="settings-form-group popover-anchor">
-                    <label class="settings-label">
-                        <input type="checkbox" class="toggle toggle-primary"
-                               x-model="form.downloadSampleImages">
-                        <span class="label-text">{{ t('settings.scraper.download_sample_images_label') }}</span>
-                        <button type="button" class="help-popover-btn"
-                                @click.prevent="showSampleImagesHelp = !showSampleImagesHelp"
-                                :aria-expanded="showSampleImagesHelp">
-                            <i class="bi bi-question-circle"></i>
-                        </button>
-                    </label>
-                    <div x-show="showSampleImagesHelp" x-cloak x-transition
-                         @click.outside="showSampleImagesHelp = false"
-                         class="help-popover">
-                        <small class="help-popover__body">
-                            {{ t('settings.scraper.download_sample_images_hint') }}
-                        </small>
+                <div class="settings-toggle-pair-row">
+                    <div class="settings-form-group popover-anchor">
+                        <label class="settings-label">
+                            <input type="checkbox" class="toggle toggle-primary"
+                                   x-model="form.downloadSampleImages">
+                            <span class="label-text">{{ t('settings.scraper.download_sample_images_label') }}</span>
+                            <button type="button" class="help-popover-btn"
+                                    @click.prevent="showSampleImagesHelp = !showSampleImagesHelp"
+                                    :aria-expanded="showSampleImagesHelp">
+                                <i class="bi bi-question-circle"></i>
+                            </button>
+                        </label>
+                        <div x-show="showSampleImagesHelp" x-cloak x-transition
+                             @click.outside="showSampleImagesHelp = false"
+                             class="help-popover">
+                            <small class="help-popover__body">
+                                {{ t('settings.scraper.download_sample_images_hint') }}
+                            </small>
+                        </div>
+                    </div>
+
+                    <div class="settings-form-group popover-anchor">
+                        <label class="settings-label">
+                            <input type="checkbox" class="toggle toggle-primary"
+                                   x-model="clipEnabled"
+                                   @change="onClipToggleChange($event)">
+                            <span class="label-text">{{ t('settings.clip.toggle_label') }}</span>
+                            <span class="text-error font-semibold ml-1">{{ t('settings.clip.beta_suffix') }}</span>
+                            <button type="button" class="help-popover-btn"
+                                    @click.prevent="showClipHelp = !showClipHelp"
+                                    :aria-expanded="showClipHelp">
+                                <i class="bi bi-question-circle"></i>
+                            </button>
+                        </label>
+                        <div x-show="showClipHelp" x-cloak x-transition
+                             @click.outside="showClipHelp = false"
+                             class="help-popover">
+                            <small class="help-popover__body">
+                                {{ t('settings.clip.toggle_hint') }}
+                                <a href="/help#clip" class="link link-primary">
+                                    {{ t('settings.clip.help_link') }}
+                                </a>
+                            </small>
+                        </div>
                     </div>
                 </div>
 
-                <div class="settings-form-group popover-anchor">
-                    <label class="settings-label">
-                        <input type="checkbox" class="toggle toggle-primary"
-                               x-model="clipEnabled"
-                               @change="onClipToggleChange($event)">
-                        <span class="label-text">{{ t('settings.clip.toggle_label') }}</span>
-                        <span class="badge badge-sm badge-warning ml-1">Beta</span>
-                        <button type="button" class="help-popover-btn"
-                                @click.prevent="showClipHelp = !showClipHelp"
-                                :aria-expanded="showClipHelp">
-                            <i class="bi bi-question-circle"></i>
-                        </button>
-                    </label>
-                    <div x-show="showClipHelp" x-cloak x-transition
-                         @click.outside="showClipHelp = false"
-                         class="help-popover">
-                        <small class="help-popover__body">
-                            {{ t('settings.clip.toggle_hint') }}
-                            <a href="/help#clip" class="link link-primary">
-                                {{ t('settings.clip.help_link') }}
-                            </a>
-                        </small>
+                <!-- Status box（clipStatusBoxVisible getter 控制可見性，CD-56D-2） -->
+                <div x-show="clipStatusBoxVisible" x-cloak x-transition
+                     class="clip-status-box mt-2 p-3 rounded-lg">
+
+                    <!-- 階段 1：下載中 -->
+                    <div x-show="clipPhase === 'downloading'" class="flex items-center gap-2">
+                        <span class="loading loading-spinner loading-sm"></span>
+                        <span x-text="t('clip.status.downloading')"></span>
+                        <span class="font-mono text-sm" x-text="clipDownloadMBStr"></span>
+                    </div>
+                    <progress x-show="clipPhase === 'downloading'"
+                              class="progress progress-primary w-full"
+                              :value="clipDownloadProgress" max="1"></progress>
+
+                    <!-- 階段 2：索引中 -->
+                    <div x-show="clipPhase === 'indexing'" class="flex items-center gap-2">
+                        <span class="loading loading-spinner loading-sm"></span>
+                        <span x-text="t('clip.status.indexing')"></span>
+                        <span class="font-mono text-sm"
+                              x-text="`${clipIndexDone} / ${clipIndexTotal}`"></span>
+                    </div>
+                    <progress x-show="clipPhase === 'indexing'"
+                              class="progress progress-primary w-full"
+                              :value="clipIndexDone" :max="clipIndexTotal || 1"></progress>
+
+                    <!-- 階段 3：完成 -->
+                    <div x-show="clipPhase === 'ready'" class="flex items-center gap-2 text-success">
+                        <i class="bi bi-check-circle-fill"></i>
+                        <span x-text="t('clip.status.ready')"></span>
                     </div>
 
-                    <!-- Status box（clipStatusBoxVisible getter 控制可見性，CD-56D-2） -->
-                    <div x-show="clipStatusBoxVisible" x-cloak x-transition
-                         class="clip-status-box mt-2 p-3 rounded-lg">
-
-                        <!-- 階段 1：下載中 -->
-                        <div x-show="clipPhase === 'downloading'" class="flex items-center gap-2">
-                            <span class="loading loading-spinner loading-sm"></span>
-                            <span x-text="t('clip.status.downloading')"></span>
-                            <span class="font-mono text-sm" x-text="clipDownloadMBStr"></span>
-                        </div>
-                        <progress x-show="clipPhase === 'downloading'"
-                                  class="progress progress-primary w-full"
-                                  :value="clipDownloadProgress" max="1"></progress>
-
-                        <!-- 階段 2：索引中 -->
-                        <div x-show="clipPhase === 'indexing'" class="flex items-center gap-2">
-                            <span class="loading loading-spinner loading-sm"></span>
-                            <span x-text="t('clip.status.indexing')"></span>
-                            <span class="font-mono text-sm"
-                                  x-text="`${clipIndexDone} / ${clipIndexTotal}`"></span>
-                        </div>
-                        <progress x-show="clipPhase === 'indexing'"
-                                  class="progress progress-primary w-full"
-                                  :value="clipIndexDone" :max="clipIndexTotal || 1"></progress>
-
-                        <!-- 階段 3：完成 -->
-                        <div x-show="clipPhase === 'ready'" class="flex items-center gap-2 text-success">
-                            <i class="bi bi-check-circle-fill"></i>
-                            <span x-text="t('clip.status.ready')"></span>
-                        </div>
-
-                        <!-- 階段 4：失敗 -->
-                        <div x-show="clipPhase === 'error'" class="flex items-center gap-2 text-error">
-                            <i class="bi bi-x-circle-fill"></i>
-                            <span x-text="clipErrorMessage"></span>
-                            <button class="btn btn-xs btn-outline btn-error ml-2"
-                                    @click="onClipToggleChange()">
-                                {{ t('clip.action.retry') }}
-                            </button>
-                        </div>
-
-                        <!-- 測試推論按鈕（56f-T5 補 testClipInference 實作後改回 x-show="clipPhase === 'ready'"） -->
-                        <button x-show="false"
-                                class="btn btn-xs btn-outline mt-1"
-                                @click="testClipInference()"
-                                :disabled="_testInferenceLoading">
-                            <i class="bi bi-stopwatch"></i>
-                            {{ t('clip.action.test_inference') }}
+                    <!-- 階段 4：失敗 -->
+                    <div x-show="clipPhase === 'error'" class="flex items-center gap-2 text-error">
+                        <i class="bi bi-x-circle-fill"></i>
+                        <span x-text="clipErrorMessage"></span>
+                        <button class="btn btn-xs btn-outline btn-error ml-2"
+                                @click="onClipToggleChange()">
+                            {{ t('clip.action.retry') }}
                         </button>
                     </div>
+
+                    <!-- 測試推論按鈕（56f-T5 補 testClipInference 實作後改回 x-show="clipPhase === 'ready'"） -->
+                    <button x-show="false"
+                            class="btn btn-xs btn-outline mt-1"
+                            @click="testClipInference()"
+                            :disabled="_testInferenceLoading">
+                        <i class="bi bi-stopwatch"></i>
+                        {{ t('clip.action.test_inference') }}
+                    </button>
                 </div>
 
                 <div class="settings-form-group">

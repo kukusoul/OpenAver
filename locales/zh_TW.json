@@ -313,7 +313,8 @@
       "confirm": "確認重置"
     },
     "clip": {
-      "toggle_label": "以圖搜圖 (Beta)",
+      "toggle_label": "以圖搜圖",
+      "beta_suffix": "(Beta)",
       "toggle_hint": "點 Lightbox 的魔杖，AI 幫你找出封面相似的影片。首次啟用會下載 80MB 模型。",
       "help_link": "詳細說明 →"
     },
