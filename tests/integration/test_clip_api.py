@@ -92,6 +92,7 @@ class TestSimilarCoversAPI:
             patch("web.routers.clip.VideoRepository") as MockRepo,
         ):
             MockRepo.return_value.get_by_id.side_effect = mock_get_by_id
+            MockRepo.return_value.get_by_ids.return_value = {2: result_video}
 
             resp = client.get("/api/similar-covers/1")
 
@@ -201,6 +202,7 @@ class TestSimilarCoversAPI:
             patch("web.routers.clip.VideoRepository") as MockRepo,
         ):
             MockRepo.return_value.get_by_id.side_effect = mock_get_by_id
+            MockRepo.return_value.get_by_ids.return_value = {2: same_actress_video}
 
             resp = client.get("/api/similar-covers/1")
 
@@ -326,6 +328,7 @@ class TestSimilarCoversResponseShape:
             patch("web.routers.clip.VideoRepository") as MockRepo,
         ):
             MockRepo.return_value.get_by_id.side_effect = mock_get_by_id
+            MockRepo.return_value.get_by_ids.return_value = {2: result_video}
             resp = client.get("/api/similar-covers/1")
 
         assert resp.status_code == 200
@@ -365,6 +368,7 @@ class TestSimilarCoversResponseShape:
             patch("web.routers.clip.VideoRepository") as MockRepo,
         ):
             MockRepo.return_value.get_by_id.side_effect = mock_get_by_id
+            MockRepo.return_value.get_by_ids.return_value = {2: result_video}
             resp = client.get("/api/similar-covers/1")
 
         assert resp.status_code == 200
@@ -429,6 +433,7 @@ class TestSimilarCoversResponseShape:
             patch("web.routers.clip.VideoRepository") as MockRepo,
         ):
             MockRepo.return_value.get_by_id.side_effect = mock_get_by_id
+            MockRepo.return_value.get_by_ids.return_value = {2: v2, 3: v3}
             resp = client.get("/api/similar-covers/1")
 
         assert resp.status_code == 200
@@ -459,6 +464,7 @@ class TestSimilarCoversResponseShape:
             patch("web.routers.clip.VideoRepository") as MockRepo,
         ):
             MockRepo.return_value.get_by_id.side_effect = mock_get_by_id
+            MockRepo.return_value.get_by_ids.return_value = {2: result_video}
             resp = client.get("/api/similar-covers/1")
 
         assert resp.status_code == 200
@@ -532,6 +538,7 @@ class TestCoverUrlFetchable:
         ):
             MockRepo.return_value.get_by_number.return_value = target_video
             MockRepo.return_value.get_by_id.side_effect = mock_get_by_id
+            MockRepo.return_value.get_by_ids.return_value = {6: result_video}
 
             resp = client.get("/api/similar-covers/by-number/ABC-005")
 

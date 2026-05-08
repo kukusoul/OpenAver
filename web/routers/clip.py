@@ -138,12 +138,9 @@ async def _compute_similar_covers(
     candidate_ids = [r["video_id"] for r in raw_results]
     raw_scores = [r["cosine_score"] for r in raw_results]
 
-    # 批次取候選影片資訊
-    candidate_videos = {}
-    for cid in candidate_ids:
-        v = repo.get_by_id(cid)
-        if v is not None:
-            candidate_videos[cid] = v
+    # 批次取候選影片資訊（codex P2 fix：bulk WHERE id IN，取代 N+1 per-id 查詢；
+    # compute_similar 不截取，candidate_ids 為全 DB 候選，~2000+ 部時影響顯著）
+    candidate_videos = repo.get_by_ids(candidate_ids)
 
     # 建立 video_actresses_map 供 diversity penalty 使用
     video_actresses_map: dict[int, list[str]] = {}

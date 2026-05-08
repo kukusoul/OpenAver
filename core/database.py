@@ -670,6 +670,33 @@ class VideoRepository:
         finally:
             conn.close()
 
+    def get_by_ids(self, video_ids: list[int]) -> dict[int, Video]:
+        """批次查詢多筆影片（避免 N+1 — codex P2 fix）。
+
+        clip 視覺搜尋一次需取所有候選影片資訊（套 diversity penalty 用），
+        個別 get_by_id 在 2000+ 候選時 → 2000 SQL round-trip。
+
+        Returns:
+            {video_id: Video} dict（缺失 id 不在 result 內）；空 list 回 {}。
+        """
+        if not video_ids:
+            return {}
+        placeholders = ",".join("?" * len(video_ids))
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                f"SELECT * FROM videos WHERE id IN ({placeholders})",
+                tuple(video_ids),
+            )
+            cols = self._get_columns()
+            return {
+                row[cols.index("id")]: Video.from_row(row, cols)
+                for row in cursor.fetchall()
+            }
+        finally:
+            conn.close()
+
     def get_by_number(self, number: str) -> Optional[Video]:
         """根據番號查詢單筆影片，大小寫不敏感（供 by-number 端點使用）。
 

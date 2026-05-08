@@ -232,8 +232,12 @@ async def disable_clip():
         if core.clip._provider is not None:
             core.clip._provider = None
 
-        # ── 階段 4：刪 .onnx 檔 ────────────────────────────────────
-        model_path = Path(_DEFAULT_MODEL_PATH)
+        # ── 階段 4：刪 .onnx 檔（codex P2 fix：尊重 cfg.clip.model_path） ──
+        # 56d 引入 ClipConfig.model_path（startup 自癒 / provider load 都有讀）；
+        # disable 寫死 _DEFAULT_MODEL_PATH 會在 custom path 部署留 orphan 檔案、
+        # 也可能誤刪默認路徑下不相關的檔。優先讀 config，None 才 fallback 默認。
+        configured_path = cfg.get("clip", {}).get("model_path")
+        model_path = Path(configured_path) if configured_path else Path(_DEFAULT_MODEL_PATH)
         if model_path.exists():
             try:
                 model_path.unlink()
