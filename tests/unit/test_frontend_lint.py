@@ -1223,23 +1223,9 @@ class TestClipStageGuard:
         assert "CLIP_ANCHORS" in html, \
             "showcase.html missing: CLIP_ANCHORS reference (x-for=\"anchor in CLIP_ANCHORS\")"
 
-    def test_no_filter_brightness_in_clip_files(self):
-        """56c-T4fix7: state-clip.js + constellation-host.js 整檔不含 brightness( 字串
-        （hover dim 路徑已改 --slot-dim-opacity CSS var tween；整檔守防回歸）"""
-        MOTION_LAB_JS = (
-            Path(__file__).parent.parent.parent
-            / "web" / "static" / "js" / "pages" / "motion-lab" / "constellation-host.js"
-        )
-        files = [
-            (self.STATE_CLIP_JS, "state-clip.js"),
-            (MOTION_LAB_JS, "constellation-host.js"),
-        ]
-        for fpath, fname in files:
-            content = fpath.read_text(encoding="utf-8")
-            assert "brightness(" not in content, (
-                f"{fname} contains 'brightness(' — hover dim 路徑必須改用 --slot-dim-opacity CSS var，"
-                "禁用 filter: brightness()（56c-T4fix7 防回歸）"
-            )
+    # NOTE (v0.8.6 pre-merge SA-pre-6): test_no_filter_brightness_in_clip_files
+    # 已遷移到 eslint.config.mjs SEL_FILTER_BRIGHTNESS（Group 5 + Group 5b），對齊
+    # CLAUDE.md「Lint 守衛規則」：「某個 JS/CSS 字串不應出現」→ eslint rule。
 
     def test_no_slot_icon_overlay_in_templates(self):
         """56c-T4fix7: showcase.html + motion_lab.html 整檔不含 slot-icon-overlay 字串

@@ -50,6 +50,16 @@ const SEL_STARSETTLE_LITERAL = {
     "starSettle（CD-T2FIX-1）已退役。非 animations.js 檔案禁止出現 'starSettle' 字串。register 保留在 animations.js（Group 4 Property selector 白名單保護 CustomEase.create）。",
 };
 
+// ── 56c-T4fix7 filter: brightness() ban（取代 TestClipStageGuard pytest 守衛）────
+// Hover dim 路徑必須改用 --slot-dim-opacity CSS var tween；filter: brightness() 已退役。
+// 限定 state-clip.js + constellation-host.js（兩 host），其他檔案不限制
+// （cover-image filter / scrubber 等仍可能合法用 brightness）。
+const SEL_FILTER_BRIGHTNESS = {
+  selector: "Literal[value=/brightness\\(/]",
+  message:
+    "filter: brightness() 在 56c-T4fix7 後禁用，hover dim 改用 --slot-dim-opacity CSS var tween（v0.8.6 取代 TestClipStageGuard pytest 守衛遷移到 eslint）。",
+};
+
 export default [
   // ── 全域基礎設定 ──────────────────────────────────────────────
   {
@@ -223,6 +233,8 @@ export default [
         },
         // Codex r1 P3 修正：constellation-host.js 也加 starSettle Literal ban（原 Group 6 ignores 此檔導致漏網）
         SEL_STARSETTLE_LITERAL,
+        // 56c-T4fix7：filter: brightness() ban（host 內 hover dim 改 CSS var tween）
+        SEL_FILTER_BRIGHTNESS,
         {
           // Codex r2 F2：y2 setAttribute ban（plan §11 / task card §9 契約）
           // Group 5 加 ban；Group 6 不加（catch-all 會打到 rails.js 自己的 railSweep）
@@ -276,6 +288,8 @@ export default [
         "error",
         SEL_WINDOW_CONFIRM,
         SEL_STARSETTLE_LITERAL,
+        // 56c-T4fix7：filter: brightness() ban（host 內 hover dim 改 CSS var tween）
+        SEL_FILTER_BRIGHTNESS,
         {
           selector: "MemberExpression[property.name='intersection']",
           message:
