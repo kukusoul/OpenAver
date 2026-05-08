@@ -119,6 +119,10 @@ export function _killLightboxTimelines(options) {
 
 export function stateBase() {
     return {
+        // Fix 4 (codex P2): clip.enabled gate — server-side rendered via window.__CLIP_ENABLED__
+        // magic 按鈕（bi-magic）與 openClipMode 只在 clipEnabled=true 時可用
+        clipEnabled: !!(window.__CLIP_ENABLED__),
+
         // 53a-T2: 持久化容器（$persist 自動同步 localStorage 的 'showcase_state' key）
         // sort/order/actressSort/actressOrder 用 null sentinel，讓 restoreState 走 URL > _persisted > config > fallback 優先序
         _persistedShowcase: this.$persist({

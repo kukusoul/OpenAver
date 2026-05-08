@@ -288,6 +288,9 @@ async def showcase_page(request: Request):
     """Showcase 頁面"""
     context = get_common_context(request)
     context["page"] = "showcase"
+    # Fix 4 (codex P2): server-side render clip.enabled → template gate magic button
+    cfg = context.get("config") or {}
+    context["clip_enabled"] = cfg.get("clip", {}).get("enabled", False)
     return templates.TemplateResponse(request, "showcase.html", context)
 
 

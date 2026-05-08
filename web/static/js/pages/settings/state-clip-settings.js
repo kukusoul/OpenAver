@@ -140,6 +140,7 @@ export function stateClipSettings() {
             this._mergeClipStatusSnapshot(data);
         },
         _mergeClipStatusSnapshot(snap) {
+            const prevPhase = this.clipPhase;
             if (snap.phase) this.clipPhase = snap.phase;
             if (typeof snap.download_bytes === 'number') {
                 this.clipDownloadBytes = snap.download_bytes;
@@ -158,6 +159,14 @@ export function stateClipSettings() {
                 // 後端已 sanitize 為固定中文，直接顯示
                 this.clipErrorMessage = snap.error_message;
             }
+            // Fix 2 (codex P3a): ready 5s auto-fade（只在初次進入 ready 時啟動，防 polling/SSE 重複觸發）
+            // frontend phase → 'idle' 後 status box 靠 x-transition 自然 fade；
+            // backend phase 仍是 'ready'，下次 page load 走 ready-early-return，行為一致
+            if (this.clipPhase === 'ready' && prevPhase !== 'ready') {
+                setTimeout(() => {
+                    if (this.clipPhase === 'ready') this.clipPhase = 'idle';
+                }, 5000);
+            }
         },
         async _restoreClipStatusOnPageLoad() {
             try {
@@ -167,7 +176,11 @@ export function stateClipSettings() {
                 // ready：已啟用，開關 ON（由 loadConfig mapping 負責），status box 刻意不還原
                 //   （避免每次進 Settings 都顯示多餘的「已啟用 ✓」訊息）
                 if (snap.phase === 'idle' || snap.phase === 'ready') return;
-                // downloading / indexing / error：還原中間態 + 啟動 polling 持續觀察
+                // downloading / indexing / error：後端 enable job 跑過或正在跑，
+                // 此時 /api/config 的 clip.enabled 可能還是 false（後端只在 indexing 完才寫），
+                // 但前端 toggle 必須顯示 ON 對齊用戶意圖（Fix 1: codex P1）
+                this.clipEnabled = true;
+                // 還原中間態 + 啟動 polling 持續觀察
                 this._mergeClipStatusSnapshot(snap);
                 this._startClipStatusPolling();
             } catch (_) { /* ignore，page load 時網路 blip 不影響主流程 */ }
