@@ -354,7 +354,7 @@
   "clip": {
     "action": {
       "retry": "重試",
-      "test_inference": "測試推論"
+      "test_inference": "測試"
     },
     "status": {
       "downloading": "下載模型中",
