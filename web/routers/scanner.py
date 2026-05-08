@@ -22,6 +22,7 @@ import base64
 import json
 import os
 import sys
+import threading
 import time
 import requests
 from datetime import datetime
@@ -40,6 +41,8 @@ from core.nfo_updater import check_cache_needs_update, update_videos_generator
 from core.database import VideoRepository, Video, init_db, get_db_path, migrate_json_to_sqlite
 from core.organizer import generate_jellyfin_images, HEADERS as _EMBED_HEADERS
 from core.config import load_config
+from core.clip import get_provider
+from core.clip.indexer import ClipIndexer
 from core.scraper import smart_search
 from pydantic import BaseModel
 from core.logger import get_logger
@@ -52,6 +55,23 @@ router = APIRouter(prefix="/api/gallery", tags=["gallery"])
 # T3(40c): Jellyfin check TTL 快取（60 秒）
 _jellyfin_cache_result: dict | None = None
 _jellyfin_cache_time: float = 0
+
+
+async def _clip_background_incremental_index():
+    """背景隱性增量 CLIP 索引。不阻塞 Scanner SSE，不發 53b 通知。（CD-56D-4）"""
+    try:
+        provider = get_provider()
+        if not provider.is_enabled:
+            return
+        repo = VideoRepository()
+        indexer = ClipIndexer(provider, repo, db_path=Path(get_db_path()))
+        result = await indexer.run_batch(progress_cb=None)
+        logger.info(
+            "CLIP incremental index done: indexed=%d skipped=%d errors=%d",
+            result["indexed"], result["skipped"], result["errors"],
+        )
+    except Exception:
+        logger.exception("CLIP incremental index background task failed")
 
 
 def _sse_event(data: dict) -> str:
@@ -387,6 +407,23 @@ def generate_avlist() -> Generator[str, None, None]:
         global _jellyfin_cache_result, _jellyfin_cache_time
         _jellyfin_cache_result = None
         _jellyfin_cache_time = 0
+
+        # 56d-T1c: 觸發背景增量 CLIP 索引（隱性，無通知無進度）（CD-56D-4）
+        try:
+            cfg = load_config()
+            if cfg.get("clip", {}).get("enabled", False):
+                def _bg_runner():
+                    try:
+                        asyncio.run(_clip_background_incremental_index())
+                    except Exception:
+                        logger.exception("CLIP background index thread failed")
+                threading.Thread(
+                    target=_bg_runner,
+                    daemon=True,
+                    name="clip-bg-index",
+                ).start()
+        except Exception as e:
+            logger.warning("CLIP background index trigger failed: %s", e)
 
         # 53b-T3: 掃描完成通知
         if scan_error_count > 0:

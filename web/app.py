@@ -1,6 +1,7 @@
 """
 OpenAver Web GUI - FastAPI Application
 """
+from contextlib import asynccontextmanager
 from pathlib import Path
 import re
 
@@ -19,17 +20,87 @@ setup_logging()
 
 logger = get_logger(__name__)
 
+from core.config import load_config, save_config
+from core.clip import get_provider, _DEFAULT_MODEL_PATH
+from core.database import VideoRepository
+
 
 # 路徑設定
 BASE_DIR = Path(__file__).parent
 TEMPLATES_DIR = BASE_DIR / "templates"
 STATIC_DIR = BASE_DIR / "static"
 
+
+async def _clip_self_heal_on_startup():
+    """啟動時偵測模型版本不一致 → 自動清空舊 embedding。（CD-56D-6）"""
+    try:
+        cfg = load_config()
+        clip_cfg = cfg.get("clip", {})
+        if not clip_cfg.get("enabled", False):
+            return
+
+        model_path = Path(clip_cfg.get("model_path") or _DEFAULT_MODEL_PATH)
+        if not model_path.exists():
+            logger.warning(
+                "CLIP enabled but model file missing: %s. Disabling.", model_path
+            )
+            cfg.setdefault("clip", {})["enabled"] = False
+            save_config(cfg)
+            return
+
+        provider = get_provider(model_path)
+        repo = VideoRepository()
+
+        conn = repo._get_connection()
+        try:
+            cur = conn.execute(
+                "SELECT DISTINCT clip_model_id FROM videos "
+                "WHERE clip_embedding IS NOT NULL"
+            )
+            existing_ids = {row[0] for row in cur.fetchall() if row[0]}
+        finally:
+            conn.close()
+
+        stale = existing_ids - {provider.model_id}
+        if not stale:
+            return
+
+        conn = repo._get_connection()
+        try:
+            placeholders = ",".join("?" * len(stale))
+            cur = conn.execute(
+                f"UPDATE videos SET clip_embedding = NULL, clip_model_id = NULL "
+                f"WHERE clip_model_id IN ({placeholders})",
+                tuple(stale),
+            )
+            conn.commit()
+            cleared = cur.rowcount
+        finally:
+            conn.close()
+
+        logger.info(
+            "CLIP self-heal: cleared %d rows with stale model_id (%s) → next Scanner run will rebuild",
+            cleared, sorted(stale),
+        )
+    except Exception:
+        logger.exception("CLIP self-heal failed")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # ── startup ───────────────────────────────────────────────
+    await _clip_self_heal_on_startup()
+    yield
+    # ── shutdown ──────────────────────────────────────────────
+    # 目前無 shutdown 邏輯（setup_logging 是 module-level，不需 teardown）
+
+
 # FastAPI 應用
 app = FastAPI(
     title="OpenAver",
     description="JAV 影片元數據管理工具",
-    version=VERSION
+    version=VERSION,
+    lifespan=lifespan,
 )
 
 # 靜態檔案
