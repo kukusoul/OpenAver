@@ -109,8 +109,10 @@ class LocalONNXProvider(CLIPProvider):
 
     @property
     def is_enabled(self) -> bool:
-        """56a 預設啟用；56d Settings 控制後可修改。"""
-        return True
+        """讀 config 判斷（CD-56D-11-B）。opt-in：缺 clip 區段視為 disabled。"""
+        from core.config import load_config  # noqa: PLC0415
+        cfg = load_config()
+        return cfg.get("clip", {}).get("enabled", False)
 
     @property
     def model_available(self) -> bool:

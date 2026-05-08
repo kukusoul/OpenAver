@@ -60,10 +60,16 @@ class TestLocalONNXProviderInit:
         assert provider.session_loaded is False
         assert provider._session is None
 
-    def test_is_enabled_default_true(self, tmp_path):
-        """56a 預設 is_enabled == True"""
+    def test_is_enabled_default_true(self, tmp_path, monkeypatch):
+        """config clip.enabled=True → is_enabled 回 True（CD-56D-11-B）"""
         from core.clip.provider import LocalONNXProvider
+        import core.config
 
+        monkeypatch.setattr(
+            core.config,
+            "load_config",
+            lambda: {"clip": {"enabled": True, "model_path": str(tmp_path / "model.onnx")}},
+        )
         provider = LocalONNXProvider(tmp_path / "model.onnx")
         assert provider.is_enabled is True
 

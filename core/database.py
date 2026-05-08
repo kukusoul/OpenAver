@@ -896,6 +896,25 @@ class VideoRepository:
             conn.close()
         return row is not None
 
+    def clear_all_clip_embeddings(self) -> int:
+        """清空所有影片的 clip_embedding + clip_model_id 欄位。
+
+        Returns:
+            被清除的列數。
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                "UPDATE videos SET clip_embedding = NULL, clip_model_id = NULL "
+                "WHERE clip_embedding IS NOT NULL"
+            )
+            conn.commit()
+            return cursor.rowcount
+        finally:
+            conn.close()
+
+
 def migrate_json_to_sqlite(json_path: Path, db_path: Path = None,
                            delete_on_success: bool = True) -> dict:
     """遷移 JSON cache 到 SQLite
