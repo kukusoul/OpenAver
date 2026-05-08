@@ -60,6 +60,8 @@ EXPECTED_TOOL_NAMES = {
     "get_notifications",
     "mark_notifications_read",
     "clear_notifications",
+    "similar_covers_by_number",
+    "similar_covers",
 }
 
 REQUIRED_TOOL_FIELDS = [
@@ -106,9 +108,9 @@ class TestCapabilitiesEndpoint:
         data = client.get("/api/capabilities").json()
         assert "retry_hint" in data["error_format"]
 
-    def test_tools_count_is_32(self, client):
+    def test_tools_count_is_34(self, client):
         data = client.get("/api/capabilities").json()
-        assert len(data["tools"]) == 32
+        assert len(data["tools"]) == 34
 
     def test_all_tool_names_present(self, client):
         data = client.get("/api/capabilities").json()
@@ -234,6 +236,13 @@ class TestCapabilitiesEndpoint:
         data = client.get("/api/capabilities").json()
         names = {t["name"] for t in data["tools"]}
         assert "translate" not in names
+
+    def test_clip_lifecycle_endpoints_not_in_tools(self, client):
+        """CLIP enable/disable/status/test-inference 為 UI flow，不揭露給 AI agent。"""
+        resp = client.get("/api/capabilities")
+        names = {t["name"] for t in resp.json()["tools"]}
+        for forbidden in ("clip_enable", "clip_disable", "clip_status", "clip_test_inference"):
+            assert forbidden not in names
 
     def test_enrich_single_example_contains_number(self, client):
         """F5: enrich_single example curl body 必須含 number 欄位（required 欄位）"""

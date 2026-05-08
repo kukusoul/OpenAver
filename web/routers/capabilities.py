@@ -1000,6 +1000,53 @@ _TOOLS: list[dict] = [
         "retry_safe": True,
         "_example_template": "curl -X DELETE '{base}/api/notifications'",
     },
+    {
+        "name": "similar_covers_by_number",
+        "description": "找視覺相似的封面：給定番號，回傳 12 部 cosine 相似度最高的影片（已排除同女優、含右半邊裁切預處理）。讀取既有 CLIP 索引，不修改資料庫。",
+        "side_effect": False,
+        "method": "GET",
+        "path": "/api/similar-covers/by-number/{number}",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "number": {"type": "string", "description": "番號（大小寫不敏感）"},
+                "limit": {
+                    "type": "integer", "default": 12, "minimum": 1, "maximum": 50,
+                    "description": "回傳筆數",
+                },
+            },
+            "required": ["number"],
+        },
+        "output_schema": {
+            "model_id": "string — CLIP 模型版本",
+            "query_video": "{video_id, number, title, cover_url}",
+            "results": "[{video_id, number, title, cover_url, cosine_score, penalty_applied, actresses}]",
+        },
+        "retry_safe": True,
+        "_example_template": "curl '{base}/api/similar-covers/by-number/SONE-205'",
+    },
+    {
+        "name": "similar_covers",
+        "description": "同 similar_covers_by_number，但用 DB 內部 video_id 查詢。一般 AI agent 用 by-number 即可，本端點為內部識別保留。",
+        "side_effect": False,
+        "method": "GET",
+        "path": "/api/similar-covers/{video_id}",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "video_id": {"type": "integer"},
+                "limit": {"type": "integer", "default": 12, "minimum": 1, "maximum": 50},
+            },
+            "required": ["video_id"],
+        },
+        "output_schema": {
+            "model_id": "string — CLIP 模型版本",
+            "query_video": "{video_id, number, title, cover_url}",
+            "results": "[{video_id, number, title, cover_url, cosine_score, penalty_applied, actresses}]",
+        },
+        "retry_safe": True,
+        "_example_template": "curl '{base}/api/similar-covers/123'",
+    },
 ]
 
 
