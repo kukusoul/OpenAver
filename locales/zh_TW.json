@@ -354,6 +354,16 @@
     "action": {
       "retry": "重試",
       "test_inference": "測試推論"
+    },
+    "status": {
+      "downloading": "下載模型中",
+      "indexing": "建立索引中",
+      "ready": "已啟用",
+      "error": "錯誤"
+    },
+    "enable": {
+      "toast_busy": "啟用流程已在進行中",
+      "toast_failed": "啟用失敗，請查閱日誌"
     }
   },
   "scanner": {

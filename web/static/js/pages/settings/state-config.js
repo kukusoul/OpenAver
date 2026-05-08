@@ -221,6 +221,7 @@ export function stateConfig() {
                     }
                 });
             }
+            this._restoreClipStatusOnPageLoad();
         },
 
         // ===== Methods =====
