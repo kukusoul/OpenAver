@@ -373,6 +373,10 @@
       "toast_done": "以圖搜圖已關閉",
       "toast_failed": "關閉失敗",
       "toast_busy": "啟用流程進行中，請待完成後再關閉"
+    },
+    "test_inference": {
+      "success": "推論完成（{ms} ms）",
+      "failed": "推論失敗"
     }
   },
   "scanner": {

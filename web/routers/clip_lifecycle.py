@@ -76,7 +76,7 @@ def _sse(data: dict) -> str:
 # ---------------------------------------------------------------------------
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-TEST_IMAGE_PATH = PROJECT_ROOT / "web" / "static" / "img" / "demo" / "sc-1.jpg"
+TEST_IMAGE_PATH = PROJECT_ROOT / "web" / "static" / "img" / "demo" / "sone-103.jpg"
 
 # ---------------------------------------------------------------------------
 # Background enable job（CD-56D-11-C）

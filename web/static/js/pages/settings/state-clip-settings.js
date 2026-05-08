@@ -97,7 +97,25 @@ export function stateClipSettings() {
                 this._clipDisableLoading = false;  // 只管 loading flag，不動 clipEnabled
             }
         },
-        async testClipInference() { /* plan-56f.md 56f-T5 補實作 */ },
+        async testClipInference() {
+            this._testInferenceLoading = true;
+            try {
+                const resp = await fetch('/api/clip/test-inference', { method: 'POST' });
+                if (!resp.ok) {
+                    const err = await resp.json().catch(() => ({}));
+                    throw new Error(err.detail || `HTTP ${resp.status}`);
+                }
+                const data = await resp.json();
+                this.showToast(
+                    window.t('clip.test_inference.success', { ms: data.elapsed_ms }),
+                    'success',
+                );
+            } catch (e) {
+                this.showToast(window.t('clip.test_inference.failed'), 'error');
+            } finally {
+                this._testInferenceLoading = false;
+            }
+        },
         _connectClipStatusSSE(url, options = {}) {
             fetch(url, { method: options.method || 'POST' }).then(async resp => {
                 // non-2xx 先處理，避免把 JSON error body 當 SSE stream 讀

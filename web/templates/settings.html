@@ -145,8 +145,7 @@
                         </button>
                     </div>
 
-                    <!-- 測試推論按鈕（56f-T5 補 testClipInference 實作後改回 x-show="clipPhase === 'ready'"） -->
-                    <button x-show="false"
+                    <button x-show="clipPhase === 'ready'"
                             class="btn btn-xs btn-outline mt-1"
                             @click="testClipInference()"
                             :disabled="_testInferenceLoading">
