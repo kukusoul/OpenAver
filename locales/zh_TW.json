@@ -845,6 +845,25 @@
       "other_gallery": "Lightbox 可開啟劇照瀏覽（點擊「劇照」按鈕）",
       "other_per_page": "每頁顯示數量可在<strong>設定頁</strong>調整"
     },
+    "clip": {
+      "title": "以圖搜圖（Beta）",
+      "intro": "在 Lightbox 點 <i class=\"bi bi-magic\"></i> 魔杖按鈕，AI 會找出視覺風格、構圖、女優最相似的 12 部影片，以星座般的方式環繞主圖呈現。",
+      "h6_what": "原理",
+      "what_principle": "用 OpenAI CLIP 模型把每張封面轉換成 512 維特徵向量，計算 cosine similarity 找出最相似者。",
+      "what_crop": "封面在進入 CLIP 前自動裁切右半邊（JAV 排版通常左半是文字，右半是女優），避免標題雜訊干擾比對。",
+      "what_diversity": "對「相同女優」的候選影片自動降權（−0.15），讓「相似服裝/場景但不同女優」的驚喜結果浮上來。",
+      "h6_use": "使用方式",
+      "use_lightbox": "在 Showcase 影片模式打開 Lightbox → 左上角魔杖按鈕 <i class=\"bi bi-magic\"></i> → 0.4s 光帶預演 → 進入星空模式",
+      "use_constellation": "12 顆星辰繞中央主圖排列，亮度與星線粗細表示相似度；點任一顆即「鑽入」變成新主圖，無止境探索",
+      "use_mobile": "手機（&lt; 768px）降級為主圖下方 grid 顯示前 4 張，不做星空動畫",
+      "h6_beta": "Beta 限制",
+      "beta_uncensored": "對<strong>無碼/FC2/老 compilation</strong> 等非標準排版封面，比對精準度可能下降（這類封面排版不遵守左標題右女優的慣例）",
+      "beta_compilation": "建議先在 Settings 啟用後跑一輪，肉眼判斷結果是否符合預期再決定是否常駐",
+      "h6_manage": "啟用 / 關閉",
+      "manage_enable": "Settings → 圖像策略 → 開啟「以圖搜圖（Beta）」 → 自動下載 80MB 模型 → 自動建立首次索引（速度依硬體 30s ~ 數分鐘）→ 完成後即可使用",
+      "manage_disable": "關閉開關 → 警告 modal 二次確認 → 刪除模型檔 + 清空所有 CLIP 索引（不影響其他資料）",
+      "manage_scanner": "之後新增的影片會在 Scanner「產生網頁」時自動建立 CLIP 索引（背景進行，無提示）"
+    },
     "shortcuts": {
       "title": "快捷鍵",
       "h6_search": "搜尋頁",
