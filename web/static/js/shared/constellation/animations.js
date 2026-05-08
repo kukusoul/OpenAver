@@ -85,7 +85,16 @@ export function playInitialExpand(cards, railLines, initSlots, onComplete) {
  * @param {Object<string, SVGLineElement>} railLines
  * @param {HTMLElement} mainImg
  * @param {() => void} onComplete
- * @param {{onMainSwap?: (clickedId: string) => void}} [options]  - T4 visual probe hook：t=0.30 同 frame 呼叫，供 host 在主圖 fade-out 點切 src（56c 接真實 cover swap 也走此 hook）
+ * @param {{onMainSwap?: (clickedId: string) => void, onPrevVisibleHidden?: () => void, onBeforeCardEnter?: (slotId: string) => void}} [options]
+ *   - onMainSwap: t=0.30 呼叫，供 host 換主圖 src（DOM 直寫，不更新 reactive 資料）
+ *   - onPrevVisibleHidden: t=0.46 clicked card 加 slot--hidden 之後同步呼叫，供 host
+ *     此時才整批 swap reactive 資料（clipResults）。分離「DOM 直寫」與「reactive
+ *     rebind」時機，避免 t=0.30 swap 把仍在中央的 clicked slot 重綁新批圖（rebind bug）。
+ *     motion-lab 不傳此 callback → no-op，backward-compat。
+ *   - onBeforeCardEnter: 每張 enter/persist slot 的 reset callback 開頭、slot--hidden
+ *     移除之前同步呼叫，供 host imperative 設定該 slot img.src 為新批同 idx 的 cover_url，
+ *     避免 fade-in 初期 reactive binding 仍綁舊 clipResults 顯示錯誤封面（codex-fix4）。
+ *     motion-lab 不傳此 callback → no-op，backward-compat。
  * @returns {gsap.core.Timeline}
  */
 export function playSlipThrough(clickedId, prevVisible, nextVisible, cards, railLines, mainImg, onComplete, options = {}) {
@@ -188,6 +197,9 @@ export function playSlipThrough(clickedId, prevVisible, nextVisible, cards, rail
     tl.call(() => {
       cards[clickedId].classList.add('slot--hidden');
       gsap.set(cards[clickedId], { opacity: 0, width: 120, height: 150, zIndex: 10 });
+      // T5 codex-fix3: clicked card 已 hidden，可見 slot src 不再受 reactive rebind 影響，
+      // 此時 host 才安全 swap clipResults（rebind bug fix）
+      options.onPrevVisibleHidden?.();
     }, null, 0.46);
   }
 
@@ -202,6 +214,9 @@ export function playSlipThrough(clickedId, prevVisible, nextVisible, cards, rail
 
     // Setup card at center before it enters
     tl.call(() => {
+      // codex-fix4: slot 仍 hidden 時讓 host imperative 設 src，避免 fade-in 期間
+      // reactive :src 還綁舊 clipResults 顯示錯誤封面
+      options.onBeforeCardEnter?.(id);
       card.classList.remove('slot--hidden');
       gsap.set(card, { left: 480, top: 310, opacity: 0, width: 120, height: 150 });
     }, null, Math.max(0, startT - 0.01));

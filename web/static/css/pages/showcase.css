@@ -2812,8 +2812,8 @@ body.sidebar-collapsed .showcase-footer {
     object-fit: cover;
     object-position: right center;  /* 沿用 cropMode: 'right-half' 視覺一致 */
     transform-origin: center center;
-    border-radius: 8px;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+    border-radius: var(--fluent-radius-lg);
+    box-shadow: var(--fluent-shadow-16);
     z-index: 11;  /* > .clip-slot z=10；play button z=12 > 11 → button 在上 */
     cursor: pointer;
 }

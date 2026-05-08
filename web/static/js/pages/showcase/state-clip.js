@@ -24,7 +24,7 @@
  * 一致；ESM 命名 export 不可用 — ghost-fly 對外只有 `export { GhostFly }` namespace）。
  */
 
-import { _filteredVideos } from '@/showcase/state-base.js';
+import { _videos, _filteredVideos } from '@/showcase/state-base.js';
 import {
   ANCHORS,
   pickEight,
@@ -560,6 +560,15 @@ export function stateClip() {
         this._clipMainStatic,  // 56c-T4: 從 _clipMainGhost 改為 inner static img
         () => {
           if (generation !== this._clipGeneration) return; // destroyed during slip-through
+          // codex-fix5: 移到 onComplete（t≈1.10s+），此時 pureExit 卡 opacity 已 0、
+          // 主圖 ghost / clicked 卡都已 hidden、carry-over 在 fade-in 後完整就位。
+          // onBeforeCardEnter 已 imperative 寫好所有 visible slot 的 img.src 為新批同 idx 的
+          // cover_url，Alpine 重 evaluate 後值相同 → 無 flicker。
+          // （fix3 把 swap 放 t=0.46 解決 clicked 中央閃換，但 pureExit 卡 opacity tween 直到
+          // t=0.55 才結束，t=0.46~0.55 間 reactive rebind 還是會在 fading-out 卡上閃新圖，
+          // fix5 把 swap 推到 timeline 結束才安全）
+          this.clipResults = newData.results;
+          this.clipQueryVideo = newData.query_video;
           this._clipActiveTimeline = null;
           this.clipMainSlot = slotId;
           this.clipVisibleSlots = nextVisible;
@@ -585,17 +594,31 @@ export function stateClip() {
           this._fireClipKeystonePulse(slotId);
           this._startClipIdleAcknowledge();
         },
-        // T5 onMainSwap：t=0.30 callback（main img fade-out 點同 frame 換 clipResults）
-        // T5: 升級為 fetch 新 12 筆 + reassign clipResults（API 資料已在 fetch await 取得）
+        // T5 onMainSwap：t=0.30 callback（main img fade-out 點換主圖 src）
+        // codex-fix3: 拆分 onMainSwap（DOM 直寫）；codex-fix5: reactive swap 移至 onComplete
         {
           onMainSwap: () => {
             if (generation !== this._clipGeneration) return;
-            // T5: 用 newData（closure 捕獲）替換整批 clipResults，不從 this.clipResults 重抓
+            // t=0.30: 只換主圖 DOM src（直寫不走 reactive）。
+            // clipResults / clipQueryVideo 延後到 onComplete（codex-fix5）才 swap，
+            // 避免 Alpine 把中央 clicked slot card 重綁新批圖（codex-fix3 rebind bug）。
             if (this._clipMainStatic && clickedItem.cover_url) {
               this._clipMainStatic.src = clickedItem.cover_url;
             }
-            this.clipResults = newData.results;
-            this.clipQueryVideo = newData.query_video;
+          },
+          // codex-fix4: 每張 enter/persist slot 在 reset callback（slot--hidden 期）由 host
+          // imperative 設 img.src 為新批同 idx cover_url，避免 fade-in 初期讀舊批 clipResults
+          // 顯示錯誤封面（fix3 把 swap 延到 t=0.46 解決 clicked card 中央閃換，但讓 fresh slot
+          // 在 t=0.20~0.46 顯示舊批同 idx 圖片，這個 callback 是補上）
+          onBeforeCardEnter: (slotId) => {
+            if (generation !== this._clipGeneration) return;
+            const slotIdx = parseInt(slotId.slice(1), 10) - 1;
+            const item = newData.results[slotIdx];
+            if (!item || !item.cover_url) return;
+            const card = this.clipCards[slotId];
+            if (!card) return;
+            const imgEl = card.querySelector('.clip-slot-img');
+            if (imgEl) imgEl.src = item.cover_url;
           },
         }
       );
@@ -701,21 +724,39 @@ export function stateClip() {
     },
 
     /**
-     * 56c-T4 (codex P2): 播放 clip mode 中央主圖對應的影片
+     * 56c-T5 codex-fix1: 播放 clip mode 中央主圖對應的影片
+     * 56c-T5 codex-fix2 (P1 二次修法): 改用 `_videos`（未過濾）read-only lookup，
+     * 避免 filtered view 下 slip-through 到範圍外影片時 fallback 舊片。
+     * _filteredVideos 是 Showcase 篩選後的子集；CLIP 結果來自全 DB，若影片被 filter 排除
+     * 則 findIndex 回 -1，導致 play button 靜默 fallback 播放進場前的舊片（P1 bug）。
+     * _videos（state-base.js:22 普通 JS Array）透過 _setVideos() in-place mutate，
+     * 跨模組 reference 永遠有效，search scope 為全庫。
      *
-     * T4 mock 階段：固定 fallback 到 currentLightboxVideo.path（即進入 clip mode 前的 lightbox 影片）。
-     * slip-through 後主圖視覺已切換，但 path 仍指原 lightbox 影片 — mock 階段預期行為；
-     * T5 backend 補 path 欄位後升級為 fallback 鏈，見 mock data 上方 TODO。
+     * slip-through 後主圖視覺已是新影片，但 currentLightboxVideo 直到 closeClipMode 才更新
+     * （CD-56C-12 ordering）。play button 用 _videos read-only lookup 取對應 path，
+     * 不呼叫 _setLightboxIndex（不違反 CD-56C-12：slip-through 期間不更新底層 lightbox state）。
      *
-     * hit-test 診斷（T4fix7 待用戶手動驗證）：
-     * 1. 進 clip mode → devtools console: document.elementFromPoint(視覺中心 X, 視覺中心 Y)
-     * 2. 若回傳 .clip-play-button → hit area OK，問題在 handler/path
-     * 3. 若回傳其他 → hit area 被覆蓋，需搬層（見 TASK-56c-T4fix7 §技術要點 1 fallback 方案）
+     * fallback 鏈：
+     *   1. _clipLastDrilledNumber（最近一次 slip-through 鑽入的 number）
+     *   2. clipQueryVideo.number（進入 clip mode 時的 query video）
+     *   3. currentLightboxVideo.path（未 slip-through 過時最終 fallback）
      */
     playClipMainVideo() {
+      // T5 codex-fix2 (P1 二次修法): _videos（未過濾全庫）read-only lookup，
+      // 避免 filtered view 下 slip-through 到範圍外影片時 fallback 舊片。
+      // （_silentSwitchLightboxByNumber 的 _filteredVideos 用法是 by design，CD-56C-12，不改）
+      const targetNumber = this._clipLastDrilledNumber || this.clipQueryVideo?.number;
+      if (targetNumber) {
+        const found = _videos.find(v => v.number === targetNumber);
+        if (found?.path) {
+          this.playVideo(found.path);
+          return;
+        }
+      }
+      // fallback：未 slip-through 過 + clipQueryVideo 無 number → 播 lightbox 原影片
       const path = this.currentLightboxVideo?.path;
       if (!path) return;  // graceful no-op，不 toast（避免重複錯誤訊息）
-      this.playVideo(path);  // 既存於 state-videos.js
+      this.playVideo(path);
     },
 
     // ── 內部 helpers（T6/T7 carry-over，照搬 motion-lab）──────────────────
@@ -1127,6 +1168,8 @@ export function stateClip() {
     onClipMobileCardClick(item) {
       if (this.clipModeAnimating) return;
       if (!item) return;
+      // T7 codex-fix1: 對齊 onClipCardClick race guard，fetch 前鎖定防連點覆蓋
+      this.clipModeAnimating = true;
       this._fetchClipResults(item.number).then(data => {
         this.clipResults = data.results;
         this.clipQueryVideo = data.query_video;
@@ -1134,6 +1177,8 @@ export function stateClip() {
         this._silentSwitchLightboxByNumber(item.number);
       }).catch(() => {
         // _fetchClipResults 已 showToast；x-for 不刷新，留原 4 張
+      }).finally(() => {
+        this.clipModeAnimating = false;
       });
     },
 
