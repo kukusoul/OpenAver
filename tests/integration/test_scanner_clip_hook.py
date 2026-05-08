@@ -141,6 +141,61 @@ class TestScannerClipHook:
             f"target must be a wrapper function, not a coroutine object: {target}"
         )
 
+    def test_hook_skips_when_already_running(self, mocker, scanner_patches):
+        """Codex-56D-P2: _clip_bg_index_running=True → threading.Thread 完全不被建。"""
+        mocker.patch(
+            "web.routers.scanner.load_config",
+            return_value={**_BASE_SCANNER_CONFIG, "clip": {"enabled": True}},
+        )
+        import web.routers.scanner as scanner_mod
+        # 模擬 bool flag 已為 True（另一個 thread 正在跑）
+        original = scanner_mod._clip_bg_index_running
+        scanner_mod._clip_bg_index_running = True
+        mock_thread_cls = mocker.patch("web.routers.scanner.threading.Thread")
+
+        try:
+            from web.app import app
+            client = TestClient(app)
+            resp = client.get("/api/gallery/generate")
+            assert resp.status_code == 200
+
+            # Thread constructor should NOT have been called（已在跑，跳過）
+            mock_thread_cls.assert_not_called()
+        finally:
+            scanner_mod._clip_bg_index_running = original
+
+    def test_hook_atomic_check_and_set_no_race(self, mocker):
+        """Codex-56D-P2: Lock-based atomic check-and-set 必須讓並發 caller 只 spawn 一個 thread。"""
+        import threading
+        import web.routers.scanner as scanner_mod
+
+        # reset module state
+        scanner_mod._clip_bg_index_running = False
+
+        barrier = threading.Barrier(2)
+        spawn_count = [0]
+
+        def caller():
+            barrier.wait()  # sync 兩 thread 同時抵達
+            with scanner_mod._clip_bg_index_lock:
+                if not scanner_mod._clip_bg_index_running:
+                    scanner_mod._clip_bg_index_running = True
+                    spawn_count[0] += 1
+
+        t1 = threading.Thread(target=caller)
+        t2 = threading.Thread(target=caller)
+        t1.start()
+        t2.start()
+        t1.join()
+        t2.join()
+
+        assert spawn_count[0] == 1, (
+            f"atomic check-and-set must allow only 1 spawn, got {spawn_count[0]}"
+        )
+
+        # cleanup
+        scanner_mod._clip_bg_index_running = False
+
     def test_hook_exception_does_not_break_scanner(self, mocker, scanner_patches):
         """If load_config raises on the hook call, scanner SSE still completes normally."""
         call_count = [0]

@@ -186,13 +186,18 @@ async def disable_clip():
 
     若 enable job 進行中（download/indexing），回 409 並請使用者等流程結束。
 
-    CD-56D-5 五階段：
+    CD-56D-5 / Codex-56D-P1 修正後六階段：
     0. 搶鎖 + 檢查 enable 是否在跑
-    1. 寫 config enabled=False
-    2. 清空 DB embedding 欄位
-    3. Reset provider singleton（釋放 onnxruntime session）
+    1. 讀取 config（先讀，尚未寫 disabled）
+    2. 清空 DB embedding 欄位（不可逆操作先做）
+    3. Reset provider singleton（in-memory，不 raise）
     4. 刪 .onnx 檔
-    5. Reset status singleton
+    5. 寫 config enabled=False（最後才標 disabled）
+    6. Reset status singleton（in-memory，不 raise）
+
+    階段順序設計原則：先做不可逆破壞性操作，最後寫 config，
+    避免「config 已標 disabled 但 embedding 仍殘留」的不一致狀態。
+    所有 I/O 操作包 try/except，detail 固定中文不洩漏 str(exc)。
     """
     global _enable_task
 
@@ -206,17 +211,23 @@ async def disable_clip():
                 detail="啟用流程進行中，請待完成後再關閉",
             )
 
-        # ── 階段 1：寫 config ────────────────────────────────────
-        cfg = load_config()  # plain dict（core/config.py:138）
-        cfg.setdefault("clip", {})["enabled"] = False
-        save_config(cfg)
+        # ── 階段 1：讀取 config（此時尚未寫 disabled）────────────
+        try:
+            cfg = load_config()  # plain dict（core/config.py:138）
+        except Exception:
+            logger.exception("disable_clip: load_config failed")
+            raise HTTPException(status_code=500, detail="讀取設定失敗，請查閱日誌")
 
-        # ── 階段 2：清空 DB embedding 欄位（對齊「關 → 開 = 重建」）──
-        repo = VideoRepository()
-        cleared = repo.clear_all_clip_embeddings()
-        logger.info("CLIP disable: cleared %d embedding rows", cleared)
+        # ── 階段 2：清空 DB embedding 欄位（不可逆，先做）─────────
+        try:
+            repo = VideoRepository()
+            cleared = repo.clear_all_clip_embeddings()
+            logger.info("CLIP disable: cleared %d embedding rows", cleared)
+        except Exception:
+            logger.exception("disable_clip: clear_all_clip_embeddings failed")
+            raise HTTPException(status_code=500, detail="清除 CLIP 索引失敗，請查閱日誌")
 
-        # ── 階段 3：Reset provider singleton（釋放 onnxruntime session）──
+        # ── 階段 3：Reset provider singleton（in-memory，不 raise）─
         import core.clip
         if core.clip._provider is not None:
             core.clip._provider = None
@@ -231,7 +242,15 @@ async def disable_clip():
                 logger.exception("Failed to delete CLIP model file")
                 raise HTTPException(status_code=500, detail="刪除模型檔失敗，請查閱日誌")
 
-        # ── 階段 5：Reset status singleton ────────────────────────
+        # ── 階段 5：寫 config enabled=False（最後才標 disabled）────
+        try:
+            cfg.setdefault("clip", {})["enabled"] = False
+            save_config(cfg)
+        except Exception:
+            logger.exception("disable_clip: save_config failed")
+            raise HTTPException(status_code=500, detail="儲存設定失敗，請查閱日誌")
+
+        # ── 階段 6：Reset status singleton（in-memory，不 raise）───
         _set_status(
             phase="idle",
             download_bytes=0,

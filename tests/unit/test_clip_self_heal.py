@@ -1,6 +1,7 @@
 """
 tests/unit/test_clip_self_heal.py
-TDD-lite tests for _clip_self_heal_on_startup (CD-56D-6).
+TDD-lite tests for _clip_self_heal_on_startup (CD-56D-6) and
+_clip_sync_status_on_startup (Codex-56D-P2).
 """
 from __future__ import annotations
 
@@ -159,3 +160,58 @@ class TestClipSelfHeal:
         assert log_call_args.args[1] == 3, (
             f"logger should report 3 cleared rows, got {log_call_args}"
         )
+
+
+class TestClipSyncStatusOnStartup:
+    """Codex-56D-P2: _clip_sync_status_on_startup 在 enabled=True + model 存在時設 phase=ready。"""
+
+    def test_status_synced_to_ready_when_enabled_and_model_exists(self, mocker, tmp_path):
+        """clip.enabled=True + model 檔存在 → _clip_set_status 被以 phase='ready' 呼叫。"""
+        model_file = tmp_path / "vision_model_quantized.onnx"
+        model_file.write_bytes(b"fake")
+
+        mocker.patch("web.app.load_config", return_value={
+            "clip": {"enabled": True, "model_path": str(model_file)}
+        })
+        mock_set_status = mocker.patch("web.app._clip_set_status")
+
+        from web.app import _clip_sync_status_on_startup
+        asyncio.run(_clip_sync_status_on_startup())
+
+        mock_set_status.assert_called_once_with(phase="ready")
+
+    def test_status_not_synced_when_disabled(self, mocker):
+        """clip.enabled=False → _clip_set_status 不被呼叫。"""
+        mocker.patch("web.app.load_config", return_value={
+            "clip": {"enabled": False}
+        })
+        mock_set_status = mocker.patch("web.app._clip_set_status")
+
+        from web.app import _clip_sync_status_on_startup
+        asyncio.run(_clip_sync_status_on_startup())
+
+        mock_set_status.assert_not_called()
+
+    def test_status_not_synced_when_model_missing(self, mocker, tmp_path):
+        """clip.enabled=True 但 model 檔不存在 → _clip_set_status 不被呼叫（不 crash）。"""
+        missing_model = tmp_path / "no_model.onnx"
+        mocker.patch("web.app.load_config", return_value={
+            "clip": {"enabled": True, "model_path": str(missing_model)}
+        })
+        mock_set_status = mocker.patch("web.app._clip_set_status")
+
+        from web.app import _clip_sync_status_on_startup
+        asyncio.run(_clip_sync_status_on_startup())
+
+        mock_set_status.assert_not_called()
+
+    def test_status_sync_does_not_crash_on_load_config_failure(self, mocker):
+        """load_config 拋例外 → _clip_sync_status_on_startup 靜默處理（不 raise）。"""
+        mocker.patch("web.app.load_config", side_effect=RuntimeError("simulated"))
+        mock_set_status = mocker.patch("web.app._clip_set_status")
+
+        from web.app import _clip_sync_status_on_startup
+        # 不應 raise
+        asyncio.run(_clip_sync_status_on_startup())
+
+        mock_set_status.assert_not_called()

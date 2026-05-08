@@ -897,7 +897,11 @@ class VideoRepository:
         return row is not None
 
     def clear_all_clip_embeddings(self) -> int:
-        """清空所有影片的 clip_embedding + clip_model_id 欄位。
+        """清空所有影片的 CLIP 索引狀態，含 embedding 與 model_id 兩欄。
+
+        使用 OR clause 確保同時清除以下兩種情形：
+        - clip_embedding IS NOT NULL（正常已索引）
+        - clip_model_id IS NOT NULL（僅有 model_id、無 embedding 的孤兒列）
 
         Returns:
             被清除的列數。
@@ -907,7 +911,7 @@ class VideoRepository:
         try:
             cursor.execute(
                 "UPDATE videos SET clip_embedding = NULL, clip_model_id = NULL "
-                "WHERE clip_embedding IS NOT NULL"
+                "WHERE clip_embedding IS NOT NULL OR clip_model_id IS NOT NULL"
             )
             conn.commit()
             return cursor.rowcount

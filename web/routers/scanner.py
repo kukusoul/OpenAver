@@ -56,6 +56,12 @@ router = APIRouter(prefix="/api/gallery", tags=["gallery"])
 _jellyfin_cache_result: dict | None = None
 _jellyfin_cache_time: float = 0
 
+# Codex-56D-P2: in-flight guard for CLIP background index thread。
+# 用 threading.Lock + bool 做 atomic check-and-set（避免 Event 的 TOCTOU race：
+# 兩個 caller 同時 is_set()=False → 都通過 → 各自 spawn thread）
+_clip_bg_index_lock = threading.Lock()
+_clip_bg_index_running = False  # guarded by _clip_bg_index_lock
+
 
 async def _clip_background_incremental_index():
     """背景隱性增量 CLIP 索引。不阻塞 Scanner SSE，不發 53b 通知。（CD-56D-4）"""
@@ -409,19 +415,39 @@ def generate_avlist() -> Generator[str, None, None]:
         _jellyfin_cache_time = 0
 
         # 56d-T1c: 觸發背景增量 CLIP 索引（隱性，無通知無進度）（CD-56D-4）
+        # Codex-56D-P2: Lock-based atomic check-and-set 防止 race condition
         try:
             cfg = load_config()
             if cfg.get("clip", {}).get("enabled", False):
-                def _bg_runner():
+                global _clip_bg_index_running
+                should_spawn = False
+                with _clip_bg_index_lock:
+                    if not _clip_bg_index_running:
+                        _clip_bg_index_running = True  # set BEFORE spawn (atomic with check)
+                        should_spawn = True
+
+                if should_spawn:
+                    def _bg_runner():
+                        try:
+                            asyncio.run(_clip_background_incremental_index())
+                        except Exception:
+                            logger.exception("CLIP background index thread failed")
+                        finally:
+                            global _clip_bg_index_running
+                            with _clip_bg_index_lock:
+                                _clip_bg_index_running = False
                     try:
-                        asyncio.run(_clip_background_incremental_index())
+                        threading.Thread(
+                            target=_bg_runner,
+                            daemon=True,
+                            name="clip-bg-index",
+                        ).start()
                     except Exception:
-                        logger.exception("CLIP background index thread failed")
-                threading.Thread(
-                    target=_bg_runner,
-                    daemon=True,
-                    name="clip-bg-index",
-                ).start()
+                        with _clip_bg_index_lock:
+                            _clip_bg_index_running = False
+                        raise
+                else:
+                    logger.info("CLIP bg index already running, skip this trigger")
         except Exception as e:
             logger.warning("CLIP background index trigger failed: %s", e)
 

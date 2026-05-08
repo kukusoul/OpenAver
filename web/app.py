@@ -23,6 +23,7 @@ logger = get_logger(__name__)
 from core.config import load_config, save_config
 from core.clip import get_provider, _DEFAULT_MODEL_PATH
 from core.database import VideoRepository
+from web.routers.clip_lifecycle import _set_status as _clip_set_status
 
 
 # 路徑設定
@@ -86,10 +87,31 @@ async def _clip_self_heal_on_startup():
         logger.exception("CLIP self-heal failed")
 
 
+async def _clip_sync_status_on_startup():
+    """啟動後若 CLIP 已啟用且 model 存在，將 status 同步為 ready。（Codex-56D-P2）
+
+    必須在 _clip_self_heal_on_startup() 之後呼叫，確保 self-heal 已完成（
+    可能將 enabled 改為 False 或清空 stale embedding）。
+    整段包 try/except + logger.exception 不 raise，lifespan 失敗不能讓 server crash。
+    """
+    try:
+        cfg = load_config()
+        clip_cfg = cfg.get("clip", {})
+        if not clip_cfg.get("enabled", False):
+            return
+        model_path = Path(clip_cfg.get("model_path") or _DEFAULT_MODEL_PATH)
+        if model_path.exists():
+            _clip_set_status(phase="ready")
+            logger.info("CLIP status synced to ready on startup (model: %s)", model_path)
+    except Exception:
+        logger.exception("CLIP status sync on startup failed")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # ── startup ───────────────────────────────────────────────
     await _clip_self_heal_on_startup()
+    await _clip_sync_status_on_startup()
     yield
     # ── shutdown ──────────────────────────────────────────────
     # 目前無 shutdown 邏輯（setup_logging 是 module-level，不需 teardown）
