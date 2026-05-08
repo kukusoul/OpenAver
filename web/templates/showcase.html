@@ -527,6 +527,16 @@
                     <i class="bi bi-x-lg"></i>
                 </button>
 
+                <!-- 56c-T3fix: Magic 按鈕（與 .lightbox-close 鏡射對稱，video mode only）
+                     56c-T4: 直接呼叫 openClipMode()——sparkle burst 已搬至 state-clip openClipMode 流程內部統一管理
+                     Fix 4 (codex P2): clipEnabled gate — 未啟用時完全隱藏，避免撞 503 -->
+                <button class="lightbox-clip-btn"
+                        x-show="currentLightboxVideo && !currentLightboxActress && !showFavoriteActresses && clipEnabled"
+                        @click="openClipMode()"
+                        :aria-label="t('clip_mode.button_aria_label')">
+                    <i class="bi bi-magic" aria-hidden="true"></i>
+                </button>
+
                 <!-- 44a T4: Actress Lightbox Branch -->
                 <template x-if="currentLightboxActress">
                     <div style="display:contents">
@@ -632,11 +642,32 @@
                     <div style="display:contents">
                         <!-- Cover Image -->
                         <div class="lightbox-cover">
-                            <img :src="currentLightboxVideo?.cover_url"
+                            <!-- 56c-T3fix: magic 按鈕已搬至 .lightbox-content（與 .lightbox-close sibling 鏡射對稱）；sparkle-burst overlay 留在 .lightbox-cover 以便 inset:0 精準覆蓋封面區（不擴及 metadata） -->
+                            <img x-ref="lightboxCoverImg"
+                                 :src="currentLightboxVideo?.cover_url"
                                  :alt="currentLightboxVideo?.number"
                                  @error="handleCoverError(currentLightboxVideo, $event)">
+
+                            <!-- 56c-T3fix: Sparkle burst overlay（10 顆四角星，ring 分佈在封面區） -->
+                            <div class="sparkle-burst"
+                                 x-show="!showFavoriteActresses"
+                                 aria-hidden="true">
+                                <svg class="sparkle-star" data-sparkle-size="lg" style="--cx: 22%; --cy: 14%;" viewBox="-12 -12 24 24"><polygon points="0,-10 2,-2 10,0 2,2 0,10 -2,2 -10,0 -2,-2"/></svg>
+                                <svg class="sparkle-star" data-sparkle-size="lg" style="--cx: 64%; --cy: 28%;" viewBox="-12 -12 24 24"><polygon points="0,-10 2,-2 10,0 2,2 0,10 -2,2 -10,0 -2,-2"/></svg>
+                                <svg class="sparkle-star" data-sparkle-size="lg" style="--cx: 38%; --cy: 82%;" viewBox="-12 -12 24 24"><polygon points="0,-10 2,-2 10,0 2,2 0,10 -2,2 -10,0 -2,-2"/></svg>
+                                <svg class="sparkle-star" data-sparkle-size="md" style="--cx: 11%; --cy: 48%;" viewBox="-12 -12 24 24"><polygon points="0,-10 2,-2 10,0 2,2 0,10 -2,2 -10,0 -2,-2"/></svg>
+                                <svg class="sparkle-star" data-sparkle-size="md" style="--cx: 48%; --cy: 8%;" viewBox="-12 -12 24 24"><polygon points="0,-10 2,-2 10,0 2,2 0,10 -2,2 -10,0 -2,-2"/></svg>
+                                <svg class="sparkle-star" data-sparkle-size="md" style="--cx: 82%; --cy: 58%;" viewBox="-12 -12 24 24"><polygon points="0,-10 2,-2 10,0 2,2 0,10 -2,2 -10,0 -2,-2"/></svg>
+                                <svg class="sparkle-star" data-sparkle-size="md" style="--cx: 28%; --cy: 64%;" viewBox="-12 -12 24 24"><polygon points="0,-10 2,-2 10,0 2,2 0,10 -2,2 -10,0 -2,-2"/></svg>
+                                <svg class="sparkle-star" data-sparkle-size="sm" style="--cx: 72%; --cy: 12%;" viewBox="-12 -12 24 24"><polygon points="0,-10 2,-2 10,0 2,2 0,10 -2,2 -10,0 -2,-2"/></svg>
+                                <svg class="sparkle-star" data-sparkle-size="sm" style="--cx: 90%; --cy: 84%;" viewBox="-12 -12 24 24"><polygon points="0,-10 2,-2 10,0 2,2 0,10 -2,2 -10,0 -2,-2"/></svg>
+                                <svg class="sparkle-star" data-sparkle-size="sm" style="--cx: 56%; --cy: 92%;" viewBox="-12 -12 24 24"><polygon points="0,-10 2,-2 10,0 2,2 0,10 -2,2 -10,0 -2,-2"/></svg>
+                            </div>
                             <!-- Cover Action Buttons -->
-                            <div class="cover-actions">
+                            <!-- 56c-fix-v2: x-show="!!currentLightboxVideo?.path" guards standalone
+                                 clip-exit mode (path undefined) — regular lightbox items always have
+                                 path so existing behavior is unaffected. -->
+                            <div class="cover-actions" x-show="!!currentLightboxVideo?.path">
                                 <button class="lb-action-btn" @click="playVideo(currentLightboxVideo?.path)" data-tooltip="{{ t('showcase.action.play') }}" aria-label="{{ t('showcase.action.play') }}">
                                     <i class="bi bi-play-fill"></i>
                                 </button>
@@ -772,6 +803,24 @@
                             </div>
 
                         </div>
+
+                        <!-- 56c-T7：手機 < 768px cosine 前 4 張 collapse（x-collapse 需 @alpinejs/collapse plugin，已在 base.html 行 640 載入） -->
+                        <div class="lightbox-clip-mobile"
+                             x-show="clipModeMobileOpen"
+                             x-collapse>
+                          <div class="clip-mobile-grid">
+                            <template x-for="item in clipResults.slice(0, 4)" :key="item.video_id">
+                              <div class="clip-mobile-card"
+                                   @click="onClipMobileCardClick(item)">
+                                <img :src="item.cover_url" :alt="item.title" loading="lazy">
+                                <div class="clip-mobile-meta">
+                                  <div class="clip-mobile-number" x-text="item.number"></div>
+                                  <div class="clip-mobile-title" x-text="item.title"></div>
+                                </div>
+                              </div>
+                            </template>
+                          </div>
+                        </div>
                     </div>
                 </template>
 
@@ -890,6 +939,177 @@
     </div>
 
     </div>
+
+    <!-- 56c-T4: Clip Stage Sibling（與 .showcase-lightbox / .sample-gallery 同層 fixed
+         z-index:1501 > sample-gallery 1500 > showcase-lightbox 1000；
+         x-show 不用 x-if，DOM 永遠在（gotchas Alpine 8）。
+         x-trap.inert 鎖 focus；x-effect 觸發 init/destroy lifecycle。
+         ESC keydown 由 56c-T6 在 state-lightbox.js handleKeydown 統一路由（不在此綁）。 -->
+    <div class="clip-stage"
+         :class="{ 'show': clipModeOpen }"
+         x-show="clipModeOpen"
+         x-trap.inert="clipModeOpen"
+         x-effect="clipModeOpen ? initClipStage() : destroyClipStage()"
+         @click.self="closeClipMode()">
+
+        <!-- X 關閉按鈕（backdrop scope，相對 viewport 角，不在 inner 內） -->
+        <button class="clip-close-btn"
+                @click="closeClipMode()"
+                :aria-label="t('clip_mode.close')">
+            <i class="bi bi-x-lg"></i>
+        </button>
+
+        <!-- inner stage：960×620 design-space 容器（spec §1 CD-56C-11） -->
+        <div class="clip-stage-inner">
+
+            <!-- Dust particle layer — 100 static circles (60 seed=56 + 40 seed=9999)，搬遷自 motion_lab.html -->
+            <svg class="clip-stage-dust" viewBox="0 0 960 620" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <circle cx="888" cy="593" r="0.61" style="--dust-base-seed:0.086;--dust-cycle:3.14s;--dust-delay:2.39s"/>
+                <circle cx="450" cy="256" r="0.69" style="--dust-base-seed:0.085;--dust-cycle:3.21s;--dust-delay:1.12s"/>
+                <circle cx="607" cy="232" r="0.62" style="--dust-base-seed:0.083;--dust-cycle:2.7s;--dust-delay:2.56s"/>
+                <circle cx="160" cy="413" r="1.28" style="--dust-base-seed:0.097;--dust-cycle:3.29s;--dust-delay:1.09s"/>
+                <circle cx="116" cy="220" r="1.16" style="--dust-base-seed:0.078;--dust-cycle:3.88s;--dust-delay:0.55s"/>
+                <circle cx="706" cy="84" r="1.38" style="--dust-base-seed:0.081;--dust-cycle:2.92s;--dust-delay:0.77s"/>
+                <circle cx="582" cy="528" r="1.34" style="--dust-base-seed:0.074;--dust-cycle:3.78s;--dust-delay:0.15s"/>
+                <circle cx="397" cy="20" r="1.47" style="--dust-base-seed:0.087;--dust-cycle:3.55s;--dust-delay:0.43s"/>
+                <circle cx="530" cy="414" r="1.28" style="--dust-base-seed:0.079;--dust-cycle:3.27s;--dust-delay:2.26s"/>
+                <circle cx="583" cy="531" r="1.29" style="--dust-base-seed:0.087;--dust-cycle:2.98s;--dust-delay:1.51s"/>
+                <circle cx="734" cy="498" r="0.74" style="--dust-base-seed:0.068;--dust-cycle:2.85s;--dust-delay:1.11s"/>
+                <circle cx="29" cy="153" r="0.63" style="--dust-base-seed:0.093;--dust-cycle:4.15s;--dust-delay:0.72s"/>
+                <circle cx="541" cy="112" r="0.65" style="--dust-base-seed:0.083;--dust-cycle:3.85s;--dust-delay:1.27s"/>
+                <circle cx="824" cy="426" r="0.84" style="--dust-base-seed:0.062;--dust-cycle:3.47s;--dust-delay:3.28s"/>
+                <circle cx="328" cy="242" r="0.66" style="--dust-base-seed:0.088;--dust-cycle:3.34s;--dust-delay:4.11s"/>
+                <circle cx="701" cy="576" r="1.39" style="--dust-base-seed:0.066;--dust-cycle:3.75s;--dust-delay:2.9s"/>
+                <circle cx="62" cy="59" r="1.28" style="--dust-base-seed:0.079;--dust-cycle:2.79s;--dust-delay:0.59s"/>
+                <circle cx="282" cy="172" r="1.37" style="--dust-base-seed:0.097;--dust-cycle:4.31s;--dust-delay:3.55s"/>
+                <circle cx="929" cy="137" r="1.59" style="--dust-base-seed:0.076;--dust-cycle:3.9s;--dust-delay:4.16s"/>
+                <circle cx="232" cy="132" r="1.35" style="--dust-base-seed:0.065;--dust-cycle:2.84s;--dust-delay:3.96s"/>
+                <circle cx="593" cy="134" r="1.52" style="--dust-base-seed:0.077;--dust-cycle:4.29s;--dust-delay:3.15s"/>
+                <circle cx="218" cy="263" r="1.54" style="--dust-base-seed:0.072;--dust-cycle:4.14s;--dust-delay:2.66s"/>
+                <circle cx="102" cy="216" r="0.72" style="--dust-base-seed:0.086;--dust-cycle:3.37s;--dust-delay:3.58s"/>
+                <circle cx="639" cy="166" r="1.44" style="--dust-base-seed:0.083;--dust-cycle:4.32s;--dust-delay:2.38s"/>
+                <circle cx="921" cy="432" r="1.4" style="--dust-base-seed:0.088;--dust-cycle:4.03s;--dust-delay:1.98s"/>
+                <circle cx="794" cy="407" r="1.48" style="--dust-base-seed:0.074;--dust-cycle:3.28s;--dust-delay:1.35s"/>
+                <circle cx="483" cy="149" r="1.03" style="--dust-base-seed:0.093;--dust-cycle:3.25s;--dust-delay:1.36s"/>
+                <circle cx="564" cy="41" r="1.31" style="--dust-base-seed:0.077;--dust-cycle:3.38s;--dust-delay:1.27s"/>
+                <circle cx="651" cy="259" r="1.49" style="--dust-base-seed:0.076;--dust-cycle:2.84s;--dust-delay:1.74s"/>
+                <circle cx="346" cy="565" r="1.41" style="--dust-base-seed:0.091;--dust-cycle:4.39s;--dust-delay:3.41s"/>
+                <circle cx="73" cy="481" r="1.18" style="--dust-base-seed:0.094;--dust-cycle:3.24s;--dust-delay:3.41s"/>
+                <circle cx="46" cy="496" r="0.77" style="--dust-base-seed:0.089;--dust-cycle:4.35s;--dust-delay:0.42s"/>
+                <circle cx="825" cy="181" r="0.95" style="--dust-base-seed:0.067;--dust-cycle:3.46s;--dust-delay:4.12s"/>
+                <circle cx="594" cy="485" r="1.21" style="--dust-base-seed:0.096;--dust-cycle:4.38s;--dust-delay:0.96s"/>
+                <circle cx="779" cy="502" r="1.1" style="--dust-base-seed:0.096;--dust-cycle:2.98s;--dust-delay:3.87s"/>
+                <circle cx="403" cy="46" r="0.84" style="--dust-base-seed:0.076;--dust-cycle:3.18s;--dust-delay:0.28s"/>
+                <circle cx="435" cy="350" r="0.82" style="--dust-base-seed:0.072;--dust-cycle:3.71s;--dust-delay:2.49s"/>
+                <circle cx="71" cy="125" r="1.09" style="--dust-base-seed:0.082;--dust-cycle:3.81s;--dust-delay:0.53s"/>
+                <circle cx="939" cy="345" r="1.13" style="--dust-base-seed:0.09;--dust-cycle:3.93s;--dust-delay:1.2s"/>
+                <circle cx="211" cy="363" r="0.88" style="--dust-base-seed:0.09;--dust-cycle:3.03s;--dust-delay:4.16s"/>
+                <circle cx="701" cy="331" r="1.23" style="--dust-base-seed:0.076;--dust-cycle:3.46s;--dust-delay:3.39s"/>
+                <circle cx="517" cy="328" r="1.58" style="--dust-base-seed:0.082;--dust-cycle:4.13s;--dust-delay:0.74s"/>
+                <circle cx="168" cy="340" r="0.96" style="--dust-base-seed:0.096;--dust-cycle:2.74s;--dust-delay:1.24s"/>
+                <circle cx="919" cy="439" r="0.79" style="--dust-base-seed:0.065;--dust-cycle:3.06s;--dust-delay:1.46s"/>
+                <circle cx="551" cy="579" r="0.7" style="--dust-base-seed:0.067;--dust-cycle:3.35s;--dust-delay:1.83s"/>
+                <circle cx="790" cy="253" r="1.14" style="--dust-base-seed:0.09;--dust-cycle:3.99s;--dust-delay:4.07s"/>
+                <circle cx="836" cy="583" r="1.41" style="--dust-base-seed:0.081;--dust-cycle:2.73s;--dust-delay:3.11s"/>
+                <circle cx="824" cy="365" r="1.29" style="--dust-base-seed:0.094;--dust-cycle:3.02s;--dust-delay:0.71s"/>
+                <circle cx="176" cy="38" r="0.63" style="--dust-base-seed:0.064;--dust-cycle:2.68s;--dust-delay:3.54s"/>
+                <circle cx="160" cy="181" r="1.2" style="--dust-base-seed:0.077;--dust-cycle:3.36s;--dust-delay:2.17s"/>
+                <circle cx="716" cy="558" r="0.6" style="--dust-base-seed:0.089;--dust-cycle:3.12s;--dust-delay:4.08s"/>
+                <circle cx="887" cy="98" r="0.64" style="--dust-base-seed:0.067;--dust-cycle:3.75s;--dust-delay:0.62s"/>
+                <circle cx="937" cy="338" r="0.71" style="--dust-base-seed:0.088;--dust-cycle:2.94s;--dust-delay:3.43s"/>
+                <circle cx="138" cy="461" r="1.15" style="--dust-base-seed:0.099;--dust-cycle:3.52s;--dust-delay:3.47s"/>
+                <circle cx="169" cy="264" r="1.47" style="--dust-base-seed:0.1;--dust-cycle:3.94s;--dust-delay:3.51s"/>
+                <circle cx="541" cy="301" r="0.87" style="--dust-base-seed:0.089;--dust-cycle:3.5s;--dust-delay:3.57s"/>
+                <circle cx="665" cy="353" r="1.46" style="--dust-base-seed:0.062;--dust-cycle:3.89s;--dust-delay:0.58s"/>
+                <circle cx="21" cy="587" r="1.1" style="--dust-base-seed:0.095;--dust-cycle:2.78s;--dust-delay:3.33s"/>
+                <circle cx="24" cy="146" r="0.75" style="--dust-base-seed:0.071;--dust-cycle:4.05s;--dust-delay:1.45s"/>
+                <circle cx="24" cy="295" r="1.1" style="--dust-base-seed:0.081;--dust-cycle:4.26s;--dust-delay:2.68s"/>
+                <circle cx="874" cy="147" r="0.76" style="--dust-base-seed:0.063;--dust-cycle:4.02s;--dust-delay:1.26s"/>
+                <circle cx="214" cy="330" r="1.23" style="--dust-base-seed:0.069;--dust-cycle:3.55s;--dust-delay:0.37s"/>
+                <circle cx="640" cy="504" r="1.04" style="--dust-base-seed:0.092;--dust-cycle:3.63s;--dust-delay:4.26s"/>
+                <circle cx="695" cy="206" r="1.55" style="--dust-base-seed:0.097;--dust-cycle:3.67s;--dust-delay:0.7s"/>
+                <circle cx="20" cy="517" r="1.48" style="--dust-base-seed:0.098;--dust-cycle:3.37s;--dust-delay:1.06s"/>
+                <circle cx="627" cy="600" r="1.24" style="--dust-base-seed:0.088;--dust-cycle:3.62s;--dust-delay:1.16s"/>
+                <circle cx="583" cy="411" r="0.63" style="--dust-base-seed:0.081;--dust-cycle:3.77s;--dust-delay:1.4s"/>
+                <circle cx="767" cy="279" r="0.73" style="--dust-base-seed:0.067;--dust-cycle:3.54s;--dust-delay:3.09s"/>
+                <circle cx="757" cy="32" r="1.38" style="--dust-base-seed:0.094;--dust-cycle:3.19s;--dust-delay:3.04s"/>
+                <circle cx="490" cy="339" r="1.08" style="--dust-base-seed:0.067;--dust-cycle:3.37s;--dust-delay:3.66s"/>
+                <circle cx="315" cy="313" r="0.81" style="--dust-base-seed:0.072;--dust-cycle:3.95s;--dust-delay:2.62s"/>
+                <circle cx="824" cy="99" r="1.0" style="--dust-base-seed:0.064;--dust-cycle:3.53s;--dust-delay:3.67s"/>
+                <circle cx="482" cy="510" r="1.54" style="--dust-base-seed:0.071;--dust-cycle:4.03s;--dust-delay:4.27s"/>
+                <circle cx="54" cy="392" r="1.47" style="--dust-base-seed:0.063;--dust-cycle:3.78s;--dust-delay:0.22s"/>
+                <circle cx="131" cy="395" r="0.89" style="--dust-base-seed:0.091;--dust-cycle:4.13s;--dust-delay:4.0s"/>
+                <circle cx="171" cy="272" r="1.18" style="--dust-base-seed:0.091;--dust-cycle:2.87s;--dust-delay:2.37s"/>
+                <circle cx="435" cy="168" r="0.8" style="--dust-base-seed:0.092;--dust-cycle:3.72s;--dust-delay:0.98s"/>
+                <circle cx="556" cy="295" r="1.5" style="--dust-base-seed:0.07;--dust-cycle:4.37s;--dust-delay:0.9s"/>
+                <circle cx="621" cy="256" r="1.29" style="--dust-base-seed:0.081;--dust-cycle:3.51s;--dust-delay:1.74s"/>
+                <circle cx="803" cy="548" r="1.33" style="--dust-base-seed:0.097;--dust-cycle:3.28s;--dust-delay:0.12s"/>
+                <circle cx="767" cy="117" r="0.69" style="--dust-base-seed:0.068;--dust-cycle:3.27s;--dust-delay:0.86s"/>
+                <circle cx="432" cy="308" r="0.72" style="--dust-base-seed:0.096;--dust-cycle:4.08s;--dust-delay:3.81s"/>
+                <circle cx="648" cy="560" r="0.97" style="--dust-base-seed:0.081;--dust-cycle:2.62s;--dust-delay:1.46s"/>
+                <circle cx="376" cy="391" r="0.69" style="--dust-base-seed:0.093;--dust-cycle:3.53s;--dust-delay:3.99s"/>
+                <circle cx="222" cy="147" r="1.48" style="--dust-base-seed:0.097;--dust-cycle:3.43s;--dust-delay:3.9s"/>
+                <circle cx="27" cy="538" r="1.35" style="--dust-base-seed:0.066;--dust-cycle:3.69s;--dust-delay:1.41s"/>
+                <circle cx="385" cy="557" r="1.43" style="--dust-base-seed:0.093;--dust-cycle:3.49s;--dust-delay:0.07s"/>
+                <circle cx="847" cy="119" r="1.51" style="--dust-base-seed:0.098;--dust-cycle:3.4s;--dust-delay:2.45s"/>
+                <circle cx="273" cy="110" r="1.27" style="--dust-base-seed:0.095;--dust-cycle:4.13s;--dust-delay:4.19s"/>
+                <circle cx="322" cy="164" r="1.21" style="--dust-base-seed:0.097;--dust-cycle:3.32s;--dust-delay:3.06s"/>
+                <circle cx="268" cy="330" r="0.97" style="--dust-base-seed:0.083;--dust-cycle:3.44s;--dust-delay:0.05s"/>
+                <circle cx="601" cy="355" r="1.57" style="--dust-base-seed:0.088;--dust-cycle:3.73s;--dust-delay:4.18s"/>
+                <circle cx="733" cy="336" r="1.12" style="--dust-base-seed:0.063;--dust-cycle:3.73s;--dust-delay:1.59s"/>
+                <circle cx="377" cy="422" r="0.98" style="--dust-base-seed:0.069;--dust-cycle:4.12s;--dust-delay:0.25s"/>
+                <circle cx="763" cy="390" r="1.34" style="--dust-base-seed:0.093;--dust-cycle:3.63s;--dust-delay:4.03s"/>
+                <circle cx="526" cy="170" r="0.65" style="--dust-base-seed:0.07;--dust-cycle:3.37s;--dust-delay:3.32s"/>
+                <circle cx="235" cy="91" r="1.17" style="--dust-base-seed:0.087;--dust-cycle:2.64s;--dust-delay:2.59s"/>
+                <circle cx="417" cy="363" r="1.25" style="--dust-base-seed:0.071;--dust-cycle:2.75s;--dust-delay:2.22s"/>
+                <circle cx="170" cy="140" r="0.73" style="--dust-base-seed:0.075;--dust-cycle:2.98s;--dust-delay:1.43s"/>
+                <circle cx="598" cy="411" r="0.62" style="--dust-base-seed:0.079;--dust-cycle:2.68s;--dust-delay:2.57s"/>
+            </svg>
+
+            <!-- SVG rails 12 條 + 12 sweep lines（id 對映 clip-rail-XX / clip-sweep-XX） -->
+            <svg class="clip-stage-rails" viewBox="0 0 960 620" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <template x-for="anchor in CLIP_ANCHORS" :key="anchor.id">
+                    <g>
+                        <line :id="'clip-rail-' + anchor.idShort" class="clip-rail rail--hidden" x1="480" y1="310" x2="480" y2="310" />
+                        <line :id="'clip-sweep-' + anchor.idShort" class="clip-rail-sweep" x1="480" y1="310" x2="480" y2="310" />
+                    </g>
+                </template>
+            </svg>
+
+            <!-- 56c-T4: main image visual center anchor — single source of truth
+                 for ghost-fly enter target rect。design-space 480,310 200×250 center。 -->
+            <div class="clip-main-anchor" x-ref="clipMainAnchor" aria-hidden="true"></div>
+
+            <!-- 12 slot cards（id 對映 clip-card-XX；@click / @mouseenter / @mouseleave 走 onClipCardXxx） -->
+            <template x-for="anchor in CLIP_ANCHORS" :key="anchor.id">
+                <div class="clip-slot slot--hidden"
+                     :id="'clip-card-' + anchor.idShort"
+                     @click="onClipCardClick(anchor.id)"
+                     @mouseenter="onClipCardHoverEnter(anchor.id)"
+                     @mouseleave="onClipCardHoverLeave(anchor.id)">
+                    <img class="clip-slot-img"
+                         :src="(_getSlotItem && _getSlotItem(anchor.id))?.cover_url"
+                         :alt="(_getSlotItem && _getSlotItem(anchor.id))?.title"
+                         loading="lazy">
+                </div>
+            </template>
+
+            <!-- 56c-T4: play button 在 .clip-stage-inner 內 design-space coords，
+                 跟著 inner scale；CSS inverse scale 維持視覺 44×44；位置 main static 下方中央 -->
+            <button class="clip-play-button"
+                    x-show="clipModeOpen"
+                    @click.stop="playClipMainVideo && playClipMainVideo()"
+                    :aria-label="t('showcase.action.play')">
+                <i class="bi bi-play-fill" aria-hidden="true"></i>
+            </button>
+
+        </div><!-- /.clip-stage-inner -->
+
+        <!-- 56c-T4 (codex P1-2): .clip-main-overlay 已移除。
+             原 hit area 改由 _buildClipMainStatic 在 <img> 上直接掛 click listener，
+             同 stacking context 內 main static z=11 < play button z=12 → 點 button
+             命中 button、點 main static 非 button 區命中 onClipMainImgClick → closeClipMode。 -->
+    </div><!-- /.clip-stage -->
 
     <!-- TASK-52.3.3: Remove Actress Confirm Modal（取代原 window.confirm）
          Esc 雙重防線：handleKeydown 入口攔截 + dialog 自身 @keydown.escape.window 冗餘
@@ -1019,6 +1239,8 @@
 <!-- M2c: 傳遞 config 給 JS -->
 <script>
 window.__SHOWCASE_CONFIG__ = {{ (config.gallery or {}) | tojson | safe }};
+// Fix 4 (codex P2): server-side render clip.enabled → Alpine clipEnabled gate
+window.__CLIP_ENABLED__ = {{ clip_enabled | tojson | safe }};
 </script>
 <!-- B5: animations.js 在 ESM main.js 之前載入（透過 extra_js defer） -->
 <script src="/static/js/pages/showcase/animations.js"></script>

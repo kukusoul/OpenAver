@@ -29,15 +29,39 @@
 
     /**
      * 建立封面 ghost img 節點，append 到 body
+     *
+     * 56c-T2 (CD-56C-3): 第三參數 options.cropMode 支援 'full'（預設）與
+     * 'right-half'。'right-half' 時 ghostRect 取右半（left += width/2、width /= 2）
+     * 且 CSS objectPosition = 'right center'，瀏覽器 GPU 層裁切（零效能損耗）。
+     * 既有 caller 不傳 options → 走 default 'full' 分支零回歸。
+     *
+     * 56c-T4: 第三參數 options.parent 預設 `document.body`（向後相容）；
+     * 56c clip mode 傳入 `.clip-stage`，讓 ghost 進入 .clip-stage 自己建立的
+     * stacking context — 同 stacking context 內 main-overlay z=2001 才能正確
+     * 蓋過 ghost z=2000。其他 callers 不傳 → 走 default body → 行為不變。
+     *
      * @param {string} src - 圖片來源 URL
      * @param {DOMRect} rect - 來源元素的 bounding rect
+     * @param {object} [options] - { cropMode: 'full' | 'right-half', parent?: Element }
      * @returns {HTMLImageElement|null} ghost element，或 null（建立失敗）
      */
-    function createCoverGhost(src, rect) {
+    function createCoverGhost(src, rect, options) {
         if (!src || !rect || rect.width === 0 || rect.height === 0) return null;
 
         // 清除殘留 ghost
         cleanupStaleGhosts();
+
+        options = options || {};
+        var cropMode = options.cropMode || 'full';
+        var ghostRect = rect;
+        if (cropMode === 'right-half') {
+            ghostRect = {
+                left: rect.left + rect.width / 2,
+                top: rect.top,
+                width: rect.width / 2,
+                height: rect.height
+            };
+        }
 
         var ghost = document.createElement('img');
         ghost.src = src;
@@ -52,16 +76,24 @@
         ghost.style.transformOrigin = 'top left';
         ghost.style.borderRadius = '8px';
         ghost.style.objectFit = 'cover';
+        if (cropMode === 'right-half') {
+            // CSS 層裁切：搭配 objectFit: cover，瀏覽器只顯示右半邊（GPU 加速、零效能損耗）
+            ghost.style.objectPosition = 'right center';
+        }
 
-        document.body.appendChild(ghost);
+        // 56c-T4: parent 預設 body 維持向後相容；56c 傳 .clip-stage 讓 ghost
+        // 進入 .clip-stage stacking context，main-overlay z=2001 在同 context 下
+        // 才能正確蓋過 ghost z=2000
+        var parent = options.parent || document.body;
+        parent.appendChild(ghost);
 
-        // 以 GSAP 定位至來源位置
+        // 以 GSAP 定位至來源位置（cropMode 'right-half' 時用裁切後 ghostRect）
         if (typeof gsap !== 'undefined') {
             gsap.set(ghost, {
-                x: rect.left,
-                y: rect.top,
-                width: rect.width,
-                height: rect.height,
+                x: ghostRect.left,
+                y: ghostRect.top,
+                width: ghostRect.width,
+                height: ghostRect.height,
                 boxShadow: '0 4px 16px rgba(0,0,0,0.25)'
             });
         }
@@ -90,12 +122,252 @@
         }
     }
 
+    // ─── 56c Clip Mode 進退場 helper（plan-56c §1 CD-56C-3 / CD-56C-2 / CD-56C-11）──
+
+    /**
+     * 56c-T2 (CD-56C-3 + CD-56C-11): Lightbox cover → Constellation stage 中央 進場
+     *
+     * 從 lightbox cover img 起飛，飛到 stageInner design-space (480, 310) 中央
+     * 200×250 box；只顯示右半邊（cropMode: 'right-half'）。
+     * 動畫完成後 ghost **不 cleanup**（state-clip.js 接管 ghost ref）。
+     *
+     * caller 責任：呼叫前必須先 mount `.clip-stage.show`，並等 rAF 讓 stageInner
+     * rect 有效（CD-56C-11 caveat）。
+     *
+     * @param {HTMLImageElement} coverImgEl - lightbox 內 .lightbox-cover img
+     * @param {HTMLElement} stageInnerEl - .clip-stage-inner（960×620 居中容器）
+     * @param {object} [opts] - { onComplete?: (ghost) => void }
+     * @returns {gsap.core.Timeline|null}
+     */
+    function play56cConstellationEnter(coverImgEl, stageInnerEl, opts) {
+        opts = opts || {};
+        if (!coverImgEl || !stageInnerEl) {
+            if (typeof opts.onComplete === 'function') opts.onComplete();
+            return null;
+        }
+        if (typeof gsap === 'undefined') {
+            if (typeof opts.onComplete === 'function') opts.onComplete();
+            return null;
+        }
+
+        var rect = coverImgEl.getBoundingClientRect();
+        var src = coverImgEl.src;
+
+        // 1) 先建 ghost（createCoverGhost 內部 cleanupStaleGhosts() 會還原所有
+        //    [data-ghost-hidden] 元素 opacity，故必須在 hide 之前呼叫；對齊
+        //    playGridToLightbox 既有 pattern）
+        // 56c-T4: 取 .clip-stage 作為 ghost parent，讓 ghost 進入 .clip-stage
+        // stacking context → main-overlay z=2001 在 .clip-stage 內可以正確蓋過 ghost z=2000
+        var stageEl = stageInnerEl.closest('.clip-stage');
+        var ghost = createCoverGhost(src, rect, {
+            cropMode: 'right-half',
+            parent: stageEl || document.body  // fallback safety
+        });
+        if (!ghost) {
+            if (typeof opts.onComplete === 'function') opts.onComplete(null);
+            return null;
+        }
+
+        // 2) 再 hide 原 lightbox cover img（cleanupStaleGhosts 已跑完，不會被還原）
+        //    避免 ghost 飛行時雙圖重疊；onInterrupt 走 cleanupGhost 還原路徑
+        coverImgEl.setAttribute('data-ghost-hidden', 'true');
+        gsap.set(coverImgEl, { opacity: 0 });
+
+        // 56c-T4: single source of truth — 直接吃 .clip-main-anchor 的 native rect
+        // （瀏覽器 transform: scale 後回傳 scaled rect），與 cards design-space 480/310
+        // 完全同步，避免再算 480*scale 公式漂移
+        var targetX, targetY, targetW, targetH;
+        var anchorEl = stageInnerEl.querySelector('.clip-main-anchor');
+        if (anchorEl) {
+            var anchorRect = anchorEl.getBoundingClientRect();
+            targetX = anchorRect.left;
+            targetY = anchorRect.top;
+            targetW = anchorRect.width;
+            targetH = anchorRect.height;
+        } else {
+            // graceful fallback: 找不到 anchor（DOM 老版 / motion-lab sandbox）退回舊公式
+            var stageRect = stageInnerEl.getBoundingClientRect();
+            var scale = stageRect.width > 0 ? stageRect.width / 960 : 1;
+            targetW = 200 * scale;
+            targetH = 250 * scale;
+            targetX = stageRect.left + 480 * scale - targetW / 2;
+            targetY = stageRect.top + 310 * scale - targetH / 2;
+        }
+
+        // duration guard chain（與 motion-lab.js:1327-1328 既有 pattern 一致，避免 ?. 在
+        // 較舊瀏覽器/lint 設定下出問題）
+        var dur = (window.OpenAver && window.OpenAver.motion &&
+                   window.OpenAver.motion.DURATION && window.OpenAver.motion.DURATION.medium) || 0.333;
+
+        // race 防護：清掉同 ghost 的舊 tween
+        gsap.killTweensOf(ghost);
+
+        var tl = gsap.timeline({
+            id: 'clipEnter',
+            onComplete: function () {
+                // ghost 留在中央給 state-clip.js 接管，**不 cleanup**
+                if (typeof opts.onComplete === 'function') opts.onComplete(ghost);
+            },
+            onInterrupt: function () {
+                // race 防護：被打斷時 cleanup ghost + 還原 coverImgEl opacity
+                cleanupGhost(ghost, coverImgEl);
+            }
+        });
+
+        tl.to(ghost, {
+            x: targetX, y: targetY,
+            width: targetW, height: targetH,
+            duration: dur,
+            ease: 'fluent-decel'
+        }, 0);
+
+        return tl;
+    }
+
+    /**
+     * 56c-T2 (CD-56C-3): Constellation stage 中央 main img → Lightbox cover 退場
+     *
+     * mainImgGhost 從中央飛回 targetCoverEl 位置，同時 objectPosition 從
+     * 'right center' 平滑過渡到 'center center'（GSAP duration 與 CSS transition 同步）。
+     * 動畫完成（或被打斷）都 cleanup ghost + 還原 targetCoverEl opacity。
+     *
+     * caller 責任：呼叫前必須確保 lightbox 已還原可見（targetCoverEl rect 才有效）。
+     *
+     * @param {HTMLImageElement} mainImgGhost - 中央 ghost img（由 play56cConstellationEnter 留下）
+     * @param {HTMLImageElement} targetCoverEl - 目標 .lightbox-cover img
+     * @param {object} [opts] - { onComplete?: () => void }
+     * @returns {gsap.core.Timeline|null}
+     */
+    function play56cConstellationExit(mainImgGhost, targetCoverEl, opts) {
+        opts = opts || {};
+        if (!mainImgGhost || !targetCoverEl) {
+            if (typeof opts.onComplete === 'function') opts.onComplete();
+            return null;
+        }
+        if (typeof gsap === 'undefined') {
+            if (typeof opts.onComplete === 'function') opts.onComplete();
+            return null;
+        }
+
+        var rect = targetCoverEl.getBoundingClientRect();
+        var dur = (window.OpenAver && window.OpenAver.motion &&
+                   window.OpenAver.motion.DURATION && window.OpenAver.motion.DURATION.medium) || 0.333;
+
+        // objectPosition 平滑過渡：CSS transition 與 GSAP duration 對齊
+        // （右半 crop 還原為全張呈現）
+        mainImgGhost.style.transition = 'object-position ' + dur + 's ease';
+        mainImgGhost.style.objectPosition = 'center center';
+
+        // race 防護
+        gsap.killTweensOf(mainImgGhost);
+
+        var tl = gsap.timeline({
+            id: 'clipExit',
+            onComplete: function () {
+                cleanupGhost(mainImgGhost, targetCoverEl);
+                if (typeof opts.onComplete === 'function') opts.onComplete();
+            },
+            onInterrupt: function () {
+                // race 防護：onInterrupt 也 cleanup（連點 5 次無殘留）
+                cleanupGhost(mainImgGhost, targetCoverEl);
+            }
+        });
+
+        tl.to(mainImgGhost, {
+            x: rect.left, y: rect.top,
+            width: rect.width, height: rect.height,
+            duration: dur,
+            ease: 'fluent-accel'
+        }, 0);
+
+        return tl;
+    }
+
+    /**
+     * 56c-T2 (CD-56C-2): Clip Scan Preview — lightbox 點 .bi-magic 時的 0.4s 預覽動畫
+     *
+     * 56c-T3fix: 改為 sparkle burst（10 顆四角星，stagger fade-in + scale + rotate + sine yoyo + accel fade-out）
+     * 對應 magic.png 視覺隱喻；廢棄舊三層光帶（left dim / beam / right glow）。
+     *
+     * Timeline 0.4s 切片：
+     *   0    → 0.20s: stagger fade-in + scale 0→1 + rotate +90deg
+     *   0.20 → 0.30s: sine.inOut yoyo scale 1→1.15→1（閃爍感）
+     *   0.25 → 0.40s: fade-out + scale 0.6（accel ease）
+     *   0.40s: callback 絕對時刻觸發（與 56c-T2 契約一致）
+     *
+     * DOM 結構（56c-T3fix）：`coverEl` = `.lightbox-cover`，內含 `.sparkle-burst` overlay
+     * （與 `<img x-ref="lightboxCoverImg">` 同層 absolute sibling）。inset:0 自動覆蓋封面區
+     * 不擴及 metadata。Magic 按鈕另搬至 `.lightbox-content` 與 `.lightbox-close` 鏡射對稱。
+     *
+     * caller 責任：reduced-motion 由 caller 決定是否呼叫；本 helper 內**不 short-circuit**。
+     *
+     * @param {HTMLElement} coverEl - .lightbox-cover 容器（內含 .sparkle-burst overlay）
+     * @param {Function} [onComplete] - 動畫完成 callback（缺 DOM 時也會立即觸發）
+     * @returns {gsap.core.Timeline|null}
+     */
+    function play56cClipScanPreview(coverEl, onComplete) {
+        var done = function () { if (typeof onComplete === 'function') onComplete(); };
+
+        if (!coverEl) { done(); return null; }
+        if (typeof gsap === 'undefined') { done(); return null; }
+
+        // 56c-T3fix: .sparkle-burst 與 <img> 同層在 .lightbox-cover 內
+        var burst = coverEl.querySelector('.sparkle-burst');
+        if (!burst) { done(); return null; }
+        var stars = burst.querySelectorAll('.sparkle-star');
+        if (!stars || stars.length === 0) { done(); return null; }
+
+        // race 防護（Codex P2-A 沿用）：連點時 kill 舊 timeline + reset stars，
+        // 避免 fromTo 與殘留 inline style 疊加閃爍。clearProps 採精確列表（對齊既有
+        // ghost-fly.js pattern），避免未來 stars 加 inline style 被誤清。
+        gsap.killTweensOf([burst, stars]);
+        gsap.set(stars, { clearProps: 'opacity,scale,rotation,transform' });
+        gsap.set(burst, { opacity: 0 });
+
+        var tl = gsap.timeline({ id: 'clipSparkleBurst' });
+        tl.set(burst, { opacity: 1 });
+        tl.set(stars, { opacity: 0, scale: 0, rotation: 'random(-30, 30)' });
+
+        // Stagger fade-in + scale + rotate (0 → 0.20s, 10 顆 * 0.012 ≈ 0.12s 全部進場)
+        tl.to(stars, {
+            opacity: 1, scale: 1, rotation: '+=90',
+            duration: 0.20, ease: 'fluent-decel',
+            stagger: { each: 0.012, from: 'random' }
+        }, 0);
+
+        // 中段 sine.inOut yoyo (0.20 → 0.30s) — 閃爍感
+        tl.to(stars, {
+            scale: 1.15,
+            duration: 0.05, ease: 'sine.inOut',
+            yoyo: true, repeat: 1
+        }, 0.20);
+
+        // Fade-out (0.25 → 0.40s)
+        tl.to(stars, {
+            opacity: 0, scale: 0.6,
+            duration: 0.15, ease: 'fluent-accel'
+        }, 0.25);
+
+        // Codex P3 沿用：callback 在 0.40s 絕對時刻觸發（與 56c-T2 契約一致）
+        tl.call(done, null, 0.40);
+
+        // 收尾：burst 容器 opacity 回 0（防殘留）
+        tl.to(burst, { opacity: 0, duration: 0.05 }, '>');
+
+        return tl;
+    }
+
     // ─── 公開動畫函式 ──────────────────────────────────────────────────────
 
     var GhostFly = {
         createCoverGhost: createCoverGhost,
         cleanupGhost: cleanupGhost,
         cleanupStaleGhosts: cleanupStaleGhosts,
+
+        // 56c-T2: Clip Mode 進退場 + scan preview helper（callsite 在 56c-T3 / T5）
+        play56cConstellationEnter: play56cConstellationEnter,
+        play56cConstellationExit: play56cConstellationExit,
+        play56cClipScanPreview: play56cClipScanPreview,
 
         /**
          * Grid → Lightbox ghost fly

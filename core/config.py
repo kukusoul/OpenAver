@@ -12,7 +12,7 @@ import json
 from pathlib import Path
 from typing import Literal, Optional, List
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from core.logger import get_logger
 from core.video_extensions import DEFAULT_VIDEO_EXTENSIONS
@@ -123,6 +123,11 @@ class GeneralConfig(BaseModel):
     locale: Literal["zh-TW", "zh-CN", "ja", "en"] = "zh-TW"  # 介面語系
 
 
+class ClipConfig(BaseModel):
+    enabled: bool = False
+    model_path: str | None = None
+
+
 class AppConfig(BaseModel):
     scraper: ScraperConfig = ScraperConfig()
     search: SearchConfig = SearchConfig()
@@ -131,6 +136,7 @@ class AppConfig(BaseModel):
     gallery: GalleryConfig = GalleryConfig()
     showcase: ShowcaseConfig = ShowcaseConfig()
     general: GeneralConfig = GeneralConfig()
+    clip: ClipConfig = Field(default_factory=ClipConfig)
 
 
 # ============ 載入 / 儲存 ============
@@ -280,6 +286,17 @@ def load_config() -> dict:
         if 'primary_source' not in search_section:
             search_section['primary_source'] = 'javbus'
             need_save = True
+
+        # Migration: clip 區段補缺（56d CD-56D-11-A）
+        if 'clip' not in raw_config or not isinstance(raw_config.get('clip'), dict):
+            raw_config['clip'] = ClipConfig().model_dump()
+            need_save = True
+        else:
+            clip_defaults = ClipConfig().model_dump()
+            for k, v in clip_defaults.items():
+                if k not in raw_config['clip']:
+                    raw_config['clip'][k] = v
+                    need_save = True
 
         # Save migrated config
         if need_save:

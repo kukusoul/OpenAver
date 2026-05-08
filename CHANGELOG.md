@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.6] - 2026-05-09
+
+本版完整出貨「以圖搜圖（Beta）」（feature/56）— OpenAver 第一個視覺搜尋功能。在 Showcase Lightbox 加魔杖按鈕，點下去進入「探索星空」模式：原封面飛中央變主圖、12 顆星辰繞主圖排列、香檳金星線從中央延伸到各星辰，點任一顆即「鑽入」變新主圖無限探索。技術層用 OpenAI CLIP 模型把每張封面轉成 512 維特徵向量、cosine similarity 排序，封面進入 CLIP 前自動裁切右半邊（避開左標題雜訊），對「相同女優」自動降權確保結果多樣性。預設關閉，Settings opt-in 後下載 80MB INT8 模型,全程本地推論不上傳。AI agent 可透過新揭露的 `similar_covers_by_number` 端點找視覺相似番。
+
+*This release ships visual search ("以圖搜圖", Beta) feature 56 — OpenAver's first vision-based discovery: click the magic wand in Lightbox → 12 cover stars surround the main image with champagne-gold rails from center → click any star to "dive in" and explore endlessly. Backed by OpenAI CLIP 512-d embeddings, cosine similarity, right-half cover crop (avoids left-side title noise), and same-actress diversity penalty. Opt-in (off by default); 80MB INT8 model downloaded locally on enable. AI agents can discover visually similar videos via the newly-exposed `similar_covers_by_number` capability.*
+
+### Added
+
+#### 🪄 56 — 以圖搜圖（CLIP Visual Search, Beta）
+
+- **56a 引擎基座**：CLIPProvider ABC + LocalONNXProvider + 模型下載 sha256 校驗 + 影像 preprocessing（右半裁切 + CLIP normalize）+ 批次索引 runner（斷點續傳）+ `GET /api/similar-covers/by-number/{number}` 端點（cosine + diversity penalty −0.15）+ DB schema migration（`clip_embedding` BLOB + `clip_model_id` 欄位 + 模型版本一致性檢查）
+- **56b 探索星空 Lab**：sandbox `/clip-lab`（後沉澱到 `/motion-lab` Constellation tab）— 12 anchor pool + 隨機抽 8 + Rails 三態（persist/enter/exit）+ Slip-through continuous mode + Hover dim + Star Field dust + Hover Reveal corridor stars + Phase Acknowledge keystone pulse；GSAP DrawSVGPlugin + CustomEase（fluent-decel）；prefers-reduced-motion 直接呈現終態
+- **56c Showcase 整合**：Lightbox 左上角魔杖按鈕 + 0.4s 香檳金光帶預演（左→右橫掃 + 左半 darken / 右半 brighten）+ GhostFly cropMode 進場（封面飛中央變主圖、只呈現右半邊，CSS `aspect-ratio` + `object-position: right center` 零成本裁切）+ slip-through 鑽入新主圖無限探索；4 路徑退出（X / 背景 / 主圖非 play 區 / ESC）；手機（< 768px）降級為主圖下方 grid 顯示前 4 張（Alpine x-collapse）
+- **56d 後端基礎**：`ClipConfig` schema（`enabled: bool=False`, `model_path`）+ 4 lifecycle endpoints（`POST /api/clip/enable` SSE 串流下載+索引進度 / `POST /api/clip/disable` 刪檔+清 DB / `GET /api/clip/status` 跨頁返回快照 / `POST /api/clip/test-inference`）+ Scanner 隱性增量索引（fire-and-forget asyncio task，無 UI 提示對齊「不打擾」氣氛）+ 啟動自癒（model_id 不一致自動清空舊 embedding）
+- **56e Settings UI**：圖像策略區塊新增「以圖搜圖（Beta）」開關（紅字 Beta badge + popover 說明）+ 三階段 status box（download → indexing → ready）+ SSE 進度推 + 跨頁返回 polling 還原進度 + DB 刪除等級紅色警告 modal 關閉確認（明示刪 80MB 模型 + 清空所有 CLIP 索引不可復原）+ Showcase magic button SSR gate（`window.__CLIP_ENABLED__`，未啟用完全隱藏入口）
+- **56f 收尾**：Settings ready 後測試推論按鈕（toast 顯示耗時 ms）+ Capabilities 揭露 `similar_covers_by_number` / `similar_covers` 兩 read-only 端點給 AI agent（4 個 lifecycle endpoint 不揭露對齊「純 UI flow 不揭露」原則）+ Help 頁「以圖搜圖（Beta）」card（原理 / 使用方式 / Beta 限制 / 啟用關閉 4 段）+ 17 `help.clip.*` zh_TW i18n key（其他 locale milestone 補齊）
+
+#### 📚 README
+
+- README.md 新增「以圖搜圖（Beta）」段落（與 AI 翻譯同層級），3 bullet 說明 OpenAI CLIP 512 維向量分析封面 + Lightbox 探索星空操作流程 + opt-in 80MB 模型本地推論
+
+### Changed
+
+#### 🛠️ Lint 守衛遷移
+
+- `TestClipStageGuard.test_no_filter_brightness_in_clip_files` 從 pytest 遷移到 eslint `no-restricted-syntax`（新增 `SEL_FILTER_BRIGHTNESS`，scoped to `state-clip.js` + `constellation-host.js`），對齊 CLAUDE.md「Lint 守衛規則」
+
+### Internal
+
+- 已知 lint-guard exception：`test_no_slot_icon_overlay_in_templates` 暫保留 pytest（HTML linter 工具盲區 — stylelint 不讀 HTML、eslint 原生不處理；待後續 PR 評估 `@html-eslint/eslint-plugin` 後遷移）
+- 後端 `TEST_IMAGE_PATH` 從 `sc-1.jpg`（不存在）修正為 `sone-103.jpg`（demo 目錄實際存在的圖）
+
 ## [0.8.5] - 2026-05-03
 
 本版治好 frontend_lint pytest 膨脹（feature/55）。一個月內測試套件從 1634 → 2976 暴增 +82%，新增的 1342 tests 幾乎全來自兩個 `test_frontend_lint.py`，根因是「沒 eslint / stylelint 可用，開發者只能拿 pytest 守 lint 規則」。本版補上工具鏈正確層：eslint flat config 守 JS 語法（`no-alert` / `no-console` / `no-restricted-syntax`）、stylelint 守 CSS token、可折疊的跨檔 contract 用 method folding 折疊、死碼測試直接刪除，最後加四層防膨脹機制（lint config + AGENTS.md 邊界宣告 + CLAUDE.md 規則 + pre-merge SA-pre-6 偵測）讓這種膨脹未來無法復發。frontend_lint 兩檔合計 905 → 450 tests（−50%），用戶完全無感知。

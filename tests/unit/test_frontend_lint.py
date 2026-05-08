@@ -1136,6 +1136,116 @@ class TestScrapeToastI18nGuard:
                     f"{locale}.json {dotted!r} must not be empty string"
 
 
+class TestClipModeI18nGuard:
+    """56c-T3: 守衛 Clip Mode 入口按鈕 i18n key（zh_TW.json）"""
+
+    def _locale(self, name):
+        return json.loads((LOCALES_ROOT / name).read_text(encoding="utf-8"))
+
+    def _get_nested(self, d, dotted_key):
+        keys = dotted_key.split(".")
+        cur = d
+        for k in keys:
+            if not isinstance(cur, dict) or k not in cur:
+                return None
+            cur = cur[k]
+        return cur
+
+    def test_zh_tw_has_clip_mode_button_aria_label(self):
+        """zh_TW.json 必須有 clip_mode.button_aria_label，且為非空字串"""
+        data = self._locale("zh_TW.json")
+        val = self._get_nested(data, "clip_mode.button_aria_label")
+        assert val is not None, \
+            "zh_TW.json missing: 'clip_mode.button_aria_label'"
+        assert isinstance(val, str) and len(val) > 0, \
+            "zh_TW.json 'clip_mode.button_aria_label' must not be empty string"
+
+
+class TestClipStageGuard:
+    """56c-T4: 守衛 state-clip.js 整合 contract — 確保新 mixin 串入 main.js mergeState
+    鏈、CLIP_ANCHORS 揭露給 Alpine template、.clip-stage sibling DOM 在 showcase.html 對齊。
+    """
+
+    SHOWCASE_DIR = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "showcase"
+    STATE_CLIP_JS = SHOWCASE_DIR / "state-clip.js"
+    MAIN_JS = SHOWCASE_DIR / "main.js"
+
+    def _html(self):
+        return SHOWCASE_HTML.read_text(encoding="utf-8")
+
+    def _state_clip(self):
+        return self.STATE_CLIP_JS.read_text(encoding="utf-8")
+
+    def _main(self):
+        return self.MAIN_JS.read_text(encoding="utf-8")
+
+    def test_state_clip_file_exists(self):
+        """state-clip.js 必須存在（56c-T4 新建）"""
+        assert self.STATE_CLIP_JS.exists(), \
+            f"state-clip.js missing at {self.STATE_CLIP_JS!s}"
+
+    def test_main_js_imports_and_merges_state_clip(self):
+        """main.js 必須 import stateClip 並插入 mergeState 鏈（v0.8.4 descriptor-preserving 規範）"""
+        src = self._main()
+        assert "from '@/showcase/state-clip.js'" in src, \
+            "main.js missing: import { stateClip } from '@/showcase/state-clip.js'"
+        # mergeState 鏈整合：stateClip.call(this) 必須出現
+        assert "stateClip.call(this)" in src, \
+            "main.js mergeState chain missing: stateClip.call(this)"
+
+    def test_state_clip_exports_clip_anchors(self):
+        """CLIP_ANCHORS 必須 export（Alpine template x-for 用：'anchor in CLIP_ANCHORS'）"""
+        src = self._state_clip()
+        assert "export const CLIP_ANCHORS" in src, \
+            "state-clip.js missing: export const CLIP_ANCHORS = ANCHORS.map(...)"
+
+    def test_state_clip_exposes_clip_mode_methods(self):
+        """state-clip.js 必須 export stateClip factory 並含 4 主流程 method（CD-56C-6）"""
+        src = self._state_clip()
+        assert re.search(r"export\s+function\s+stateClip\s*\(", src), \
+            "state-clip.js missing: export function stateClip()"
+        for method in ("openClipMode", "closeClipMode", "initClipStage", "destroyClipStage"):
+            assert method in src, \
+                f"state-clip.js missing method: {method}"
+
+    def test_clip_stage_sibling_dom_in_showcase_html(self):
+        """showcase.html 必須含 .clip-stage sibling DOM（z-index 1501，x-effect lifecycle）"""
+        html = self._html()
+        # backdrop class
+        assert "clip-stage" in html, "showcase.html missing: .clip-stage sibling div"
+        # x-effect lifecycle 觸發 init/destroy（必須沿用 plan §6 §B 範例）
+        assert "initClipStage()" in html and "destroyClipStage()" in html, \
+            "showcase.html missing x-effect: clipModeOpen ? initClipStage() : destroyClipStage()"
+        # 960×620 inner stage（spec §1 CD-56C-11）
+        assert "clip-stage-inner" in html, \
+            "showcase.html missing: .clip-stage-inner (960×620 design-space container)"
+        # Alpine x-for 對齊 CLIP_ANCHORS export
+        assert "CLIP_ANCHORS" in html, \
+            "showcase.html missing: CLIP_ANCHORS reference (x-for=\"anchor in CLIP_ANCHORS\")"
+
+    # NOTE (v0.8.6 pre-merge SA-pre-6): test_no_filter_brightness_in_clip_files
+    # 已遷移到 eslint.config.mjs SEL_FILTER_BRIGHTNESS（Group 5 + Group 5b），對齊
+    # CLAUDE.md「Lint 守衛規則」：「某個 JS/CSS 字串不應出現」→ eslint rule。
+
+    def test_no_slot_icon_overlay_in_templates(self):
+        """56c-T4fix7: showcase.html + motion_lab.html 整檔不含 slot-icon-overlay 字串
+        （spec DoD 3：8 卡不配置任何 action button；整檔守防回歸）"""
+        MOTION_LAB_HTML = (
+            Path(__file__).parent.parent.parent
+            / "web" / "templates" / "motion_lab.html"
+        )
+        files = [
+            (SHOWCASE_HTML, "showcase.html"),
+            (MOTION_LAB_HTML, "motion_lab.html"),
+        ]
+        for fpath, fname in files:
+            content = fpath.read_text(encoding="utf-8")
+            assert "slot-icon-overlay" not in content, (
+                f"{fname} contains 'slot-icon-overlay' — spec §3 Phase 56c DoD 3 禁止 8 卡配置"
+                " action button；DOM + CSS 需完全移除（56c-T4fix7 防回歸）"
+            )
+
+
 SEARCH_STATE_DIR = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "search" / "state"
 
 
@@ -4533,6 +4643,8 @@ class TestMotionInfra:
             Path('pages') / 'motion-lab-state.js',      # pages/motion-lab-state.js（39b-T1 Alpine state 含 GSAP 委派呼叫）
             Path('pages') / 'search' / 'animations.js', # pages/search/animations.js（T6 預先加入）
             Path('pages') / 'showcase' / 'animations.js', # pages/showcase/animations.js（B6 動畫模組）
+            Path('pages') / 'motion-lab' / 'constellation-host.js',  # 56b-T3 thin host（從 pages/clip-lab/main.js 搬遷）
+            Path('pages') / 'showcase' / 'state-clip.js',  # 56c-T4 showcase clip mode host（per-host BreathingManager / GSAP context lifecycle，CD-56C-6）
         }
         violations = []
 
@@ -7074,3 +7186,112 @@ class TestScannerCopyFailModal:
         for expected in ['copy_fail_modal.title', 'copy-fail-pre',
                          'copyFailModalOpen && closeCopyFailModal']:
             assert expected in html, f"scanner.html missing: {expected!r}"
+
+
+class TestClipLabHostRemoved:
+    """56b-T3: 驗證 clip-lab thin host 已完全移除（檔案 / 目錄 / app.py import / i18n key）"""
+
+    PROJECT_ROOT = Path(__file__).parent.parent.parent
+
+    def test_clip_lab_router_file_not_exists(self):
+        """web/routers/clip_lab.py 不應存在"""
+        path = self.PROJECT_ROOT / "web" / "routers" / "clip_lab.py"
+        assert not path.exists(), f"56b-T3 違規：{path} 仍存在，應已刪除"
+
+    def test_clip_lab_template_not_exists(self):
+        """web/templates/clip_lab.html 不應存在"""
+        path = self.PROJECT_ROOT / "web" / "templates" / "clip_lab.html"
+        assert not path.exists(), f"56b-T3 違規：{path} 仍存在，應已刪除"
+
+    def test_clip_lab_pages_dir_not_exists(self):
+        """web/static/js/pages/clip-lab/ 目錄不應存在"""
+        path = self.PROJECT_ROOT / "web" / "static" / "js" / "pages" / "clip-lab"
+        assert not path.exists(), f"56b-T3 違規：{path} 目錄仍存在，應已刪除"
+
+    def test_app_py_no_clip_lab_import(self):
+        """web/app.py 內容不應含 'clip_lab' 字串（import / include_router 皆已移除）"""
+        path = self.PROJECT_ROOT / "web" / "app.py"
+        content = path.read_text(encoding="utf-8")
+        assert "clip_lab" not in content, (
+            "56b-T3 違規：web/app.py 仍含 'clip_lab' 字串（import / include_router 未清乾淨）"
+        )
+
+    def test_zh_tw_no_clip_lab_namespace(self):
+        """locales/zh_TW.json 解析後不應有 'clip_lab' top-level key"""
+        path = self.PROJECT_ROOT / "locales" / "zh_TW.json"
+        data = json.loads(path.read_text(encoding="utf-8"))
+        assert "clip_lab" not in data, (
+            "56b-T3 違規：locales/zh_TW.json 仍含 'clip_lab' top-level namespace"
+        )
+
+
+class TestConstellationRealCovers:
+    """56b-T4 visual probe：motion-lab Constellation 已使用本地靜態 sc-N.jpg 模擬 prod 視覺。
+
+    守衛範圍刻意降 brittleness（codex review 點 4）：
+      - 不檢 IMAGE_POOL.length === 20 字面字
+      - 不檢 sc-1..sc-20 完整列表
+      - 改檢「機制 / 結構 / 簽名」是否在位
+    """
+
+    PROJECT_ROOT = Path(__file__).parent.parent.parent
+
+    def test_constellation_dom_has_real_cover_imgs(self):
+        """motion_lab.html 12 個 .clip-lab-slot-img + 1 個 #main-img-photo；無 #XX label / "MAIN" 文字殘留"""
+        path = self.PROJECT_ROOT / "web" / "templates" / "motion_lab.html"
+        content = path.read_text(encoding="utf-8")
+        slot_img_count = content.count('class="clip-lab-slot-img"')
+        assert slot_img_count == 12, (
+            f"56b-T4 違規：motion_lab.html 應含 12 個 .clip-lab-slot-img，實際 {slot_img_count}"
+        )
+        assert 'id="main-img-photo"' in content, (
+            "56b-T4 違規：motion_lab.html 缺少 #main-img-photo（中央主圖 <img>）"
+        )
+        # #XX slot label 殘留檢查（T4 後不應再出現）
+        for n in range(1, 13):
+            label = f'>#{n:02d}</span>'
+            assert label not in content, (
+                f"56b-T4 違規：motion_lab.html 仍含舊 slot label '{label}'，應已移除"
+            )
+        # MAIN 文字殘留（T4 後主圖不再有 MAIN 字樣）
+        assert ">MAIN<" not in content, (
+            "56b-T4 違規：motion_lab.html 仍含 'MAIN' 文字節點，應已被 <img> 取代"
+        )
+
+    def test_constellation_host_no_hardcoded_image_paths(self):
+        """constellation-host.js 用 IMAGE_BASE 常數 + 模板字串，不硬編碼 sc-N.jpg 完整路徑陣列"""
+        path = (
+            self.PROJECT_ROOT / "web" / "static" / "js"
+            / "pages" / "motion-lab" / "constellation-host.js"
+        )
+        content = path.read_text(encoding="utf-8")
+        # 必須有 IMAGE_BASE / IMAGE_COUNT 常數識別字
+        assert "IMAGE_BASE" in content, (
+            "56b-T4 違規：constellation-host.js 缺 IMAGE_BASE 常數（圖路徑應常數化）"
+        )
+        assert "IMAGE_COUNT" in content, (
+            "56b-T4 違規：constellation-host.js 缺 IMAGE_COUNT 常數"
+        )
+        # /static/img/showcase/sc- 字面字不可硬編 12 條/20 條（容許 IMAGE_BASE = '...' 那一行）
+        # 我們允許出現上限為 1（IMAGE_BASE 賦值該行）
+        hardcoded_count = content.count("/static/img/showcase/sc-")
+        assert hardcoded_count <= 1, (
+            f"56b-T4 違規：constellation-host.js 含 {hardcoded_count} 處 '/static/img/showcase/sc-' 字面字，"
+            "應只在 IMAGE_BASE 常數定義出現（≤ 1）；其餘走模板字串組合"
+        )
+
+    def test_shared_animations_has_on_main_swap_hook(self):
+        """shared/constellation/animations.js playSlipThrough 必須含 onMainSwap hook 機制"""
+        path = (
+            self.PROJECT_ROOT / "web" / "static" / "js" / "shared"
+            / "constellation" / "animations.js"
+        )
+        content = path.read_text(encoding="utf-8")
+        # 簽名末加 options 參數
+        assert "options = {}" in content, (
+            "56b-T4 違規：animations.js playSlipThrough 應有 options = {} 末參數（onMainSwap hook 機制）"
+        )
+        # callback 內呼叫 hook
+        assert "options.onMainSwap" in content, (
+            "56b-T4 違規：animations.js 應在 t=0.30 callback 呼叫 options.onMainSwap?.()"
+        )
