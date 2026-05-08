@@ -97,6 +97,7 @@ export function stateClip() {
     _clipActiveHoverSlot: null,
     _clipMainBreathTween: null,
     _clipLastDrilledNumber: null,   // T5/T6 closeClipMode silent switch 用（T4 不讀）
+    _clipLastDrilledItem: null,    // 56c-fix-v2：snapshot clickedItem，避免 clipResults 替換後找不到
     clipModeMobileOpen: false,     // 56c-T7：手機 x-collapse toggle
 
     // 揭露給 Alpine template（x-for="anchor in CLIP_ANCHORS"）
@@ -282,6 +283,7 @@ export function stateClip() {
       this.clipResults = data.results;
       this.clipQueryVideo = data.query_video;
       this._clipLastDrilledNumber = null;
+      this._clipLastDrilledItem = null;    // 56c-fix-v2: reset snapshot
 
       // 4. Preload 前 8 張封面圖（避免空白幀）
       await this._preloadImages(data.results.slice(0, 8).map(r => r.cover_url));
@@ -411,7 +413,43 @@ export function stateClip() {
       // 3. silent switch lightbox to last drilled-into video（T5：CD-56C-12）
       // 必須在 clip-mode-active 移除前完成，確保 currentLightboxVideo 已更新
       // 才觸發 lightbox content fade-in（顯示正確影片）
-      this._silentSwitchLightboxByNumber(this._clipLastDrilledNumber);
+      //
+      // 56c-fix 方案 B：若 _clipLastDrilledNumber 不在 _filteredVideos（active filter 下 slip-through
+      // 到 filter 外影片）→ findIndex = -1 → _silentSwitchLightboxByNumber no-op → lightbox 顯示舊影片。
+      // 修法：找不到時改用 clipResults 的最後一個鑽入 item 當 standalone lightbox source（clipExitVideo）。
+      if (this._clipLastDrilledNumber) {
+        const drilledIdx = _filteredVideos.findIndex(v => v.number === this._clipLastDrilledNumber);
+        if (drilledIdx >= 0) {
+          // 找到 → 沿用既有邏輯（_setLightboxIndex + currentLightboxVideo 同步）
+          this._silentSwitchLightboxByNumber(this._clipLastDrilledNumber);
+        } else {
+          // 找不到 → standalone 模式：用 _clipLastDrilledItem snapshot（v2 修法；
+          // v1 用 clipResults.find 常找不到 — clipResults 在 onComplete 已替換為 clickedItem 的鄰居，
+          // 不保證包含 clickedItem 本身，導致 fallback no-op 回原始 lightbox。）
+          const drilledItem = this._clipLastDrilledItem;
+          if (drilledItem) {
+            // actresses 在 clipResults 是 array，lightbox template 用 .split(',') 解析；轉字串對齊
+            const actressStr = Array.isArray(drilledItem.actresses)
+              ? drilledItem.actresses.join(', ')
+              : (drilledItem.actresses || '');
+            this.clipExitVideo = {
+              number:    drilledItem.number,
+              title:     drilledItem.title,
+              cover_url: drilledItem.cover_url,
+              actresses: actressStr,
+              // path 故意留 undefined — lightbox template 用 ?.path guard，path 缺失時
+              // user-tags 區、play/open-folder 按鈕靜默不渲染（方案 1 optional-chaining）
+            };
+            // currentLightboxVideo 直接指向 clipExitVideo（_silentSwitchLightboxByNumber 不呼叫）
+            this.currentLightboxVideo = this.clipExitVideo;
+          } else {
+            // clipResults 裡也找不到（理論上不發生）→ 靜默，顯示進場前舊影片（同 no-op 行為）
+          }
+        }
+      } else {
+        // 無 slip-through（進 clip 後直接關）→ 不動，沿用既有行為
+        this._silentSwitchLightboxByNumber(this._clipLastDrilledNumber);
+      }
 
       // 3.5. lightbox content fade-in（silent switch 完成後才移除 active class）
       if (lightboxEl) lightboxEl.classList.remove('clip-mode-active');
@@ -509,6 +547,7 @@ export function stateClip() {
         this.clipMainSlot = slotId;
         this.clipVisibleSlots = nextVisible;
         this._clipLastDrilledNumber = clickedItem.number;
+        this._clipLastDrilledItem = clickedItem;   // 56c-fix-v2: snapshot before clipResults swap
         this.clipModeAnimating = false;
         return;
       }
@@ -576,6 +615,7 @@ export function stateClip() {
           this.clipModeAnimating = false;
           // T5: onComplete 內賦值（closure 抓 clickedItem ref，不從 this.clipResults 重抓）
           this._clipLastDrilledNumber = clickedItem.number;
+          this._clipLastDrilledItem = clickedItem;   // 56c-fix-v2: snapshot before clipResults swap
           if (this.clipBreathingManager) this.clipBreathingManager.start(nextVisible);
           this._startClipMainBreath();
 

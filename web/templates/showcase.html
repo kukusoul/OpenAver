@@ -664,7 +664,10 @@
                                 <svg class="sparkle-star" data-sparkle-size="sm" style="--cx: 56%; --cy: 92%;" viewBox="-12 -12 24 24"><polygon points="0,-10 2,-2 10,0 2,2 0,10 -2,2 -10,0 -2,-2"/></svg>
                             </div>
                             <!-- Cover Action Buttons -->
-                            <div class="cover-actions">
+                            <!-- 56c-fix-v2: x-show="!!currentLightboxVideo?.path" guards standalone
+                                 clip-exit mode (path undefined) — regular lightbox items always have
+                                 path so existing behavior is unaffected. -->
+                            <div class="cover-actions" x-show="!!currentLightboxVideo?.path">
                                 <button class="lb-action-btn" @click="playVideo(currentLightboxVideo?.path)" data-tooltip="{{ t('showcase.action.play') }}" aria-label="{{ t('showcase.action.play') }}">
                                     <i class="bi bi-play-fill"></i>
                                 </button>

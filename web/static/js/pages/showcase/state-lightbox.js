@@ -254,9 +254,14 @@ export function stateLightbox() {
             this._fetchSamplesFailed = {};
 
             // ★ C11: fly-back — 必須在 generation++ / lightboxOpen = false 之前捕獲
-            var closingIndex = this.showFavoriteActresses
-                ? this.actressLightboxIndex
-                : this.lightboxIndex;
+            // 56c-fix-v3: standalone clip-exit（clipExitVideo set，lightboxIndex 仍是進 clip 前舊值）
+            // → closingIndex 設 -1 跳過 fly-back，避免新影片封面飛回舊 alice 卡片
+            var isClipExitStandalone = !!this.clipExitVideo;
+            var closingIndex = isClipExitStandalone
+                ? -1
+                : (this.showFavoriteActresses
+                    ? this.actressLightboxIndex
+                    : this.lightboxIndex);
             var lbEl = document.querySelector('.showcase-lightbox');
             var lbImg = lbEl ? lbEl.querySelector('.lightbox-cover img') : null;
             var flybackFromRect = lbImg ? lbImg.getBoundingClientRect() : null;
@@ -304,6 +309,12 @@ export function stateLightbox() {
             // 56c-T7：手機路徑 lightbox close 時 reset clipModeMobileOpen，避免下次開 lightbox 殘留展開
             if (typeof this.clipModeMobileOpen !== 'undefined') {
                 this.clipModeMobileOpen = false;
+            }
+
+            // 56c-fix: standalone clip-exit mode — lightbox 關閉時清 clipExitVideo，
+            // 回到原 alice 搜尋結果不動（currentLightboxVideo 在 250ms timer 內由 _setLightboxIndex(-1) 清除）
+            if (this.clipExitVideo) {
+                this.clipExitVideo = null;
             }
 
             // F2: delay state clearing until CSS transition completes (250ms)
@@ -445,6 +456,8 @@ export function stateLightbox() {
 
         // 44b-T4: Nav arrow visibility computed
         hasVisiblePrev() {
+            // 56c-fix: standalone clip-exit mode — 沒有 list context，暫禁 prev/next
+            if (this.clipExitVideo) return false;
             if (this.showFavoriteActresses) return this.actressLightboxIndex > 0;
             if (this.lightboxIndex === -1) return false;
             if (this.lightboxIndex === 0) {
@@ -454,6 +467,8 @@ export function stateLightbox() {
         },
 
         hasVisibleNext() {
+            // 56c-fix: standalone clip-exit mode — 沒有 list context，暫禁 prev/next
+            if (this.clipExitVideo) return false;
             if (this.showFavoriteActresses) return this.actressLightboxIndex < this.filteredActressCount - 1;
             if (this.lightboxIndex === -1) {
                 return _filteredVideos.length > 0;
