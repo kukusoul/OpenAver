@@ -8,13 +8,12 @@
  *   pauseOne(slotId)     — 暫停單顆（hover enter）
  *   resumeOne(slotId)    — 恢復單顆（hover leave）
  *
- * 設計選型（plan §8 E/F）：
- *   - proxy object _yOffsets[id]（純數字），不直接 tween DOM top
- *   - proxy object _rotations[id]（純數字），不直接 tween DOM rotation
+ * 設計選型（56e-fix: transform-only, CPU 10%→3%）：
+ *   - 直接 tween 元素 y/rotation（GPU 合成層，跳過 layout/paint）
  *   - per-card random sign（±1）在 start() 決定，y 與 rotation 共用同一 sign 製造
  *     coherent「tilt + drift」感（同方向漂移 + 同方向傾斜）
- *   - ticker 每幀批次寫入 card top + rotation + line y2 setAttribute（降低 DOM mutation）
- *   - railEndpoint 在 start() 預算快取，ticker 只加 yOff（rail 不旋轉，保持直線）
+ *   - ticker 僅做 rail y2 setAttribute（8 次 SVG geometry，無 layout reflow）
+ *   - railEndpoint 在 start() 預算快取，ticker 讀 gsap.getProperty(card, 'y') 後更新 y2
  */
 
 import { railEndpoint } from './anchors.js';
@@ -39,10 +38,6 @@ export class BreathingManager {
     this._tweens = {};
     /** @type {Object<string, gsap.core.Tween>} */
     this._rotTweens = {};
-    /** @type {Object<string, {value: number}>} */
-    this._yOffsets = {};
-    /** @type {Object<string, {value: number}>} */
-    this._rotations = {};
     /** @type {Object<string, {x: number, y: number}>} */
     this._endpoints = {};
     /** @type {Function|null} */
@@ -60,11 +55,8 @@ export class BreathingManager {
 
     visibleSlots.forEach(id => {
       const anchor = this._anchors.find(a => a.id === id);
-      if (!anchor) return;
-
-      // Proxy objects（純數字，tween 的目標）
-      this._yOffsets[id] = { value: 0 };
-      this._rotations[id] = { value: 0 };
+      const card = this._cards[id];
+      if (!anchor || !card) return;
 
       // 預算 rail endpoint（anchor 固定，快取之）
       this._endpoints[id] = railEndpoint(anchor);
@@ -76,16 +68,21 @@ export class BreathingManager {
       // Picker 全套：1.5-1.9s（user 驗收為「不卡」基準；舊 2.1-2.7 仍覺一頓一頓）
       const dur = 1.5 + Math.random() * 0.4;
 
-      this._tweens[id] = gsap.to(this._yOffsets[id], {
-        value: BREATH_AMPLITUDE * sign,
+      // 確保起始 transform 乾淨（animations.js 已補 y:0，此處二次保險）
+      // xPercent/yPercent: -50 接管 CSS translate(-50%,-50%) 置中，防 GSAP 覆蓋（P1 fix）
+      gsap.set(card, { xPercent: -50, yPercent: -50, x: 0, y: 0, rotation: 0 });
+
+      // 直接 tween 元素 y/rotation（GPU 合成層，跳過 layout/paint）
+      this._tweens[id] = gsap.to(card, {
+        y: BREATH_AMPLITUDE * sign,
         duration: dur,
         ease: 'sine.inOut',
         yoyo: true,
         repeat: -1,
       });
 
-      this._rotTweens[id] = gsap.to(this._rotations[id], {
-        value: BREATH_ROTATION * sign,
+      this._rotTweens[id] = gsap.to(card, {
+        rotation: BREATH_ROTATION * sign,
         duration: dur,
         ease: 'sine.inOut',
         yoyo: true,
@@ -93,13 +90,14 @@ export class BreathingManager {
       });
     });
 
-    // ticker callback：每幀批次寫入 card top + rail y2
+    // ticker callback：僅做 rail y2 跟隨（8 次 setAttribute，無 layout reflow）
     this._tickerFn = () => this._tickUpdate(visibleSlots);
     gsap.ticker.add(this._tickerFn);
   }
 
   /**
-   * _tickUpdate — 每幀執行，批次更新 card top + line y2
+   * _tickUpdate — 每幀執行，僅更新 rail line y2（跟隨卡片 y transform）
+   * 不再寫卡片 top/rotation（已由 GSAP tween 直接管理）
    *
    * @param {Set<string>} visibleSlots
    */
@@ -110,27 +108,21 @@ export class BreathingManager {
     visibleSlots.forEach(id => {
       if (!this._tweens[id]) return; // stop 後 _tweens 清空，skip
 
-      const anchor = this._anchors.find(a => a.id === id);
-      if (!anchor) return;
-
-      const yOff = this._yOffsets[id].value;
-      const rot = this._rotations[id].value;
       const card = this._cards[id];
       const line = this._railLines[id];
       const ep = this._endpoints[id];
 
-      if (card) {
-        gsap.set(card, { top: anchor.y + yOff, rotation: rot });
-      }
-      if (line && ep) {
-        line.setAttribute('y2', String(ep.y + yOff));
-      }
+      if (!card || !line || !ep) return;
+
+      // 讀卡片當前 transform y（GSAP 管理），強制轉數字防版本差異
+      const currentY = Number(gsap.getProperty(card, 'y')) || 0;
+      line.setAttribute('y2', String(ep.y + currentY));
     });
   }
 
   /**
    * pauseOne — 暫停單顆呼吸（hover enter）
-   * tween.pause() 凍結 _yOffsets[id] 在當前值，card 靜止在漂浮中途位置
+   * tween.pause() 凍結 card 在當前 y/rotation transform 值，card 靜止在漂浮中途位置
    *
    * @param {string} slotId
    */
@@ -159,12 +151,11 @@ export class BreathingManager {
   }
 
   /**
-   * stop — kill 所有 tweens + 移除 ticker + 清空狀態 + normalize rotation
-   * slip-through / onExit 前必須呼叫，確保 card top 不被 ticker 繼續漂移
+   * stop — kill 所有 tweens + 移除 ticker + 清空狀態 + normalize y/rotation
+   * slip-through / onExit 前必須呼叫，確保 card transform 不殘留漂浮偏移
    *
-   * Codex r1 P1（polish）：kill tween 不清 DOM rotation 殘留，下游 caller
-   * （playExit 不 tween rotation）會帶著 ±2.5° 飛出。在 state 清除前對
-   * active cards clearProps: 'rotation'，stop() 自身保證下次接管乾淨。
+   * clearProps: 'y,rotation' 確保下游 animations.js 的 top-based 定位不受
+   * 殘留 transform 影響（y 偏移 + rotation 都歸零）。
    */
   stop() {
     // Kill all tweens
@@ -177,17 +168,19 @@ export class BreathingManager {
       this._tickerFn = null;
     }
 
-    // Normalize rotation on previously-active cards（在 clear state 前）
-    Object.keys(this._rotations).forEach(id => {
+    // Normalize y + rotation on previously-active cards（在 clear state 前）
+    // P2 fix: 同步重設 rail y2 endpoint 到靜止位置，防最後一幀殘留偏移
+    Object.keys(this._tweens).forEach(id => {
       const card = this._cards[id];
-      if (card) gsap.set(card, { clearProps: 'rotation' });
+      if (card) gsap.set(card, { xPercent: -50, yPercent: -50, x: 0, y: 0, rotation: 0 });
+      const line = this._railLines[id];
+      const ep = this._endpoints[id];
+      if (line && ep) line.setAttribute('y2', String(ep.y));
     });
 
     // Clear state
     this._tweens = {};
     this._rotTweens = {};
-    this._yOffsets = {};
-    this._rotations = {};
     this._endpoints = {};
   }
 }

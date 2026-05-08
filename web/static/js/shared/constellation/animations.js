@@ -48,7 +48,7 @@ export function playInitialExpand(cards, railLines, initSlots, onComplete) {
     if (!anchor || !card) return;
 
     card.classList.remove('slot--hidden');
-    gsap.set(card, { left: 480, top: 310, opacity: 0, width: 120, height: 150 });
+    gsap.set(card, { xPercent: -50, yPercent: -50, left: 480, top: 310, opacity: 0, width: 120, height: 150, x: 0, y: 0, rotation: 0 });
 
     const cardT = idx * 0.06;
 
@@ -196,7 +196,7 @@ export function playSlipThrough(clickedId, prevVisible, nextVisible, cards, rail
   if (cards[clickedId]) {
     tl.call(() => {
       cards[clickedId].classList.add('slot--hidden');
-      gsap.set(cards[clickedId], { opacity: 0, width: 120, height: 150, zIndex: 10 });
+      gsap.set(cards[clickedId], { xPercent: -50, yPercent: -50, opacity: 0, width: 120, height: 150, zIndex: 10, x: 0, y: 0, rotation: 0 });
       // T5 codex-fix3: clicked card 已 hidden，可見 slot src 不再受 reactive rebind 影響，
       // 此時 host 才安全 swap clipResults（rebind bug fix）
       options.onPrevVisibleHidden?.();
@@ -218,7 +218,7 @@ export function playSlipThrough(clickedId, prevVisible, nextVisible, cards, rail
       // reactive :src 還綁舊 clipResults 顯示錯誤封面
       options.onBeforeCardEnter?.(id);
       card.classList.remove('slot--hidden');
-      gsap.set(card, { left: 480, top: 310, opacity: 0, width: 120, height: 150 });
+      gsap.set(card, { xPercent: -50, yPercent: -50, left: 480, top: 310, opacity: 0, width: 120, height: 150, x: 0, y: 0, rotation: 0 });
     }, null, Math.max(0, startT - 0.01));
 
     tl.to(card, {
