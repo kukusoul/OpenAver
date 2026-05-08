@@ -312,6 +312,11 @@
       "body": "確定要重置所有設定嗎？此操作將刪除所有自訂設定，無法復原。",
       "confirm": "確認重置"
     },
+    "clip": {
+      "toggle_label": "以圖搜圖 (Beta)",
+      "toggle_hint": "點 Lightbox 的魔杖，AI 幫你找出封面相似的影片。首次啟用會下載 80MB 模型。",
+      "help_link": "詳細說明 →"
+    },
     "status": {
       "loading_models": "載入模型中...",
       "connecting": "連線中...",
@@ -343,6 +348,12 @@
       "openai_translate_failed": "翻譯測試失敗",
       "openai_unknown_response_format": "未知的回應格式",
       "ja_skip": "日文模式：跳過翻譯"
+    }
+  },
+  "clip": {
+    "action": {
+      "retry": "重試",
+      "test_inference": "測試推論"
     }
   },
   "scanner": {
