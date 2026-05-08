@@ -60,9 +60,43 @@ export function stateClipSettings() {
                 await this.openClipDisableModal();
             }
         },
-        async openClipDisableModal() { /* T4 補實作 */ },
-        cancelClipDisableModal() { /* T4 補實作 */ },
-        async confirmClipDisable() { /* T4 補實作 */ },
+        async openClipDisableModal() {
+            // rollback 視覺（避免 modal 取消後開關仍 OFF）
+            // clipEnabled 是獨立 state（audit BLOCKER G1），不是 this.form.clipEnabled
+            this.clipEnabled = true;
+            this.clipDisableModalOpen = true;
+        },
+        cancelClipDisableModal() {
+            this.clipDisableModalOpen = false;
+            // this.clipEnabled 已是 true（rollback 值），開關視覺保持 ON
+        },
+        async confirmClipDisable() {
+            this._clipDisableLoading = true;
+            try {
+                const resp = await fetch('/api/clip/disable', { method: 'POST' });
+                if (resp.status === 409) {
+                    // enable job 進行中，請等流程結束（plan-56d §1 CD-56D-5 後端設計）
+                    // 409 是「請等候」語義，不走 catch
+                    this.clipDisableModalOpen = false;
+                    this.showToast(window.t('clip.disable_modal.toast_busy'), 'warning');
+                    return;
+                }
+                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                // 後端 2xx：真正把 clipEnabled 改 false（此前保持 ON rollback 值）
+                this.clipEnabled = false;
+                this.clipPhase = 'idle';
+                this.clipDisableModalOpen = false;
+                this.showToast(window.t('clip.disable_modal.toast_done'), 'success');
+            } catch (_e) {
+                // _e.message 是 fetch HTTP 狀態字串（如 "HTTP 500"）或 "Failed to fetch"
+                // 後端已 sanitize（固定中文 detail），前端不解析 detail，不展示 _e.message
+                // 4 種 500 子 case 一律統一 toast_failed（audit MAJOR §G4.3）
+                this.showToast(window.t('clip.disable_modal.toast_failed'), 'error');
+                // clipEnabled 保持 true（rollback 值），開關維持 ON
+            } finally {
+                this._clipDisableLoading = false;  // 只管 loading flag，不動 clipEnabled
+            }
+        },
         async testClipInference() { /* plan-56f.md 56f-T5 補實作 */ },
         _connectClipStatusSSE(url, options = {}) {
             fetch(url, { method: options.method || 'POST' }).then(async resp => {

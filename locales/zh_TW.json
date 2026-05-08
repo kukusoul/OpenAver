@@ -364,6 +364,14 @@
     "enable": {
       "toast_busy": "啟用流程已在進行中",
       "toast_failed": "啟用失敗，請查閱日誌"
+    },
+    "disable_modal": {
+      "title": "關閉以圖搜圖？",
+      "body": "將會：\n• 刪除模型檔（約 80 MB）\n• 清空所有影片的 CLIP 索引\n\n此操作不可復原。確定要關閉嗎？",
+      "confirm": "確定關閉",
+      "toast_done": "以圖搜圖已關閉",
+      "toast_failed": "關閉失敗",
+      "toast_busy": "啟用流程進行中，請待完成後再關閉"
     }
   },
   "scanner": {
