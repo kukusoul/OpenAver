@@ -596,7 +596,7 @@ export function stateSimilar() {
         nextVisible,
         this.similarCards,
         this.similarRailLines,
-        this._similarMainStatic,  // 56c-T4: 從 _similarMainGhost 改為 inner static img
+        this._similarMainStatic,  // 56c-T4: 從 ghost overlay 改為 inner static img
         () => {
           if (generation !== this._similarGeneration) return; // destroyed during slip-through
           // codex-fix5: 移到 onComplete（t≈1.10s+），此時 pureExit 卡 opacity 已 0、
