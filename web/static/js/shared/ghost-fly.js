@@ -36,7 +36,7 @@
      * 既有 caller 不傳 options → 走 default 'full' 分支零回歸。
      *
      * 56c-T4: 第三參數 options.parent 預設 `document.body`（向後相容）；
-     * 56c clip mode 傳入 `.clip-stage`，讓 ghost 進入 .clip-stage 自己建立的
+     * 56c clip mode 傳入 `.similar-stage`，讓 ghost 進入 .similar-stage 自己建立的
      * stacking context — 同 stacking context 內 main-overlay z=2001 才能正確
      * 蓋過 ghost z=2000。其他 callers 不傳 → 走 default body → 行為不變。
      *
@@ -81,8 +81,8 @@
             ghost.style.objectPosition = 'right center';
         }
 
-        // 56c-T4: parent 預設 body 維持向後相容；56c 傳 .clip-stage 讓 ghost
-        // 進入 .clip-stage stacking context，main-overlay z=2001 在同 context 下
+        // 56c-T4: parent 預設 body 維持向後相容；56c 傳 .similar-stage 讓 ghost
+        // 進入 .similar-stage stacking context，main-overlay z=2001 在同 context 下
         // 才能正確蓋過 ghost z=2000
         var parent = options.parent || document.body;
         parent.appendChild(ghost);
@@ -129,13 +129,13 @@
      *
      * 從 lightbox cover img 起飛，飛到 stageInner design-space (480, 310) 中央
      * 200×250 box；只顯示右半邊（cropMode: 'right-half'）。
-     * 動畫完成後 ghost **不 cleanup**（state-clip.js 接管 ghost ref）。
+     * 動畫完成後 ghost **不 cleanup**（state-similar.js 接管 ghost ref）。
      *
-     * caller 責任：呼叫前必須先 mount `.clip-stage.show`，並等 rAF 讓 stageInner
+     * caller 責任：呼叫前必須先 mount `.similar-stage.show`，並等 rAF 讓 stageInner
      * rect 有效（CD-56C-11 caveat）。
      *
      * @param {HTMLImageElement} coverImgEl - lightbox 內 .lightbox-cover img
-     * @param {HTMLElement} stageInnerEl - .clip-stage-inner（960×620 居中容器）
+     * @param {HTMLElement} stageInnerEl - .similar-stage-inner（960×620 居中容器）
      * @param {object} [opts] - { onComplete?: (ghost) => void }
      * @returns {gsap.core.Timeline|null}
      */
@@ -156,9 +156,9 @@
         // 1) 先建 ghost（createCoverGhost 內部 cleanupStaleGhosts() 會還原所有
         //    [data-ghost-hidden] 元素 opacity，故必須在 hide 之前呼叫；對齊
         //    playGridToLightbox 既有 pattern）
-        // 56c-T4: 取 .clip-stage 作為 ghost parent，讓 ghost 進入 .clip-stage
-        // stacking context → main-overlay z=2001 在 .clip-stage 內可以正確蓋過 ghost z=2000
-        var stageEl = stageInnerEl.closest('.clip-stage');
+        // 56c-T4: 取 .similar-stage 作為 ghost parent，讓 ghost 進入 .similar-stage
+        // stacking context → main-overlay z=2001 在 .similar-stage 內可以正確蓋過 ghost z=2000
+        var stageEl = stageInnerEl.closest('.similar-stage');
         var ghost = createCoverGhost(src, rect, {
             cropMode: 'right-half',
             parent: stageEl || document.body  // fallback safety
@@ -173,11 +173,11 @@
         coverImgEl.setAttribute('data-ghost-hidden', 'true');
         gsap.set(coverImgEl, { opacity: 0 });
 
-        // 56c-T4: single source of truth — 直接吃 .clip-main-anchor 的 native rect
+        // 56c-T4: single source of truth — 直接吃 .similar-main-anchor 的 native rect
         // （瀏覽器 transform: scale 後回傳 scaled rect），與 cards design-space 480/310
         // 完全同步，避免再算 480*scale 公式漂移
         var targetX, targetY, targetW, targetH;
-        var anchorEl = stageInnerEl.querySelector('.clip-main-anchor');
+        var anchorEl = stageInnerEl.querySelector('.similar-main-anchor');
         if (anchorEl) {
             var anchorRect = anchorEl.getBoundingClientRect();
             targetX = anchorRect.left;
@@ -205,7 +205,7 @@
         var tl = gsap.timeline({
             id: 'clipEnter',
             onComplete: function () {
-                // ghost 留在中央給 state-clip.js 接管，**不 cleanup**
+                // ghost 留在中央給 state-similar.js 接管，**不 cleanup**
                 if (typeof opts.onComplete === 'function') opts.onComplete(ghost);
             },
             onInterrupt: function () {
