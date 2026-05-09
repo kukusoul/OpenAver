@@ -146,8 +146,8 @@ function extractNumber(filename) {
     const patterns = [
         /\b(FC2-PPV)-(\d{5,7})\b/i,          // FC2-PPV-1234567（優先）
         /\b([A-Z]+\d+-\d+)\b/i,              // T28-103 混合格式（字母+數字-數字）
-        /\b([A-Z]{1,5})-(\d{3,5})\b/i,       // SONE-205（支援單字母）
-        /\b([A-Z]{2,5})(\d{3,5})\b/i,        // IPTD927（無連字號需 2+ 字母避免誤判）
+        /\b([A-Z]{1,5})-(\d{2,5})\b/i,       // SONE-12（支援單字母）
+        /\b([A-Z]{2,5})(\d{2,5})\b/i,        // IPTD12（無連字號需 2+ 字母避免誤判）
     ];
 
     for (const pattern of patterns) {
@@ -200,7 +200,7 @@ async function parseFilenames(filenames) {
  */
 function formatNumber(input) {
     if (!input) return null;
-    const match = input.match(/([A-Z]{1,5})-?(\d{3,7})/i);
+    const match = input.match(/([A-Z]{1,5})-?(\d{2,7})/i);
     if (match) {
         return `${match[1].toUpperCase()}-${match[2]}`;
     }
