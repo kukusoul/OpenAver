@@ -73,7 +73,7 @@ def is_number_format(s: str) -> bool:
         r'[-_](UC|UNCEN|UNCENSORED|LEAK|LEAKED)(?=[-_.\s]|$)',
         '', s, flags=re.IGNORECASE
     )
-    return bool(re.match(r'^[a-zA-Z]+-?\d{3,}$', s))
+    return bool(re.match(r'^[a-zA-Z]+-?\d{2,}$', s))
 
 
 def is_partial_number(s: str) -> bool:
@@ -107,7 +107,7 @@ def expand_partial_number(partial: str) -> List[str]:
     prefix, num = match.groups()
     prefix = prefix.upper()
 
-    if len(num) >= 3:
+    if len(num) >= 2:
         return [f"{prefix}-{num}"]
 
     candidates = []
