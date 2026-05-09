@@ -152,14 +152,20 @@ def test_thread_safety_reentrant():
 # T7：import 時不觸發 DB（lazy）
 # ──────────────────────────────────────────────────────────
 def test_lazy_import_no_db_on_import():
-    with patch("core.similar.ranker_cache.VideoRepository") as mock_repo_cls:
-        # 重新 import（已在 sys.modules 中，這裡驗 call_count）
-        import importlib
-        import core.similar.ranker_cache
-        importlib.reload(core.similar.ranker_cache)
+    import importlib
+    import core.similar.ranker_cache
 
-        # import/reload 後不應呼叫 get_all
-        assert mock_repo_cls.return_value.get_all.call_count == 0
+    # reload() 在同一個 module object 上 re-exec，會替換其中的 class 屬性。
+    # 儲存原始 class 並在 finally 中還原，避免 class identity 跨測試污染。
+    original_class = core.similar.ranker_cache.SimilarRankerCache
+    try:
+        with patch("core.similar.ranker_cache.VideoRepository") as mock_repo_cls:
+            importlib.reload(core.similar.ranker_cache)
+
+            # import/reload 後不應呼叫 get_all
+            assert mock_repo_cls.return_value.get_all.call_count == 0
+    finally:
+        core.similar.ranker_cache.SimilarRankerCache = original_class
 
 
 # ──────────────────────────────────────────────────────────
