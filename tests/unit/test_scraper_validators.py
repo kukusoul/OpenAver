@@ -3,7 +3,7 @@
 涵蓋 is_number_format, is_partial_number, is_prefix_only 的單元測試
 
 注意：測試按照 CURRENT prod code 行為撰寫：
-- is_number_format: regex ``^[a-zA-Z]+-?\\d{3,}$`` (先清除 -UC/-UNCEN 等後綴)
+- is_number_format: regex ``^[a-zA-Z]+-?\d{2,}$`` (先清除 -UC/-UNCEN 等後綴)
 - is_partial_number: regex ``^([a-zA-Z]+)-?(\\d{1,2})$``
 - is_prefix_only: regex ``^[A-Z]{2,6}$``
 - 三者都沒有 null guard (.strip() on None raises AttributeError)
@@ -53,8 +53,7 @@ class TestIsNumberFormat:
         assert is_number_format("-001") is False
 
     def test_too_few_digits(self):
-        """Less than 3 digits rejected"""
-        assert is_number_format("ABP-01") is False
+        """Less than 2 digits rejected"""
         assert is_number_format("ABP-1") is False
 
     def test_none_raises(self):
