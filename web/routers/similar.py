@@ -51,7 +51,7 @@ def _compute_similar_covers(video_id: int, limit: int) -> dict:
     repo = VideoRepository()
     target = repo.get_by_id(video_id)
     if target is None:
-        raise HTTPException(status_code=404, detail=f"video_id {video_id} not found")
+        raise HTTPException(status_code=404, detail="找不到影片")
 
     ranker = SimilarRankerCache.get()
     results_videos = ranker.rank(target, top_k=limit)
@@ -98,7 +98,7 @@ def get_similar_covers_by_number(
     repo = VideoRepository()
     video = repo.get_by_number(number)
     if video is None:
-        raise HTTPException(status_code=404, detail=f"number {number!r} not found")
+        raise HTTPException(status_code=404, detail="找不到影片")
     return _compute_similar_covers(video.id, limit)
 
 

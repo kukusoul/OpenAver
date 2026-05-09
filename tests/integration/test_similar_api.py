@@ -346,3 +346,92 @@ class TestSimilarCoversAPI:
         assert target_number not in result_numbers, (
             f"target number {target_number!r} should not appear in results"
         )
+
+
+# ---------------------------------------------------------------------------
+# Codex P1 — legacy DB startup path regression test
+# ---------------------------------------------------------------------------
+
+class TestLegacySchemaStartupPath:
+    """CD-57b-8：init_db() 必須在 SimilarRankerCache 首次 get() 前執行。
+
+    覆蓋 Codex finding P1：若 legacy v0.8.6 DB 仍含 clip_embedding / clip_model_id 欄位，
+    Video.from_row cls(**data) 會因未知 keyword 拋 TypeError → 500。
+    init_db() 在 lifespan startup 執行 DROP COLUMN migration 後此問題消失。
+    """
+
+    def test_init_db_drops_clip_columns_before_similar_query(self, tmp_path, monkeypatch):
+        """legacy DB 啟動後，similar endpoint 不因 clip 欄位拋 500。"""
+        import sqlite3
+
+        db_path = tmp_path / "legacy_v086.db"
+
+        # 建立模擬 v0.8.6 schema（含 clip_embedding / clip_model_id）
+        conn = sqlite3.connect(db_path)
+        conn.execute("""
+            CREATE TABLE videos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                path TEXT UNIQUE NOT NULL,
+                number TEXT,
+                title TEXT,
+                original_title TEXT,
+                actresses TEXT DEFAULT '[]',
+                maker TEXT DEFAULT '',
+                director TEXT DEFAULT '',
+                series TEXT DEFAULT '',
+                label TEXT DEFAULT '',
+                tags TEXT DEFAULT '[]',
+                sample_images TEXT DEFAULT '',
+                user_tags TEXT DEFAULT '[]',
+                duration INTEGER DEFAULT 0,
+                size_bytes INTEGER,
+                cover_path TEXT DEFAULT '',
+                release_date TEXT DEFAULT '',
+                mtime REAL DEFAULT 0.0,
+                nfo_mtime REAL DEFAULT 0.0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                clip_embedding BLOB DEFAULT NULL,
+                clip_model_id TEXT DEFAULT NULL
+            )
+        """)
+        # 插入一筆帶 clip_embedding 的 legacy row
+        conn.execute(
+            "INSERT INTO videos (path, number, title, actresses, tags) VALUES (?,?,?,?,?)",
+            ("file:///legacy/test.mp4", "LEGACY-001", "Legacy Test", "[]", '["巨乳"]'),
+        )
+        conn.commit()
+        conn.close()
+
+        # 執行 init_db（模擬 app startup），應 DROP clip 欄位
+        init_db(db_path)
+
+        # 驗欄位已 DROP
+        conn = sqlite3.connect(db_path)
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(videos)").fetchall()}
+        conn.close()
+        assert "clip_embedding" not in cols
+        assert "clip_model_id" not in cols
+
+        # 驗 similar endpoint 不 500：patch VideoRepository + cache，用修正後 DB 建 ranker
+        real_repo_cls = VideoRepository
+
+        class _PatchedRepo(real_repo_cls):
+            def __init__(self, _=None):
+                super().__init__(db_path)
+
+        monkeypatch.setattr("web.routers.similar.VideoRepository", _PatchedRepo)
+
+        repo = VideoRepository(db_path)
+        corpus = repo.get_all()  # 不應 TypeError
+        ranker = SimilarRanker(corpus)
+        monkeypatch.setattr(SimilarRankerCache, "_instance", ranker)
+
+        client = TestClient(_make_test_app())
+        try:
+            resp = client.get("/api/similar-covers/by-number/LEGACY-001")
+            # 有 1 部影片，corpus = [target]，results = []，200 不 500
+            assert resp.status_code == 200
+            assert resp.json()["results"] == []
+        finally:
+            SimilarRankerCache._instance = None

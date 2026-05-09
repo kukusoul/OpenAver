@@ -21,7 +21,7 @@ setup_logging()
 logger = get_logger(__name__)
 
 from core.config import load_config, save_config
-from core.database import VideoRepository
+from core.database import VideoRepository, init_db
 
 
 # 路徑設定
@@ -33,6 +33,10 @@ STATIC_DIR = BASE_DIR / "static"
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # ── startup ───────────────────────────────────────────────
+    # init_db() 必須在任何 request 前執行：執行 DROP COLUMN migration（v0.8.7：
+    # 移除 legacy clip_embedding / clip_model_id），確保 Video.from_row cls(**data)
+    # 不會因 legacy schema 欄位收到未知 keyword 而 500。CD-57b-8 contract。
+    init_db()
     yield
     # ── shutdown ──────────────────────────────────────────────
     # 目前無 shutdown 邏輯（setup_logging 是 module-level，不需 teardown）
