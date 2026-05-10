@@ -116,3 +116,16 @@ def get_similar_covers_by_id(
         404: 查無 video_id
     """
     return _compute_similar_covers(video_id, limit)
+
+
+@router.get("/similar/warmup")
+def warmup_similar_ranker() -> dict:
+    """GET /api/similar/warmup — 57e hotfix。
+
+    Showcase 頁 mount 時 fire-and-forget 呼叫；觸發 SimilarRankerCache 首次 lazy build，
+    讓用戶之後點 magic icon 時不再吃 cold-start 延遲（6000-video DB 上 50-150ms）。
+    與 magic icon 首次點擊 race 配合（client 端 openSimilarMode 序列化修法）：
+    warm-up 命中 → A 的 await 變 ~10ms invisible；warm-up 來不及 → A 仍正確（只是慢）。
+    """
+    SimilarRankerCache.get()
+    return {"ok": True}

@@ -195,6 +195,9 @@ export function stateBase() {
             this.restoreState();        // M2c: 先恢復狀態
             const savedPage = this.page;
             await this.fetchVideos();
+            // 57e hotfix：fire-and-forget warm-up SimilarRankerCache，避免 magic icon 首次點擊 cold-start race。
+            // 失敗靜默（端點不存在的舊 server / 網路斷線都不影響 showcase 主流程）。
+            fetch('/api/similar/warmup').catch(() => {});
             await _loadAliasMap();      // 45-P2: 無條件載入 alias map（影片搜尋也需要）
             if (this.showFavoriteActresses) { this.loadActresses(); }
             this.applyFilterAndSort(true);  // M4a: 套用搜尋篩選（跳過 pagination，下面統一處理）

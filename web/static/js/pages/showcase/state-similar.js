@@ -252,7 +252,10 @@ export function stateSimilar() {
       const lightboxEl = document.querySelector('.showcase-lightbox');
       const isPRM = !!(window.OpenAver && window.OpenAver.prefersReducedMotion);
 
-      // 1. 並行：先發 fetch（縮短 perceived latency）+ sparkle burst（PRM 跳過）
+      // 1. 並行起跑：fetch + sparkle burst 各自跑；但 stage mount **必須等** fetch + similarResults 賦值 + preload 全部完成。
+      // 57e hotfix：v0.8.7 production cold-start race — 之前 Promise.all([fetch, scan]) 之後才 set similarModeOpen，
+      // 看似序列但 Alpine x-effect 同 tick 與 similarResults reactive 賦值微時序差導致首次 12 stars 不入場。
+      // 修法：先 await fetch + 立即賦值 + preload（資料齊穩）再 await scanPromise（含 PRM 短路）最後 mount stage。
       const fetchPromise = this._fetchSimilarResults(this.currentLightboxVideo.number);
 
       // 2. Sparkle burst 0.4s（PRM 跳過）— C23 per-callsite PRM guard
@@ -268,26 +271,28 @@ export function stateSimilar() {
         }
       });
 
-      // Promise.all 等兩者完成；fetchPromise reject 則 Promise.all 立即 reject → catch 段攔截
+      // 3. 先 await fetch（reject → showToast 已處理 → 重置 guard 退出）
       let data;
       try {
-        [data] = await Promise.all([fetchPromise, scanPromise]);
+        data = await fetchPromise;
       } catch (_err) {
-        // _fetchSimilarResults 已 showToast，此處只重置 animating guard 並提前退出
         this.similarModeAnimating = false;
         return;
       }
 
-      // 3. 填入 API 資料 + 重置鑽入歷史
+      // 4. 填入 API 資料 + 重置鑽入歷史（在 stage mount 前一定已穩定）
       this.similarResults = data.results;
       this.similarQueryVideo = data.query_video;
       this._similarLastDrilledNumber = null;
       this._similarLastDrilledItem = null;    // 56c-fix-v2: reset snapshot
 
-      // 4. Preload 前 8 張封面圖（避免空白幀）
+      // 5. Preload 前 8 張封面圖（避免空白幀）
       await this._preloadImages(data.results.slice(0, 8).map(r => r.cover_url));
 
-      // 5. lightbox content fade-out + stage mount（cards/rails 仍 hidden；dust 開始閃爍）
+      // 6. 等 sparkle 結束（若 PRM / 無 coverEl 已 resolve）
+      await scanPromise;
+
+      // 7. lightbox content fade-out + stage mount（cards/rails 仍 hidden；dust 開始閃爍）
       //    順序鐵律（spec §1 CD-56C-11）：先 mount stage 才能取 stageInner rect。
       if (lightboxEl) lightboxEl.classList.add('similar-mode-active');
       this.similarModeOpen = true;
