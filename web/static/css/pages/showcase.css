@@ -473,6 +473,13 @@
     transition: opacity var(--fluent-duration-fast) var(--fluent-ease-standard);
 }
 
+/* NFO-first: 無影片警告徽章 */
+.footer-default .badge-warning {
+    font-size: 0.75rem;
+    color: var(--status-warning);
+    flex-shrink: 0;
+}
+
 /* 懸停層：標題（絕對定位覆蓋） */
 .footer-hover {
     position: absolute;

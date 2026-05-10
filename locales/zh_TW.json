@@ -571,6 +571,9 @@
       "unknown_title": "未知標題",
       "unknown_size": "未知"
     },
+    "badge": {
+      "no_video_hint": "無對應影片檔"
+    },
     "label": {
       "actor": "演員",
       "maker": "片商",

@@ -29,6 +29,8 @@ logger = get_logger(__name__)
 class VideoInfo:
     """影片資訊資料結構"""
     path: str = ""
+    nfo_path: str = ""
+    number: str = ""
     title: str = ""
     originaltitle: str = ""
     actor: str = ""
@@ -46,10 +48,15 @@ class VideoInfo:
     sample_images: List[str] = field(default_factory=list)
     user_tags: List[str] = field(default_factory=list)
     nfo_thumb: Optional[str] = None  # 暫存用途，不序列化進 DB/cache
+    has_video: bool = True  # 是否有對應影片檔
+    all_videos: List[str] = field(default_factory=list)  # 所有對應的影片檔（CD1/CD2 等）
+    nfo_mtime: int = 0  # NFO 檔修改時間
 
     def to_dict(self) -> dict:
         return {
             "path": self.path,
+            "nfo_path": self.nfo_path,
+            "number": self.number,
             "title": self.title,
             "originaltitle": self.originaltitle,
             "actor": self.actor,
@@ -66,6 +73,9 @@ class VideoInfo:
             "label": self.label,
             "sample_images": self.sample_images,
             "user_tags": self.user_tags,
+            "nfo_mtime": self.nfo_mtime,
+            "has_video": self.has_video,
+            "all_videos": self.all_videos,
         }
 
     @classmethod
@@ -82,6 +92,56 @@ IMAGE_EXTENSIONS = ('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp')
 
 # 預設緩存檔案名稱
 DEFAULT_CACHE_FILE = "gallery_cache.json"
+
+
+def fast_scan_nfo_directory(
+    directory: str,
+    on_skip: Optional[Callable[[str, Exception], None]] = None,
+) -> List[dict]:
+    """快速掃描目錄，回傳所有 .nfo 檔案資訊（NFO-first 掃描用）
+
+    Args:
+        directory: 要掃描的根目錄
+        on_skip: 可選 callback，簽名 (path, exception) -> None
+    """
+    logger.debug(f"[FastScanNFO] 掃描目錄: {directory}")
+    results = []
+
+    def _safe_on_skip(p: str, exc: Exception) -> None:
+        if on_skip is None:
+            return
+        try:
+            on_skip(p, exc)
+        except Exception:
+            pass
+
+    def scan_recursive(path: str):
+        try:
+            with os.scandir(path) as entries:
+                for entry in entries:
+                    try:
+                        if entry.is_dir(follow_symlinks=False):
+                            scan_recursive(entry.path)
+                        elif entry.is_file(follow_symlinks=False):
+                            ext = os.path.splitext(entry.name)[1].lower()
+                            if ext == '.nfo':
+                                try:
+                                    stat = entry.stat()
+                                    results.append({
+                                        'nfo_path': entry.path,
+                                        'mtime': stat.st_mtime,
+                                        'size': stat.st_size,
+                                    })
+                                except OSError as e:
+                                    _safe_on_skip(entry.path, e)
+                    except (OSError, PermissionError) as e:
+                        _safe_on_skip(entry.path, e)
+        except (OSError, PermissionError) as e:
+            _safe_on_skip(path, e)
+
+    scan_recursive(directory)
+    logger.debug(f"[FastScanNFO] 找到 {len(results)} 個 NFO 檔案")
+    return results
 
 
 def fast_scan_directory(
@@ -287,6 +347,109 @@ class VideoScanner:
                 return extractor(match)
 
         return ""
+
+    def _find_matching_videos(self, number: str, folder: Path) -> List[Path]:
+        """根據番號在資料夾內找對應的影片檔
+
+        匹配方式：
+          1. 直接相等：SONE-205.mp4
+          2. 移除 CD/DISC/PART 後輟：SONE-205-CD1.mp4 → SONE-205.mp4
+          3. 移除國碼：ABC-123-C.mp4 → ABC-123.mp4
+        """
+        base = re.sub(r'[-_]?(CD|DISC|PART)\s*\d+$', '', number, flags=re.IGNORECASE)
+        base = re.sub(r'[-_][A-Z]{1,2}$', '', base)
+        base_upper = base.upper()
+
+        videos = []
+        for ext in VIDEO_EXTENSIONS:
+            for vp in folder.glob(f'*{ext}'):
+                stem = vp.stem.upper()
+                if stem == number.upper():
+                    videos.append(vp)
+                elif re.sub(r'[-_]?(CD|DISC|PART)\s*\d+$', '', stem, flags=re.IGNORECASE) == base_upper:
+                    videos.append(vp)
+        return sorted(videos)
+
+    def scan_nfo_entry(self, nfo_path: Path, folder: Path) -> VideoInfo:
+        """用 NFO 檔生成 VideoInfo（NFO-first 掃描核心方法）"""
+        t_start = time.time()
+        number = nfo_path.stem.upper()
+        logger.debug(f"[ScanNFO] {nfo_path.name} 開始")
+
+        info = VideoInfo()
+        info.nfo_path = str(nfo_path)
+        info.number = number
+        info.num = number
+
+        matching_videos = self._find_matching_videos(number, folder)
+        info.all_videos = [str(v) for v in matching_videos]
+        info.has_video = len(matching_videos) > 0
+        info.path = str(matching_videos[0]) if matching_videos else ""
+        info.path = to_file_uri(info.path, self.path_mappings)
+
+        if matching_videos:
+            first_video = Path(matching_videos[0])
+            try:
+                stat = first_video.stat()
+                info.size = stat.st_size
+                info.mtime = int(stat.st_mtime * 10000000 + 116444736000000000)
+            except OSError:
+                pass
+
+        try:
+            nfo_stat = nfo_path.stat()
+            info.nfo_mtime = int(nfo_stat.st_mtime * 10000000 + 116444736000000000)
+        except OSError:
+            pass
+
+        nfo_info = self.parse_nfo(str(nfo_path))
+        if nfo_info:
+            info.title = nfo_info.title
+            info.originaltitle = nfo_info.originaltitle
+            info.actor = nfo_info.actor
+            info.num = nfo_info.num or number
+            info.maker = nfo_info.maker
+            info.date = nfo_info.date
+            info.genre = nfo_info.genre
+            info.director = nfo_info.director
+            info.duration = nfo_info.duration
+            info.series = nfo_info.series
+            info.label = nfo_info.label
+            info.user_tags = nfo_info.user_tags or []
+            info.nfo_thumb = nfo_info.nfo_thumb
+
+        info.maker = self.normalize_maker(info.num, info.maker)
+
+        if matching_videos:
+            img_path = self.find_cover_image(str(matching_videos[0]), nfo_thumb=info.nfo_thumb)
+            if img_path:
+                info.img = to_file_uri(img_path, self.path_mappings)
+        elif info.nfo_thumb:
+            img_path = self._resolve_thumb_path(info.nfo_thumb, folder)
+            if img_path:
+                info.img = to_file_uri(img_path, self.path_mappings)
+
+        if matching_videos:
+            extrafanart_dir = Path(matching_videos[0]).parent / 'extrafanart'
+            if extrafanart_dir.is_dir():
+                try:
+                    for img_path in sorted(extrafanart_dir.glob('fanart*.jpg')):
+                        info.sample_images.append(to_file_uri(str(img_path), self.path_mappings))
+                except OSError as e:
+                    logger.warning(f"  [!] extrafanart 掃描失敗: {extrafanart_dir} - {e}")
+
+        t_end = time.time()
+        logger.debug(f"[ScanNFO] {nfo_path.name} 完成 ({t_end - t_start:.2f}s)")
+
+        return info
+
+    def detect_multi_nfo_folders(self, nfo_entries: List[dict]) -> Dict[Path, List[dict]]:
+        """按 folder 分組，回傳有多個 NFO 的 folder"""
+        from collections import defaultdict
+        by_folder: Dict[Path, List[dict]] = defaultdict(list)
+        for entry in nfo_entries:
+            by_folder[Path(entry['nfo_path']).parent].append(entry)
+        return {f: e for f, e in by_folder.items() if len(e) > 1}
 
     def parse_filename(self, filename: str) -> VideoInfo:
         """依據命名格式解析檔名"""

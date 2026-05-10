@@ -101,6 +101,7 @@ def init_db(db_path: Path = None) -> None:
         CREATE TABLE IF NOT EXISTS videos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             path TEXT UNIQUE NOT NULL,
+            nfo_path TEXT,
             number TEXT,
             title TEXT,
             original_title TEXT,
@@ -118,6 +119,8 @@ def init_db(db_path: Path = None) -> None:
             release_date TEXT,
             mtime REAL,
             nfo_mtime REAL,
+            has_video INTEGER DEFAULT 1,
+            all_videos TEXT DEFAULT '[]',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
@@ -136,6 +139,20 @@ def init_db(db_path: Path = None) -> None:
     cursor.execute("""
         CREATE INDEX IF NOT EXISTS idx_videos_cover_path ON videos(cover_path)
     """)
+
+    # Migration: 新增 NFO-first 欄位（舊 schema 相容）
+    existing_cols = {row[1] for row in cursor.execute("PRAGMA table_info(videos)").fetchall()}
+    if 'nfo_path' not in existing_cols:
+        cursor.execute("ALTER TABLE videos ADD COLUMN nfo_path TEXT")
+    if 'has_video' not in existing_cols:
+        cursor.execute("ALTER TABLE videos ADD COLUMN has_video INTEGER DEFAULT 1")
+    if 'all_videos' not in existing_cols:
+        cursor.execute("ALTER TABLE videos ADD COLUMN all_videos TEXT DEFAULT '[]'")
+
+    # 為 nfo_path 建立唯一索引（NFO-first 的主要查詢 key）
+    existing_indexes = {row[1] for row in cursor.execute("PRAGMA index_list(videos)").fetchall()}
+    if 'idx_videos_nfo_path' not in existing_indexes:
+        cursor.execute("CREATE UNIQUE INDEX idx_videos_nfo_path ON videos(nfo_path)")
 
     # 女優別名表 — 偵測舊 schema (old_name 欄位) 並執行跟鏈遷移
     existing_alias_cols = {
@@ -229,6 +246,7 @@ class Video:
     """影片資料模型"""
     id: Optional[int] = None
     path: str = ""
+    nfo_path: str = ""
     number: Optional[str] = None
     title: str = ""
     original_title: str = ""
@@ -246,6 +264,8 @@ class Video:
     release_date: str = ""
     mtime: float = 0.0
     nfo_mtime: float = 0.0
+    has_video: bool = True
+    all_videos: List[str] = field(default_factory=list)  # JSON
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -270,6 +290,7 @@ class Video:
 
         return cls(
             path=info.path,
+            nfo_path=info.nfo_path or '',
             number=info.num or None,
             title=info.title,
             original_title=info.originaltitle,
@@ -286,7 +307,9 @@ class Video:
             cover_path=info.img,
             release_date=info.date,
             mtime=mtime_unix,
-            nfo_mtime=0.0  # VideoInfo 沒有直接的 nfo_mtime
+            nfo_mtime=0.0,
+            has_video=info.has_video,
+            all_videos=info.all_videos or [],
         )
 
     def to_dict(self) -> dict:
@@ -297,6 +320,7 @@ class Video:
         data['tags'] = json.dumps(self.tags, ensure_ascii=False)
         data['user_tags'] = json.dumps(self.user_tags, ensure_ascii=False)
         data['sample_images'] = json.dumps(self.sample_images, ensure_ascii=False)
+        data['all_videos'] = json.dumps(self.all_videos, ensure_ascii=False)
         # 序列化 datetime
         if self.created_at:
             data['created_at'] = self.created_at.isoformat()
@@ -341,6 +365,17 @@ class Video:
                 data['sample_images'] = []
         else:
             data['sample_images'] = []
+
+        if 'all_videos' in data and data['all_videos']:
+            try:
+                data['all_videos'] = json.loads(data['all_videos'])
+            except json.JSONDecodeError:
+                data['all_videos'] = []
+        else:
+            data['all_videos'] = []
+
+        if 'has_video' in data:
+            data['has_video'] = bool(data['has_video'])
 
         # 反序列化 datetime
         if 'created_at' in data and data['created_at']:
@@ -542,6 +577,26 @@ class VideoRepository:
         try:
             placeholders = ', '.join(['?'] * len(paths))
             cursor.execute(f"DELETE FROM videos WHERE path IN ({placeholders})", paths)
+            deleted_count = cursor.rowcount
+            conn.commit()
+            return deleted_count
+        finally:
+            conn.close()
+
+    def delete_by_folder(self, folder_uri: str) -> int:
+        """刪除指定 folder 下的所有記錄（NFO-first 刪除重建用）
+
+        Args:
+            folder_uri: 資料夾的 file:/// URI
+
+        Returns:
+            int: 刪除數量
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        try:
+            cursor.execute("DELETE FROM videos WHERE path LIKE ?", (folder_uri.rstrip('/') + '/%',))
             deleted_count = cursor.rowcount
             conn.commit()
             return deleted_count

@@ -32,7 +32,7 @@ from typing import Any, Dict, Generator, List, Optional
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import StreamingResponse, HTMLResponse, Response, FileResponse, JSONResponse
 
-from core.gallery_scanner import VideoScanner, fast_scan_directory, VideoInfo, _run_sample_images_cleanup_pass
+from core.gallery_scanner import VideoScanner, fast_scan_directory, fast_scan_nfo_directory, VideoInfo, _run_sample_images_cleanup_pass
 from core.video_extensions import get_proxy_extensions, get_video_extensions
 from core.gallery_generator import HTMLGenerator
 from core.path_utils import normalize_path, to_file_uri, is_path_under_dir, uri_to_fs_path
@@ -168,90 +168,90 @@ def generate_avlist() -> Generator[str, None, None]:
                 continue
 
             try:
-                # 快速掃描取得檔案列表
-                min_size_bytes = min_size_mb * 1024 * 1024
-                video_extensions = get_video_extensions(config)
-                # a5 Codex fix: 收集因 OSError/PermissionError 被跳過的路徑
-                # （含 Windows 長路徑觸發的 OSError — 這些 entry 根本不會進 all_files）
+                # NFO-first: 快速掃描取得所有 .nfo 檔案
                 skipped_paths: list[str] = []
-                all_files = fast_scan_directory(
+                all_nfo_entries = fast_scan_nfo_directory(
                     normalized_dir,
-                    video_extensions,
-                    min_size_bytes,
                     on_skip=lambda p, _e: skipped_paths.append(p),
                 )
 
-                if not all_files and not skipped_paths:
-                    yield _sse_event({"type": "log", "level": "info", "message": f"{directory}: 沒有影片檔案"})
+                # 掃描整個目錄樹找出「有影片但無 NFO」的檔案（用於警告）
+                video_extensions = get_video_extensions(config)
+                video_no_nfo_paths: list[str] = []
+                if not all_nfo_entries and not skipped_paths:
+                    # 完全沒有 NFO → 跳過此目錄
+                    yield _sse_event({"type": "log", "level": "info", "message": f"{directory}: 沒有 NFO 檔案"})
                     continue
 
-                # a5: Windows 長路徑警告（gate 在呼叫端，不在 helper）
-                if sys.platform == 'win32':
-                    long_paths.extend(_collect_long_paths(all_files))
-                    # 把因長度而失敗的 skipped 路徑也納入警告（filter >260 過濾非長路徑失敗）
-                    long_paths.extend(p for p in skipped_paths if len(p) > 260)
+                # 收集所有影片檔（有 NFO 的先不算）
+                def scan_videos_for_warning(path: str):
+                    try:
+                        with os.scandir(path) as entries:
+                            for entry in entries:
+                                if entry.is_dir(follow_symlinks=False):
+                                    scan_videos_for_warning(entry.path)
+                                elif entry.is_file(follow_symlinks=False):
+                                    ext = os.path.splitext(entry.name)[1].lower()
+                                    if ext in video_extensions:
+                                        stem = os.path.splitext(entry.name)[0]
+                                        # 檢查是否有對應的 NFO
+                                        nfo_path = os.path.join(path, stem + '.nfo')
+                                        if not os.path.exists(nfo_path):
+                                            video_no_nfo_paths.append(entry.path)
+                    except (OSError, PermissionError):
+                        pass
+                scan_videos_for_warning(normalized_dir)
 
-                yield _sse_event({"type": "log", "level": "info", "message": f"{directory}: 找到 {len(all_files)} 個檔案"})
-
-                # 取得現有 mtime 索引
-                db_index = repo.get_mtime_index()
-
-                # 比對決定需要處理的檔案
-                needs_scan = []
-                current_paths = set()
-
-                for file_info in all_files:
-                    path = file_info['path']
-                    file_uri = to_file_uri(path, path_mappings)
-                    current_paths.add(file_uri)
-
-                    db_entry = db_index.get(file_uri)
-                    if db_entry is None:
-                        # 新檔案
-                        needs_scan.append(file_info)
-                    elif db_entry[0] != file_info['mtime'] or db_entry[1] != file_info.get('nfo_mtime', 0):
-                        # mtime 或 nfo_mtime 變更
-                        needs_scan.append(file_info)
-
-                # 清理已刪除的檔案（限定在此目錄下）
-                # a5 Codex fix: scan 不完整時（skipped_paths 非空）跳過 deletion 偵測
-                # current_paths 只含本次成功掃到的檔案；若有路徑因 OSError/PermissionError
-                # 被跳過，current_paths 就不是本目錄完整集合，用它做 diff 會把「原本存在
-                # 但這次沒掃到（因失敗）」的 DB 紀錄誤判為已刪除並清掉。
-                # partial scan 只做 insert/update，不能 infer 刪除。
-                if skipped_paths:
+                if video_no_nfo_paths:
                     yield _sse_event({
                         "type": "log",
                         "level": "warn",
-                        "message": f"  {directory}: {len(skipped_paths)} 個路徑讀取失敗，跳過刪除偵測以免誤刪（詳見 debug.log）"
+                        "message": f"  {directory}: {len(video_no_nfo_paths)} 個影片無 NFO，不會顯示在列表中"
                     })
-                else:
-                    normalized_dir_uri = to_file_uri(normalized_dir, path_mappings)
-                    deleted_paths = [p for p in db_index.keys() if is_path_under_dir(p, normalized_dir_uri) and p not in current_paths]
-                    if deleted_paths:
-                        deleted_count = repo.delete_by_paths(deleted_paths)
-                        total_deleted += deleted_count
-                        yield _sse_event({"type": "log", "level": "info", "message": f"  清理 {deleted_count} 個已刪除檔案"})
 
-                # 掃描並寫入需要更新的檔案
+                yield _sse_event({"type": "log", "level": "info", "message": f"{directory}: 找到 {len(all_nfo_entries)} 個 NFO 檔案"})
+
+                # 刪除此目錄的舊記錄（NFO-first: 刪除重建）
+                normalized_dir_uri = to_file_uri(normalized_dir, path_mappings)
+                deleted_count = repo.delete_by_folder(normalized_dir_uri)
+                if deleted_count > 0:
+                    total_deleted += deleted_count
+                    yield _sse_event({"type": "log", "level": "info", "message": f"  刪除舊記錄 {deleted_count} 筆（重建為 NFO-first）"})
+
+                # 偵測多 NFO 資料夾
+                multi_nfo_folders = scanner.detect_multi_nfo_folders(all_nfo_entries)
+                for folder, entries in multi_nfo_folders.items():
+                    yield _sse_event({
+                        "type": "log",
+                        "level": "warn",
+                        "message": f"  資料夾有多個 NFO: {folder} ({len(entries)} 個)"
+                    })
+
+                # 掃描並寫入所有 NFO entries
                 videos_to_upsert = []
-                cache_hits = len(all_files) - len(needs_scan)
-                cache_misses = 0
-
-                for i, file_info in enumerate(needs_scan, 1):
-                    video_name = os.path.basename(file_info['path'])
-                    yield _sse_event({"type": "log", "level": "info", "message": f"  [{i}/{len(needs_scan)}] {video_name}"})
+                for i, nfo_entry in enumerate(all_nfo_entries, 1):
+                    nfo_name = os.path.basename(nfo_entry['nfo_path'])
+                    yield _sse_event({"type": "log", "level": "info", "message": f"  [{i}/{len(all_nfo_entries)}] {nfo_name}"})
 
                     try:
-                        video_info = scanner.scan_file(file_info['path'], None)
+                        nfo_path = Path(nfo_entry['nfo_path'])
+                        folder = nfo_path.parent
+                        video_info = scanner.scan_nfo_entry(nfo_path, folder)
                         video = Video.from_video_info(video_info)
-                        video.mtime = file_info['mtime']
-                        video.nfo_mtime = file_info.get('nfo_mtime', 0)
+                        video.mtime = nfo_entry['mtime']
+                        if video_info.nfo_mtime:
+                            video.nfo_mtime = (video_info.nfo_mtime - 116444736000000000) / 10000000.0
                         videos_to_upsert.append(video)
-                        session_added_paths.append(video.path)
-                        cache_misses += 1
+                        session_added_paths.append(video.nfo_path)
+
+                        if not video_info.has_video:
+                            yield _sse_event({
+                                "type": "log",
+                                "level": "warn",
+                                "message": f"  [{i}] {nfo_name}: 無對應影片檔"
+                            })
                     except Exception as e:
-                        logger.exception("掃描檔案失敗: %s", file_info.get('path', ''))
+                        logger.exception("掃描 NFO 失敗: %s", nfo_entry.get('nfo_path', ''))
                         yield _sse_event({"type": "log", "level": "warn", "message": f"  [{i}] 掃描發生錯誤，已跳過"})
                         scan_error_count += 1
 
@@ -261,12 +261,12 @@ def generate_avlist() -> Generator[str, None, None]:
                     total_inserted += inserted
                     total_updated += updated
 
-                logger.info(f"[Gallery] {directory}: {len(all_files)} 個檔案，快取命中 {cache_hits}")
+                logger.info(f"[Gallery] {directory}: {len(all_nfo_entries)} 個 NFO，新增 {len(videos_to_upsert)}")
 
                 yield _sse_event({
                     "type": "log",
                     "level": "info",
-                    "message": f"{directory}: {len(all_files)} 部 (快取: {cache_hits}, 新增/更新: {cache_misses})"
+                    "message": f"{directory}: {len(all_nfo_entries)} 部 (新增/更新: {len(videos_to_upsert)})"
                 })
             except Exception as e:
                 logger.exception("掃描資料夾失敗: %s", directory)
@@ -291,6 +291,8 @@ def generate_avlist() -> Generator[str, None, None]:
         for v in all_db_videos:
             info = VideoInfo(
                 path=v.path,
+                nfo_path=v.nfo_path or '',
+                number=v.number or '',
                 title=v.title,
                 originaltitle=v.original_title,
                 actor=','.join(v.actresses) if v.actresses else '',
@@ -300,19 +302,21 @@ def generate_avlist() -> Generator[str, None, None]:
                 genre=','.join(v.tags) if v.tags else '',
                 size=v.size_bytes,
                 mtime=int(v.mtime * 10000000 + 116444736000000000) if v.mtime else 0,
-                img=v.cover_path
+                img=v.cover_path,
+                nfo_mtime=int(v.nfo_mtime * 10000000 + 116444736000000000) if v.nfo_mtime else 0,
+                has_video=v.has_video,
+                all_videos=v.all_videos or [],
             )
             all_videos.append(info)
 
-        # 檢查本次新增影片是否需要 NFO 補全（建構相容的 cache 格式）
+        # 檢查本次新增 NFO 是否需要補全（建構相容的 cache 格式）
         session_update = {"count": 0, "paths": []}
         if session_added_paths:
-            # 建立只包含本次新增影片的 session_cache（相容 check_cache_needs_update 格式）
             session_cache = {}
-            for path in session_added_paths:
-                video = repo.get_by_path(path)
+            for nfo_path in session_added_paths:
+                video = repo.get_by_path(nfo_path)
                 if video:
-                    session_cache[path] = {
+                    session_cache[nfo_path] = {
                         'nfo_mtime': video.nfo_mtime,
                         'info': {
                             'title': video.title,

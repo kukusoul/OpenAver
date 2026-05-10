@@ -332,6 +332,9 @@
                     <div class="av-card-preview-footer">
                         <div class="footer-default">
                             <span class="av-num" x-text="video.number"></span>
+                            <span x-show="video.no_video"
+                                  class="badge-warning"
+                                  :title="t('showcase.badge.no_video_hint')">⚠️</span>
                             <span class="av-actress" x-text="video.actresses || t('showcase.grid.unknown_actor')"></span>
                         </div>
                         <div class="footer-hover" x-show="!infoVisible">

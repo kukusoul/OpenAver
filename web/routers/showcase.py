@@ -12,7 +12,7 @@ from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
 from core.database import VideoRepository, get_db_path, init_db
-from core.path_utils import to_file_uri, is_path_under_dir, uri_to_fs_path
+from core.path_utils import to_file_uri, is_path_under_dir, normalize_path, uri_to_fs_path
 from core.logger import get_logger
 from core.config import load_config
 
@@ -23,10 +23,18 @@ router = APIRouter(prefix="/api/showcase", tags=["showcase"])
 
 def _serialize_video(v, path_mappings: dict) -> dict:
     """將 Video ORM 物件序列化為前端 JSON dict（列表端點與單筆端點共用）"""
+    import os
     cover_url = ""
     if v.cover_path:
         local_path = uri_to_fs_path(v.cover_path)
         cover_url = f"/api/gallery/image?path={quote(local_path, safe='')}"
+    elif v.nfo_path:
+        folder = os.path.dirname(uri_to_fs_path(v.nfo_path))
+        for name in ['cover.jpg', 'folder.jpg', 'poster.jpg', 'fanart.jpg']:
+            candidate = os.path.join(folder, name)
+            if os.path.isfile(candidate):
+                cover_url = f"/api/gallery/image?path={quote(candidate, safe='')}"
+                break
 
     sample_urls = []
     for img_uri in (v.sample_images or []):
@@ -35,10 +43,11 @@ def _serialize_video(v, path_mappings: dict) -> dict:
 
     return {
         "path": v.path,                                          # file:/// URI（開啟影片用）
+        "nfo_path": v.nfo_path or '',
+        "number": v.number or '',
         "title": v.title,
         "original_title": v.original_title,
         "actresses": ','.join(v.actresses) if v.actresses else '',  # 逗號分隔字串
-        "number": v.number or '',
         "maker": v.maker,
         "release_date": v.release_date,
         "tags": ','.join(v.tags) if v.tags else '',              # 逗號分隔字串
@@ -53,6 +62,9 @@ def _serialize_video(v, path_mappings: dict) -> dict:
         "user_tags": v.user_tags or [],              # list[str]，空時回空 list
         "has_cover": bool(v.cover_path),             # DB 初判（不做 IO）
         "has_nfo": (v.nfo_mtime or 0) > 0,          # 對齊 41a nfo_mtime 寫入契約，防禦 NULL
+        "has_video": v.has_video,                   # NFO-first: 是否有對應影片檔
+        "all_videos": v.all_videos or [],           # NFO-first: 所有對應影片（CD1/CD2 等）
+        "no_video": not v.has_video,                # 無影片標記（給前端顯示徽章用）
     }
 
 
@@ -65,7 +77,8 @@ def _get_configured_dirs(config: dict) -> tuple[set, dict]:
     configured_dir_uris: set = set()
     for d in directories:
         try:
-            configured_dir_uris.add(to_file_uri(d, path_mappings))
+            normalized = normalize_path(d)
+            configured_dir_uris.add(to_file_uri(normalized, path_mappings))
         except ValueError:
             continue
 

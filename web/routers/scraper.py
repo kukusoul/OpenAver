@@ -191,11 +191,7 @@ def fetch_samples_endpoint(req: FetchSamplesRequest) -> dict:
     proxy_url = search_cfg.get("proxy_url", "")
     primary_source = search_cfg.get("primary_source", "javbus")
 
-    folder_uri_prefix = to_file_uri(os.path.dirname(uri_to_fs_path(req.file_path))) + "/"
-    repo = VideoRepository()
-    count = repo.count_videos_in_folder(folder_uri_prefix)
-    if count > 1:
-        return {"success": False, "error": "multi_video_folder", "count": count, "extrafanart_written": 0}
+    # NFO-first: 移除 multi_video_folder 阻擋（NFO-first 下 CD1/CD2 同屬一個 entry，fetch_samples 已無需阻擋）
 
     try:
         result = fetch_samples_only(
