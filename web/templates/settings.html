@@ -157,8 +157,7 @@
                                 class="btn btn-sm btn-outline"
                                 :title="t('settings.favorite_folder.pick_from_scanner')"
                                 :aria-label="t('settings.favorite_folder.pick_from_scanner')"
-                                @click="showDirDropdown = !showDirDropdown"
-                                @click.outside="showDirDropdown = false">
+                                @click.stop="showDirDropdown = !showDirDropdown">
                                 <i class="bi bi-folder2-open"></i>
                             </button>
                             <!-- Scanner directories dropdown -->
