@@ -153,7 +153,8 @@
       "unrecognized": "無法識別番號: {filename}",
       "not_found": "找不到 {number} 的資料",
       "search_failed": "搜尋失敗",
-      "connection_error": "連線錯誤，請稍後再試"
+      "connection_error": "連線錯誤，請稍後再試",
+      "already_organized": "已整理"
     },
     "toast": {
       "no_searchable_files": "沒有需要搜尋的檔案",
@@ -166,7 +167,9 @@
       "no_valid_files": "無有效影片檔案（無法識別番號）",
       "desktop_only": "此功能需要在桌面應用程式中使用",
       "load_failed": "載入失敗，請重試",
-      "translate_failed": "翻譯失敗，請重試"
+      "translate_failed": "翻譯失敗，請重試",
+      "db_not_synced": "未連動 — 整理完成後不會出現在 Showcase",
+      "db_sync_failed": "DB 同步失敗（檔案已整理但未出現在 Showcase）"
     },
     "duplicate": {
       "title": "檔案重複",
@@ -194,6 +197,12 @@
       "scraper_advanced": "進階刮削設定",
       "gallery_advanced": "進階顯示選項",
       "system": "系統設定"
+    },
+    "favorite_folder": {
+      "pick_from_scanner": "從 Scanner 資料夾選取",
+      "no_directories": "尚未設定 Scanner 資料夾",
+      "linked_text": "✓ 已連動 Scanner",
+      "not_linked_text": "⚠ 未連動 Scanner"
     },
     "search": {
       "uncensored_mode": "無碼模式",
@@ -449,7 +458,7 @@
       "loading": "載入中...",
       "empty": "尚無別名記錄",
       "no_results": "無搜尋建議",
-      "add_alias": "+ 別名",
+      "add_alias": "別名",
       "alias_input_placeholder": "輸入別名",
       "confirm": "確認加入",
       "delete_group_title": "刪除此女優別名組",
@@ -460,6 +469,40 @@
         "body": "確定要刪除「{name}」的整筆別名組嗎？此操作無法復原。",
         "cancel": "取消",
         "confirm": "確認刪除"
+      }
+    },
+    "tag_alias": {
+      "section_title": "Tag 別名管理",
+      "collapse_title": "展開/收起",
+      "new_group_placeholder": "例：メイド / 女僕 / 女傭",
+      "add": "新增",
+      "loading": "載入中...",
+      "empty": "尚無 Tag 別名記錄",
+      "add_alias_aria": "新增別名",
+      "delete_group_title": "刪除此 Tag 別名組",
+      "delete_alias_title": "移除此別名",
+      "error_conflict": "Tag 別名衝突",
+      "delete_group_modal": {
+        "title": "刪除 Tag 別名組",
+        "body": "確定要刪除「{name}」的整筆 Tag 別名組嗎？此操作無法復原。",
+        "cancel": "取消",
+        "confirm": "確認刪除"
+      },
+      "ai_hint": {
+        "icon_title": "AI 整理建議",
+        "tooltip": "💡 讓 AI agent 透過 /api/capabilities 整理比較快"
+      },
+      "toast": {
+        "add_group_success": "已新增 Tag 別名組：{name}",
+        "delete_success": "已刪除：{name}"
+      },
+      "error": {
+        "unknown": "未知錯誤",
+        "load_failed": "載入失敗: {error}",
+        "add_failed": "新增失敗: {error}",
+        "delete_failed": "刪除失敗: {error}",
+        "add_alias_failed": "新增別名失敗: {error}",
+        "remove_failed": "移除失敗: {error}"
       }
     },
     "dirty_modal": {

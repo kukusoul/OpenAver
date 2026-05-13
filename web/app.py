@@ -71,8 +71,11 @@ from web.routers import capabilities as capabilities_router
 from web.routers import collection as collection_router
 from web.routers import actress as actress_router
 from web.routers import actress_alias as actress_alias_router
+from web.routers import tag_alias as tag_alias_router
+from web.routers import tags as tags_router
 from web.routers import notifications as notifications_router
 from web.routers import similar as similar_router
+from web.routers import settings_link as settings_link_router
 app.include_router(search_router.router)
 app.include_router(config_router.router)
 app.include_router(scraper_router.router)
@@ -88,8 +91,11 @@ app.include_router(collection_router.router)
 app.include_router(collection_router.user_tags_router)
 app.include_router(actress_router.router)
 app.include_router(actress_alias_router.router)
+app.include_router(tag_alias_router.router)
+app.include_router(tags_router.router)
 app.include_router(notifications_router.router)
 app.include_router(similar_router.router)
+app.include_router(settings_link_router.router)
 
 
 @app.exception_handler(RequestValidationError)

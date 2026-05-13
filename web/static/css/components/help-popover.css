@@ -57,3 +57,39 @@
     overflow-x: auto;
     font-size: 0.75rem;
 }
+
+/* ── Tag Alias AI Hint Popover ─────────────────────────────────────────────── */
+
+/* 錨點容器：相對定位 + inline-flex 不撐滿整行
+   margin-right: auto 把後續 chevron 推到最右，(?) 保持貼著 title */
+.tag-alias-ai-hint-wrap {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    margin-left: 0.25rem;
+    margin-right: auto;
+}
+
+/* 右側定位：從 icon 右方延伸，垂直置中對齊 icon */
+.tag-alias-ai-hint-popover {
+    top: 50%;
+    left: calc(100% + 0.5rem);
+    right: auto;
+    margin-top: 0;
+    transform: translateY(-50%);
+    width: max-content;
+    max-width: 22rem;    /* 避免單行太寬 */
+    white-space: normal; /* 仍可自動換行 */
+}
+
+/* 窄螢幕（< Tailwind md 768px）改向下展開，對齊 icon 右邊往左 */
+@media (max-width: 768px) {
+    .tag-alias-ai-hint-popover {
+        top: 100%;
+        left: auto;
+        right: 0;                       /* 對齊 icon 右邊，往左展開 */
+        margin-top: 0.5rem;
+        transform: none;
+        max-width: calc(100vw - 2rem);  /* viewport-aware clamp，防止溢出 */
+    }
+}
