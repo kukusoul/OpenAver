@@ -428,6 +428,34 @@ export function searchStateBatch() {
                     const btn = [...rowEl.querySelectorAll('.btn-scrape-single')]
                         .find(b => b.offsetParent !== null);
                     window.SearchAnimations?.playOrganizeSuccess?.(btn, rowEl);
+
+                    // B2：db_sync_status 驅動 GhostFly / toast
+                    var syncStatus = result.db_sync_status;
+                    if (syncStatus === 'synced') {
+                        var toEl = document.getElementById('sidebar-showcase-link');
+                        // fromEl：左側主封面預覽 <img id="resultCover" class="av-card-full-cover-img">
+                        var fromEl = document.getElementById('resultCover') ||
+                                     document.querySelector('.av-card-full-cover-img') ||
+                                     null;
+                        if (fromEl && toEl &&
+                            window.GhostFly &&
+                            typeof window.GhostFly.playToIcon === 'function') {
+                            window.GhostFly.playToIcon(fromEl, toEl, {
+                                coverSrc: fromEl.src,
+                                duration: 0.65,
+                                onComplete: function () {
+                                    toEl.classList.remove('pulse-once');
+                                    void toEl.offsetWidth; // force reflow
+                                    toEl.classList.add('pulse-once');
+                                }
+                            });
+                        }
+                    } else if (syncStatus === 'not_linked') {
+                        this.showToast(window.t('search.toast.db_not_synced'), 'info', 1500);
+                    } else if (syncStatus === 'failed') {
+                        this.showToast(window.t('search.toast.db_sync_failed'), 'warning', 2000);
+                    }
+                    // syncStatus 缺失（舊 API）→ 靜默不飛不 toast（向後相容）
                 });
             } else {
                 console.error('[Scrape]', file.filename, result.error);
