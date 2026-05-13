@@ -55,8 +55,7 @@ export function stateLightbox() {
         _pickerFloatTweens: [],
         _pickerRunId: 0,
         _pickerSSE: null,
-        _pickerTimeoutTimer: null,
-        _pickerBurstFired: false,       // SSE 收齊後一次 burst（防 done/timeout/error 重複觸發）
+        _pickerBurstFired: false,       // SSE 收齊後一次 burst（防 done/error 重複觸發）
 
         // User Tags 狀態 (T4)
         addingLbTag: false,
@@ -762,9 +761,8 @@ export function stateLightbox() {
             const name = this.currentLightboxActress?.name;
             if (!name) return;
 
-            // Tear down any in-flight SSE/timer before starting a new one
+            // Tear down any in-flight SSE before starting a new one
             if (this._pickerSSE) { this._pickerSSE.close(); this._pickerSSE = null; }
-            if (this._pickerTimeoutTimer) { clearTimeout(this._pickerTimeoutTimer); this._pickerTimeoutTimer = null; }
 
             if (this._pickerOpen) {
                 this._resetPicker();
@@ -814,24 +812,16 @@ export function stateLightbox() {
         },
 
         /**
-         * 啟動 EventSource，處理 candidate / done / error 事件 + 3s no-event timeout
+         * 啟動 EventSource，處理 candidate / done / error 事件
+         *
+         * 不設 no-event timeout：本地影片在 UNC / 網路磁碟時，ffmpeg crop 之間的 gap 可能
+         * 超過數秒，誤殺會讓用戶只看到雲端那張。連線中斷由 EventSource onerror 兜底。
          */
         _startPickerSSE(name, runId) {
             const url = `/api/actresses/${encodeURIComponent(name)}/photo-candidates`;
             const sse = new EventSource(url);
             this._pickerSSE = sse;
             this._pickerBurstFired = false;
-
-            const scheduleTimeout = () => {
-                clearTimeout(this._pickerTimeoutTimer);
-                this._pickerTimeoutTimer = setTimeout(() => {
-                    if (this._pickerRunId !== runId) return;
-                    sse.close();
-                    this._pickerLoading = false;
-                    this._burstAllPickerCandidates(runId);
-                }, 3000);
-            };
-            scheduleTimeout();
 
             sse.addEventListener('candidate', (e) => {
                 if (this._pickerRunId !== runId) { sse.close(); return; }
@@ -841,7 +831,6 @@ export function stateLightbox() {
                 } catch (err) {
                     console.warn('[Picker] Failed to parse candidate:', err);
                 }
-                scheduleTimeout();
             });
 
             sse.addEventListener('done', () => {
@@ -849,7 +838,6 @@ export function stateLightbox() {
                 sse.close();
                 this._pickerSSE = null;
                 this._pickerLoading = false;
-                clearTimeout(this._pickerTimeoutTimer);
                 this._burstAllPickerCandidates(runId);
             });
 
@@ -1007,8 +995,6 @@ export function stateLightbox() {
                 this._pickerSSE.close();
                 this._pickerSSE = null;
             }
-            clearTimeout(this._pickerTimeoutTimer);
-            this._pickerTimeoutTimer = null;
             this._resetPicker();
             this._fadeMetadataPanel(false);
         },
@@ -1020,11 +1006,9 @@ export function stateLightbox() {
             if (!this._pickerOpen || this._pickerSelected) return;
             // Codex P2 fix：reverse 動畫期間鎖住 _onPickerSelect 不被觸發
             this._pickerSelected = true;
-            // 鎖住 SSE/timer 不再觸發
+            // 鎖住 SSE 不再觸發
             this._pickerRunId++;
             if (this._pickerSSE) { this._pickerSSE.close(); this._pickerSSE = null; }
-            clearTimeout(this._pickerTimeoutTimer);
-            this._pickerTimeoutTimer = null;
             // 抓現有候選卡，播 reverse 動畫
             const grid = this.$refs?.pickerGrid;
             const cards = grid ? Array.from(grid.querySelectorAll('.picker-candidate-card')) : [];
