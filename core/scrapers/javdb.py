@@ -14,7 +14,8 @@ from .utils import rate_limit, strip_number_prefix
 try:
     from curl_cffi import requests as curl_requests
     CURL_CFFI_AVAILABLE = True
-except ImportError:
+except ImportError as e:
+    logger.warning(f"curl_cffi import 失敗: {e}")
     CURL_CFFI_AVAILABLE = False
 
 
