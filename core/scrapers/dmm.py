@@ -53,6 +53,7 @@ class DMMScraper(BaseScraper):
                 description
                 packageImage { largeUrl }
                 makerReleasedAt
+                saleStartDate
                 duration
                 actresses { name }
                 directors { name }
@@ -87,6 +88,27 @@ class DMMScraper(BaseScraper):
         }
     """
 
+    SEARCH_DETAIL_QUERY = """
+        query AvSearch($limit: Int!, $offset: Int!, $sort: ContentSearchPPVSort!, $queryWord: String) {
+            legacySearchPPV(limit: $limit, offset: $offset, sort: $sort, queryWord: $queryWord) {
+                result {
+                    contents {
+                        id
+                        title
+                        packageImage { largeUrl }
+                        actresses { name }
+                        maker { name }
+                        makerReleasedAt
+                        saleStartDate
+                        directors { name }
+                        duration
+                        series { name }
+                    }
+                }
+            }
+        }
+    """
+
     # 獨立 probe query — 與 DETAIL_QUERY 分離，失敗不影響主流程
     GENRES_PROBE_QUERY = """
         query ProbeGenres($id: ID!) {
@@ -108,7 +130,22 @@ class DMMScraper(BaseScraper):
     # GraphQL schema error patterns — 不同實作回傳的訊息格式不同
     SCHEMA_ERROR_PATTERNS = ('Unknown field', 'Cannot query field')
 
-    def __init__(self, config: Optional[ScraperConfig] = None):
+    def __init__(
+        self,
+        config: Optional[ScraperConfig] = None,
+        *,
+        proxy_url: str = "",
+        delay: float = 0.3,
+        user_agent: str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        timeout: int = 15,
+    ):
+        if config is None:
+            config = ScraperConfig(
+                proxy_url=proxy_url,
+                delay=delay,
+                user_agent=user_agent,
+                timeout=timeout,
+            )
         super().__init__(config)
         self._session = requests.Session()
         self._session.headers.update({
@@ -338,26 +375,26 @@ class DMMScraper(BaseScraper):
             return match.group(1).lower(), match.group(2)
         return "", ""
 
-    def _convert_with_hints(self, number: str) -> str:
+    def _convert_with_hints(self, number: str) -> list[str]:
         """
-        用前綴映射轉換番號
+        用前綴映射推導多個 content_id 候選。
 
         Examples:
-            SONE-205 + hints={} → sone00205
-            STARS-804 + hints={"stars": "1"} → 1stars00804
+            SONE-205 + hints={} → ["sone00205", "sone205"]
+            STARS-804 + hints={"stars": "1"} → ["1stars00804", "1stars804"]
         """
         prefix, num = self._parse_number(number)
         if not prefix or not num:
-            return ""
-
-        # 數字補零到 5 位
-        num_padded = num.zfill(5)
-
-        # 查前綴映射
+            return []
         hints = self._load_prefix_hints()
         dmm_prefix = hints.get(prefix, "")
-
-        return f"{dmm_prefix}{prefix}{num_padded}"
+        candidates = []
+        candidates.append(f"{dmm_prefix}{prefix}{num.zfill(5)}")
+        candidates.append(f"{dmm_prefix}{prefix}{num}")
+        if len(num) < 3:
+            candidates.append(f"{dmm_prefix}{prefix}{num.zfill(3)}")
+        seen = set()
+        return [c for c in candidates if not (c in seen or seen.add(c))]
 
     def _learn_prefix(self, number: str, content_id: str):
         """
@@ -375,17 +412,17 @@ class DMMScraper(BaseScraper):
         # 例如：1stars00804
         # 找出 dmm_prefix
         idx = content_id.lower().find(prefix)
-        if idx > 0:
+        if idx >= 0:
             dmm_prefix = content_id[:idx]
-            # 儲存學習到的映射
-            self._save_prefix_hint(prefix, dmm_prefix)
+            if dmm_prefix:
+                self._save_prefix_hint(prefix, dmm_prefix)
 
     def _content_id_to_number(self, content_id: str) -> str:
         """
         從 content_id 推導標準番號格式。
 
         DMM content_id 固定 5 位數字零補位（zfill(5)）。
-        反向推導時 strip leading zeros 但保留至少 3 位數字。
+        反向推導時 strip leading zeros 但保留至少 2 位數字。
 
         Examples:
             sone00205   → SONE-205
@@ -398,11 +435,15 @@ class DMMScraper(BaseScraper):
         if m:
             alpha = m.group(2).upper()
             num = m.group(3)
-            # Strip leading zeros but keep at least 3 digits
             stripped = num.lstrip('0') or '0'
             if len(stripped) < 3 and len(num) >= 3:
                 stripped = num[-3:]
+            elif len(stripped) < 2 and len(num) >= 2:
+                stripped = num[-2:]
             return f"{alpha}-{stripped}"
+        m2 = re.match(r'^[a-z0-9]+_([a-z]+)(\d+)$', content_id.lower())
+        if m2:
+            return f"{m2.group(1).upper()}-{m2.group(2)}"
         return content_id
 
     def _search_content_id(self, number: str) -> Optional[str]:
@@ -481,7 +522,7 @@ class DMMScraper(BaseScraper):
                 for a in item.get('actresses', [])
             ]
 
-            release_date = item.get('makerReleasedAt', '')
+            release_date = (item.get('makerReleasedAt') or item.get('saleStartDate') or '')
             if release_date and 'T' in release_date:
                 release_date = release_date.split('T')[0]
 
@@ -501,8 +542,10 @@ class DMMScraper(BaseScraper):
 
             series = (item.get('series') or {}).get('name', '')
 
+            number = item.get('makerContentId') or self._content_id_to_number(content_id)
+
             video = Video(
-                number=item.get('makerContentId', ''),
+                number=number,
                 title=item.get('title', ''),
                 actresses=actresses,
                 date=release_date,
@@ -525,6 +568,303 @@ class DMMScraper(BaseScraper):
         except Exception:
             return None
 
+    # ========== helper: 搜尋結果驗證與建構 ==========
+
+    def _result_matches_number(self, result: Video, number: str) -> bool:
+        """用 DMM API 回傳的實際 product number 比對輸入番號"""
+        _, input_num = self._parse_number(number)
+        _, result_num = self._parse_number(result.number)
+        if not input_num or not result_num:
+            return True
+        return input_num.lstrip('0') == result_num.lstrip('0')
+
+    def _content_id_matches_number(self, content_id: str, number: str) -> bool:
+        _, input_num = self._parse_number(number)
+        if not input_num:
+            return True
+        m = re.search(r'(\d+)$', content_id)
+        if not m:
+            return True
+        return m.group(1).lstrip('0') == input_num.lstrip('0')
+
+    def _build_video_from_search_data(self, content_id: str, search_data: dict, number_hint: str = '') -> Optional[Video]:
+        try:
+            number = number_hint if number_hint else self._content_id_to_number(content_id)
+            actresses = [
+                Actress(name=a['name'])
+                for a in (search_data.get('actresses') or [])
+                if a.get('name')
+            ]
+            date = (search_data.get('makerReleasedAt') or search_data.get('saleStartDate') or '')
+            if date and 'T' in date:
+                date = date.split('T')[0]
+            directors_list = search_data.get('directors') or []
+            director = directors_list[0]['name'] if directors_list else ''
+            raw_duration = search_data.get('duration')
+            duration = raw_duration // 60 if raw_duration is not None else None
+            series = (search_data.get('series') or {}).get('name', '')
+
+            video = Video(
+                number=number,
+                title=search_data.get('title', ''),
+                actresses=actresses,
+                maker=(search_data.get('maker') or {}).get('name', ''),
+                cover_url=(search_data.get('packageImage') or {}).get('largeUrl', ''),
+                date=date,
+                director=director,
+                duration=duration,
+                series=series,
+                source=self.source_name,
+                detail_url=f"https://www.dmm.co.jp/digital/videoa/-/detail/=/cid={content_id}/",
+            )
+            return video
+        except Exception:
+            return None
+
+    def _search_content_with_data(self, number: str) -> Optional[tuple[str, dict]]:
+        query_word = number.upper().replace('-', '')
+        prefix, num = self._parse_number(number)
+        if not prefix:
+            return None
+
+        for query_str in [self.SEARCH_DETAIL_QUERY, self.SEARCH_LIST_QUERY]:
+            try:
+                payload = {
+                    'query': query_str,
+                    'variables': {
+                        'limit': 5,
+                        'offset': 0,
+                        'sort': 'RELEASE_DATE',
+                        'queryWord': query_word
+                    }
+                }
+                resp = self._session.post(self.API_URL, json=payload, timeout=10)
+
+                if resp.status_code != 200:
+                    continue
+
+                data = resp.json()
+                errors = data.get('errors', [])
+                if errors and any(
+                    any(pat in (e.get('message', '') or '') for pat in self.SCHEMA_ERROR_PATTERNS)
+                    for e in errors
+                ):
+                    continue
+
+                if not data.get('data') or not data['data'].get('legacySearchPPV'):
+                    continue
+
+                contents = data['data']['legacySearchPPV']['result']['contents']
+                if not contents:
+                    continue
+
+                for content in contents:
+                    cid = content['id']
+                    if prefix in cid.lower():
+                        m = re.search(r'(\d+)$', cid)
+                        if m and m.group(1).lstrip('0') == num.lstrip('0'):
+                            return cid, content
+
+                continue
+
+            except Exception:
+                continue
+
+        return None
+
+    # ========== HTML fallback ==========
+
+    def _html_get(self, url: str) -> Optional[requests.Response]:
+        try:
+            resp = self._session.get(
+                url,
+                headers={
+                    'User-Agent': self.config.user_agent,
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                },
+                timeout=self.config.timeout,
+                cookies={"age_check_done": "1"},
+            )
+            if resp.status_code == 200:
+                return resp
+            return None
+        except Exception:
+            return None
+
+    def _search_content_id_from_html(self, number: str) -> Optional[str]:
+        for query in [number.lower().replace('-', ''), number.lower()]:
+            url = f"https://video.dmm.co.jp/list/?key={query}"
+            resp = self._html_get(url)
+            if resp is None:
+                continue
+
+            # Check if redirected to a detail page
+            m_url = re.search(r'av/content/\?id=([a-zA-Z0-9_]+)', resp.url)
+            if m_url:
+                return m_url.group(1)
+
+            m = re.search(r'av/content/\?id=([a-zA-Z0-9_]+)', resp.text)
+            if m:
+                return m.group(1)
+
+            for m_json in re.finditer(r'"(?:contentId|productId|cid)"\s*:\s*"([^"]+)"', resp.text):
+                cid = m_json.group(1)
+                if re.search(r'[a-z]', cid):
+                    return cid
+
+        return None
+
+    @staticmethod
+    def _next_data_search(obj: object, *keys: str) -> object:
+        for key in keys:
+            if isinstance(obj, dict) and key in obj:
+                obj = obj[key]
+            else:
+                return None
+        return obj
+
+    @staticmethod
+    def _next_data_find(obj: object, target_key: str) -> list[object]:
+        results = []
+        if isinstance(obj, dict):
+            for k, v in obj.items():
+                if k == target_key:
+                    results.append(v)
+                else:
+                    results.extend(DMMScraper._next_data_find(v, target_key))
+        elif isinstance(obj, list):
+            for item in obj:
+                results.extend(DMMScraper._next_data_find(item, target_key))
+        return results
+
+    def _fetch_from_video_html(self, content_id: str) -> Optional[Video]:
+        import html as _html
+
+        url = f"https://video.dmm.co.jp/av/content/?id={content_id}"
+        resp = self._html_get(url)
+        if resp is None or resp.status_code != 200:
+            old_url = f"https://www.dmm.co.jp/digital/videoa/-/detail/=/cid={content_id}/"
+            resp = self._html_get(old_url)
+            if resp is None or resp.status_code != 200:
+                return None
+            url = old_url
+
+        try:
+            title = ''
+            cover_url = ''
+            tags = []
+            actresses = []
+            text = resp.text
+
+            m_next = re.search(
+                r'<script[^>]*id=["\']__NEXT_DATA__["\'][^>]*>(.*?)</script>',
+                text, re.DOTALL
+            )
+            if m_next:
+                try:
+                    next_data = json.loads(_html.unescape(m_next.group(1).strip()))
+                    page_props = self._next_data_search(next_data, 'props', 'pageProps')
+                    if page_props:
+                        candidates = self._next_data_find(page_props, 'title')
+                        if candidates:
+                            title = str(candidates[0])
+                        candidates = self._next_data_find(page_props, 'coverUrl')
+                        if not candidates:
+                            candidates = self._next_data_find(page_props, 'cover')
+                        if not candidates:
+                            candidates = self._next_data_find(page_props, 'packageImage')
+                        if candidates:
+                            cv = candidates[0]
+                            if isinstance(cv, str):
+                                cover_url = cv
+                            elif isinstance(cv, dict):
+                                cover_url = cv.get('largeUrl', cv.get('url', ''))
+                        candidates = self._next_data_find(page_props, 'actresses')
+                        if not candidates:
+                            candidates = self._next_data_find(page_props, 'actors')
+                        if candidates:
+                            for a in (candidates[0] if isinstance(candidates[0], list) else [candidates[0]]):
+                                if isinstance(a, dict):
+                                    actresses.append(Actress(name=a.get('name', '')))
+                                elif isinstance(a, str):
+                                    actresses.append(Actress(name=a))
+                        candidates = self._next_data_find(page_props, 'genres')
+                        if not candidates:
+                            candidates = self._next_data_find(page_props, 'tags')
+                        if candidates:
+                            g = candidates[0]
+                            if isinstance(g, list):
+                                for item in g:
+                                    if isinstance(item, dict):
+                                        tags.append(item.get('name', ''))
+                                    elif isinstance(item, str):
+                                        tags.append(item)
+                            elif isinstance(g, str):
+                                tags = [g]
+                except (json.JSONDecodeError, Exception):
+                    pass
+
+            if not title:
+                for m_ld in re.finditer(
+                    r'<script[^>]*type=["\']application/ld\+json["\'][^>]*>(.*?)</script>',
+                    text, re.DOTALL
+                ):
+                    raw = _html.unescape(m_ld.group(1).strip())
+                    try:
+                        ld = json.loads(raw)
+                    except json.JSONDecodeError:
+                        continue
+                    for item in (ld if isinstance(ld, list) else [ld]):
+                        if isinstance(item, dict) and item.get('@type') in ('VideoObject', 'Product'):
+                            title = item.get('name', '') or ''
+                            image = item.get('image') or ''
+                            if isinstance(image, str):
+                                cover_url = image
+                            elif isinstance(image, dict):
+                                cover_url = image.get('url', '')
+                            genre = item.get('genre') or []
+                            tags = genre if isinstance(genre, list) else [genre] if genre else []
+                            break
+                    if title:
+                        break
+
+            if not title:
+                m_t = re.search(r'<meta[^>]+property=["\']og:title["\'][^>]+content=["\']([^"\']+)["\']', text)
+                if m_t:
+                    title = _html.unescape(m_t.group(1))
+                m_c = re.search(r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)["\']', text)
+                if m_c:
+                    cover_url = m_c.group(1)
+
+            if not title:
+                m_t = re.search(r'<title>([^<]+)</title>', text)
+                if m_t:
+                    title = _html.unescape(m_t.group(1).strip())
+
+            if not title:
+                m_t = re.search(r'<meta[^>]+name=["\']description["\'][^>]+content=["\']([^"\']+)["\']', text)
+                if m_t:
+                    title = _html.unescape(m_t.group(1))
+
+            if not title and not cover_url:
+                return None
+
+            number = self._content_id_to_number(content_id)
+
+            video = Video(
+                number=number,
+                title=title,
+                actresses=actresses,
+                cover_url=cover_url,
+                tags=tags,
+                source=self.source_name,
+                detail_url=url,
+            )
+            return video
+
+        except Exception:
+            return None
+
     # ========== 主要搜尋方法 ==========
 
     def search(self, number: str) -> Optional[Video]:
@@ -535,7 +875,7 @@ class DMMScraper(BaseScraper):
         1. 查快取 → 有就直接用（最快）
         2. 用前綴映射轉換 → 嘗試查詢（快）
         3. 搜索 API 發現 → 學習前綴（慢，但只需一次）
-        4. 都失敗 → 返回 None
+        4. HTML 頁面 fallback（最後手段）
 
         Args:
             number: 番號（如 SONE-205）
@@ -557,29 +897,50 @@ class DMMScraper(BaseScraper):
             cached_cid = cache[number_upper]
             result = self._fetch_by_id(cached_cid)
             if result:
-                rate_limit(self.config.delay)
-                return result
+                if self._result_matches_number(result, number):
+                    rate_limit(self.config.delay)
+                    return result
+                cache.pop(number_upper, None)
+                self._save_json(CACHE_FILE, cache)
 
         # 2. 用前綴映射轉換（快）
-        converted_cid = self._convert_with_hints(number)
-        if converted_cid:
-            result = self._fetch_by_id(converted_cid)
-            if result:
-                self._save_cache(number, converted_cid)
+        for cid in self._convert_with_hints(number):
+            if not cid:
+                continue
+            result = self._fetch_by_id(cid)
+            if not result:
+                result = self._fetch_from_video_html(cid)
+            if result and self._result_matches_number(result, number):
+                self._save_cache(number, cid)
+                self._learn_prefix(number, cid)
                 rate_limit(self.config.delay)
                 return result
 
         # 3. 搜索 API 發現（慢，但會學習）
-        discovered_cid = self._search_content_id(number)
-        if discovered_cid:
+        search_result = self._search_content_with_data(number)
+        discovered_cid = search_result[0] if search_result else None
+        if discovered_cid and self._content_id_matches_number(discovered_cid, number):
             result = self._fetch_by_id(discovered_cid)
-            if result:
+            if not result and search_result:
+                result = self._build_video_from_search_data(discovered_cid, search_result[1], number_hint=number)
+            if result and self._result_matches_number(result, number):
                 self._save_cache(number, discovered_cid)
-                self._learn_prefix(number, discovered_cid)  # 學習新前綴
+                self._learn_prefix(number, discovered_cid)
                 rate_limit(self.config.delay)
                 return result
 
-        # 4. 完全失敗
+        # 4. HTML fallback
+        html_cid = self._search_content_id_from_html(number)
+        if html_cid and self._content_id_matches_number(html_cid, number):
+            result = self._fetch_by_id(html_cid)
+            if not result:
+                result = self._fetch_from_video_html(html_cid)
+            if result and self._result_matches_number(result, number):
+                self._save_cache(number, html_cid)
+                self._learn_prefix(number, html_cid)
+                rate_limit(self.config.delay)
+                return result
+
         return None
 
     def search_by_keyword_with_ids(self, keyword: str, limit: int = 20, offset: int = 0) -> list[tuple[str, Video]]:

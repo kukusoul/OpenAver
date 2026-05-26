@@ -226,11 +226,13 @@ class TestDMMScraperIntegration:
         detail_resp = _make_mock_resp(status_code=200, json_data=DMM_DETAIL_RESPONSE)
 
         with patch.object(dmm_scraper._session, 'post', side_effect=[
-            _make_mock_resp(status_code=404),  # _convert_with_hints → _fetch_by_id → 404
-            search_resp,                        # _search_content_id
-            detail_resp,                        # _fetch_by_id(discovered_cid)
+            _make_mock_resp(status_code=404),  # _fetch_by_id(sone00205) → 404
+            _make_mock_resp(status_code=404),  # _fetch_by_id(sone205) → 404
+            search_resp,                        # _search_content_with_data → search_resp
+            detail_resp,                        # _fetch_by_id(discovered_cid) → detail_resp
         ]), \
              patch.object(dmm_scraper, '_fetch_tags_from_html', return_value=[]), \
+             patch.object(dmm_scraper, '_fetch_from_video_html', return_value=None), \
              patch('core.scrapers.dmm.rate_limit'):
             video = dmm_scraper.search("SONE-205")
 
