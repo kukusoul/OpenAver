@@ -415,27 +415,48 @@
                         <div class="settings-sources-batchbar-right">
                             <button type="button"
                                     class="settings-sources-mini-btn"
-                                    @click="typeof enableAllToCap === 'function' && enableAllToCap()">
+                                    @click="enableAllToCap()">
                                 <i class="bi bi-check2-all"></i> {{ t('settings.sources.select_all') }}
                             </button>
                         </div>
                     </div>
 
-                    <!-- Flat pill row — 61c-2 populates `sources`; B1 renders 0 pills -->
+                    <!-- Flat pill row — 61c-2 wires `sources` (Active Row order). -->
                     <div class="settings-sources-pills" role="listbox" aria-label="Active Row">
-                        <template x-for="s in sources" :key="s.id">
+                        <template x-for="s in activeRowSources" :key="s.id">
                             <div class="settings-sources-pill"
                                  :class="{
-                                     'settings-sources-pill--uncensored': !s.is_censored,
+                                     'settings-sources-pill--uncensored': isUncensored(s),
                                      'settings-sources-pill--manual-only': s.manual_only,
+                                     'is-disconnected': isDisconnectedMetatube(s),
+                                     'is-grabbed': _grabbedId === s.id,
+                                     dragging: draggingId === s.id,
+                                     'drop-target': dropTargetId === s.id,
                                  }"
-                                 :data-enabled="s.enabled ? 'true' : 'false'"
+                                 :data-enabled="pillVisualEnabled(s) ? 'true' : 'false'"
                                  role="option"
                                  :aria-selected="s.enabled ? 'true' : 'false'"
+                                 :aria-grabbed="_grabbedId === s.id ? 'true' : 'false'"
                                  tabindex="0"
-                                 @click="typeof clickActiveRowPill === 'function' && clickActiveRowPill(s)">
+                                 :draggable="isDraggable(s) ? 'true' : 'false'"
+                                 @click="clickActiveRowPill(s)"
+                                 @keydown.enter.prevent="clickActiveRowPill(s)"
+                                 @keydown.space.prevent="onPillSpace(s)"
+                                 @keydown.arrow-left.prevent="onPillArrow(s, -1)"
+                                 @keydown.arrow-up.prevent="onPillArrow(s, -1)"
+                                 @keydown.arrow-right.prevent="onPillArrow(s, 1)"
+                                 @keydown.arrow-down.prevent="onPillArrow(s, 1)"
+                                 @keydown.escape="onPillEscape()"
+                                 @dragstart="onDragStart($event, s.id)"
+                                 @dragend="onDragEnd()"
+                                 @dragover.prevent="onDragOver($event, s.id)"
+                                 @dragleave="dropTargetId = null"
+                                 @drop.prevent="onDrop($event, s.id)">
                                 <i class="bi bi-slash-circle slash-icn" aria-hidden="true"></i>
                                 <span class="pill-name" x-text="s.display_name"></span>
+                                <span class="settings-sources-pill-mt-badge"
+                                      x-show="isDisconnectedMetatube(s)"
+                                      aria-hidden="true">m</span>
                                 <span class="settings-sources-pill-badge" x-show="s.manual_only">
                                     {{ t('settings.sources.manual_only_badge') }}
                                 </span>

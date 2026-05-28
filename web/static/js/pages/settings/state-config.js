@@ -1,3 +1,6 @@
+// 同時啟用來源數上限（前端鏡像；後端真理來源 core/source_config.py:MAX_ENABLED_SOURCES）
+const MAX_ENABLED_SOURCES = 10;
+
 export function stateConfig() {
     return {
         // ===== Form State =====
@@ -57,14 +60,24 @@ export function stateConfig() {
         pendingNavigationUrl: '',
         _configLoading: true,  // 初始 true，loadConfig 完成後 false
 
-        // 61c-1 inert stubs — replaced by real state/computed in 61c-2 (sources/enabledCount),
-        // 61c-3 (uncensoredMode getter/setter), 61c-4 (metatubeEnabled). Declared so the
-        // sources-panel bindings don't throw ReferenceError before those tasks land.
+        // ===== Sources (61c-2) =====
+        // 單一 unified scope：sources[] 容 builtin + metatube + manual_only 一個陣列，
+        // cap 天然全域（design §0 + §9 B1 row）。由 loadConfig() 填、saveConfig() 序列化回。
         sources: [],
-        enabledCount: 0,
+        MAX_ENABLED_SOURCES,
+
+        // 拖曳 / 鍵盤 sortable transient state
+        draggingId: null,
+        dropTargetId: null,
+        _grabbedId: null,        // 鍵盤 sortable 拾起中的 pill id
+        showCapAlert: false,     // _flashCapAlert() 觸發 + auto-dismiss
+        _capAlertTimer: null,
+
+        // 61c-1 inert stubs — still owned by later tasks. Declared so the
+        // sources-panel bindings don't throw ReferenceError before those tasks land.
+        // uncensoredMode → 61c-3 變 getter/setter；metatubeEnabled → 61c-4。本 task 不動。
         uncensoredMode: false,
         metatubeEnabled: false,
-        showCapAlert: false,
 
         // ===== Constants =====
 
@@ -166,6 +179,55 @@ export function stateConfig() {
 
             const folder = folderPreview ? folderPreview + '/' : '';
             return folder + filenamePreview + '.mp4';
+        },
+
+        // ===== Sources computed (61c-2) =====
+        // Cap basis（counter + promote/toggle 守衛）。**不看 available**（design §2.2 —
+        // 斷線 metatube 仍占槽，避免重連後 cap 暴衝）。manual_only 不計入。
+        get enabledCount() {
+            return this.sources.filter(s => s.enabled && !s.manual_only).length;
+        },
+
+        // Zone A render 順序：builtin + enabled metatube 保留 GLOBAL 順序（一條 flat
+        // orderable run）；manual_only（JavLibrary）永遠 append 末尾、固定不可拖。
+        get activeRowSources() {
+            const inRow = this.sources.filter(
+                s => s.type === 'builtin' || (s.type === 'metatube' && s.enabled)
+            );
+            const manualOnly = this.sources.filter(s => s.type === 'manual_only');
+            return [...inRow, ...manualOnly];
+        },
+
+        // Zone B Parts Bin：只有 enabled=false 的 metatube，依 order 排序（spread COPY，
+        // 不 in-place mutate reactive 陣列）。B1 無 metatube → 空。
+        get partsBinSources() {
+            return this.sources
+                .filter(s => s.type === 'metatube' && !s.enabled)
+                .slice()
+                .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+        },
+
+        // 是否無碼來源（供膠囊有碼/無碼配色）。讀後端 computed is_censored 欄位。
+        isUncensored(src) {
+            return !src.is_censored;
+        },
+
+        // promote 可行性：未啟用、非 manual_only、cap 未滿。
+        canPromote(src) {
+            return !!src && !src.enabled && !src.manual_only
+                && this.enabledCount < MAX_ENABLED_SOURCES;
+        },
+
+        // metatube 已啟用但不可用 = 「斷線」（灰化 + 刪除線 + m 角標 + click toast；§2.4 / EC-9）。
+        isDisconnectedMetatube(src) {
+            return src.type === 'metatube' && src.enabled && !src.available;
+        },
+
+        // data-enabled="false"（刪除線/slash/dashed）視覺：manual_only → muted；斷線 → false。
+        pillVisualEnabled(src) {
+            if (src.type === 'manual_only') return false;
+            if (this.isDisconnectedMetatube(src)) return false;
+            return src.enabled;
         },
 
         /**
@@ -361,6 +423,27 @@ export function stateConfig() {
                     this.form.defaultPage = defaultPage;
                     // sidebar_collapsed 已移除（由 Alpine $persist + localStorage 驅動）
 
+                    // Sources（61c-2）：讀 config.sources 段填入 unified scope。
+                    // FIELD-NAME TRAP：後端用 display_name_key / display_name_raw；
+                    // 前端 pill 統一用 display_name（builtin→key，其他→raw）。
+                    // is_censored 是後端 computed，直接讀。依 order 排序。
+                    this.sources = (config.sources || [])
+                        .map(s => ({
+                            id: s.id,
+                            type: s.type,
+                            enabled: s.enabled,
+                            order: s.order,
+                            manual_only: s.manual_only,
+                            is_beta: s.is_beta,
+                            is_censored: s.is_censored,
+                            config: s.config || {},
+                            display_name_key: s.display_name_key || '',
+                            display_name: s.type === 'metatube'
+                                ? (s.display_name_raw || '')
+                                : (s.display_name_key || ''),
+                        }))
+                        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
                     // 建立初始快照（dirty check 基準）— 必須在解鎖前建立
                     this.savedState = JSON.parse(JSON.stringify(this.form));
                     this.savedOpenaiUseCustomModel = this.openaiUseCustomModel;
@@ -470,6 +553,20 @@ export function stateConfig() {
                     // theme / sidebar_collapsed 由 base.html $watch 即時同步，此處僅隨整體設定一併寫入
                 };
 
+                // 更新 sources（61c-2）：序列化回後端 SourceConfig 欄位形狀。
+                // order 重算 = 當前陣列 index。is_censored 是後端 computed，**不回送**。
+                config.sources = this.sources.map((s, i) => ({
+                    id: s.id,
+                    type: s.type,
+                    display_name_key: s.type === 'builtin' ? s.display_name : (s.display_name_key || ''),
+                    display_name_raw: s.type === 'metatube' ? s.display_name : '',
+                    enabled: s.enabled,
+                    order: i,
+                    config: s.config || {},
+                    is_beta: s.is_beta,
+                    manual_only: s.manual_only,
+                }));
+
                 const resp = await fetch('/api/config', {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
@@ -578,6 +675,169 @@ export function stateConfig() {
 
         removeSuffix(idx) {
             this.form.suffixKeywords.splice(idx, 1);
+        },
+
+        // ═══════════════════════════════════════════════════════════════
+        // Sources — Active Row 互動（61c-2，移植自 POC settingsMockPage）
+        // ═══════════════════════════════════════════════════════════════
+
+        // Dispatcher：依 type / 狀態分流。B1 只命中 builtin-toggle 分支。
+        clickActiveRowPill(src) {
+            if (!src) return;
+            if (src.type === 'manual_only') { this.clickJavLibrary(); return; }
+            if (this.isDisconnectedMetatube(src)) {
+                this.clickDisconnectedMetatube(src.display_name);
+                return;
+            }
+            if (src.type === 'builtin') { this.toggleBuiltin(src.id); return; }
+            if (src.type === 'metatube') { this.demoteMetatube(src.id); return; }
+        },
+
+        // Builtin：原地翻轉 enabled（膠囊留 Active Row、停用 = inline 刪除線）。
+        // cap 滿且要 enable → _flashCapAlert() return。翻轉後 saveConfig 即時 persist。
+        toggleBuiltin(id) {
+            const s = this.sources.find(x => x.id === id);
+            if (!s || s.type !== 'builtin') return;
+            if (!s.enabled && this.enabledCount >= MAX_ENABLED_SOURCES) {
+                this._flashCapAlert();
+                return;
+            }
+            s.enabled = !s.enabled;
+            this.saveConfig();
+        },
+
+        // Promote：Parts Bin → Active Row（enabled=true）。cap 檢查。splice 移到陣列末尾
+        // → 落在 metatube run 末、JavLibrary 前（EC-3）。
+        promoteMetatube(id) {
+            const s = this.sources.find(x => x.id === id);
+            if (!s || s.type !== 'metatube' || s.enabled) return;
+            if (this.enabledCount >= MAX_ENABLED_SOURCES) {
+                this._flashCapAlert();
+                return;
+            }
+            s.enabled = true;
+            const idx = this.sources.findIndex(x => x.id === id);
+            if (idx >= 0) {
+                const [moved] = this.sources.splice(idx, 1);
+                this.sources.push(moved);
+            }
+            this.saveConfig();
+        },
+
+        // Demote：Active Row → Parts Bin（enabled=false）。
+        demoteMetatube(id) {
+            const s = this.sources.find(x => x.id === id);
+            if (!s || s.type !== 'metatube') return;
+            s.enabled = false;
+            this.saveConfig();
+        },
+
+        // 斷線 metatube 點擊：toast 提示重連，無 state mutation（EC-9）。
+        clickDisconnectedMetatube(_name) {
+            this.showToast('Metatube 已中斷，請至下方 Section 3 重新連線', 'warning');
+        },
+
+        // Manual-Only（JavLibrary）：Active Row 內 no-op（[BETA] badge 取代 toggle，固定末尾）。
+        clickJavLibrary() {
+            // 進階搜尋專用 — no-op。
+        },
+
+        // 全開：builtin 先（依序），到 cap 即 break；不碰 metatube / manual_only。
+        enableAllToCap() {
+            for (const s of this.sources) {
+                if (s.manual_only || s.enabled) continue;
+                if (s.type === 'metatube') continue;  // builtin first
+                if (this.enabledCount >= MAX_ENABLED_SOURCES) break;
+                s.enabled = true;
+            }
+            this.saveConfig();
+        },
+
+        _flashCapAlert() {
+            this.showCapAlert = true;
+            if (this._capAlertTimer) clearTimeout(this._capAlertTimer);
+            this._capAlertTimer = setTimeout(() => { this.showCapAlert = false; }, 4500);
+        },
+
+        // ═══════════════════════════════════════════════════════════════
+        // Sources — HTML5 native 拖曳（CD-61-4，無 Sortable）
+        // 拖曳池：builtin 任一狀態 + enabled metatube。JavLibrary / Parts Bin 不可拖。
+        // ═══════════════════════════════════════════════════════════════
+        isDraggable(src) {
+            if (!src || src.type === 'manual_only') return false;
+            if (src.type === 'builtin') return true;
+            return src.type === 'metatube' && src.enabled;
+        },
+        onDragStart(e, id) {
+            this.draggingId = id;
+            try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', id); } catch (_) { /* WebView 相容 */ }
+        },
+        onDragEnd() { this.draggingId = null; this.dropTargetId = null; },
+        onDragOver(e, id) {
+            // PyWebView 內 dragover 必須 preventDefault（模板 @dragover.prevent），
+            // 否則 drop 不觸發（gotchas）。
+            if (!this.draggingId || this.draggingId === id) return;
+            const target = this.sources.find(x => x.id === id);
+            if (!target || !this.isDraggable(target)) return;
+            try { e.dataTransfer.dropEffect = 'move'; } catch (_) { /* WebView 相容 */ }
+            this.dropTargetId = id;
+        },
+        onDrop(e, targetId) {
+            const srcId = this.draggingId;
+            const target = this.sources.find(x => x.id === targetId);
+            if (!srcId || srcId === targetId || !target || !this.isDraggable(target)) {
+                this.onDragEnd();
+                return;
+            }
+            const srcIdx = this.sources.findIndex(s => s.id === srcId);
+            const tgtIdx = this.sources.findIndex(s => s.id === targetId);
+            if (srcIdx < 0 || tgtIdx < 0) { this.onDragEnd(); return; }
+            const [moved] = this.sources.splice(srcIdx, 1);
+            const insertAt = srcIdx < tgtIdx ? tgtIdx - 1 : tgtIdx;
+            this.sources.splice(insertAt, 0, moved);
+            this.onDragEnd();
+            this.saveConfig();
+        },
+
+        // ═══════════════════════════════════════════════════════════════
+        // Sources — 鍵盤 sortable（WAI-ARIA APG；POC 無，淨新增）
+        // Enter = 翻轉/promote/demote（clickActiveRowPill）。
+        // Space = 拾起 / 放下（grab toggle）。Arrow = grabbed 時移動位置。Escape = 取消。
+        // ═══════════════════════════════════════════════════════════════
+
+        // Space 在可拖曳 pill 上切換 grab/drop；不可拖（manual_only/disconnected）→ 視為啟用。
+        onPillSpace(src) {
+            if (!src) return;
+            if (!this.isDraggable(src)) { this.clickActiveRowPill(src); return; }
+            if (this._grabbedId === src.id) {
+                // 放下 → persist
+                this._grabbedId = null;
+                this.saveConfig();
+            } else {
+                this._grabbedId = src.id;
+            }
+        },
+
+        // Arrow 移動 grabbed pill 一格（dir = -1 上/左、+1 下/右）。只在 grabbed 時生效。
+        onPillArrow(src, dir) {
+            if (!src || this._grabbedId !== src.id) return;
+            const idx = this.sources.findIndex(s => s.id === src.id);
+            if (idx < 0) return;
+            const targetIdx = idx + dir;
+            if (targetIdx < 0 || targetIdx >= this.sources.length) return;
+            // 目標位置必須仍是可拖曳區（不可越過 JavLibrary / Parts Bin pill）
+            const neighbor = this.sources[targetIdx];
+            if (!this.isDraggable(neighbor)) return;
+            const [moved] = this.sources.splice(idx, 1);
+            this.sources.splice(targetIdx, 0, moved);
+        },
+
+        // Escape 取消拾起（位置已即時移動，此處僅釋放 grab 並 persist 當前序）。
+        onPillEscape() {
+            if (this._grabbedId !== null) {
+                this._grabbedId = null;
+                this.saveConfig();
+            }
         },
     };
 }

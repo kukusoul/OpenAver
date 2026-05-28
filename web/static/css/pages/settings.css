@@ -696,6 +696,54 @@
     border-radius: var(--radius-pill);
 }
 
+/* ─── Drag-and-drop visual state (61c-2; HTML5 native, CD-61-4) ─── */
+/* Pill being dragged: dimmed + lifted shadow. */
+#settings-components .settings-sources-pill.dragging {
+    opacity: 0.5;
+    cursor: grabbing;
+    box-shadow: var(--fluent-shadow-4);
+}
+
+/* Drop target: accent ring indicates insertion point. */
+#settings-components .settings-sources-pill.drop-target {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px color-mix(in oklch, var(--accent) 45%, transparent);
+}
+
+/* Keyboard-grabbed pill (WAI-ARIA sortable): solid accent ring. */
+#settings-components .settings-sources-pill.is-grabbed {
+    border-style: solid;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px color-mix(in oklch, var(--accent) 55%, transparent);
+}
+
+/* ─── Disconnected metatube (B3; visual contract present, B1 unexercised) ─── */
+/* Reuse disabled look (gray + strikethrough via data-enabled=false) but no hover
+   lift + default cursor + an `m` corner badge to distinguish from a disabled builtin. */
+#settings-components .settings-sources-pill.is-disconnected {
+    cursor: default;
+}
+
+#settings-components .settings-sources-pill.is-disconnected:hover {
+    transform: none;
+    box-shadow: none;
+}
+
+#settings-components .settings-sources-pill-mt-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.05rem;
+    height: 1.05rem;
+    font-size: 0.62rem;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--text-secondary);
+    background: color-mix(in oklch, var(--surface-2) 80%, transparent);
+    border: 1px solid color-mix(in oklch, var(--color-base-content) 22%, transparent);
+    border-radius: var(--radius-pill);
+}
+
 /* ─── Cap-block alert ─── */
 #settings-components .settings-sources-cap-alert {
     display: flex;
