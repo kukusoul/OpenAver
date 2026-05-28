@@ -131,6 +131,12 @@ export function stateUI() {
                 // playEnter 內含 reduced-motion guard，不自寫 matchMedia；缺 motion 時跳過。
                 const panel = this.$el.querySelector('[data-settings-panel="' + val + '"]');
                 if (panel && window.OpenAver && window.OpenAver.motion) {
+                    // lazy ctx：motion-adapter ESM 在 init() 當下可能尚未載入完成
+                    // （_gsapCtx 留 false）。首次 tab 切換時 motion 必已就緒，補建一次，
+                    // 確保 cleanup 的 _gsapCtx.revert() 真能 revert（frontend-stack-roles rule 3）。
+                    if (!this._gsapCtx) {
+                        this._gsapCtx = window.OpenAver.motion.createContext(this.$el);
+                    }
                     window.OpenAver.motion.playEnter(panel, {
                         y: 0,
                         duration: window.OpenAver.motion.DURATION.medium,
