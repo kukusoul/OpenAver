@@ -22,50 +22,63 @@ router = APIRouter(prefix="", tags=["settings-mock"])
 # 8 builtin sources — order mirrors `core/scraper.py::SCRAPER_CLASSES` + DMM.
 # Source of truth for the real feature is `core/source_config.py::get_builtin_sources()`
 # (built in P2 task 61a-1). This list is a POC mock only.
+#
+# `manual_only` is the B1 day-one schema field (design-source-tiers.md v4.2 §2 +
+# §5.1 SourceConfig). All builtin sources are False; only B4 javlibrary lands True.
 _MOCK_BUILTIN_SOURCES = [
-    {"id": "javbus", "name": "JavBus", "is_censored": True, "order": 0},
-    {"id": "jav321", "name": "Jav321", "is_censored": True, "order": 1},
-    {"id": "javdb", "name": "JavDB", "is_censored": True, "order": 2},
-    {"id": "dmm", "name": "DMM", "is_censored": True, "order": 3},
-    {"id": "d2pass", "name": "D2Pass", "is_censored": False, "order": 4},
-    {"id": "heyzo", "name": "HEYZO", "is_censored": False, "order": 5},
-    {"id": "fc2", "name": "FC2", "is_censored": False, "order": 6},
-    {"id": "avsox", "name": "AVSOX", "is_censored": False, "order": 7},
+    {"id": "javbus", "name": "JavBus", "is_censored": True, "order": 0, "manual_only": False},
+    {"id": "jav321", "name": "Jav321", "is_censored": True, "order": 1, "manual_only": False},
+    {"id": "javdb", "name": "JavDB", "is_censored": True, "order": 2, "manual_only": False},
+    {"id": "dmm", "name": "DMM", "is_censored": True, "order": 3, "manual_only": False},
+    {"id": "d2pass", "name": "D2Pass", "is_censored": False, "order": 4, "manual_only": False},
+    {"id": "heyzo", "name": "HEYZO", "is_censored": False, "order": 5, "manual_only": False},
+    {"id": "fc2", "name": "FC2", "is_censored": False, "order": 6, "manual_only": False},
+    {"id": "avsox", "name": "AVSOX", "is_censored": False, "order": 7, "manual_only": False},
+]
+
+# Manual-Only mock — B4 javlibrary preview. Lives in Tier 2 with a
+# `[進階搜尋專用]` badge instead of a toggle; does NOT count toward cap.
+# See design-source-tiers.md v4.2 §3 Rule 3 + §4.1 + §9 B4 row.
+_MOCK_MANUAL_ONLY_SOURCES = [
+    {"id": "javlibrary", "name": "JavLibrary",
+     "is_censored": True, "order": 99, "manual_only": True, "is_beta": True},
 ]
 
 # Metatube provider preview — used in viewpoint C "connected preview".
-# These names are illustrative for the POC visual only.
+# Names are illustrative for the POC visual only. `recommended=True` surfaces a
+# small star hint next to the pill (design-source-tiers.md v4.2 §2 + §9 risk row:
+# guides first-time toggle without auto-enabling; epic §2 "控制" axis).
 _MOCK_METATUBE_SOURCES = [
-    {"id": "mt_fanza", "name": "FANZA"},
-    {"id": "mt_mgs", "name": "MGS"},
-    {"id": "mt_duga", "name": "DUGA"},
-    {"id": "mt_sod", "name": "SOD"},
-    {"id": "mt_1pondo", "name": "1Pondo"},
-    {"id": "mt_10musume", "name": "10musume"},
-    {"id": "mt_caribbeancom", "name": "Caribbeancom"},
-    {"id": "mt_heyzo", "name": "HEYZO"},
-    {"id": "mt_fc2", "name": "FC2"},
-    {"id": "mt_pacopacomama", "name": "Pacopacomama"},
-    {"id": "mt_muramura", "name": "Muramura"},
-    {"id": "mt_tokyohot", "name": "Tokyo-Hot"},
-    {"id": "mt_kin8", "name": "Kin8tengoku"},
-    {"id": "mt_naturalhigh", "name": "NaturalHigh"},
-    {"id": "mt_xcity", "name": "X-City"},
-    {"id": "mt_h4610", "name": "H4610"},
-    {"id": "mt_gachinco", "name": "Gachinco"},
-    {"id": "mt_javbus", "name": "JavBus"},
-    {"id": "mt_arzon", "name": "Arzon"},
-    {"id": "mt_avbase", "name": "AVBase"},
-    {"id": "mt_aventertainments", "name": "AV-E"},
-    {"id": "mt_fc2hub", "name": "FC2Hub"},
-    {"id": "mt_jav321", "name": "Jav321"},
-    {"id": "mt_javdb", "name": "JavDB"},
-    {"id": "mt_njav", "name": "NJav"},
-    {"id": "mt_prestige", "name": "Prestige"},
-    {"id": "mt_sehuatang", "name": "色花堂"},
-    {"id": "mt_tameikegoro", "name": "Tameike Goro"},
-    {"id": "mt_xslist", "name": "XsList"},
-    {"id": "mt_javlibrary", "name": "JavLibrary"},
+    {"id": "mt_fanza", "name": "FANZA", "recommended": True},
+    {"id": "mt_mgs", "name": "MGS", "recommended": True},
+    {"id": "mt_duga", "name": "DUGA", "recommended": True},
+    {"id": "mt_sod", "name": "SOD", "recommended": True},
+    {"id": "mt_1pondo", "name": "1Pondo", "recommended": False},
+    {"id": "mt_10musume", "name": "10musume", "recommended": False},
+    {"id": "mt_caribbeancom", "name": "Caribbeancom", "recommended": False},
+    {"id": "mt_heyzo", "name": "HEYZO", "recommended": False},
+    {"id": "mt_fc2", "name": "FC2", "recommended": False},
+    {"id": "mt_pacopacomama", "name": "Pacopacomama", "recommended": False},
+    {"id": "mt_muramura", "name": "Muramura", "recommended": False},
+    {"id": "mt_tokyohot", "name": "Tokyo-Hot", "recommended": False},
+    {"id": "mt_kin8", "name": "Kin8tengoku", "recommended": False},
+    {"id": "mt_naturalhigh", "name": "NaturalHigh", "recommended": False},
+    {"id": "mt_xcity", "name": "X-City", "recommended": False},
+    {"id": "mt_h4610", "name": "H4610", "recommended": False},
+    {"id": "mt_gachinco", "name": "Gachinco", "recommended": False},
+    {"id": "mt_javbus", "name": "JavBus", "recommended": False},
+    {"id": "mt_arzon", "name": "Arzon", "recommended": False},
+    {"id": "mt_avbase", "name": "AVBase", "recommended": False},
+    {"id": "mt_aventertainments", "name": "AV-E", "recommended": False},
+    {"id": "mt_fc2hub", "name": "FC2Hub", "recommended": False},
+    {"id": "mt_jav321", "name": "Jav321", "recommended": False},
+    {"id": "mt_javdb", "name": "JavDB", "recommended": False},
+    {"id": "mt_njav", "name": "NJav", "recommended": False},
+    {"id": "mt_prestige", "name": "Prestige", "recommended": False},
+    {"id": "mt_sehuatang", "name": "色花堂", "recommended": False},
+    {"id": "mt_tameikegoro", "name": "Tameike Goro", "recommended": False},
+    {"id": "mt_xslist", "name": "XsList", "recommended": False},
+    {"id": "mt_javlibrary", "name": "JavLibrary", "recommended": False},
 ]
 
 
@@ -94,6 +107,11 @@ async def settings_mock_page(request: Request):
     context["page"] = "settings-mock"
     context["mock_tabs"] = _MOCK_TABS
     context["mock_builtin_sources"] = _MOCK_BUILTIN_SOURCES
+    context["mock_manual_only_sources"] = _MOCK_MANUAL_ONLY_SOURCES
     context["mock_metatube_sources"] = _MOCK_METATUBE_SOURCES
+    # Tier 1 hard cap — design-source-tiers.md v4.2 §2 (also B1 contract;
+    # core/source_config.py::MAX_ENABLED_SOURCES in P2). Exposed to the
+    # template so the magic number lives in one place.
+    context["mock_tier1_cap"] = 10
 
     return templates.TemplateResponse(request, "settings_mock.html", context)

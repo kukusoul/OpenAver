@@ -240,8 +240,24 @@
     }
     .smock-batchbar-left { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
     .smock-batchbar-right { display: flex; align-items: center; gap: 0.5rem; }
-    .smock-counter { font-family: 'Space Grotesk', monospace; font-size: 0.82rem; color: var(--text-secondary); }
+    .smock-counter {
+        font-family: 'Space Grotesk', monospace;
+        font-size: 0.82rem;
+        color: var(--text-secondary);
+        font-variant-numeric: tabular-nums;  /* prevent digit-width jitter on toggle */
+        display: inline-flex; align-items: baseline; gap: 0.3rem;
+    }
     .smock-counter strong { color: var(--text-primary); font-weight: 700; }
+    .smock-counter .cap-divider { color: var(--text-muted, var(--text-secondary)); opacity: 0.6; }
+    .smock-counter .cap-value { color: var(--text-muted, var(--text-secondary)); font-weight: 500; }
+    .smock-counter .cap-tag {
+        margin-left: 0.4rem;
+        font-size: 0.62rem; letter-spacing: 0.16em; text-transform: uppercase;
+        color: var(--text-muted, var(--text-secondary));
+        padding: 0.1rem 0.4rem;
+        border-radius: var(--fluent-radius-sm);
+        background: color-mix(in oklch, var(--surface-2) 60%, transparent);
+    }
 
     /* Fluent-style switch toggle (uncensored mode) */
     .smock-switch {
@@ -492,19 +508,6 @@
         border-radius: 999px;
         white-space: nowrap;
     }
-    /* State 1 explainer (visible inside builtin card so reviewer knows the rule) */
-    .smock-mt-hidden-note {
-        display: flex; align-items: flex-start; gap: 0.7rem;
-        padding: 0.75rem 0.95rem;
-        background: color-mix(in oklch, var(--surface-1) 40%, transparent);
-        border-left: 3px solid color-mix(in oklch, var(--text-muted, var(--text-secondary)) 40%, transparent);
-        color: var(--text-secondary);
-        font-size: 0.82rem;
-        line-height: 1.5;
-        border-radius: var(--fluent-radius-md);
-    }
-    .smock-mt-hidden-note i { font-size: 1rem; opacity: 0.6; margin-top: 1px; }
-
     /* ─── Footer note ─────────────────────────────────────────────────── */
     .smock-foot {
         margin-top: 3rem;
@@ -522,11 +525,286 @@
         background: var(--surface-1);
     }
 
+    /* ═══════════════════════════════════════════════════════════════════
+       v4.2 ADDITIONS — Tier 1 / Tier 2 / Manual-Only / Cap alert
+       Appended after the pre-v4.2 styles so cascade order favors v4.2.
+    ═══════════════════════════════════════════════════════════════════ */
+
+    /* ─── Tier group head (Tier 1 always-expanded / Tier 2 collapsible) ─── */
+    .smock-tier-head {
+        display: flex; align-items: center; gap: 0.6rem;
+        width: 100%;
+        margin: 1.15rem 0 0.7rem;
+        padding: 0.5rem 0.6rem;
+        font-size: 0.83rem; font-weight: 600;
+        color: var(--text-secondary);
+        letter-spacing: 0.01em;
+        background: transparent;
+        border: none;
+        border-radius: var(--fluent-radius-md);
+        text-align: left;
+    }
+    .smock-tier-head > i:first-child {
+        color: var(--text-muted, var(--text-secondary));
+        font-size: 0.85rem;
+        transition: transform var(--fluent-duration-fast) var(--fluent-ease-decel);
+    }
+    .smock-tier-head .tier-tag {
+        font-family: 'Space Grotesk', monospace;
+        font-size: 0.62rem; letter-spacing: 0.16em; text-transform: uppercase;
+        color: var(--accent);
+        padding: 0.1rem 0.42rem;
+        margin-left: 0.15rem;
+        border-radius: var(--fluent-radius-sm);
+        background: color-mix(in oklch, var(--accent) 12%, transparent);
+    }
+    .smock-tier-head.is-tier2 .tier-tag {
+        color: var(--text-muted, var(--text-secondary));
+        background: color-mix(in oklch, var(--surface-2) 70%, transparent);
+    }
+    .smock-tier-head.is-collapsible {
+        cursor: pointer;
+        font-family: inherit;
+    }
+    .smock-tier-head.is-collapsible:hover {
+        background: color-mix(in oklch, var(--surface-2) 55%, transparent);
+        color: var(--text-primary);
+    }
+    .smock-tier-head.is-collapsible:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+    }
+
+    /* ─── Tier 1 pills container — give empty state a hint frame ──────── */
+    .smock-pills.is-tier1-empty {
+        min-height: 2.75rem;
+        padding: 0.65rem 0.85rem;
+        background: color-mix(in oklch, var(--surface-1) 30%, transparent);
+        border: 1px dashed var(--stroke-subtle);
+        border-radius: var(--fluent-radius-md);
+        align-items: center;
+        justify-content: center;
+        color: var(--text-secondary);
+        font-size: 0.8rem;
+    }
+
+    /* ─── Manual-Only sub-section divider + pill ─────────────────────── */
+    .smock-tier-divider {
+        display: flex; align-items: baseline; gap: 0.75rem;
+        margin: 1rem 0 0.6rem;
+        padding-top: 0.75rem;
+        border-top: 1px dashed var(--stroke-subtle);
+        flex-wrap: wrap;
+    }
+    .smock-tier-divider > .label {
+        font-family: 'Space Grotesk', monospace;
+        font-size: 0.7rem; font-weight: 700;
+        letter-spacing: 0.2em; text-transform: uppercase;
+        color: var(--accent);
+        flex: 0 0 auto;
+    }
+    .smock-tier-divider > small {
+        font-size: 0.74rem;
+        color: var(--text-muted, var(--text-secondary));
+        line-height: 1.4;
+        flex: 1 1 18rem;
+    }
+
+    .smock-pill.is-manual-only {
+        cursor: default;
+        background: color-mix(in oklch, var(--surface-1) 45%, transparent);
+        border-style: dashed;
+        border-color: color-mix(in oklch, var(--accent) 28%, var(--stroke-subtle));
+        color: var(--text-secondary);
+        padding-right: 0.4rem;
+        gap: 0.55rem;
+    }
+    .smock-pill.is-manual-only:hover {
+        box-shadow: none;
+        transform: none;
+        background: color-mix(in oklch, var(--surface-1) 55%, transparent);
+    }
+    .smock-pill.is-manual-only .slash-icn { display: none; }
+    .smock-pill.is-manual-only .pill-name {
+        text-decoration: none;
+        color: var(--text-primary);
+    }
+
+    /* ─── Inline pill badge (Manual-Only / future generic) ────────────── */
+    .smock-pill-badge {
+        font-family: 'Space Grotesk', monospace;
+        font-size: 0.6rem; font-weight: 700;
+        letter-spacing: 0.14em; text-transform: uppercase;
+        padding: 0.18rem 0.5rem;
+        border-radius: 999px;
+        line-height: 1;
+    }
+    .smock-pill-badge.is-manual-only {
+        background: color-mix(in oklch, var(--accent) 16%, transparent);
+        color: var(--accent);
+        border: 1px solid color-mix(in oklch, var(--accent) 30%, transparent);
+    }
+
+    /* ─── Recommended star (inline before pill-name; only when not enabled) ─── */
+    .smock-pill .rec-star {
+        display: none;
+        color: color-mix(in oklch, var(--color-warning, #f59e0b) 92%, transparent);
+        font-size: 0.78rem;
+        line-height: 1;
+    }
+    .smock-pill[data-rec="true"][data-enabled="false"] .rec-star {
+        display: inline-block;
+    }
+    .smock-pill[data-rec="true"][data-enabled="false"] {
+        border-color: color-mix(in oklch, var(--color-warning, #f59e0b) 35%, var(--stroke-subtle));
+    }
+
+    /* ─── Cap-block inline alert ──────────────────────────────────────── */
+    .smock-cap-alert {
+        display: flex; align-items: flex-start; gap: 0.7rem;
+        padding: 0.8rem 1rem;
+        margin-top: 0.85rem;
+        background:
+            linear-gradient(135deg,
+                color-mix(in oklch, var(--color-warning, #f59e0b) 14%, transparent) 0%,
+                color-mix(in oklch, var(--color-warning, #f59e0b) 5%, transparent) 100%);
+        border: 1px solid color-mix(in oklch, var(--color-warning, #f59e0b) 38%, transparent);
+        border-radius: var(--fluent-radius-md);
+        color: var(--text-primary);
+        font-size: 0.85rem;
+        line-height: 1.45;
+    }
+    .smock-cap-alert > i {
+        color: var(--color-warning, #f59e0b);
+        font-size: 1.15rem;
+        margin-top: 1px;
+        flex: 0 0 auto;
+    }
+    .smock-cap-alert > div { flex: 1 1 auto; }
+    .smock-cap-alert strong {
+        display: block;
+        font-family: 'Space Grotesk', sans-serif;
+        font-size: 0.85rem; font-weight: 700;
+        margin-bottom: 0.18rem;
+        letter-spacing: 0.01em;
+    }
+    .smock-cap-alert p {
+        margin: 0;
+        color: var(--text-secondary);
+        font-size: 0.8rem;
+    }
+    .smock-cap-alert button {
+        align-self: flex-start;
+        flex: 0 0 auto;
+        font-size: 0.78rem; font-weight: 600;
+        padding: 0.34rem 0.75rem;
+        background: var(--surface-0);
+        border: 1px solid color-mix(in oklch, var(--color-warning, #f59e0b) 38%, transparent);
+        color: var(--color-warning, #f59e0b);
+        border-radius: var(--fluent-radius-md);
+        cursor: pointer;
+        transition:
+            background var(--fluent-duration-fast) var(--fluent-ease-standard),
+            box-shadow var(--fluent-duration-fast) var(--fluent-ease-standard);
+    }
+    .smock-cap-alert button:hover {
+        background: color-mix(in oklch, var(--color-warning, #f59e0b) 12%, var(--surface-0));
+        box-shadow: var(--fluent-shadow-2);
+    }
+    .smock-cap-alert button:focus-visible {
+        outline: 2px solid var(--color-warning, #f59e0b);
+        outline-offset: 2px;
+    }
+
+    /* ─── Uncensored-mode off transient hint (Codex P1 / design §EC-2) ── */
+    .smock-uncens-hint {
+        display: flex; align-items: flex-start; gap: 0.55rem;
+        margin: 0.65rem 0 0;
+        padding: 0.55rem 0.75rem;
+        font-size: 0.78rem;
+        line-height: 1.5;
+        color: var(--text-secondary);
+        background: color-mix(in oklch, var(--accent) 6%, transparent);
+        border: 1px solid color-mix(in oklch, var(--accent) 22%, transparent);
+        border-radius: var(--fluent-radius-md);
+    }
+    .smock-uncens-hint > i {
+        color: var(--accent);
+        font-size: 0.95rem;
+        margin-top: 1px;
+        flex: 0 0 auto;
+    }
+
+    /* ─── Tier 2 footnote (editorial small text) ──────────────────────── */
+    .smock-tier2-footnote {
+        margin: 1rem 0 0;
+        padding: 0.6rem 0.85rem;
+        font-size: 0.76rem;
+        line-height: 1.6;
+        color: var(--text-secondary);
+        background: color-mix(in oklch, var(--surface-1) 35%, transparent);
+        border-left: 2px solid color-mix(in oklch, var(--text-muted, var(--text-secondary)) 35%, transparent);
+        border-radius: 0 var(--fluent-radius-sm) var(--fluent-radius-sm) 0;
+    }
+
+    /* ─── Metatube disabled-state OUTSIDE-card explainer ──────────────── */
+    .smock-mt-disabled-explainer {
+        display: flex; align-items: flex-start; gap: 0.8rem;
+        padding: 0.95rem 1.1rem;
+        background:
+            repeating-linear-gradient(
+                -45deg,
+                color-mix(in oklch, var(--text-muted, var(--text-secondary)) 5%, transparent) 0 8px,
+                transparent 8px 16px
+            );
+        border: 1px dashed color-mix(in oklch, var(--text-muted, var(--text-secondary)) 32%, transparent);
+        border-radius: var(--fluent-radius-lg);
+        color: var(--text-secondary);
+        font-size: 0.83rem;
+        line-height: 1.55;
+    }
+    .smock-mt-disabled-explainer > i {
+        color: var(--text-muted, var(--text-secondary));
+        font-size: 1.15rem;
+        margin-top: 1px;
+        flex: 0 0 auto;
+    }
+    .smock-mt-disabled-explainer > div { flex: 1 1 auto; }
+    .smock-mt-disabled-explainer strong {
+        display: inline-block;
+        font-family: 'Space Grotesk', monospace;
+        font-size: 0.66rem; font-weight: 700;
+        letter-spacing: 0.18em; text-transform: uppercase;
+        color: var(--text-muted, var(--text-secondary));
+        margin-right: 0.5rem;
+    }
+
+    /* ─── Metatube connected: Tier hint banner above pills ────────────── */
+    .smock-mt-tier-hint {
+        display: flex; align-items: flex-start; gap: 0.7rem;
+        padding: 0.7rem 0.95rem;
+        margin-bottom: 0.85rem;
+        background: color-mix(in oklch, var(--accent) 6%, var(--surface-1));
+        border: 1px solid color-mix(in oklch, var(--accent) 22%, transparent);
+        border-radius: var(--fluent-radius-md);
+        color: var(--text-secondary);
+        font-size: 0.82rem;
+        line-height: 1.5;
+    }
+    .smock-mt-tier-hint > i {
+        color: var(--accent);
+        font-size: 1rem;
+        margin-top: 1px;
+        flex: 0 0 auto;
+    }
+
     /* ─── Reduced motion ──────────────────────────────────────────────── */
     @media (prefers-reduced-motion: reduce) {
         .smock-hero-eyebrow .pulse,
         .smock-tabpanel,
-        .smock-pill { animation: none !important; transition: none !important; }
+        .smock-pill,
+        .smock-cap-alert,
+        .smock-tier-head > i:first-child { animation: none !important; transition: none !important; }
     }
 </style>
 {% endblock %}
@@ -640,17 +918,17 @@
             </div>
         </header>
 
-        <div class="smock-card" x-data="sourcesBlock('b-canonical')">
+        <div class="smock-card" x-data="sourcesBlock('b-canonical', {{ mock_tier1_cap }})">
             <div class="smock-card-head">
                 <h4>{{ t('settings.mock.tab.sources') }}</h4>
-                <span class="label">canonical</span>
+                <span class="label">canonical · v4.2</span>
             </div>
             <div class="smock-card-body">
 
-                <!-- Batch operations bar: switch is primary, 全開 secondary, 全停用 dropped to ghost -->
+                <!-- Batch bar: uncensored switch + Tier 1 cap counter + 全開（最多 10）-->
                 <div class="smock-batchbar">
                     <div class="smock-batchbar-left">
-                        <label class="smock-switch" :title="$el.querySelector('.lbl small')?.textContent || ''">
+                        <label class="smock-switch">
                             <input type="checkbox"
                                    :checked="uncensoredMode"
                                    @change="toggleUncensoredMode()"
@@ -661,27 +939,47 @@
                                 <small>{{ t('settings.mock.uncensored_mode_help') }}</small>
                             </span>
                         </label>
-                        <span class="smock-counter">
-                            <strong x-text="enabledCount"></strong> / <span x-text="sources.length"></span>
-                            {{ t('settings.mock.counter_suffix') }}
+                        <span class="smock-counter" :title="`{{ t('settings.mock.cap_label') }} = ${MAX_TIER1}`">
+                            <span>{{ t('settings.mock.counter_suffix') }}</span>
+                            <strong x-text="tier1Count"></strong>
+                            <span class="cap-divider">/</span>
+                            <span class="cap-value" x-text="MAX_TIER1"></span>
+                            <span class="cap-tag">cap</span>
                         </span>
                     </div>
                     <div class="smock-batchbar-right">
-                        <button class="smock-mini-btn" @click="enableAll()">
+                        <button class="smock-mini-btn" @click="enableAllToCap()">
                             <i class="bi bi-arrow-counterclockwise"></i> {{ t('settings.mock.enable_all') }}
                         </button>
                     </div>
                 </div>
 
-                <!-- Builtin group -->
-                <div class="smock-group-head">
-                    <i class="bi bi-chevron-down chev"></i>
-                    <span>{{ t('settings.mock.group_builtin') }}</span>
-                    <span class="smock-group-count" x-text="`${enabledCount}/${sources.length}`"></span>
+                <!-- Uncensored-mode off hint (Codex P1 / design §EC-2):
+                     fires when user clicks the switch while mode is ON.
+                     The switch visually rebounds (computed didn't change); this
+                     line explains *why* the click "didn't take". -->
+                <p class="smock-uncens-hint"
+                   x-show="showUncensoredOffHint"
+                   x-transition.opacity.duration.200ms
+                   role="status"
+                   aria-live="polite">
+                    <i class="bi bi-info-circle"></i>
+                    <span>{{ t('settings.mock.uncensored_mode_off_hint') }}</span>
+                </p>
+
+                <!-- ─── Tier 1 (Auto Pool, drag-sortable, cap=10) ─── -->
+                <div class="smock-tier-head">
+                    <i class="bi bi-chevron-down"></i>
+                    <span>{{ t('settings.mock.tier1_group_label') }}</span>
+                    <span class="tier-tag">auto pool</span>
+                    <span class="smock-group-count" x-text="`${tier1Count}/${MAX_TIER1}`"></span>
                 </div>
 
-                <div class="smock-pills" role="listbox" aria-label="{{ t('settings.mock.group_builtin') }}">
-                    <template x-for="src in sources" :key="src.id">
+                <div class="smock-pills"
+                     :class="{ 'is-tier1-empty': tier1Count === 0 }"
+                     role="listbox"
+                     aria-label="Tier 1">
+                    <template x-for="src in tier1Sources" :key="src.id">
                         <div class="smock-pill"
                              :data-enabled="src.enabled ? 'true' : 'false'"
                              :data-cat="src.is_censored ? 'censored' : 'uncensored'"
@@ -689,7 +987,8 @@
                              draggable="true"
                              role="option"
                              :aria-selected="src.enabled"
-                             :aria-label="src.enabled ? `${src.name} — {{ t('settings.mock.pill_enabled_aria') }}` : `${src.name} — {{ t('settings.mock.pill_disabled_aria') }}`"
+                             :aria-label="`${src.name} — {{ t('settings.mock.pill_enabled_aria') }}`"
+                             :title="srcTooltip(src)"
                              tabindex="0"
                              @click="toggle(src.id)"
                              @keydown.enter.prevent="toggle(src.id)"
@@ -703,18 +1002,106 @@
                             <span class="pill-name" x-text="src.name"></span>
                         </div>
                     </template>
+                    <span x-show="tier1Count === 0" aria-hidden="true">
+                        <i class="bi bi-droplet"></i>
+                        {{ t('settings.mock.tier1_empty_hint') }}
+                    </span>
                 </div>
 
-                <!-- Full-disabled warning (canonical, always present, x-show toggles) -->
-                <div class="smock-warn" x-show="enabledCount === 0" x-transition>
+                <!-- Cap-block alert (transient; auto-dismiss + dismissable) -->
+                <div class="smock-cap-alert"
+                     x-show="showCapAlert"
+                     x-transition.duration.250ms
+                     role="alert"
+                     aria-live="polite">
+                    <i class="bi bi-shield-exclamation"></i>
+                    <div>
+                        <strong>{{ t('settings.mock.cap_exceeded_title') }}</strong>
+                        <p>{{ t('settings.mock.cap_exceeded_body') }}</p>
+                    </div>
+                    <button type="button" @click="showCapAlert = false">
+                        {{ t('settings.mock.cap_alert_dismiss') }}
+                    </button>
+                </div>
+
+                <!-- Full-disabled warning (Tier 1 = 0) -->
+                <div class="smock-warn" x-show="tier1Count === 0" x-transition>
                     <i class="bi bi-exclamation-triangle-fill"></i>
                     <span>{{ t('settings.mock.warn_all_disabled') }}</span>
                 </div>
 
+                <!-- ─── Tier 2 (collapsible, default collapsed) ─── -->
+                <button type="button"
+                        class="smock-tier-head is-collapsible is-tier2"
+                        @click="tier2Expanded = !tier2Expanded"
+                        :aria-expanded="tier2Expanded"
+                        :aria-label="tier2Expanded ? '{{ t('settings.mock.tier2_collapse_aria') }}' : '{{ t('settings.mock.tier2_expand_aria') }}'">
+                    <i class="bi" :class="tier2Expanded ? 'bi-chevron-down' : 'bi-chevron-right'"></i>
+                    <span>{{ t('settings.mock.tier2_group_label') }}</span>
+                    <span class="tier-tag">disabled · registered</span>
+                    <span class="smock-group-count" x-text="`${tier2Sources.length + manualOnlySources.length}`"></span>
+                </button>
+
+                <div x-show="tier2Expanded" x-transition.opacity.duration.200ms>
+                    <!-- Tier 2 pills (promotable, strikethrough via [data-enabled=false]) -->
+                    <div class="smock-pills" role="listbox" aria-label="Tier 2">
+                        <template x-for="src in tier2Sources" :key="src.id">
+                            <div class="smock-pill"
+                                 data-enabled="false"
+                                 :data-cat="src.is_censored ? 'censored' : 'uncensored'"
+                                 role="option"
+                                 :aria-selected="false"
+                                 :aria-label="`${src.name} — {{ t('settings.mock.pill_disabled_aria') }}`"
+                                 :title="srcTooltip(src)"
+                                 tabindex="0"
+                                 @click="toggle(src.id)"
+                                 @keydown.enter.prevent="toggle(src.id)"
+                                 @keydown.space.prevent="toggle(src.id)">
+                                <i class="bi bi-slash-circle slash-icn" aria-hidden="true"></i>
+                                <span class="pill-name" x-text="src.name"></span>
+                            </div>
+                        </template>
+                        <span x-show="tier2Sources.length === 0" aria-hidden="true"
+                              style="font-size:0.78rem; color:var(--text-secondary); padding:0.5rem 0.2rem;">
+                            {{ t('settings.mock.tier2_empty_hint') }}
+                        </span>
+                    </div>
+
+                    <!-- Manual-Only sub-section: divider + B4 javlibrary preview -->
+                    <template x-if="manualOnlySources.length > 0">
+                        <div>
+                            <div class="smock-tier-divider">
+                                <span class="label">{{ t('settings.mock.manual_only_section_label') }}</span>
+                                <small>{{ t('settings.mock.manual_only_hint') }}</small>
+                            </div>
+                            <div class="smock-pills" role="list">
+                                <template x-for="src in manualOnlySources" :key="src.id">
+                                    <div class="smock-pill is-manual-only"
+                                         data-enabled="false"
+                                         role="listitem"
+                                         tabindex="0"
+                                         :aria-label="`${src.name} — {{ t('settings.mock.manual_only_aria') }}`"
+                                         :title="`${src.name} — {{ t('settings.mock.manual_only_hint') }}`">
+                                        <span class="pill-name" x-text="src.name"></span>
+                                        <span class="smock-pill-badge is-manual-only">
+                                            {{ t('settings.mock.manual_only_badge') }}
+                                        </span>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </template>
+
+                    <!-- Tier 2 footnote: always-on Rule reminder (design §3 + §EC-6) -->
+                    <p class="smock-tier2-footnote">
+                        {{ t('settings.mock.tier2_footnote') }}
+                    </p>
+                </div>
+
                 <!-- Secondary / debug control: 全停用 (de-emphasized) -->
-                <div style="margin-top: 1rem; display: flex; justify-content: flex-end;">
+                <div style="margin-top: 1.1rem; display: flex; justify-content: flex-end;">
                     <button class="smock-mini-btn ghost"
-                            @click="disableAll()"
+                            @click="demoteAll()"
                             title="POC debug — verify warning state">
                         <i class="bi bi-bug"></i> {{ t('settings.mock.disable_all_debug') }}
                     </button>
@@ -726,7 +1113,7 @@
     <!-- ═══════════════════════════════════════════════════════════════
          SECTION 3 — Metatube canonical (three states via mock switcher)
     ═══════════════════════════════════════════════════════════════ -->
-    <section id="view-c" class="smock-view" x-data="metatubeBlock()">
+    <section id="view-c" class="smock-view" x-data="metatubeBlock({{ mock_tier1_cap }})">
         <header class="smock-view-head">
             <div class="marker">3</div>
             <div>
@@ -745,24 +1132,30 @@
             </div>
         </div>
 
-        <div class="smock-card">
+        <!-- STATE 1: disabled — OUTSIDE-card explainer (the card itself is hidden) -->
+        <div class="smock-mt-disabled-explainer"
+             x-show="state === 'disabled'"
+             x-transition.opacity.duration.200ms
+             role="status">
+            <i class="bi bi-info-circle"></i>
+            <div>
+                <strong>POC NOTE</strong>
+                {{ t('settings.mock.mt_disabled_poc_note') }}
+            </div>
+        </div>
+
+        <!-- Card: completely hidden in disabled state (matches v4.2 §4.1 contract) -->
+        <div class="smock-card"
+             x-show="state !== 'disabled'"
+             x-transition.opacity.duration.200ms>
             <div class="smock-card-head">
                 <h4>{{ t('settings.mock.group_metatube') }} —
-                    <span x-show="state === 'disabled'">{{ t('settings.mock.mt_state_disabled') }}</span>
                     <span x-show="state === 'idle'">{{ t('settings.mock.mt_state_idle') }}</span>
                     <span x-show="state === 'connected'">{{ t('settings.mock.mt_state_connected') }}</span>
                 </h4>
                 <span class="label" x-text="state"></span>
             </div>
             <div class="smock-card-body">
-
-                <!-- STATE 1: disabled — section is NOT rendered.
-                     Behind the card-head, we show a developer-only explainer
-                     so the reviewer knows why nothing is visible. -->
-                <div class="smock-mt-hidden-note" x-show="state === 'disabled'" x-transition>
-                    <i class="bi bi-info-circle"></i>
-                    <span>{{ t('settings.mock.mt_state_disabled_help') }}</span>
-                </div>
 
                 <!-- STATE 2: idle — inline CTA -->
                 <div class="smock-mt-idle" x-show="state === 'idle'" x-transition role="status">
@@ -771,20 +1164,46 @@
                     <a href="#" aria-disabled="true" tabindex="-1" @click.prevent>{{ t('settings.mock.go_to_metatube') }} →</a>
                 </div>
 
-                <!-- STATE 3: connected — provider pills (B3 ship preview) -->
+                <!-- STATE 3: connected — Tier-2-on-connect (all default Tier 2) -->
                 <div x-show="state === 'connected'" x-transition>
-                    <div class="smock-group-head">
-                        <i class="bi bi-chevron-down chev"></i>
-                        <span>{{ t('settings.mock.group_metatube') }}</span>
-                        <span class="smock-group-count" x-text="`${enabledCount}/${sources.length}`"></span>
+
+                    <!-- Tier hint banner: explain Tier-2-on-connect + Recommended affordance -->
+                    <div class="smock-mt-tier-hint">
+                        <i class="bi bi-stars"></i>
+                        <span>{{ t('settings.mock.mt_connected_tier_hint') }}</span>
                     </div>
-                    <div class="smock-pills" role="listbox" aria-label="{{ t('settings.mock.group_metatube') }}">
-                        <template x-for="src in sources" :key="src.id">
+
+                    <!-- Cap counter row (consistent with Section 2) -->
+                    <div class="smock-batchbar" style="margin-bottom: 0.85rem;">
+                        <div class="smock-batchbar-left">
+                            <span class="smock-counter" :title="`{{ t('settings.mock.cap_label') }} = ${MAX_TIER1}`">
+                                <span>{{ t('settings.mock.counter_suffix') }}</span>
+                                <strong x-text="tier1Count"></strong>
+                                <span class="cap-divider">/</span>
+                                <span class="cap-value" x-text="MAX_TIER1"></span>
+                                <span class="cap-tag">cap (shared)</span>
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Tier 1 area (initially empty — Tier-2-on-connect) -->
+                    <div class="smock-tier-head">
+                        <i class="bi bi-chevron-down"></i>
+                        <span>{{ t('settings.mock.tier1_group_label') }}</span>
+                        <span class="tier-tag">auto pool</span>
+                        <span class="smock-group-count" x-text="`${tier1Count}/${MAX_TIER1}`"></span>
+                    </div>
+                    <div class="smock-pills"
+                         :class="{ 'is-tier1-empty': tier1Count === 0 }"
+                         role="listbox"
+                         aria-label="Tier 1">
+                        <template x-for="src in tier1Sources" :key="src.id">
                             <div class="smock-pill is-mt"
-                                 :data-enabled="src.enabled ? 'true' : 'false'"
-                                 tabindex="0"
+                                 data-enabled="true"
                                  role="option"
-                                 :aria-selected="src.enabled"
+                                 :aria-selected="true"
+                                 :aria-label="`${src.name} — {{ t('settings.mock.pill_enabled_aria') }}`"
+                                 tabindex="0"
                                  @click="toggle(src.id)"
                                  @keydown.enter.prevent="toggle(src.id)"
                                  @keydown.space.prevent="toggle(src.id)">
@@ -792,6 +1211,65 @@
                                 <span class="pill-name" x-text="src.name"></span>
                             </div>
                         </template>
+                        <span x-show="tier1Count === 0" aria-hidden="true">
+                            <i class="bi bi-droplet"></i>
+                            {{ t('settings.mock.mt_tier1_empty_hint') }}
+                        </span>
+                    </div>
+
+                    <!-- Cap-block alert -->
+                    <div class="smock-cap-alert"
+                         x-show="showCapAlert"
+                         x-transition.duration.250ms
+                         role="alert"
+                         aria-live="polite">
+                        <i class="bi bi-shield-exclamation"></i>
+                        <div>
+                            <strong>{{ t('settings.mock.cap_exceeded_title') }}</strong>
+                            <p>{{ t('settings.mock.cap_exceeded_body') }}</p>
+                        </div>
+                        <button type="button" @click="showCapAlert = false">
+                            {{ t('settings.mock.cap_alert_dismiss') }}
+                        </button>
+                    </div>
+
+                    <!-- Tier 2 area: starts EXPANDED (otherwise reviewer sees nothing on connect) -->
+                    <button type="button"
+                            class="smock-tier-head is-collapsible is-tier2"
+                            @click="tier2Expanded = !tier2Expanded"
+                            :aria-expanded="tier2Expanded"
+                            :aria-label="tier2Expanded ? '{{ t('settings.mock.tier2_collapse_aria') }}' : '{{ t('settings.mock.tier2_expand_aria') }}'">
+                        <i class="bi" :class="tier2Expanded ? 'bi-chevron-down' : 'bi-chevron-right'"></i>
+                        <span>{{ t('settings.mock.tier2_group_label') }}</span>
+                        <span class="tier-tag">registered</span>
+                        <span class="smock-group-count" x-text="`${tier2Sources.length}`"></span>
+                    </button>
+
+                    <div x-show="tier2Expanded" x-transition.opacity.duration.200ms>
+                        <div class="smock-pills" role="listbox" aria-label="Tier 2 metatube">
+                            <template x-for="src in tier2Sources" :key="src.id">
+                                <div class="smock-pill is-mt"
+                                     data-enabled="false"
+                                     :data-rec="src.recommended ? 'true' : 'false'"
+                                     role="option"
+                                     :aria-selected="false"
+                                     :aria-label="src.recommended
+                                         ? `${src.name} — {{ t('settings.mock.recommended_aria') }} · {{ t('settings.mock.pill_disabled_aria') }}`
+                                         : `${src.name} — {{ t('settings.mock.pill_disabled_aria') }}`"
+                                     tabindex="0"
+                                     @click="toggle(src.id)"
+                                     @keydown.enter.prevent="toggle(src.id)"
+                                     @keydown.space.prevent="toggle(src.id)">
+                                    <i class="bi bi-star-fill rec-star" aria-hidden="true"></i>
+                                    <i class="bi bi-slash-circle slash-icn" aria-hidden="true"></i>
+                                    <span class="pill-name" x-text="src.name"></span>
+                                </div>
+                            </template>
+                        </div>
+
+                        <p class="smock-tier2-footnote">
+                            {{ t('settings.mock.tier2_footnote') }}
+                        </p>
                     </div>
                 </div>
             </div>
@@ -806,6 +1284,7 @@
             {{ t('settings.mock.footer_hint') }}
             <kbd>click</kbd> {{ t('settings.mock.footer_toggle') }} ·
             <kbd>drag</kbd> {{ t('settings.mock.footer_drag') }} ·
+            <kbd>11+</kbd> {{ t('settings.mock.footer_cap') }} ·
             <kbd>state</kbd> {{ t('settings.mock.footer_state') }}
         </p>
     </footer>
@@ -815,8 +1294,9 @@
 // ─────────────────────────────────────────────────────────────────────
 // Mock data from FastAPI context
 // ─────────────────────────────────────────────────────────────────────
-const SMOCK_BUILTIN  = {{ mock_builtin_sources|tojson }};
-const SMOCK_METATUBE = {{ mock_metatube_sources|tojson }};
+const SMOCK_BUILTIN     = {{ mock_builtin_sources|tojson }};
+const SMOCK_MANUAL_ONLY = {{ mock_manual_only_sources|tojson }};
+const SMOCK_METATUBE    = {{ mock_metatube_sources|tojson }};
 
 // ─────────────────────────────────────────────────────────────────────
 // Root state — current tab cursor and tab label lookup
@@ -836,41 +1316,131 @@ function settingsMockPage() {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// sourcesBlock — canonical scanner-sources component.
-// One Alpine scope per usage; each gets its own copy of the source list.
+// Tier helpers — shared between sourcesBlock and metatubeBlock
+//   tier1 = enabled && !manual_only  (Auto Pool, subject to cap)
+//   tier2 = !enabled && !manual_only (Disabled / Registered, promotable)
+//   manualOnly = manual_only=true    (NOT promotable, NOT in cap)
 // ─────────────────────────────────────────────────────────────────────
-function sourcesBlock(scopeId) {
+const JAVBUS_TOOLTIP = '{{ t('settings.mock.javbus_tooltip') }}';
+
+// ─────────────────────────────────────────────────────────────────────
+// sourcesBlock — Section 2 canonical scanner-sources component.
+//   maxTier1 = the Tier 1 cap (10, injected from the template via Jinja).
+// ─────────────────────────────────────────────────────────────────────
+function sourcesBlock(scopeId, maxTier1) {
     return {
         scopeId,
-        sources: SMOCK_BUILTIN.map(s => ({ ...s, enabled: true })),
+        MAX_TIER1: maxTier1,
+        // Seed: 8 builtin sources enabled (Tier 1) + manual-only javlibrary at end.
+        // EC-1: migration after-state lands at 8/10 — two free slots, no auto-disable.
+        sources: [
+            ...SMOCK_BUILTIN.map(s => ({ ...s, enabled: true, manual_only: false })),
+            ...SMOCK_MANUAL_ONLY.map(s => ({ ...s, enabled: false })),
+        ],
         draggingId: null,
         dropTargetId: null,
+        tier2Expanded: false,   // OQ-5 A: collapsed by default
+        showCapAlert: false,
+        _capAlertTimer: null,
+        showUncensoredOffHint: false,
+        _uncensoredOffHintTimer: null,
 
-        get enabledCount() { return this.sources.filter(s => s.enabled).length; },
+        get tier1Sources()      { return this.sources.filter(s => s.enabled && !s.manual_only); },
+        get tier2Sources()      { return this.sources.filter(s => !s.enabled && !s.manual_only); },
+        get manualOnlySources() { return this.sources.filter(s => s.manual_only); },
+        get tier1Count()        { return this.tier1Sources.length; },
+
         get uncensoredMode() {
-            const censored = this.sources.filter(s => s.is_censored);
-            const uncens   = this.sources.filter(s => !s.is_censored);
+            // Manual-Only sources don't participate in censored / uncensored gating.
+            const real = this.sources.filter(s => !s.manual_only);
+            const censored = real.filter(s => s.is_censored);
+            const uncens   = real.filter(s => !s.is_censored);
             return censored.length > 0
                 && censored.every(s => !s.enabled)
                 && uncens.some(s => s.enabled);
         },
 
+        // Per-source tooltip. JavBus carries the Rule 4b variant-probe warning;
+        // others have an empty title (no native tooltip flashes for them).
+        srcTooltip(src) {
+            if (!src) return '';
+            if (src.id === 'javbus') return JAVBUS_TOOLTIP;
+            return '';
+        },
+
+        // Click semantic: promote (Tier 2 → Tier 1) / demote (Tier 1 → Tier 2).
+        // Manual-Only pills are no-ops. Hitting cap on promote → inline alert.
         toggle(id) {
             const s = this.sources.find(x => x.id === id);
-            if (s) s.enabled = !s.enabled;
-        },
-        toggleUncensoredMode() {
-            // If currently on → re-enable censored. Otherwise → disable censored.
-            if (this.uncensoredMode) {
-                this.sources.forEach(s => { if (s.is_censored) s.enabled = true; });
-            } else {
-                this.sources.forEach(s => { if (s.is_censored) s.enabled = false; });
+            if (!s || s.manual_only) return;
+            if (s.enabled) {
+                s.enabled = false;  // demote — no cap concern
+                return;
+            }
+            // promote path
+            if (this.tier1Count >= this.MAX_TIER1) {
+                this._flashCapAlert();
+                return;
+            }
+            s.enabled = true;
+            // EC-3: new Tier 1 member inserts at the END of Tier 1.
+            // We move it to the end of the underlying `sources` array so that
+            // the `tier1Sources` filter sees it last.
+            const idx = this.sources.findIndex(x => x.id === id);
+            if (idx >= 0) {
+                const [moved] = this.sources.splice(idx, 1);
+                this.sources.push(moved);
             }
         },
-        enableAll()  { this.sources.forEach(s => s.enabled = true); },
-        disableAll() { this.sources.forEach(s => s.enabled = false); },
 
-        // HTML5 native drag-and-drop (CD-61-4)
+        toggleUncensoredMode() {
+            // Per design §EC-2 + spec US5:
+            //   on  → off (turning ON)  : batch-demote censored sources (the shortcut).
+            //   off → on (turning OFF)  : NO-OP. The switch is a status indicator —
+            //     the only way to clear "uncensored mode" is to manually promote any
+            //     censored source back to Tier 1. We flash a transient hint so the
+            //     user understands why the switch rebounds (Alpine re-renders
+            //     :checked from the unchanged computed `uncensoredMode` ⇒ thumb
+            //     flips back to ON within a frame).
+            const goingOn = !this.uncensoredMode;
+            if (goingOn) {
+                this.sources.forEach(s => {
+                    if (s.is_censored && !s.manual_only) s.enabled = false;
+                });
+            } else {
+                this._flashUncensoredOffHint();
+            }
+        },
+
+        _flashUncensoredOffHint() {
+            this.showUncensoredOffHint = true;
+            if (this._uncensoredOffHintTimer) clearTimeout(this._uncensoredOffHintTimer);
+            this._uncensoredOffHintTimer = setTimeout(() => {
+                this.showUncensoredOffHint = false;
+            }, 5000);
+        },
+
+        enableAllToCap() {
+            // Promote (in current sources order) until cap is reached.
+            for (const s of this.sources) {
+                if (s.manual_only || s.enabled) continue;
+                if (this.tier1Count >= this.MAX_TIER1) break;
+                s.enabled = true;
+            }
+        },
+        demoteAll() {
+            this.sources.forEach(s => { if (!s.manual_only) s.enabled = false; });
+        },
+
+        _flashCapAlert() {
+            this.showCapAlert = true;
+            if (this._capAlertTimer) clearTimeout(this._capAlertTimer);
+            this._capAlertTimer = setTimeout(() => { this.showCapAlert = false; }, 4500);
+        },
+
+        // HTML5 native drag-and-drop (CD-61-4). Drag is allowed only within Tier 1;
+        // Tier 2 pills aren't draggable (no draggable attr on their template).
+        // We still guard the target side: ignore drops onto Tier 2 / Manual-Only.
         onDragStart(e, id) {
             this.draggingId = id;
             try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', id); } catch (_) {}
@@ -878,36 +1448,73 @@ function sourcesBlock(scopeId) {
         onDragEnd() { this.draggingId = null; this.dropTargetId = null; },
         onDragOver(e, id) {
             if (!this.draggingId || this.draggingId === id) return;
+            const target = this.sources.find(x => x.id === id);
+            if (!target || !target.enabled || target.manual_only) return;
             try { e.dataTransfer.dropEffect = 'move'; } catch (_) {}
             this.dropTargetId = id;
         },
         onDrop(e, targetId) {
             const srcId = this.draggingId;
-            if (!srcId || srcId === targetId) { this.onDragEnd(); return; }
+            const target = this.sources.find(x => x.id === targetId);
+            if (!srcId || srcId === targetId || !target || !target.enabled) {
+                this.onDragEnd();
+                return;
+            }
             const srcIdx = this.sources.findIndex(s => s.id === srcId);
             const tgtIdx = this.sources.findIndex(s => s.id === targetId);
             if (srcIdx < 0 || tgtIdx < 0) { this.onDragEnd(); return; }
             const [moved] = this.sources.splice(srcIdx, 1);
-            this.sources.splice(tgtIdx, 0, moved);
+            // Splice index shifts if we removed something before the target.
+            const insertAt = srcIdx < tgtIdx ? tgtIdx - 1 : tgtIdx;
+            this.sources.splice(insertAt, 0, moved);
             this.onDragEnd();
         },
     };
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// metatubeBlock — single canonical design with POC-only state switcher.
-// state: 'disabled' | 'idle' | 'connected'
+// metatubeBlock — Section 3 component with POC-only state switcher.
+//   state: 'disabled' | 'idle' | 'connected'
+//   On `connected`, ALL providers default to Tier 2 (design v4.2 §2,
+//   §8 conflict-resolution: never auto-promote any third-party provider).
 // ─────────────────────────────────────────────────────────────────────
-function metatubeBlock() {
+function metatubeBlock(maxTier1) {
     return {
-        state: 'idle',  // default to the more interesting state for first impression
-        sources: SMOCK_METATUBE.map((s, i) => ({ ...s, enabled: i % 7 !== 5 })),
+        MAX_TIER1: maxTier1,
+        state: 'idle',  // start at idle for first impression (was already the default)
+        // ALL providers seeded as Tier 2 (enabled=false). Tier-2-on-connect rule.
+        sources: SMOCK_METATUBE.map(s => ({ ...s, enabled: false, manual_only: false })),
+        tier2Expanded: true,    // start expanded — otherwise the user sees nothing on first connect
+        showCapAlert: false,
+        _capAlertTimer: null,
 
-        get enabledCount() { return this.sources.filter(s => s.enabled).length; },
+        get tier1Sources() { return this.sources.filter(s => s.enabled && !s.manual_only); },
+        get tier2Sources() { return this.sources.filter(s => !s.enabled && !s.manual_only); },
+        get tier1Count()   { return this.tier1Sources.length; },
 
         toggle(id) {
             const s = this.sources.find(x => x.id === id);
-            if (s) s.enabled = !s.enabled;
+            if (!s) return;
+            if (s.enabled) {
+                s.enabled = false;
+                return;
+            }
+            if (this.tier1Count >= this.MAX_TIER1) {
+                this._flashCapAlert();
+                return;
+            }
+            s.enabled = true;
+            const idx = this.sources.findIndex(x => x.id === id);
+            if (idx >= 0) {
+                const [moved] = this.sources.splice(idx, 1);
+                this.sources.push(moved);
+            }
+        },
+
+        _flashCapAlert() {
+            this.showCapAlert = true;
+            if (this._capAlertTimer) clearTimeout(this._capAlertTimer);
+            this._capAlertTimer = setTimeout(() => { this.showCapAlert = false; }, 4500);
         },
     };
 }
