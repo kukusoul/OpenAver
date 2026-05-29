@@ -9,6 +9,7 @@ export function stateConfig() {
             searchFavoriteFolder: '',
             proxyUrl: '',
             primarySource: 'javbus',
+            advancedSearchEnabled: false,  // 進階搜尋 picker（TASK-61c-7，top-level config 欄位）
 
             // Translate
             translateEnabled: false,
@@ -394,6 +395,8 @@ export function stateConfig() {
                     this.form.searchFavoriteFolder = config.search?.favorite_folder || '';
                     this.form.proxyUrl = config.search?.proxy_url || '';
                     this.form.primarySource = config.search?.primary_source || 'javbus';
+                    // 進階搜尋（TASK-61c-7）：top-level bool 欄位
+                    this.form.advancedSearchEnabled = config.advanced_search_enabled || false;
 
                     // Translate
                     this.form.translateEnabled = config.translate.enabled;
@@ -548,6 +551,9 @@ export function stateConfig() {
                     proxy_url: this.form.proxyUrl.trim(),
                     primary_source: this.form.primarySource,
                 };
+
+                // 進階搜尋（TASK-61c-7）：top-level bool 欄位（與 nested 區塊並列）
+                config.advanced_search_enabled = this.form.advancedSearchEnabled;
 
                 // 更新 translate
                 config.translate = {

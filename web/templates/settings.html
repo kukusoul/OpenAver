@@ -1019,6 +1019,17 @@
                             <small class="settings-hint">{{ t('settings.search.favorite_folder_example_prefix') | safe }}</small>
                         </div>
                     </div>
+
+                    <!-- 進階搜尋 (Beta) toggle（TASK-61c-7） -->
+                    <div class="settings-form-group">
+                        <label class="settings-label">
+                            <input type="checkbox" class="toggle toggle-primary"
+                                   id="advancedSearchToggle"
+                                   x-model="form.advancedSearchEnabled">
+                            <span class="label-text">{{ t('settings.advanced_search.toggle_label') }}</span>
+                        </label>
+                        <small class="settings-hint">{{ t('settings.advanced_search.help') }}</small>
+                    </div>
                 </div>
             </div>
 

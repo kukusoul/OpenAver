@@ -133,6 +133,7 @@ class AppConfig(BaseModel):
     showcase: ShowcaseConfig = ShowcaseConfig()
     general: GeneralConfig = GeneralConfig()
     sources: list[SourceConfig] = Field(default_factory=get_builtin_sources)
+    advanced_search_enabled: bool = False  # 進階搜尋 picker（TASK-61c-7）；Pydantic default 自動補缺漏
 
 
 # ============ 載入 / 儲存 ============
