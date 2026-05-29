@@ -127,3 +127,21 @@ class TestStateConfigStateMachineFlags:
         js = self._js()
         assert "TODO(B4)" in js, \
             "metatube mock provider fixture must carry a // TODO(B4) removal marker (CD-61-13)"
+
+
+class TestSourcesI18nWiring:
+    """61c-6：i18n key 綁定守衛（warn 條走 i18n key、斷線 toast 不硬編碼中文）。"""
+
+    def test_warn_bar_references_warn_all_disabled_key(self):
+        """全停用警告條須引用 settings.sources.warn_all_disabled key（非硬編碼文案）。"""
+        html = SETTINGS_HTML.read_text(encoding="utf-8")
+        assert "settings.sources.warn_all_disabled" in html, \
+            "full-disable warning bar must bind t('settings.sources.warn_all_disabled')"
+
+    def test_disconnect_toast_uses_i18n_key_not_hardcoded(self):
+        """clickDisconnectedMetatube 須走 window.t()，不得硬編碼中文 toast。"""
+        js = STATE_CONFIG_JS.read_text(encoding="utf-8")
+        assert "window.t('settings.sources.mt_disconnect_toast')" in js, \
+            "clickDisconnectedMetatube must use window.t('settings.sources.mt_disconnect_toast')"
+        assert "'Metatube 已中斷" not in js, \
+            "clickDisconnectedMetatube must not hardcode the Chinese disconnect toast literal"

@@ -777,7 +777,7 @@ export function stateConfig() {
 
         // 斷線 metatube 點擊：toast 提示重連，無 state mutation（EC-9）。
         clickDisconnectedMetatube(_name) {
-            this.showToast('Metatube 已中斷，請至下方 Section 3 重新連線', 'warning');
+            this.showToast(window.t('settings.sources.mt_disconnect_toast'), 'warning');
         },
 
         // Manual-Only（JavLibrary）：Active Row 內 no-op（[BETA] badge 取代 toggle，固定末尾）。
