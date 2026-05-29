@@ -12,6 +12,7 @@ from core.scrapers.heyzo import HEYZOScraper
 from core.scrapers.dmm import DMMScraper
 from core.scrapers.javbus import JavBusScraper
 from core.scrapers.models import Video
+from core.scrapers.utils import SOURCE_ORDER
 from core.scraper import search_jav, smart_search
 
 
@@ -46,6 +47,25 @@ def _make_video(source: str, number: str = "TEST-001") -> Video:
 
 class TestPipeline:
     """Pipeline routing 測試（mock scraper.search，驗證路由邏輯）"""
+
+    @pytest.fixture(autouse=True)
+    def _all_sources_enabled(self, monkeypatch):
+        """隔離 ambient web/config.json 的啟用來源集合。
+
+        TASK-61a-3 起 search_jav(source='auto') 改讀 get_enabled_source_ids()
+        →（讀 live web/config.json）決定 fan-out 來源。本檔的 merge-priority
+        測試假設 8 個 builtin 來源（含 dmm/javbus）全部啟用；若開發者把有碼來源
+        停用（例如開無碼模式），dmm/javbus 會被排除 → search_jav 回 None →
+        assertion 觸發 TypeError，測試變得 config-coupled 且不確定。
+
+        此 fixture 把 search_jav 實際呼叫的 core.scraper.get_enabled_source_ids
+        monkeypatch 成回傳全部 8 個 builtin id（canonical 順序），讓 merge
+        測試只驗證 MERGER 在所有來源可用時的行為，與環境 config 無關。
+        """
+        monkeypatch.setattr(
+            "core.scraper.get_enabled_source_ids",
+            lambda: list(SOURCE_ORDER),
+        )
 
     def test_uncensored_detection_d2pass(self):
         """日期_底線格式番號 → 自動走無碼路徑 → D2PassScraper 被呼叫"""
