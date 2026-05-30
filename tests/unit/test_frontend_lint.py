@@ -8309,13 +8309,13 @@ class TestSearchRescrapeEntryGuard:
 
 
 class TestSwitchSourcePickGuard:
-    """62c-3 US7：守衛結果面板 🔄（#switchSourceBtn）長壓挑來源 wiring + entryPoint 分支 + 番號唯讀 + seeding helper export。
+    """62c-3 US7：守衛結果面板 🔄（#switchSourceBtn）長壓挑來源 wiring + entryPoint 分支 + 番號可編輯 + seeding helper export。
 
     tap=維持現有循環切換（switchSource）；長壓 700ms=開來源 picker（openSwitchSourcePicker，entryPoint
-    'switch-source'，番號預填當前那一筆且唯讀）→ 點 pill → preview 重抓→ 只替換捕捉的當前卡 slot
+    'switch-source'，番號預填當前那一筆、可編輯（2026-05-31 放開唯讀））→ 點 pill → preview 重抓→ 只替換捕捉的當前卡 slot
     + seed cycle state（window.SearchUI.seedSwitchState）。race 安全 + cycle 同步走手動 checklist
     （async 時序無法靜態斷言）；負向「switch-source 分支禁 advancedSearch/fallbackSearch/searchResults =」
-    走 eslint Group 7。本 class 只靜態斷言 wiring / 分支字串 / 番號唯讀 / export contract。
+    走 eslint Group 7。本 class 只靜態斷言 wiring / 分支字串 / 番號可編輯 / export contract。
     對齊 TestSearchRescrapeEntryGuard pattern（element-bound regex，避免假測試）。
     """
 
@@ -8405,10 +8405,15 @@ class TestSwitchSourcePickGuard:
             assert forbidden not in url_btn, \
                 f"§1.6 D 違規：↗ openSourceUrl 鈕誤接 {forbidden}（長壓只疊 #switchSourceBtn）"
 
-    # ── (b) _rescrape_modal.html 番號 input switch-source 唯讀 ──
+    # ── (b) _rescrape_modal.html 番號 input 永遠可編輯（含 switch-source 入口）──
 
-    def test_number_input_readonly_for_switch_source(self):
-        """_rescrape_modal.html 番號 input 含 :readonly="rescrapeEntryPoint === 'switch-source'"（鎖定#1，不 fork 元件）。"""
+    def test_number_input_editable_in_all_entry_points(self):
+        """_rescrape_modal.html 番號 input 不得有 switch-source 唯讀綁定。
+
+        2026-05-31 修訂：原 US7 拍板#1 鎖 switch-source 唯讀，後因「拖入檔名解析錯 → 無結果 →
+        想在當前卡改正番號重抓」的真實工作流放開。番號在所有入口（lightbox/enrich/search/switch-source）
+        皆可編輯。此守衛防回歸：禁止任何 readonly 綁定重新出現在番號 input 上。
+        """
         modal = self._modal()
         m = re.search(
             r'<input\b(?:(?!>).)*?\bclass="rescrape-num-input"(?:(?!>).)*?>',
@@ -8416,8 +8421,8 @@ class TestSwitchSourcePickGuard:
         )
         assert m, "_rescrape_modal.html 番號 input（.rescrape-num-input）不存在"
         inp = m.group(0)
-        assert re.search(r":readonly=\"rescrapeEntryPoint === 'switch-source'\"", inp), \
-            f"番號 input 必須含 :readonly=\"rescrapeEntryPoint === 'switch-source'\"（switch-source 入口唯讀），實際: {inp!r}"
+        assert not re.search(r"(?::readonly|\breadonly)\b", inp), \
+            f"番號 input 不得含 readonly / :readonly 綁定（所有入口皆可編輯番號，含 switch-source），實際: {inp!r}"
 
     # ── (c) state-rescrape.js openSwitchSourcePicker + switch-source 分支 + 註解 ──
 

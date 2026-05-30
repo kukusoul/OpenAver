@@ -22,9 +22,10 @@
       <div class="rescrape-section">
         <label class="rescrape-label">{{ t('showcase.rescrape.number_label') }}</label>
         {# US2：番號永遠可編輯（無鉛筆、不因 loading 鎖）；改動即清掉上次 not-found 結果。
-           62c-3 US7：switch-source 入口番號鎖定為當前那一筆（唯讀，重抓「這一筆」語意，不可改字）。 #}
+           62c-3 US7（2026-05-31 修訂）：switch-source 入口番號改為可編輯。原拍板#1 鎖唯讀，
+           但實測「拖入檔名解析錯 → 搜尋無結果 → 想在當前卡改正番號重抓」是真實工作流，
+           故放開唯讀，讓 🔄 長壓 = 改番號 + 挑來源、只替換當前卡（仍不重設結果列，與 US5 區隔）。 #}
         <input class="rescrape-num-input" type="text" x-model="rescrapeNumber"
-               :readonly="rescrapeEntryPoint === 'switch-source'"
                @input="rescrapeNotFound = false">
         <div class="rescrape-hint">{{ t('showcase.rescrape.filename_hint') }}：<code x-text="rescrapeOriginalFilename"></code></div>
       </div>

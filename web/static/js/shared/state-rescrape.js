@@ -79,7 +79,7 @@ export function rescrapeState() {
          *
          * current() / listMode / fileList / currentFileIndex / currentIndex 為 search 元件 state，
          * 經 mergeState 後綁元件 this（result-card.js current() / navigation 既有）。
-         * 番號預填當前那一筆且唯讀（partial :readonly="rescrapeEntryPoint === 'switch-source'"）。
+         * 番號預填當前那一筆，且可編輯（2026-05-31 放開唯讀：拖入解析錯時可在當前卡改正番號重抓）。
          */
         openSwitchSourcePicker() {
             this.openRescrape(null, 'switch-source');
@@ -156,6 +156,9 @@ export function rescrapeState() {
                 const data = await resp.json();
                 // 62c-3 US7：switch-source 入口（在 showcase 分支之前判斷）。找到 → 只替換捕捉的當前卡 slot
                 // （不重設結果列、currentIndex 不歸零、無 ✓/✗ commit）+ seed cycle state；找不到 → 沿用 not-found。
+                // 2026-05-31：番號改為可編輯（拍板放開唯讀），故 stale 比對仍用捕捉的原 t.number
+                // （await 回來時 slot 尚未替換、仍持有舊番號），但 seed 改用 variant.number
+                // （替換後當前卡顯示的番號 = 下次 tap 查 switchStateMap 的 key；用編輯後實際抓回的番號才對得上）。
                 if (this.rescrapeEntryPoint === 'switch-source') {
                     if (data && data.success) {
                         // ── race 防覆蓋錯卡：await 回來判 slot 是否還在原位（強化 1：含 liveArr 顯式 identity 比對）──
@@ -174,7 +177,7 @@ export function rescrapeState() {
                             t.arr[t.idx] = variant;                               // 整顆替換（對齊 ui.js:248）
                             this._resetCoverState?.();                            // cover 可能變（對齊 ui.js:250）
                             this.saveState?.();                                   // 持久化寫回（對齊 ui.js:259 tap 路徑；防 session restore 回舊卡）。optional-chain：mixin 共用 showcase，switch-source 僅 search 觸發
-                            window.SearchUI?.seedSwitchState?.(t.number, sourceId, variant);  // 鎖定#4：下次 tap 從選定來源接續
+                            window.SearchUI?.seedSwitchState?.(variant.number || t.number, sourceId, variant);  // 鎖定#4：下次 tap 從選定來源接續（用替換後實際番號 key，對齊編輯番號後的當前卡）
                         }
                         // stale → 靜默丟棄（不寫 detached 陣列、不誤 seed）；非 stale → 已寫回。一律關窗。
                         this.closeRescrape();
