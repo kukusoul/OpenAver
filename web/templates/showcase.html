@@ -526,7 +526,7 @@
         <!-- Lightbox (M3a) -->
         <div class="showcase-lightbox"
              :class="{ 'show': lightboxOpen }"
-             x-trap.inert="lightboxOpen && !sampleGalleryOpen && !removeActressModalOpen"
+             x-trap.inert="lightboxOpen && !sampleGalleryOpen && !removeActressModalOpen && !rescrapeOpen"
              @click="handleLightboxBackdropClick($event)">
 
             <div class="lightbox-content" @click.stop>
