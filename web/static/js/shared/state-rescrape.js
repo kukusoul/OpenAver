@@ -163,6 +163,7 @@ export function rescrapeState() {
                             const { success, ...variant } = data;
                             t.arr[t.idx] = variant;                               // 整顆替換（對齊 ui.js:248）
                             this._resetCoverState?.();                            // cover 可能變（對齊 ui.js:250）
+                            this.saveState?.();                                   // 持久化寫回（對齊 ui.js:259 tap 路徑；防 session restore 回舊卡）。optional-chain：mixin 共用 showcase，switch-source 僅 search 觸發
                             window.SearchUI?.seedSwitchState?.(t.number, sourceId, variant);  // 鎖定#4：下次 tap 從選定來源接續
                         }
                         // stale → 靜默丟棄（不寫 detached 陣列、不誤 seed）；非 stale → 已寫回。一律關窗。
