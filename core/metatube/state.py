@@ -39,6 +39,9 @@ class MetatubeConnectionState:
         self.token: str | None = None
         self._availability: dict[str, bool] = {}   # key = 'metatube:{ProviderName}'
         self._providers: list[str] = []            # raw ProviderName list
+        # Probe progress tracking (CD-63b-2)
+        self._probe_done: bool = True
+        self._probe_progress: int = 0
 
     # ------------------------------------------------------------------
     # Mutations
@@ -86,6 +89,26 @@ class MetatubeConnectionState:
             for key in self._availability:
                 self._availability[key] = False
         logger.debug('MetatubeConnectionState.disconnect')
+
+    # ------------------------------------------------------------------
+    # Probe progress setters (CD-63b-2) — all Lock-guarded
+    # ------------------------------------------------------------------
+
+    def set_probe_started(self) -> None:
+        """Mark probe as in-progress and reset progress counter."""
+        with self._lock:
+            self._probe_done = False
+            self._probe_progress = 0
+
+    def set_probe_progress(self, done: int, total: int) -> None:
+        """Update probe progress counter."""
+        with self._lock:
+            self._probe_progress = done
+
+    def set_probe_done(self) -> None:
+        """Mark probe as completed."""
+        with self._lock:
+            self._probe_done = True
 
     def mark_failed(self, source_id: str) -> None:
         """Set a single provider source to unavailable.
@@ -146,6 +169,35 @@ class MetatubeConnectionState:
         """Number of providers registered at the last connect()."""
         with self._lock:
             return len(self._providers)
+
+    @property
+    def probe_done(self) -> bool:
+        """True when no probe is currently running (initial state = True)."""
+        with self._lock:
+            return self._probe_done
+
+    @property
+    def probe_progress(self) -> int:
+        """Number of providers probed so far in the current probe run."""
+        with self._lock:
+            return self._probe_progress
+
+    def status_dict(self) -> dict:
+        """Return a snapshot dict for the /status endpoint (CD-63b-2).
+
+        Keys: connected, base_url, probe_done, probe_progress, providers.
+        """
+        with self._lock:
+            return {
+                "connected": self.connected,       # runtime, NOT config
+                "base_url": self.base_url,
+                "probe_done": self._probe_done,
+                "probe_progress": self._probe_progress,
+                "providers": [
+                    {"id": k, "available": v}
+                    for k, v in self._availability.items()
+                ],
+            }
 
 
 # ---------------------------------------------------------------------------

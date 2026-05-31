@@ -84,6 +84,12 @@ class OpenAIConfig(BaseModel):
     use_custom_model: bool = False
 
 
+class MetatubeConfig(BaseModel):
+    """串接結構：Metatube HTTP server 配置（CD-63b-3）"""
+    url: str = ""    # metatube server URL (persisted; runtime connected state NOT stored here)
+    token: str = ""  # API token（空字串 = 不需驗證）
+
+
 class TranslateConfig(BaseModel):
     enabled: bool = False
     provider: str = "ollama"  # "ollama" | "gemini" | "openai"
@@ -134,6 +140,7 @@ class AppConfig(BaseModel):
     general: GeneralConfig = GeneralConfig()
     sources: list[SourceConfig] = Field(default_factory=get_builtin_sources)
     advanced_search_enabled: bool = False  # 進階搜尋 picker（TASK-61c-7）；Pydantic default 自動補缺漏
+    metatube: MetatubeConfig = MetatubeConfig()  # CD-63b-3；Pydantic default 自動補缺漏（no migration needed）
 
 
 # ============ 載入 / 儲存 ============

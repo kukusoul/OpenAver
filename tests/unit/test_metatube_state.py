@@ -234,3 +234,101 @@ def test_reconnect_removes_stale_providers(state):
     assert 'metatube:HEYZO' not in availability
     # 新 provider 應在 map 且為 True
     assert availability.get('metatube:JavBus') is True
+
+
+# ===========================================================================
+# CD-63b-2: probe progress setters + status_dict
+# ===========================================================================
+
+def test_probe_initial_state():
+    """Fresh instance: probe_done=True, probe_progress=0."""
+    s = MetatubeConnectionState()
+    assert s.probe_done is True
+    assert s.probe_progress == 0
+
+
+def test_probe_set_started():
+    """set_probe_started() → probe_done=False, probe_progress=0."""
+    s = MetatubeConnectionState()
+    s.set_probe_started()
+    assert s.probe_done is False
+    assert s.probe_progress == 0
+
+
+def test_probe_set_progress():
+    """set_probe_progress(5, 30) → probe_progress==5."""
+    s = MetatubeConnectionState()
+    s.set_probe_started()
+    s.set_probe_progress(5, 30)
+    assert s.probe_progress == 5
+    assert s.probe_done is False  # still in progress
+
+
+def test_probe_set_done():
+    """set_probe_done() → probe_done=True."""
+    s = MetatubeConnectionState()
+    s.set_probe_started()
+    s.set_probe_progress(5, 30)
+    s.set_probe_done()
+    assert s.probe_done is True
+
+
+def test_probe_setter_sequence_no_deadlock():
+    """Single-threaded setter sequence completes without deadlock."""
+    s = MetatubeConnectionState()
+    # initial
+    assert s.probe_done is True
+    assert s.probe_progress == 0
+    # start
+    s.set_probe_started()
+    assert s.probe_done is False
+    assert s.probe_progress == 0
+    # progress
+    s.set_probe_progress(5, 30)
+    assert s.probe_progress == 5
+    # done
+    s.set_probe_done()
+    assert s.probe_done is True
+
+
+def test_status_dict_shape():
+    """status_dict() returns all required keys."""
+    s = MetatubeConnectionState()
+    d = s.status_dict()
+    assert set(d.keys()) == {"connected", "base_url", "probe_done", "probe_progress", "providers"}
+    assert isinstance(d["connected"], bool)
+    assert d["base_url"] is None  # not connected
+    assert isinstance(d["probe_done"], bool)
+    assert isinstance(d["probe_progress"], int)
+    assert isinstance(d["providers"], list)
+
+
+def test_status_dict_after_connect_reflects_providers():
+    """status_dict() providers reflects availability_map after connect()."""
+    s = MetatubeConnectionState()
+    s.connect('http://host', 'tok', ['FANZA', 'HEYZO'])
+    d = s.status_dict()
+
+    assert d["connected"] is True
+    assert d["base_url"] == 'http://host'
+    # providers list has entries for FANZA and HEYZO
+    provider_ids = {p["id"] for p in d["providers"]}
+    assert 'metatube:FANZA' in provider_ids
+    assert 'metatube:HEYZO' in provider_ids
+    # all available=True right after connect
+    for p in d["providers"]:
+        assert p["available"] is True
+
+
+def test_status_dict_probe_flags():
+    """status_dict() probe_done/probe_progress update with setters."""
+    s = MetatubeConnectionState()
+    s.set_probe_started()
+    s.set_probe_progress(3, 10)
+    d = s.status_dict()
+    assert d["probe_done"] is False
+    assert d["probe_progress"] == 3
+
+    s.set_probe_done()
+    d2 = s.status_dict()
+    assert d2["probe_done"] is True
