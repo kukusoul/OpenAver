@@ -188,6 +188,12 @@
     display: inline-block;
 }
 
+/* Probe-failed Parts Bin pill (CD-63b-4 US9): dimmed but still clickable (promote-with-warning).
+   Mirror: .source-pill.dragging opacity 0.5 (L131) and .source-pill:disabled opacity 0.45 (L202). */
+.source-pill.is-partsbin[data-available="false"] {
+    opacity: 0.5;
+}
+
 /* ─── Action / loading modifiers (62a-2; click-to-rescrape pill, NOT drag) ───
  * Settings pill = drag (base cursor: grab). Rescrape-modal pill = click action.
  * `--action` flips the cursor to pointer + guards the lift against disabled/loading;

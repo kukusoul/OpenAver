@@ -779,6 +779,16 @@ export function stateConfig() {
         promoteMetatube(id) {
             const s = this.sources.find(x => x.id === id);
             if (!s || s.type !== 'metatube' || s.enabled) return;
+            // 斷線灰（US3）：整個 metatube 掉線 → 導向重連，不 promote
+            if (!this.metatubeConnected) {
+                this.showToast(window.t('settings.sources.mt_disconnect_toast'), 'warning');
+                return;
+            }
+            // probe-failed 灰（US9）：connected 但此源測不到 → 非阻塞警告 + 繼續 promote（不擋）
+            if (s.available === false) {
+                this.showToast(window.t('settings.sources.mt_promote_unavailable_warning'), 'warning');
+                // 不 return — promote 繼續（可逆操作，符合 prd 非破壞性 toast 規則）
+            }
             if (this.enabledCount >= MAX_ENABLED_SOURCES) {
                 this._flashCapAlert();
                 return;
@@ -851,7 +861,18 @@ export function stateConfig() {
             this.metatubeConnected = false;
         },
 
-        // ─── Probe polling helpers (CD-63b-3 / CD-63b-6) ───────────────
+        // ─── Probe polling helpers (CD-63b-3 / CD-63b-4) ───────────────
+
+        // Re-trigger a full probe (retest button — CD-63b-4 B1).
+        async metatubeRetest() {
+            try {
+                await fetch('/api/settings/metatube/test', { method: 'POST' });
+                this.startProbePolling();
+            } catch (_e) {
+                this.showToast(window.t('settings.sources.mt_connect_network_error'), 'error');
+            }
+        },
+
         startProbePolling() {
             this.probeDone = false; this.probeProgress = 0;
             if (this._probeInterval) clearInterval(this._probeInterval);

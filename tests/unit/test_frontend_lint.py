@@ -8791,3 +8791,72 @@ class TestMetatubeB3Guard:
         assert "metatubeEnableToggle" in html, (
             "CD-63b-3 違規：settings.html 缺少 metatubeEnableToggle（Advanced tab 啟用開關）"
         )
+
+
+class TestMetatubeB4Guard:
+    """CD-63b-4: 守衛 probe UI 視覺層（進度列 / retest button / hint details / grey-out）。"""
+
+    SETTINGS_JS = PROJECT_ROOT / "web" / "static" / "js" / "pages" / "settings" / "state-config.js"
+    SETTINGS_HTML = PROJECT_ROOT / "web" / "templates" / "settings.html"
+
+    def _js(self) -> str:
+        return self.SETTINGS_JS.read_text(encoding="utf-8")
+
+    def _html(self) -> str:
+        return self.SETTINGS_HTML.read_text(encoding="utf-8")
+
+    def test_html_has_mt_probe_testing_key(self):
+        """B1: settings.html 含 mt_probe_testing i18n key（進度列文字）。"""
+        html = self._html()
+        assert "mt_probe_testing" in html, (
+            "CD-63b-4 違規：settings.html 缺少 mt_probe_testing 文字 key（probe 進度列）"
+        )
+
+    def test_html_has_metatube_retest_call(self):
+        """B2: settings.html 含 metatubeRetest() 呼叫（retest button）。"""
+        html = self._html()
+        assert "metatubeRetest" in html, (
+            "CD-63b-4 違規：settings.html 缺少 metatubeRetest() 呼叫（retest button）"
+        )
+
+    def test_html_has_mt_probe_hint_title_key(self):
+        """B3: settings.html 含 mt_probe_hint_title i18n key（hint details summary）。"""
+        html = self._html()
+        assert "mt_probe_hint_title" in html, (
+            "CD-63b-4 違規：settings.html 缺少 mt_probe_hint_title key（probe-hint details）"
+        )
+
+    def test_html_has_data_available_binding(self):
+        """B4: settings.html 含 :data-available 綁定（Parts Bin pill grey-out mechanism）。"""
+        html = self._html()
+        assert "data-available" in html, (
+            "CD-63b-4 違規：settings.html 缺少 :data-available 綁定（probe-failed grey-out）"
+        )
+
+    def test_js_has_metatube_retest(self):
+        """A1: state-config.js 含 metatubeRetest 方法定義。"""
+        js = self._js()
+        assert "metatubeRetest" in js, (
+            "CD-63b-4 違規：state-config.js 缺少 metatubeRetest 方法"
+        )
+
+    def test_js_has_start_probe_polling(self):
+        """A1: state-config.js 含 startProbePolling（metatubeRetest 呼叫的 helper）。"""
+        js = self._js()
+        assert "startProbePolling" in js, (
+            "CD-63b-4 違規：state-config.js 缺少 startProbePolling 方法"
+        )
+
+    def test_js_promote_metatube_has_available_check(self):
+        """A2: state-config.js promoteMetatube 含 available === false 檢查（probe-failed 警告）。"""
+        js = self._js()
+        assert "s.available === false" in js, (
+            "CD-63b-4 違規：state-config.js promoteMetatube 缺少 s.available === false guard"
+        )
+
+    def test_js_promote_metatube_has_unavailable_warning_key(self):
+        """A2: state-config.js promoteMetatube 含 mt_promote_unavailable_warning toast key。"""
+        js = self._js()
+        assert "mt_promote_unavailable_warning" in js, (
+            "CD-63b-4 違規：state-config.js 缺少 mt_promote_unavailable_warning toast key"
+        )

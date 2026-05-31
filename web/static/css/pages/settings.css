@@ -831,6 +831,67 @@
     color: var(--text-secondary);
 }
 
+/* connected: probe progress line — shown while probe is running (CD-63b-4 C1).
+   Mirrors .settings-mt-tier-hint: same font-size, muted color, flex row with gap. */
+#settings-components .settings-mt-probe-progress {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    padding: 0.5rem 0.9rem;
+    margin-bottom: 0.5rem;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    color: var(--text-secondary);
+}
+
+#settings-components .settings-mt-probe-progress > i {
+    flex: 0 0 auto;
+    color: var(--text-secondary);
+}
+
+#settings-components .settings-mt-probe-progress .probe-counter {
+    color: var(--text-secondary);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    /* static hourglass — no spin animation added; keep simple per task spec */
+}
+
+/* connected: probe-hint <details> — subordinate explanatory aside (CD-63b-4 C1).
+   summary acts as a small muted clickable hint line; ul uses comfortable list spacing. */
+#settings-components .settings-mt-probe-hint {
+    margin-bottom: 0.5rem;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+#settings-components .settings-mt-probe-hint > summary {
+    cursor: pointer;
+    padding: 0.25rem 0;
+    color: var(--text-secondary);
+    list-style: disclosure-closed;
+    transition: color var(--fluent-duration-fast) var(--fluent-ease-standard);
+}
+
+#settings-components .settings-mt-probe-hint[open] > summary {
+    list-style: disclosure-open;
+}
+
+#settings-components .settings-mt-probe-hint > summary:hover {
+    color: var(--text-primary);
+}
+
+#settings-components .settings-mt-probe-hint > ul {
+    margin: 0.4rem 0 0;
+    padding-left: 1.25rem;
+    line-height: 1.55;
+}
+
+#settings-components .settings-mt-probe-hint > ul > li {
+    margin-bottom: 0.25rem;
+    color: var(--text-secondary);
+}
+
 /* Parts Bin pill (.source-pill.is-partsbin) moved to components/source-pill.css (TASK-62a-0). */
 
 @media (prefers-reduced-motion: reduce) {

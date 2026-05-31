@@ -543,6 +543,19 @@
                                         @click="metatubeDisconnect()">
                                     <i class="bi bi-x-circle"></i> {{ t('settings.sources.mt_disconnect_btn') }}
                                 </button>
+                                <!-- Retest button — shown when connected AND probe finished (CD-63b-4 B2) -->
+                                <button type="button" class="settings-sources-mini-btn"
+                                        x-show="metatubeConnected && probeDone"
+                                        @click="metatubeRetest()">
+                                    <i class="bi bi-arrow-clockwise"></i> {{ t('settings.sources.mt_retest_btn') }}
+                                </button>
+                            </div>
+
+                            <!-- Probe progress line — shown while probe is running (CD-63b-4 B1) -->
+                            <div class="settings-mt-probe-progress" x-show="!probeDone">
+                                <i class="bi bi-hourglass-split" aria-hidden="true"></i>
+                                <span>{{ t('settings.sources.mt_probe_testing') }}</span>
+                                <span class="probe-counter">(<span x-text="probeProgress"></span>/<span x-text="probeTotal"></span>)</span>
                             </div>
 
                             <!-- Tier hint -->
@@ -550,6 +563,16 @@
                                 <i class="bi bi-stars" aria-hidden="true"></i>
                                 <span>{{ t('settings.sources.mt_connected_tier_hint') }}</span>
                             </div>
+
+                            <!-- Three-cause hint: why some providers are greyed (CD-63b-4 B3) -->
+                            <details class="settings-mt-probe-hint">
+                                <summary>{{ t('settings.sources.mt_probe_hint_title') }}</summary>
+                                <ul>
+                                    <li>{{ t('settings.sources.mt_probe_hint_reason1') }}</li>
+                                    <li>{{ t('settings.sources.mt_probe_hint_reason2') }}</li>
+                                    <li>{{ t('settings.sources.mt_probe_hint_reason3') }}</li>
+                                </ul>
+                            </details>
 
                             <!-- Parts Bin header (collapsible, default collapsed) — N = partsBinSources.length -->
                             <button type="button"
@@ -573,6 +596,7 @@
                                                 <div class="source-pill is-partsbin"
                                                      data-enabled="false"
                                                      data-rec="true"
+                                                     :data-available="src.available"
                                                      role="option"
                                                      :aria-selected="false"
                                                      :aria-label="`${src.display_name} — {{ t('settings.sources.mt_promote_hint') }}`"
@@ -598,6 +622,7 @@
                                             <template x-for="src in partsBinSources.filter(s => !s.recommended)" :key="src.id">
                                                 <div class="source-pill is-partsbin"
                                                      data-enabled="false"
+                                                     :data-available="src.available"
                                                      role="option"
                                                      :aria-selected="false"
                                                      :aria-label="`${src.display_name} — {{ t('settings.sources.mt_promote_hint') }}`"
