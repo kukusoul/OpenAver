@@ -87,6 +87,7 @@
       "config": {},
       "is_beta": false,
       "manual_only": false,
+      "requires_proxy": true,
       "is_censored": true
     },
     {
@@ -99,6 +100,7 @@
       "config": {},
       "is_beta": false,
       "manual_only": false,
+      "requires_proxy": false,
       "is_censored": true
     },
     {
@@ -111,6 +113,7 @@
       "config": {},
       "is_beta": false,
       "manual_only": false,
+      "requires_proxy": false,
       "is_censored": true
     },
     {
@@ -123,6 +126,7 @@
       "config": {},
       "is_beta": false,
       "manual_only": false,
+      "requires_proxy": false,
       "is_censored": true
     },
     {
@@ -135,6 +139,7 @@
       "config": {},
       "is_beta": false,
       "manual_only": false,
+      "requires_proxy": false,
       "is_censored": false
     },
     {
@@ -147,6 +152,7 @@
       "config": {},
       "is_beta": false,
       "manual_only": false,
+      "requires_proxy": false,
       "is_censored": false
     },
     {
@@ -159,6 +165,7 @@
       "config": {},
       "is_beta": false,
       "manual_only": false,
+      "requires_proxy": false,
       "is_censored": false
     },
     {
@@ -171,6 +178,7 @@
       "config": {},
       "is_beta": false,
       "manual_only": false,
+      "requires_proxy": false,
       "is_censored": false
     }
   ],

@@ -14,6 +14,10 @@ from pydantic import BaseModel, Field, computed_field
 from core.logger import get_logger
 from core.scrapers.utils import (
     CENSORED_SOURCES,
+    METATUBE_CENSORED,
+    METATUBE_PROVIDER_ORDER,
+    METATUBE_UNCENSORED,
+    PROXY_SOURCES,
     SOURCE_NAMES,
     SOURCE_ORDER,
     UNCENSORED_SOURCES,
@@ -34,13 +38,14 @@ class SourceConfig(BaseModel):
 
     id: str
     type: str  # 'builtin' / 'metatube' / ...
-    display_name_key: str
+    display_name_key: str | None = None
     display_name_raw: str = ''
     enabled: bool = True
     order: int = 0
     config: dict = Field(default_factory=dict)
     is_beta: bool = False
     manual_only: bool = False  # B1 day-one schema（預留 B4 javlibrary）；B1 全 False
+    requires_proxy: bool = False  # CD-63a-3：DMM=True，metatube 全 False
 
     @computed_field  # type: ignore[prop-decorator]
     @property
@@ -81,9 +86,12 @@ def render_name(s: SourceConfig) -> str:
 
     - builtin → display_name_key（品牌名本身不走 i18n，CD-61-15）。
     - 其他（metatube 等）→ display_name_raw（外部來源原樣名稱，不翻譯）。
+
+    builtin 的 display_name_key 由 get_builtin_sources() 保證非 None；
+    metatube 走 display_name_raw 分支，永不讀到 None（CD-63a-1）。
     """
     if s.type == 'builtin':
-        return s.display_name_key
+        return s.display_name_key or ''
     return s.display_name_raw
 
 
@@ -104,6 +112,7 @@ def get_builtin_sources() -> list[SourceConfig]:
             config={},
             is_beta=False,
             manual_only=False,
+            requires_proxy=(sid in PROXY_SOURCES),
         )
         for index, sid in enumerate(SOURCE_ORDER)
     ]
@@ -117,6 +126,56 @@ def get_source_enum(include_auto: bool = False) -> list[str]:
     """
     ids = [s.id for s in get_builtin_sources()]
     return ['auto', *ids] if include_auto else ids
+
+
+def build_metatube_sources(provider_names: list[str]) -> list['SourceConfig']:
+    """從 provider name 清單建立 metatube SourceConfig 列表（CD-63a-5）。
+
+    純函數：不吃 config、不寫檔。
+    - id = 'metatube:{name}'
+    - type = 'metatube'
+    - enabled = False（Parts Bin，不自動 promote，spec US1）
+    - censored_type 由 METATUBE_CENSORED / METATUBE_UNCENSORED map 推導；
+      不在 map 中的 provider 保守填 'censored' + log warning。
+    - order：在 METATUBE_PROVIDER_ORDER 的 index；
+      不在 list 的未知 provider 排末尾，彼此按字母序（deterministic）。
+    """
+    known_count = len(METATUBE_PROVIDER_ORDER)
+
+    # 分出已知 / 未知 provider
+    unknown_names = sorted(n for n in provider_names if n not in METATUBE_PROVIDER_ORDER)
+
+    def _order(name: str) -> int:
+        if name in METATUBE_PROVIDER_ORDER:
+            return METATUBE_PROVIDER_ORDER.index(name)
+        return known_count + unknown_names.index(name)
+
+    def _censored_type(name: str) -> str:
+        if name in METATUBE_CENSORED:
+            return 'censored'
+        if name in METATUBE_UNCENSORED:
+            return 'uncensored'
+        logger.warning(
+            "metatube provider '%s' 不在 censored/uncensored map，保守視為有碼",
+            name,
+        )
+        return 'censored'
+
+    return [
+        SourceConfig(
+            id=f'metatube:{name}',
+            type='metatube',
+            display_name_key=None,
+            display_name_raw=name,
+            enabled=False,
+            manual_only=False,
+            is_beta=False,
+            requires_proxy=False,
+            config={'censored_type': _censored_type(name)},
+            order=_order(name),
+        )
+        for name in provider_names
+    ]
 
 
 def validate_source_id(sid: str) -> bool:
