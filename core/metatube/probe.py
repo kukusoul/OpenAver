@@ -126,6 +126,7 @@ def probe_all(
     state: MetatubeConnectionState,
     provider_names: list[str],
     on_progress: Callable[[int, int], None] | None = None,
+    generation: int | None = None,
 ) -> dict[str, bool]:
     """
     Probe all providers in parallel and update state accordingly.
@@ -180,10 +181,10 @@ def probe_all(
             # Update state (thread-safe — state uses RLock internally)
             source_id = f'metatube:{name}'
             if ok:
-                state.mark_available(source_id)
+                state.mark_available(source_id, generation=generation)
                 logger.debug('probe_all: %r → available', source_id)
             else:
-                state.mark_failed(source_id)
+                state.mark_failed(source_id, generation=generation)
                 logger.debug('probe_all: %r → failed', source_id)
 
             # Notify progress in main thread (serialised, no race)

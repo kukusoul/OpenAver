@@ -173,9 +173,9 @@ class MetatubeHttpClient:
 
         try:
             resp = self._session.get(url, params=params, timeout=self._timeout)
-        except (requests.Timeout, requests.ConnectionError) as exc:
-            logger.warning("metatube unavailable: %s — %s", url, exc)
-            raise MetatubeUnavailable(f"Network error reaching {url}: {exc}") from exc
+        except requests.RequestException as exc:
+            logger.warning("metatube unavailable: %s — %s", url, type(exc).__name__)
+            raise MetatubeUnavailable("Network error reaching metatube server") from exc
 
         status = resp.status_code
 

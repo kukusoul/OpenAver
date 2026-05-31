@@ -42,6 +42,9 @@ class MetatubeConnectionState:
         # Probe progress tracking (CD-63b-2)
         self._probe_done: bool = True
         self._probe_progress: int = 0
+        # Generation counter — incremented on every connect/disconnect so that
+        # in-flight probes from a prior session can be detected and ignored.
+        self._generation: int = 0
 
     # ------------------------------------------------------------------
     # Mutations
@@ -70,6 +73,7 @@ class MetatubeConnectionState:
             self._providers = list(provider_names)
             for name in provider_names:
                 self._availability[f'metatube:{name}'] = True
+            self._generation += 1
         logger.debug(
             'MetatubeConnectionState.connect: base_url=%r providers=%r',
             base_url, provider_names,
@@ -80,6 +84,12 @@ class MetatubeConnectionState:
 
         Keys are preserved (not cleared) so the UI can still render grey
         capsules for previously known providers (63b feature).
+
+        Also resets probe progress to a terminal state: bumping the generation
+        means any in-flight probe's generation-guarded set_probe_done() is
+        skipped, so disconnect() must clear _probe_done itself — otherwise
+        /status would report probe_done=false forever after a disconnect during
+        an active probe (Codex P2).
         """
         with self._lock:
             self.connected = False
@@ -88,48 +98,65 @@ class MetatubeConnectionState:
             self._providers = []
             for key in self._availability:
                 self._availability[key] = False
+            self._generation += 1
+            self._probe_done = True
+            self._probe_progress = 0
         logger.debug('MetatubeConnectionState.disconnect')
 
     # ------------------------------------------------------------------
     # Probe progress setters (CD-63b-2) — all Lock-guarded
     # ------------------------------------------------------------------
 
-    def set_probe_started(self) -> None:
+    def set_probe_started(self, generation: int | None = None) -> None:
         """Mark probe as in-progress and reset progress counter."""
         with self._lock:
+            if generation is not None and generation != self._generation:
+                return
             self._probe_done = False
             self._probe_progress = 0
 
-    def set_probe_progress(self, done: int, total: int) -> None:
+    def set_probe_progress(self, done: int, total: int, generation: int | None = None) -> None:
         """Update probe progress counter."""
         with self._lock:
+            if generation is not None and generation != self._generation:
+                return
             self._probe_progress = done
 
-    def set_probe_done(self) -> None:
+    def set_probe_done(self, generation: int | None = None) -> None:
         """Mark probe as completed."""
         with self._lock:
+            if generation is not None and generation != self._generation:
+                return
             self._probe_done = True
 
-    def mark_failed(self, source_id: str) -> None:
+    def mark_failed(self, source_id: str, generation: int | None = None) -> None:
         """Set a single provider source to unavailable.
 
         Works on unknown source_ids (creates entry with False value).
 
         Args:
-            source_id: Full source id including prefix, e.g. 'metatube:FANZA'.
+            source_id:  Full source id including prefix, e.g. 'metatube:FANZA'.
+            generation: If provided, write is skipped when current generation
+                        differs (stale probe guard).
         """
         with self._lock:
+            if generation is not None and generation != self._generation:
+                return
             self._availability[source_id] = False
 
-    def mark_available(self, source_id: str) -> None:
+    def mark_available(self, source_id: str, generation: int | None = None) -> None:
         """Set a single provider source to available.
 
         Works on unknown source_ids (creates entry with True value).
 
         Args:
-            source_id: Full source id including prefix, e.g. 'metatube:FANZA'.
+            source_id:  Full source id including prefix, e.g. 'metatube:FANZA'.
+            generation: If provided, write is skipped when current generation
+                        differs (stale probe guard).
         """
         with self._lock:
+            if generation is not None and generation != self._generation:
+                return
             self._availability[source_id] = True
 
     # ------------------------------------------------------------------
@@ -157,6 +184,12 @@ class MetatubeConnectionState:
     # ------------------------------------------------------------------
     # Read-only properties
     # ------------------------------------------------------------------
+
+    @property
+    def generation(self) -> int:
+        """Current generation counter.  Incremented on every connect/disconnect."""
+        with self._lock:
+            return self._generation
 
     @property
     def is_connected(self) -> bool:

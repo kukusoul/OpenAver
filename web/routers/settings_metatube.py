@@ -41,22 +41,23 @@ class ConnectRequest(BaseModel):
 # so asyncio.get_running_loop() works)
 # ---------------------------------------------------------------------------
 
-def _fire_probe(base_url: str, token: str, names: list[str]) -> None:
+def _fire_probe(base_url: str, token: str, names: list[str], generation: int) -> None:
     """Schedule a background probe via the running event loop's executor."""
     def _run_probe():
-        state.set_probe_started()
+        state.set_probe_started(generation=generation)
         try:
             probe_all(
                 base_url,
                 token,
                 state,
                 names,
-                on_progress=lambda done, total: state.set_probe_progress(done, total),
+                on_progress=lambda done, total: state.set_probe_progress(done, total, generation=generation),
+                generation=generation,
             )
         except Exception:
             logger.exception("metatube probe failed")
         finally:
-            state.set_probe_done()
+            state.set_probe_done(generation=generation)
 
     asyncio.get_running_loop().run_in_executor(None, _run_probe)
 
@@ -140,10 +141,12 @@ async def connect(req: ConnectRequest):
         save_config(config)
     except Exception:
         logger.exception("metatube connect: failed to persist config")
-        # Non-fatal: runtime state is already updated; continue
+        state.disconnect()  # rollback — don't stay connected with unsaved config
+        return {"success": False, "error": "設定儲存失敗，請重試。"}
 
     # Step 6: fire background probe
-    _fire_probe(req.url, req.token, names)
+    gen = state.generation
+    _fire_probe(req.url, req.token, names, gen)
 
     return {"success": True, "provider_count": len(names)}
 
@@ -181,5 +184,6 @@ async def status():
 async def test_connection():
     """Re-probe all currently known providers in the background."""
     names = [k.split(":", 1)[1] for k in state.availability_map()]
-    _fire_probe(state.base_url or "", state.token or "", names)
+    gen = state.generation
+    _fire_probe(state.base_url or "", state.token or "", names, gen)
     return {"success": True, "message": "probe started"}

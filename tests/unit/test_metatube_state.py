@@ -332,3 +332,138 @@ def test_status_dict_probe_flags():
     s.set_probe_done()
     d2 = s.status_dict()
     assert d2["probe_done"] is True
+
+
+# ===========================================================================
+# FIX 3: generation guard tests
+# ===========================================================================
+
+def test_connect_bumps_generation(state):
+    """connect() must increment _generation."""
+    gen_before = state.generation
+    state.connect('http://host', 'tok', ['FANZA'])
+    assert state.generation == gen_before + 1
+
+
+def test_disconnect_bumps_generation(state):
+    """disconnect() must increment _generation."""
+    state.connect('http://host', 'tok', ['FANZA'])
+    gen_after_connect = state.generation
+    state.disconnect()
+    assert state.generation == gen_after_connect + 1
+
+
+def test_mark_available_stale_generation_is_noop(state):
+    """mark_available with a stale generation must not mutate availability_map."""
+    state.connect('http://host', 'tok', ['FANZA'])
+    gen1 = state.generation
+    # Mark FANZA as failed (current state)
+    state.mark_failed('metatube:FANZA')
+    assert state.is_available('metatube:FANZA') is False
+    # Second connect bumps generation
+    state.connect('http://host2', 'tok', ['FANZA'])
+    # Try to mark_available with the old (gen1) — must be ignored
+    state.mark_available('metatube:FANZA', generation=gen1)
+    # FANZA was set to True by the second connect() bulk-true; stale write must not corrupt
+    assert state.is_available('metatube:FANZA') is True
+
+
+def test_mark_failed_stale_generation_is_noop(state):
+    """mark_failed with a stale generation must not mutate availability_map."""
+    state.connect('http://hostA', 'tok', ['FANZA'])
+    gen1 = state.generation
+    # Reconnect (new server, new generation)
+    state.connect('http://hostB', 'tok', ['FANZA'])
+    # Stale probe from gen1 tries to mark FANZA failed → must be ignored
+    state.mark_failed('metatube:FANZA', generation=gen1)
+    # FANZA should still be True (set by the second connect bulk-true)
+    assert state.is_available('metatube:FANZA') is True
+
+
+def test_set_probe_done_stale_generation_is_noop(state):
+    """set_probe_done with a stale generation must not flip probe_done.
+
+    Isolate the stale guard via a second connect() (which bumps generation
+    without touching probe_done), so disconnect()'s own probe_done reset
+    doesn't mask the guard behavior.
+    """
+    state.connect('http://serverA', 'tok', ['FANZA'])
+    gen1 = state.generation
+    state.set_probe_started(generation=gen1)   # probe_done=False (current gen)
+    assert state.probe_done is False
+    # A second connect bumps generation (invalidates gen1) without resetting probe_done
+    state.connect('http://serverB', 'tok', ['FANZA'])
+    # Stale set_probe_done from gen1 must be ignored → probe_done stays False
+    state.set_probe_done(generation=gen1)
+    assert state.probe_done is False
+    # Current-generation set_probe_done still works
+    state.set_probe_done(generation=state.generation)
+    assert state.probe_done is True
+
+
+def test_disconnect_resets_probe_done(state):
+    """disconnect() must reset probe_done=True + probe_progress=0 (Codex P2).
+
+    Because disconnect bumps generation, an in-flight probe's
+    set_probe_done(generation=old) is generation-guarded out; disconnect must
+    itself clear the flag, else /status reports probe_done=false forever after
+    a disconnect during an active probe.
+    """
+    state.connect('http://host', 'tok', ['FANZA'])
+    gen = state.generation
+    state.set_probe_started(generation=gen)
+    state.set_probe_progress(3, 30, generation=gen)
+    assert state.probe_done is False
+    assert state.probe_progress == 3
+    # Disconnect mid-probe
+    state.disconnect()
+    assert state.probe_done is True
+    assert state.probe_progress == 0
+    # The stale probe finishing afterward is a no-op (generation bumped)
+    state.set_probe_done(generation=gen)
+    assert state.probe_done is True
+
+
+def test_generation_race_scenario(state):
+    """Simulate the connect-A → connect-B → stale probe-A marks_failed race.
+
+    connect A (gen1), connect B (gen2 — rebuilds all-True for B's providers),
+    then call mark_failed('metatube:BProvider', generation=gen1) → must be ignored.
+    B's provider stays True.
+    """
+    state.connect('http://serverA', 'tokA', ['FANZA'])
+    gen1 = state.generation
+
+    state.connect('http://serverB', 'tokB', ['FANZA', 'HEYZO'])
+    # gen2 = state.generation; both providers bulk-true
+    assert state.is_available('metatube:FANZA') is True
+    assert state.is_available('metatube:HEYZO') is True
+
+    # Stale probe from A's session tries to mark B's provider as failed
+    state.mark_failed('metatube:HEYZO', generation=gen1)
+    # Must be ignored — HEYZO stays True
+    assert state.is_available('metatube:HEYZO') is True
+
+    # Current-gen mark_failed still works
+    gen2 = state.generation
+    state.mark_failed('metatube:HEYZO', generation=gen2)
+    assert state.is_available('metatube:HEYZO') is False
+
+
+def test_mark_available_current_generation_works(state):
+    """mark_available/mark_failed with current generation must still work normally."""
+    state.connect('http://host', 'tok', ['FANZA'])
+    gen = state.generation
+    state.mark_failed('metatube:FANZA', generation=gen)
+    assert state.is_available('metatube:FANZA') is False
+    state.mark_available('metatube:FANZA', generation=gen)
+    assert state.is_available('metatube:FANZA') is True
+
+
+def test_mark_no_generation_arg_backward_compatible(state):
+    """Callers passing no generation (None) must still work as before."""
+    state.connect('http://host', 'tok', ['FANZA'])
+    state.mark_failed('metatube:FANZA')  # no generation arg
+    assert state.is_available('metatube:FANZA') is False
+    state.mark_available('metatube:FANZA')  # no generation arg
+    assert state.is_available('metatube:FANZA') is True

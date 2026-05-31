@@ -201,3 +201,27 @@ class TestHostnameResolution:
         ):
             result = validate_metatube_url("http://resolve-fail.internal")
         assert isinstance(result, str) and result
+
+
+# ---------------------------------------------------------------------------
+# Port validation (FIX 1a)
+# ---------------------------------------------------------------------------
+
+class TestPortValidation:
+    def test_malformed_port_alpha_blocked(self):
+        """http://1.1.1.1:abc — non-numeric port must return port-error string."""
+        result = validate_metatube_url("http://1.1.1.1:abc")
+        assert isinstance(result, str) and result, "Malformed port ':abc' should be blocked"
+        # Must not leak internal details
+        assert "abc" not in result
+
+    def test_port_out_of_range_blocked(self):
+        """http://1.1.1.1:99999 — out-of-range port (>65535) must be blocked."""
+        result = validate_metatube_url("http://1.1.1.1:99999")
+        assert isinstance(result, str) and result, "Out-of-range port ':99999' should be blocked"
+
+    def test_valid_port_passes(self):
+        """http://1.1.1.1:8900 — valid port on a public IP literal must pass (None)."""
+        # 1.1.1.1 is a public IP literal — no DNS resolution needed; passes without allow_lan
+        result = validate_metatube_url("http://1.1.1.1:8900")
+        assert result is None, f"Valid public IP+port should pass, got: {result!r}"

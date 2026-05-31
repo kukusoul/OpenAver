@@ -545,3 +545,40 @@ def test_connect_preserves_metatube_enabled_flag(client):
     # URL and token must be updated to the new values
     assert saved_cfg["metatube"]["url"] == "http://192.168.1.10:8080"
     assert saved_cfg["metatube"]["token"] == "tok123"
+
+
+# ---------------------------------------------------------------------------
+# Test: connect persistence failure → rollback runtime state (FIX 2)
+# ---------------------------------------------------------------------------
+
+def test_connect_persistence_failure_rollback(client):
+    """If save_config raises, /connect must roll back runtime state and return
+    {"success": False, "error": "設定儲存失敗，請重試。"} (FIX 2 / P2-A)."""
+
+    with patch("web.routers.settings_metatube.MetatubeHttpClient") as MockClient, \
+         patch("web.routers.settings_metatube.probe_all") as mock_probe, \
+         patch("web.routers.settings_metatube.load_config", return_value=_fresh_config()), \
+         patch("web.routers.settings_metatube.save_config", side_effect=OSError("disk full")):
+
+        mock_instance = MagicMock()
+        mock_instance.list_providers.return_value = {
+            "FANZA": "http://mt:8080",
+            "HEYZO": "http://mt:8080",
+        }
+        MockClient.return_value = mock_instance
+
+        resp = client.post(
+            "/api/settings/metatube/connect",
+            json={"url": "http://192.168.1.10:8080", "token": "", "allow_lan": True},
+        )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    # Must return failure
+    assert data["success"] is False
+    # Fixed Chinese error string
+    assert data.get("error") == "設定儲存失敗，請重試。"
+    # Runtime state must be rolled back (not connected)
+    assert state.is_connected is False
+    # probe must NOT have been fired (persistence failed before probe step)
+    mock_probe.assert_not_called()

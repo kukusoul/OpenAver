@@ -24,6 +24,7 @@ logger = get_logger(__name__)
 
 _ERR_SCHEME = "網址格式不支援，請使用 http 或 https。"
 _ERR_EMPTY_HOST = "網址缺少主機名稱，請確認輸入是否正確。"
+_ERR_PORT = "連接埠格式錯誤，請使用有效的埠號（1–65535）。"
 _ERR_LOCALHOST = "不允許連線至本機迴路位址。"
 _ERR_DOT_LOCAL = "不允許連線至 mDNS（.local）位址。"
 _ERR_LOOPBACK = "不允許連線至迴路位址。"
@@ -85,6 +86,13 @@ def validate_metatube_url(url: str, allow_lan: bool = False) -> str | None:
     if not host:
         logger.info("Blocked: empty host")
         return _ERR_EMPTY_HOST
+
+    # Reject malformed / out-of-range ports (urlparse only raises on .port access).
+    try:
+        _ = parsed.port  # ValueError for ':abc' or out-of-range ':99999'
+    except ValueError:
+        logger.info("Blocked: invalid port")
+        return _ERR_PORT
 
     host_lower = host.lower()
 

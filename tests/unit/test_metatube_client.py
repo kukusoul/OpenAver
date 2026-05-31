@@ -64,6 +64,34 @@ class TestExceptionMapping:
         with pytest.raises(MetatubeUnavailable):
             client.get_info("FANZA", "1stars00141")
 
+    def test_invalid_url_raises_unavailable_not_raw(self):
+        """requests.InvalidURL (a RequestException subclass) must be caught and
+        re-raised as MetatubeUnavailable — must NOT escape as InvalidURL (FIX 1b)."""
+        client = make_client()
+        client._session.get = MagicMock(
+            side_effect=requests.exceptions.InvalidURL("Invalid URL")
+        )
+        with pytest.raises(MetatubeUnavailable):
+            client.get_info("FANZA", "1stars00141")
+
+    def test_ssl_error_raises_unavailable(self):
+        """requests.SSLError must also be caught as MetatubeUnavailable (FIX 1b)."""
+        client = make_client()
+        client._session.get = MagicMock(
+            side_effect=requests.exceptions.SSLError("SSL handshake failed")
+        )
+        with pytest.raises(MetatubeUnavailable):
+            client.get_info("FANZA", "1stars00141")
+
+    def test_too_many_redirects_raises_unavailable(self):
+        """requests.TooManyRedirects must be caught as MetatubeUnavailable (FIX 1b)."""
+        client = make_client()
+        client._session.get = MagicMock(
+            side_effect=requests.exceptions.TooManyRedirects("Too many redirects")
+        )
+        with pytest.raises(MetatubeUnavailable):
+            client.get_info("FANZA", "1stars00141")
+
     def test_200_valid_json_with_data_returns_data(self):
         client = make_client()
         data = {"number": "SSIS-001", "title": "Test Title"}
