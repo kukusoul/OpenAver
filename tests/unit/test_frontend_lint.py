@@ -8701,3 +8701,537 @@ class TestScannerXShowCssConflictGuard:
             r":style=\"\{\s*display:\s*doneActionsVisible\s*\?\s*'flex'\s*:\s*'none'\s*\}\"",
             tag,
         ), ".done-actions 應為 :style=\"{ display: doneActionsVisible ? 'flex' : 'none' }\""
+
+
+class TestMetatubeB3Guard:
+    """CD-63b-3: 守衛 state-config.js STUB 已移除 + 真實 HTTP 已接線 + helpers 已加入 + settings.html 已更新。"""
+
+    SETTINGS_JS = PROJECT_ROOT / "web" / "static" / "js" / "pages" / "settings" / "state-config.js"
+    SETTINGS_HTML = PROJECT_ROOT / "web" / "templates" / "settings.html"
+
+    def _js(self) -> str:
+        return self.SETTINGS_JS.read_text(encoding="utf-8")
+
+    def _html(self) -> str:
+        return self.SETTINGS_HTML.read_text(encoding="utf-8")
+
+    def test_stub_connect_removed(self):
+        """B2: STUB connect 字串已從 state-config.js 移除。"""
+        js = self._js()
+        assert "STUB connect" not in js, (
+            "CD-63b-3 違規：state-config.js 仍含 'STUB connect' — B3 應已替換為真實 fetch"
+        )
+
+    def test_stub_disconnect_removed(self):
+        """B3: STUB disconnect 字串已從 state-config.js 移除。"""
+        js = self._js()
+        assert "STUB disconnect" not in js, (
+            "CD-63b-3 違規：state-config.js 仍含 'STUB disconnect' — B3 應已替換為真實 fetch"
+        )
+
+    def test_connect_uses_real_fetch(self):
+        """B2: metatubeConnect() 使用真實 POST /api/settings/metatube/connect。"""
+        js = self._js()
+        assert "'/api/settings/metatube/connect'" in js, (
+            "CD-63b-3 違規：state-config.js 缺少 '/api/settings/metatube/connect' fetch 呼叫"
+        )
+
+    def test_disconnect_uses_real_fetch(self):
+        """B3: metatubeDisconnect() 使用真實 POST /api/settings/metatube/disconnect。"""
+        js = self._js()
+        assert "'/api/settings/metatube/disconnect'" in js, (
+            "CD-63b-3 違規：state-config.js 缺少 '/api/settings/metatube/disconnect' fetch 呼叫"
+        )
+
+    def test_start_probe_polling_present(self):
+        """B4: startProbePolling helper 已加入 state-config.js。"""
+        js = self._js()
+        assert "startProbePolling" in js, (
+            "CD-63b-3 違規：state-config.js 缺少 startProbePolling 方法"
+        )
+
+    def test_stop_probe_polling_present(self):
+        """B4: stopProbePolling helper 已加入 state-config.js。"""
+        js = self._js()
+        assert "stopProbePolling" in js, (
+            "CD-63b-3 違規：state-config.js 缺少 stopProbePolling 方法"
+        )
+
+    def test_hydrate_metatube_status_present(self):
+        """B5: hydrateMetatubeStatus helper 已加入 state-config.js。"""
+        js = self._js()
+        assert "hydrateMetatubeStatus" in js, (
+            "CD-63b-3 違規：state-config.js 缺少 hydrateMetatubeStatus 方法"
+        )
+
+    def test_on_metatube_enabled_change_present(self):
+        """B7: onMetatubeEnabledChange 已加入 state-config.js。"""
+        js = self._js()
+        assert "onMetatubeEnabledChange" in js, (
+            "CD-63b-3 違規：state-config.js 缺少 onMetatubeEnabledChange 方法"
+        )
+
+    def test_settings_html_has_metatube_lan_mode(self):
+        """C2: settings.html 含 metatubeLanMode 綁定（LAN checkbox）。"""
+        html = self._html()
+        assert "metatubeLanMode" in html, (
+            "CD-63b-3 違規：settings.html 缺少 metatubeLanMode 綁定（LAN mode checkbox）"
+        )
+
+    def test_settings_html_has_metatube_connecting(self):
+        """C2: settings.html 含 metatubeConnecting 綁定（connect button loading state）。"""
+        html = self._html()
+        assert "metatubeConnecting" in html, (
+            "CD-63b-3 違規：settings.html 缺少 metatubeConnecting 綁定（button loading state）"
+        )
+
+    def test_settings_html_has_metatube_enable_toggle(self):
+        """C1: settings.html 含 metatubeEnableToggle ID（Advanced tab toggle）。"""
+        html = self._html()
+        assert "metatubeEnableToggle" in html, (
+            "CD-63b-3 違規：settings.html 缺少 metatubeEnableToggle（Advanced tab 啟用開關）"
+        )
+
+
+class TestMetatubeB4Guard:
+    """CD-63b-4: 守衛 probe UI 視覺層（進度列 / retest button / hint details / grey-out）。"""
+
+    SETTINGS_JS = PROJECT_ROOT / "web" / "static" / "js" / "pages" / "settings" / "state-config.js"
+    SETTINGS_HTML = PROJECT_ROOT / "web" / "templates" / "settings.html"
+
+    def _js(self) -> str:
+        return self.SETTINGS_JS.read_text(encoding="utf-8")
+
+    def _html(self) -> str:
+        return self.SETTINGS_HTML.read_text(encoding="utf-8")
+
+    def test_html_has_mt_probe_testing_key(self):
+        """B1: settings.html 含 mt_probe_testing i18n key（進度列文字）。"""
+        html = self._html()
+        assert "mt_probe_testing" in html, (
+            "CD-63b-4 違規：settings.html 缺少 mt_probe_testing 文字 key（probe 進度列）"
+        )
+
+    def test_html_has_metatube_retest_call(self):
+        """B2: settings.html 含 metatubeRetest() 呼叫（retest button）。"""
+        html = self._html()
+        assert "metatubeRetest" in html, (
+            "CD-63b-4 違規：settings.html 缺少 metatubeRetest() 呼叫（retest button）"
+        )
+
+    def test_html_has_mt_probe_hint_title_key(self):
+        """B3: settings.html 含 mt_probe_hint_title i18n key（hint details summary）。"""
+        html = self._html()
+        assert "mt_probe_hint_title" in html, (
+            "CD-63b-4 違規：settings.html 缺少 mt_probe_hint_title key（probe-hint details）"
+        )
+
+    def test_html_has_data_available_binding(self):
+        """B4: settings.html 含 :data-available 綁定（Parts Bin pill grey-out mechanism）。"""
+        html = self._html()
+        assert "data-available" in html, (
+            "CD-63b-4 違規：settings.html 缺少 :data-available 綁定（probe-failed grey-out）"
+        )
+
+    def test_js_has_metatube_retest(self):
+        """A1: state-config.js 含 metatubeRetest 方法定義。"""
+        js = self._js()
+        assert "metatubeRetest" in js, (
+            "CD-63b-4 違規：state-config.js 缺少 metatubeRetest 方法"
+        )
+
+    def test_js_has_start_probe_polling(self):
+        """A1: state-config.js 含 startProbePolling（metatubeRetest 呼叫的 helper）。"""
+        js = self._js()
+        assert "startProbePolling" in js, (
+            "CD-63b-4 違規：state-config.js 缺少 startProbePolling 方法"
+        )
+
+    def test_js_promote_metatube_has_available_check(self):
+        """A2: state-config.js promoteMetatube 含 available === false 檢查（probe-failed 警告）。"""
+        js = self._js()
+        assert "s.available === false" in js, (
+            "CD-63b-4 違規：state-config.js promoteMetatube 缺少 s.available === false guard"
+        )
+
+    def test_js_promote_metatube_has_unavailable_warning_key(self):
+        """A2: state-config.js promoteMetatube 含 mt_promote_unavailable_warning toast key。"""
+        js = self._js()
+        assert "mt_promote_unavailable_warning" in js, (
+            "CD-63b-4 違規：state-config.js 缺少 mt_promote_unavailable_warning toast key"
+        )
+
+
+class TestMetatubeB5RecommendedRemoved:
+    """CD-63b-7: 守衛靜態 Recommended 群組殘留已徹底拔除（含 settings_mock.html）。
+
+    「廢棄 feature 拔除要徹底」memory：不留殭屍命名 / 群組頭 / 星標 / i18n key。
+    """
+
+    SETTINGS_JS = PROJECT_ROOT / "web" / "static" / "js" / "pages" / "settings" / "state-config.js"
+    SETTINGS_HTML = PROJECT_ROOT / "web" / "templates" / "settings.html"
+    SETTINGS_MOCK_HTML = PROJECT_ROOT / "web" / "templates" / "settings_mock.html"
+    SOURCE_PILL_CSS = PROJECT_ROOT / "web" / "static" / "css" / "components" / "source-pill.css"
+    SETTINGS_CSS = PROJECT_ROOT / "web" / "static" / "css" / "pages" / "settings.css"
+    ZH_TW = PROJECT_ROOT / "locales" / "zh_TW.json"
+
+    def test_settings_html_no_recommended_filter(self):
+        html = self.SETTINGS_HTML.read_text(encoding="utf-8")
+        assert "s.recommended" not in html, (
+            "CD-63b-7 違規：settings.html 仍含 s.recommended（Recommended filter 應已拔除，flat loop 取代）"
+        )
+
+    def test_settings_html_no_recommended_i18n_keys(self):
+        html = self.SETTINGS_HTML.read_text(encoding="utf-8")
+        assert "mt_recommended_label" not in html and "mt_other_label" not in html, (
+            "CD-63b-7 違規：settings.html 仍含 mt_recommended_label / mt_other_label（群組頭已拔）"
+        )
+
+    def test_settings_html_no_group_head_class(self):
+        html = self.SETTINGS_HTML.read_text(encoding="utf-8")
+        assert "settings-mt-group-head" not in html, (
+            "CD-63b-7 違規：settings.html 仍含 settings-mt-group-head（群組頭 class 已拔）"
+        )
+
+    def test_state_config_no_recommended_mock_field(self):
+        js = self.SETTINGS_JS.read_text(encoding="utf-8")
+        assert "recommended:" not in js and "recommended: i < 4" not in js, (
+            "CD-63b-7 違規：state-config.js mock 仍含 recommended 欄位"
+        )
+
+    def test_source_pill_css_no_rec_star(self):
+        css = self.SOURCE_PILL_CSS.read_text(encoding="utf-8")
+        assert ".rec-star" not in css, (
+            "CD-63b-7 違規：source-pill.css 仍含 .rec-star 規則（星標已拔）"
+        )
+
+    def test_settings_css_no_group_head(self):
+        css = self.SETTINGS_CSS.read_text(encoding="utf-8")
+        assert "settings-mt-group-head" not in css, (
+            "CD-63b-7 違規：settings.css 仍含 .settings-mt-group-head 規則（用途消失應移除）"
+        )
+
+    def test_zh_tw_no_recommended_label_keys(self):
+        data = json.loads(self.ZH_TW.read_text(encoding="utf-8"))
+        sources = data.get("settings", {}).get("sources", {})
+        assert "mt_recommended_label" not in sources and "mt_other_label" not in sources, (
+            "CD-63b-7 違規：zh_TW.json settings.sources 仍含 mt_recommended_label / mt_other_label"
+        )
+
+    def test_settings_mock_no_recommended(self):
+        html = self.SETTINGS_MOCK_HTML.read_text(encoding="utf-8")
+        assert "s.recommended" not in html and "rec-star" not in html and "smock-group-head" not in html, (
+            "CD-63b-7 違規：settings_mock.html 仍含 recommended/rec-star/smock-group-head 殘留"
+        )
+
+
+class TestMetatubeB6I18n:
+    """CD-63b-6 / CD-63b-8: 63b 新 UI 文字 key 存在於 zh_TW.json（其他 3 locale 待 milestone）。"""
+
+    ZH_TW = PROJECT_ROOT / "locales" / "zh_TW.json"
+
+    NEW_KEYS = [
+        "mt_enable_label", "mt_enable_help", "mt_lan_mode_label",
+        "mt_connecting_btn", "mt_connect_network_error", "mt_connect_success_toast",
+        "mt_probe_testing", "mt_retest_btn",
+        "mt_probe_hint_title", "mt_probe_hint_reason1",
+        "mt_probe_hint_reason2", "mt_probe_hint_reason3",
+        "mt_promote_unavailable_warning",
+    ]
+
+    def _sources(self) -> dict:
+        data = json.loads(self.ZH_TW.read_text(encoding="utf-8"))
+        return data.get("settings", {}).get("sources", {})
+
+    def test_all_new_keys_exist_and_nonempty(self):
+        sources = self._sources()
+        for key in self.NEW_KEYS:
+            assert sources.get(key), f"CD-63b-6 違規：zh_TW.json settings.sources 缺 {key!r} 或為空"
+
+    def test_tier_hint_no_recommended_mention(self):
+        """CD-63b-8: mt_connected_tier_hint 已移除 ⭐ / 建議起手 提及。"""
+        hint = self._sources().get("mt_connected_tier_hint", "")
+        assert "⭐" not in hint and "建議起手" not in hint, (
+            "CD-63b-8 違規：mt_connected_tier_hint 仍含 Recommended 星標 / 建議起手 文案"
+        )
+
+
+# ─── 63c-3: 進階 picker 接 metatube 真資料（routable / available / proxy_configured 注入）───
+class TestMetatubePickerWiringGuard:
+    """63c-3: bootstrap 注入 proxy_configured + state-rescrape.js routable gate 保留 +
+    _rescrape_modal.html metatube 分組未被刪除（驗 B1 data-driven 分組仍在）。
+
+    routable/available 隨 config.sources|tojson 自動帶出（不在 template 逐欄寫），
+    故守衛綁在 state-rescrape.js 的 routable gate 與後端注入（後端走 integration test）。
+    """
+
+    STATE_RESCRAPE_JS = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "shared" / "state-rescrape.js"
+
+    def _bootstrap(self):
+        return ADV_SEARCH_BOOTSTRAP.read_text(encoding="utf-8")
+
+    def _modal(self):
+        return RESCRAPE_MODAL_HTML.read_text(encoding="utf-8")
+
+    def _state_rescrape(self):
+        return self.STATE_RESCRAPE_JS.read_text(encoding="utf-8")
+
+    def test_bootstrap_injects_proxy_configured(self):
+        """_advanced_search_bootstrap.html 含 proxy_configured 注入行（63c-3/63c-6 Surface 2）。"""
+        assert "proxy_configured:" in self._bootstrap(), (
+            "63c-3 違規：bootstrap 缺少 proxy_configured 注入行"
+        )
+
+    def test_state_rescrape_keeps_routable_gate(self):
+        """rescrapeMetatubeSources() 保留 s.routable === true gate（斷線 metatube 不長 stale pill）。"""
+        src = self._state_rescrape()
+        assert "rescrapeMetatubeSources" in src, "63c-3 違規：缺 rescrapeMetatubeSources()"
+        assert "routable === true" in src, (
+            "63c-3 違規：rescrapeMetatubeSources 應保留 routable === true gate"
+        )
+        assert "s.type === 'metatube'" in src, (
+            "63c-3 違規：rescrapeMetatubeSources 應 filter type === 'metatube'"
+        )
+
+    def test_modal_metatube_grouping_present(self):
+        """_rescrape_modal.html 保留 metatube 分組渲染（rescrapeMetatubeSources 驅動，B1 分組未被刪）。"""
+        html = self._modal()
+        assert "rescrapeMetatubeSources()" in html, (
+            "63c-3 違規：_rescrape_modal.html 缺 metatube 分組（rescrapeMetatubeSources 引用）"
+        )
+
+
+# ─── 63c-6: DMM requires_proxy 灰化（兩 surface） ───
+class TestDmmProxyRequiredGuard:
+    """63c-6: DMM requires_proxy 灰化 — Surface 1（Settings Active Row）+ Surface 2（rescrape picker）。
+
+    Frontend-guard 強度：每個斷言都綁到具體元素/屬性，而非對整檔做字串存在性檢查。
+    gotchas.md 「字串存在性 ≠ contract」：先 regex 擷取目標元素的 tag 範圍，再在 tag 範圍內斷言。
+    """
+
+    SETTINGS_CONFIG_JS = PROJECT_ROOT / "web" / "static" / "js" / "pages" / "settings" / "state-config.js"
+    SETTINGS_HTML      = PROJECT_ROOT / "web" / "templates" / "settings.html"
+    STATE_RESCRAPE_JS  = PROJECT_ROOT / "web" / "static" / "js" / "shared" / "state-rescrape.js"
+    RESCRAPE_MODAL_HTML = PROJECT_ROOT / "web" / "templates" / "_rescrape_modal.html"
+    SOURCE_PILL_CSS    = PROJECT_ROOT / "web" / "static" / "css" / "components" / "source-pill.css"
+
+    # ── Surface 1: state-config.js ──────────────────────────────────────────────
+
+    def test_click_active_row_pill_has_requires_proxy_intercept(self):
+        """clickActiveRowPill 在函數開頭加 requires_proxy + isDmmAvailable 攔截（Surface 1）。
+
+        策略：用 regex 擷取 clickActiveRowPill 函數體，再在其中斷言三個 token。
+        「字串存在性 ≠ contract」：斷言在函數體範圍內，而非整檔字串搜尋。
+        """
+        js = self.SETTINGS_CONFIG_JS.read_text(encoding="utf-8")
+        # 擷取 clickActiveRowPill 函數體（直到下一個方法定義）
+        m = re.search(
+            r'clickActiveRowPill\s*\([^)]*\)\s*\{(.+?)(?=\n\s{8}\w|\Z)',
+            js, re.DOTALL
+        )
+        assert m, "63c-6 違規：找不到 clickActiveRowPill 函數體"
+        fn_body = m.group(1)
+        assert "requires_proxy" in fn_body, (
+            "63c-6 違規：clickActiveRowPill 函數體缺 requires_proxy 判斷（Surface 1 攔截）"
+        )
+        assert "isDmmAvailable" in fn_body, (
+            "63c-6 違規：clickActiveRowPill 函數體缺 isDmmAvailable() 呼叫（Surface 1 proxy 判斷）"
+        )
+        assert "dmm_proxy_required_hint" in fn_body, (
+            "63c-6 違規：clickActiveRowPill 函數體缺 dmm_proxy_required_hint toast key（Surface 1）"
+        )
+
+    def test_click_active_row_pill_no_window_confirm(self):
+        """clickActiveRowPill 不含 window.confirm（eslint no-confirm 全域 rule，禁 modal block）。"""
+        js = self.SETTINGS_CONFIG_JS.read_text(encoding="utf-8")
+        m = re.search(
+            r'clickActiveRowPill\s*\([^)]*\)\s*\{(.+?)(?=\n\s{8}\w|\Z)',
+            js, re.DOTALL
+        )
+        assert m, "63c-6 違規：找不到 clickActiveRowPill 函數體"
+        fn_body = m.group(1)
+        assert "window.confirm" not in fn_body, (
+            "63c-6 違規：clickActiveRowPill 含 window.confirm — 用 showToast 取代（no-confirm rule）"
+        )
+
+    # ── Surface 1: settings.html Active Row pill ─────────────────────────────────
+
+    def test_settings_active_row_pill_has_data_proxy_required_binding(self):
+        """settings.html Active Row source-pill div 含 :data-proxy-required binding（Surface 1）。
+
+        策略：用 regex 擷取 x-for="s in activeRowSources" 的 source-pill div 開口 tag（到第一個 >），
+        再在 tag 內容中斷言 :data-proxy-required 屬性存在。
+        """
+        html = self.SETTINGS_HTML.read_text(encoding="utf-8")
+        # 擷取 x-for activeRowSources 模板內的 source-pill div 開口 tag
+        m = re.search(
+            r'x-for="s in activeRowSources"[^>]*>.*?<div\s+class="source-pill"(.*?)role="option"',
+            html, re.DOTALL
+        )
+        assert m, (
+            "63c-6 違規：找不到 Active Row source-pill div（settings.html x-for activeRowSources 內）"
+        )
+        tag_attrs = m.group(1)
+        assert ":data-proxy-required" in tag_attrs, (
+            "63c-6 違規：settings.html Active Row source-pill 缺 :data-proxy-required binding（Surface 1）"
+        )
+
+    def test_settings_active_row_pill_proxy_required_uses_is_dmm_available(self):
+        """settings.html Active Row :data-proxy-required 引用 isDmmAvailable()（不用硬編碼邏輯）。"""
+        html = self.SETTINGS_HTML.read_text(encoding="utf-8")
+        m = re.search(
+            r'x-for="s in activeRowSources"[^>]*>.*?<div\s+class="source-pill"(.*?)role="option"',
+            html, re.DOTALL
+        )
+        assert m, "63c-6 違規：找不到 Active Row source-pill div"
+        tag_attrs = m.group(1)
+        assert "isDmmAvailable" in tag_attrs, (
+            "63c-6 違規：settings.html Active Row :data-proxy-required 應引用 isDmmAvailable()（Surface 1）"
+        )
+
+    # ── Surface 2: state-rescrape.js ─────────────────────────────────────────────
+
+    def test_state_rescrape_has_is_source_proxy_blocked(self):
+        """state-rescrape.js 定義 isSourceProxyBlocked method（Surface 2）。
+
+        綁到 method 定義（非全檔字串存在 — gotchas「字串存在性 ≠ contract」），
+        避免 comment 裡的字串繞過守衛。"""
+        js = self.STATE_RESCRAPE_JS.read_text(encoding="utf-8")
+        assert re.search(r"isSourceProxyBlocked\s*\([^)]*\)\s*\{", js), (
+            "63c-6 違規：state-rescrape.js 缺 isSourceProxyBlocked 方法定義（Surface 2）"
+        )
+
+    def test_state_rescrape_is_source_proxy_blocked_reads_proxy_configured(self):
+        """isSourceProxyBlocked helper 讀取 proxy_configured（不依賴 Settings scope isDmmAvailable）。
+
+        策略：擷取 isSourceProxyBlocked 函數體，斷言其中含 proxy_configured。
+        """
+        js = self.STATE_RESCRAPE_JS.read_text(encoding="utf-8")
+        m = re.search(
+            r'isSourceProxyBlocked\s*\([^)]*\)\s*\{([^}]+)\}',
+            js, re.DOTALL
+        )
+        assert m, "63c-6 違規：找不到 isSourceProxyBlocked 函數體（state-rescrape.js）"
+        fn_body = m.group(1)
+        assert "proxy_configured" in fn_body, (
+            "63c-6 違規：isSourceProxyBlocked 函數體缺 proxy_configured 讀取（不可依賴 isDmmAvailable()）"
+        )
+        assert "requires_proxy" in fn_body, (
+            "63c-6 違規：isSourceProxyBlocked 函數體缺 requires_proxy 讀取（Surface 2）"
+        )
+
+    # ── Surface 2: _rescrape_modal.html builtin pill ─────────────────────────────
+
+    def test_rescrape_modal_builtin_pill_has_data_proxy_required(self):
+        """_rescrape_modal.html builtin pill button 含 :data-proxy-required binding（Surface 2）。
+
+        策略：擷取 x-for="s in rescrapeBuiltinSources()" 模板內的 button tag（到第一個 >），
+        再在 tag 屬性內容斷言 :data-proxy-required 存在（綁定到具體 builtin 元素，不是整檔搜尋）。
+        """
+        html = self.RESCRAPE_MODAL_HTML.read_text(encoding="utf-8")
+        m = re.search(
+            r'x-for="s in rescrapeBuiltinSources\(\)"[^>]*>.*?<button\s+([^>]+)>',
+            html, re.DOTALL
+        )
+        assert m, (
+            "63c-6 違規：找不到 rescrapeBuiltinSources() 模板內的 button tag（_rescrape_modal.html）"
+        )
+        button_attrs = m.group(1)
+        assert ":data-proxy-required" in button_attrs, (
+            "63c-6 違規：_rescrape_modal.html builtin pill button 缺 :data-proxy-required binding（Surface 2）"
+        )
+
+    def test_rescrape_modal_builtin_pill_click_uses_is_source_proxy_blocked(self):
+        """_rescrape_modal.html builtin pill @click handler 引用 isSourceProxyBlocked（Surface 2）。
+
+        策略：同上，在 builtin pill button tag 屬性內斷言 isSourceProxyBlocked 出現（click guard）。
+        """
+        html = self.RESCRAPE_MODAL_HTML.read_text(encoding="utf-8")
+        m = re.search(
+            r'x-for="s in rescrapeBuiltinSources\(\)"[^>]*>.*?<button\s+([^>]+)>',
+            html, re.DOTALL
+        )
+        assert m, "63c-6 違規：找不到 rescrapeBuiltinSources() 模板內的 button tag"
+        button_attrs = m.group(1)
+        assert "isSourceProxyBlocked" in button_attrs, (
+            "63c-6 違規：_rescrape_modal.html builtin pill @click 缺 isSourceProxyBlocked guard（Surface 2）"
+        )
+
+    def test_rescrape_modal_builtin_pill_no_window_confirm(self):
+        """_rescrape_modal.html builtin pill button tag 不含 window.confirm。"""
+        html = self.RESCRAPE_MODAL_HTML.read_text(encoding="utf-8")
+        m = re.search(
+            r'x-for="s in rescrapeBuiltinSources\(\)"[^>]*>.*?<button\s+([^>]+)>',
+            html, re.DOTALL
+        )
+        assert m, "63c-6 違規：找不到 rescrapeBuiltinSources() 模板內的 button tag"
+        button_attrs = m.group(1)
+        assert "window.confirm" not in button_attrs, (
+            "63c-6 違規：_rescrape_modal.html builtin pill 含 window.confirm（用 showToast 取代）"
+        )
+
+    # ── CSS: source-pill.css ─────────────────────────────────────────────────────
+
+    def test_source_pill_css_has_proxy_required_opacity_rule(self):
+        """source-pill.css 含 [data-proxy-required="true"] opacity rule（兩 surface 共用）。"""
+        css = self.SOURCE_PILL_CSS.read_text(encoding="utf-8")
+        # 擷取含 data-proxy-required="true" 的 rule block
+        m = re.search(
+            r'\.source-pill\[data-proxy-required="true"\]\s*\{([^}]+)\}',
+            css, re.DOTALL
+        )
+        assert m, (
+            "63c-6 違規：source-pill.css 缺 .source-pill[data-proxy-required=\"true\"] rule block"
+        )
+        rule_body = m.group(1)
+        assert "opacity" in rule_body, (
+            "63c-6 違規：[data-proxy-required=\"true\"] rule 缺 opacity 設定（灰化機制）"
+        )
+
+    def test_source_pill_css_proxy_required_hover_no_lift(self):
+        """source-pill.css [data-proxy-required="true"]:hover 不 lift（mirror is-disconnected）。"""
+        css = self.SOURCE_PILL_CSS.read_text(encoding="utf-8")
+        m = re.search(
+            r'\.source-pill\[data-proxy-required="true"\]:hover\s*\{([^}]+)\}',
+            css, re.DOTALL
+        )
+        assert m, (
+            "63c-6 違規：source-pill.css 缺 [data-proxy-required=\"true\"]:hover rule（hover 不亮回）"
+        )
+        hover_body = m.group(1)
+        assert "transform" in hover_body, (
+            "63c-6 違規：:hover rule 缺 transform: none（防 lift）"
+        )
+
+
+# ─── 63c-7: i18n zh_TW（DMM proxy hint + Help metatube SQLite hint）───
+class TestMetatube63c7I18nGuard:
+    """63c-7: 63c 新 UI 文字 zh_TW key 存在 + help.html 引用（其他 3 locale 待 milestone）。
+
+    本 branch 只交付 zh_TW（對齊 62/63b i18n 慣例）。不驗 zh_CN/ja/en parity。
+    """
+
+    ZH_TW = LOCALES_ROOT / "zh_TW.json"
+    HELP_HTML = Path(__file__).parent.parent.parent / "web" / "templates" / "help.html"
+
+    def _zh(self):
+        return json.loads(self.ZH_TW.read_text(encoding="utf-8"))
+
+    def test_dmm_proxy_required_hint_exists(self):
+        """63c-6 toast 引用的 key 存在且非空（state-config.js / _rescrape_modal.html）。"""
+        v = self._zh().get("settings", {}).get("sources", {}).get("dmm_proxy_required_hint")
+        assert v, "63c-7 違規：缺 settings.sources.dmm_proxy_required_hint"
+
+    def test_help_metatube_sqlite_keys_exist(self):
+        """Help §7.6 SQLite 寫鎖 hint（h6 + 內文）存在且非空。"""
+        scraper = self._zh().get("help", {}).get("scraper", {})
+        assert scraper.get("h6_metatube"), "63c-7 違規：缺 help.scraper.h6_metatube"
+        assert scraper.get("metatube_sqlite_hint"), "63c-7 違規：缺 help.scraper.metatube_sqlite_hint"
+
+    def test_help_html_references_metatube_hint(self):
+        """help.html 引用 h6_metatube + metatube_sqlite_hint（非孤兒 key）。"""
+        html = self.HELP_HTML.read_text(encoding="utf-8")
+        assert "help.scraper.h6_metatube" in html, "63c-7 違規：help.html 未引用 h6_metatube"
+        assert "help.scraper.metatube_sqlite_hint" in html, (
+            "63c-7 違規：help.html 未引用 metatube_sqlite_hint"
+        )

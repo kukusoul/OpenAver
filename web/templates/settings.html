@@ -435,6 +435,7 @@
                                      'drop-target': dropTargetId === s.id,
                                  }"
                                  :data-enabled="pillVisualEnabled(s) ? 'true' : 'false'"
+                                 :data-proxy-required="(s.requires_proxy && !isDmmAvailable()) ? 'true' : 'false'"
                                  role="option"
                                  :aria-selected="s.enabled ? 'true' : 'false'"
                                  :aria-grabbed="_grabbedId === s.id ? 'true' : 'false'"
@@ -502,7 +503,7 @@
                                 <span>{{ t('settings.sources.mt_server_url_label') }}</span>
                                 <input type="text"
                                        x-model="metatubeServerUrl"
-                                       placeholder="http://localhost:8080">
+                                       placeholder="http://192.168.1.50:8900">
                             </label>
                             <label class="settings-mt-field">
                                 <span>{{ t('settings.sources.mt_token_label') }}</span>
@@ -510,10 +511,16 @@
                                        x-model="metatubeToken"
                                        autocomplete="off">
                             </label>
+                            <label class="settings-mt-field-checkbox">
+                                <input type="checkbox" class="toggle toggle-sm toggle-primary" x-model="metatubeLanMode">
+                                <span>{{ t('settings.sources.mt_lan_mode_label') }}</span>
+                            </label>
                             <button type="button"
                                     class="settings-mt-connect-btn"
+                                    :disabled="metatubeConnecting"
                                     @click="metatubeConnect()">
-                                <i class="bi bi-plug"></i> {{ t('settings.sources.mt_connect_btn') }}
+                                <i class="bi" :class="metatubeConnecting ? 'bi-hourglass-split' : 'bi-plug'"></i>
+                                <span x-text="metatubeConnecting ? window.t('settings.sources.mt_connecting_btn') : window.t('settings.sources.mt_connect_btn')"></span>
                             </button>
                         </div>
 
@@ -537,6 +544,19 @@
                                         @click="metatubeDisconnect()">
                                     <i class="bi bi-x-circle"></i> {{ t('settings.sources.mt_disconnect_btn') }}
                                 </button>
+                                <!-- Retest button — shown when connected AND probe finished (CD-63b-4 B2) -->
+                                <button type="button" class="settings-sources-mini-btn"
+                                        x-show="metatubeConnected && probeDone"
+                                        @click="metatubeRetest()">
+                                    <i class="bi bi-arrow-clockwise"></i> {{ t('settings.sources.mt_retest_btn') }}
+                                </button>
+                            </div>
+
+                            <!-- Probe progress line — shown while probe is running (CD-63b-4 B1) -->
+                            <div class="settings-mt-probe-progress" x-show="!probeDone">
+                                <i class="bi bi-hourglass-split" aria-hidden="true"></i>
+                                <span>{{ t('settings.sources.mt_probe_testing') }}</span>
+                                <span class="probe-counter">(<span x-text="probeProgress"></span>/<span x-text="probeTotal"></span>)</span>
                             </div>
 
                             <!-- Tier hint -->
@@ -544,6 +564,16 @@
                                 <i class="bi bi-stars" aria-hidden="true"></i>
                                 <span>{{ t('settings.sources.mt_connected_tier_hint') }}</span>
                             </div>
+
+                            <!-- Three-cause hint: why some providers are greyed (CD-63b-4 B3) -->
+                            <details class="settings-mt-probe-hint">
+                                <summary>{{ t('settings.sources.mt_probe_hint_title') }}</summary>
+                                <ul>
+                                    <li>{{ t('settings.sources.mt_probe_hint_reason1') }}</li>
+                                    <li>{{ t('settings.sources.mt_probe_hint_reason2') }}</li>
+                                    <li>{{ t('settings.sources.mt_probe_hint_reason3') }}</li>
+                                </ul>
+                            </details>
 
                             <!-- Parts Bin header (collapsible, default collapsed) — N = partsBinSources.length -->
                             <button type="button"
@@ -556,57 +586,26 @@
                                 <span class="settings-mt-partsbin-count" x-text="partsBinSources.length"></span>
                             </button>
 
-                            <!-- Parts Bin body — Parts Bin pills (NOT draggable). Recommended group first. -->
+                            <!-- Parts Bin body — flat pill loop (NOT draggable; no Recommended group, B3 §7.5). -->
                             <div class="settings-mt-partsbin-body" x-show="partsBinExpanded">
-                                <!-- Recommended group -->
-                                <template x-if="partsBinSources.filter(s => s.recommended).length > 0">
-                                    <div>
-                                        <div class="settings-mt-group-head">{{ t('settings.sources.mt_recommended_label') }}</div>
-                                        <div class="settings-sources-pills" role="listbox" aria-label="Recommended providers">
-                                            <template x-for="src in partsBinSources.filter(s => s.recommended)" :key="src.id">
-                                                <div class="source-pill is-partsbin"
-                                                     data-enabled="false"
-                                                     data-rec="true"
-                                                     role="option"
-                                                     :aria-selected="false"
-                                                     :aria-label="`${src.display_name} — {{ t('settings.sources.mt_promote_hint') }}`"
-                                                     :title="'{{ t('settings.sources.mt_promote_hint') }}'"
-                                                     tabindex="0"
-                                                     @click="promoteMetatube(src.id)"
-                                                     @keydown.enter.prevent="promoteMetatube(src.id)"
-                                                     @keydown.space.prevent="promoteMetatube(src.id)">
-                                                    <i class="bi bi-star-fill rec-star" aria-hidden="true"></i>
-                                                    <i class="bi bi-slash-circle slash-icn" aria-hidden="true"></i>
-                                                    <span class="pill-name" x-text="src.display_name"></span>
-                                                </div>
-                                            </template>
+                                <div class="settings-sources-pills" role="listbox" aria-label="Provider list">
+                                    <template x-for="src in partsBinSources" :key="src.id">
+                                        <div class="source-pill is-partsbin"
+                                             data-enabled="false"
+                                             :data-available="src.available ? 'true' : 'false'"
+                                             role="option"
+                                             :aria-selected="false"
+                                             :aria-label="`${src.display_name} — ${src.available === false ? window.t('settings.sources.mt_probe_failed_pill_hint') : window.t('settings.sources.mt_promote_hint')}`"
+                                             :title="src.available === false ? window.t('settings.sources.mt_probe_failed_pill_hint') : window.t('settings.sources.mt_promote_hint')"
+                                             tabindex="0"
+                                             @click="promoteMetatube(src.id)"
+                                             @keydown.enter.prevent="promoteMetatube(src.id)"
+                                             @keydown.space.prevent="promoteMetatube(src.id)">
+                                            <i class="bi bi-slash-circle slash-icn" aria-hidden="true"></i>
+                                            <span class="pill-name" x-text="src.display_name"></span>
                                         </div>
-                                    </div>
-                                </template>
-
-                                <!-- Other group -->
-                                <template x-if="partsBinSources.filter(s => !s.recommended).length > 0">
-                                    <div>
-                                        <div class="settings-mt-group-head">{{ t('settings.sources.mt_other_label') }}</div>
-                                        <div class="settings-sources-pills" role="listbox" aria-label="Other providers">
-                                            <template x-for="src in partsBinSources.filter(s => !s.recommended)" :key="src.id">
-                                                <div class="source-pill is-partsbin"
-                                                     data-enabled="false"
-                                                     role="option"
-                                                     :aria-selected="false"
-                                                     :aria-label="`${src.display_name} — {{ t('settings.sources.mt_promote_hint') }}`"
-                                                     :title="'{{ t('settings.sources.mt_promote_hint') }}'"
-                                                     tabindex="0"
-                                                     @click="promoteMetatube(src.id)"
-                                                     @keydown.enter.prevent="promoteMetatube(src.id)"
-                                                     @keydown.space.prevent="promoteMetatube(src.id)">
-                                                    <i class="bi bi-slash-circle slash-icn" aria-hidden="true"></i>
-                                                    <span class="pill-name" x-text="src.display_name"></span>
-                                                </div>
-                                            </template>
-                                        </div>
-                                    </div>
-                                </template>
+                                    </template>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1021,6 +1020,18 @@
                             </small>
                             <small class="settings-hint">{{ t('settings.search.favorite_folder_example_prefix') | safe }}</small>
                         </div>
+                    </div>
+
+                    <!-- Metatube 連線（B3）toggle（CD-63b-3） -->
+                    <div class="settings-form-group">
+                        <label class="settings-label">
+                            <input type="checkbox" class="toggle toggle-primary"
+                                   id="metatubeEnableToggle"
+                                   x-model="metatubeEnabled"
+                                   @change="onMetatubeEnabledChange()">
+                            <span class="label-text">{{ t('settings.sources.mt_enable_label') }}</span>
+                        </label>
+                        <small class="settings-hint">{{ t('settings.sources.mt_enable_help') }}</small>
                     </div>
 
                     <!-- 進階搜尋 (Beta) toggle（TASK-61c-7） -->
