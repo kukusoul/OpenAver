@@ -54,6 +54,21 @@ def _err_result(error: str):
 
 class TestBatchEnrich:
 
+    @pytest.fixture(autouse=True)
+    def _stub_search_jav(self, mocker):
+        """預設 mock 掉 search_jav。
+
+        refresh_full 模式下 router 會 pre-fetch search_jav（scraper.py:338），
+        未 mock 時會真的打外站、空等 timeout（單測曾各拖 7~17 秒）。這裡給個
+        stub 預設值，杜絕整個 class 誤連外網；需要驗證 search 行為（call_count /
+        負向 cache）的測試會自行 re-patch 覆蓋。enrich_single 在各測試已 mock，
+        會忽略這個 cached data，所以回什麼 dict 不影響斷言。
+        """
+        mocker.patch(
+            "web.routers.scraper.search_jav",
+            return_value={"title": "stub", "source": "javbus"},
+        )
+
     def test_batch_single_item_sse_events(self, client, mocker):
         """1 筆成功：progress + result-item(success=True) + done 事件順序正確"""
         mocker.patch(
