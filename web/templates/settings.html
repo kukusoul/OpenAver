@@ -126,18 +126,6 @@
             <div class="settings-card-header"><i class="bi bi-collection"></i> {{ t('settings.tabs.sources') }}</div>
             <div class="card-body">
 
-                    <!-- Metatube 連線（B3）toggle（CD-63b-3）— 64b-1: gate 移至此卡頂端 -->
-                    <div class="settings-form-group">
-                        <label class="settings-label">
-                            <input type="checkbox" class="toggle toggle-primary"
-                                   id="metatubeEnableToggle"
-                                   x-model="metatubeEnabled"
-                                   @change="onMetatubeEnabledChange()">
-                            <span class="label-text">{{ t('settings.sources.mt_enable_label') }}</span>
-                        </label>
-                        <small class="settings-hint">{{ t('settings.sources.mt_enable_help') }}</small>
-                    </div>
-
                     <!-- ===== Section 2 — Active Row (Zone A) — 61c-1 structure ===== -->
                     <!-- Batch bar: 無碼模式 toggle placeholder (61c-3 wires uncensoredMode) -->
                     <div class="settings-sources-batchbar">
@@ -235,6 +223,18 @@
 
                     <!-- Disabled-sources footnote (F6 / CD-61-20) — always visible, no Alpine cond -->
                     <p class="settings-sources-footnote">{{ t('settings.sources.disabled_footnote') }}</p>
+
+                    <!-- Metatube 連線（B3）toggle（CD-63b-3）— 64b-6: 移至 Section 3 正上方 -->
+                    <div class="settings-form-group">
+                        <label class="settings-label">
+                            <input type="checkbox" class="toggle toggle-primary"
+                                   id="metatubeEnableToggle"
+                                   x-model="metatubeEnabled"
+                                   @change="onMetatubeEnabledChange()">
+                            <span class="label-text">{{ t('settings.sources.mt_enable_label') }}</span>
+                        </label>
+                        <small class="settings-hint">{{ t('settings.sources.mt_enable_help') }}</small>
+                    </div>
 
                     <!-- ===== Section 3 — Metatube Connection (Zone B) — 61c-1 guard wrapper ===== -->
                     <!-- B1: metatubeEnabled hardcoded false → 整段不渲染（disabled state）。
@@ -394,6 +394,30 @@
                         </div>
                         <small class="settings-hint mt-1">{{ t('settings.sources.primary_source_deprecated_note') }}</small>
                     </div>
+
+                    <!-- Proxy（64b-6: 從進階刮削摺疊上移至搜尋來源卡末，貼近 DMM 來源） -->
+                    <div class="settings-form-row">
+                        <label class="row-label">
+                            Proxy
+                            <small class="settings-hint">{{ t('settings.search.proxy_dmm_hint') }}</small>
+                        </label>
+                        <div class="flex-1 flex flex-col gap-1">
+                            <div class="variable-input-group">
+                                <input type="text" class="input input-bordered input-sm flex-1"
+                                    x-model="form.proxyUrl"
+                                    placeholder="{{ t('settings.search.proxy_placeholder') }}">
+                                <button class="btn btn-sm btn-outline" type="button"
+                                    @click="testProxy()"
+                                    :disabled="!form.proxyUrl.trim() || testProxyLoading">
+                                    <span x-show="testProxyLoading" class="loading loading-spinner loading-sm"></span>
+                                    {{ t('settings.action.test') }}
+                                </button>
+                            </div>
+                            <small class="settings-hint" x-show="proxyStatus" x-text="proxyStatus"
+                                :class="{ 'text-success': proxyStatusOk, 'text-error': proxyStatus && !proxyStatusOk && !testProxyLoading }"></small>
+                        </div>
+                    </div>
+
             </div>
           </div>
 
@@ -874,29 +898,6 @@
                                 {{ t('settings.scraper.jellyfin_mode_label') }}
                                 <small class="settings-hint">{{ t('settings.scraper.jellyfin_mode_hint') }}</small>
                             </label>
-                        </div>
-
-                        <!-- Proxy（最終家，64b-1 直接歸位，見 Opus split refinement） -->
-                        <div class="settings-form-row">
-                            <label class="row-label">
-                                Proxy
-                                <small class="settings-hint">{{ t('settings.search.proxy_dmm_hint') }}</small>
-                            </label>
-                            <div class="flex-1 flex flex-col gap-1">
-                                <div class="variable-input-group">
-                                    <input type="text" class="input input-bordered input-sm flex-1"
-                                        x-model="form.proxyUrl"
-                                        placeholder="{{ t('settings.search.proxy_placeholder') }}">
-                                    <button class="btn btn-sm btn-outline" type="button"
-                                        @click="testProxy()"
-                                        :disabled="!form.proxyUrl.trim() || testProxyLoading">
-                                        <span x-show="testProxyLoading" class="loading loading-spinner loading-sm"></span>
-                                        {{ t('settings.action.test') }}
-                                    </button>
-                                </div>
-                                <small class="settings-hint" x-show="proxyStatus" x-text="proxyStatus"
-                                    :class="{ 'text-success': proxyStatusOk, 'text-error': proxyStatus && !proxyStatusOk && !testProxyLoading }"></small>
-                            </div>
                         </div>
 
                     </div><!-- /collapsible-content scraperAdvanced -->

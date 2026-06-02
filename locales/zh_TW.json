@@ -227,7 +227,7 @@
       "mt_promote_hint": "點擊可加入 Active Row",
       "mt_disconnect_toast": "Metatube 已中斷，請至下方 Section 3 重新連線。",
       "mt_enable_label": "啟用 Metatube 連線",
-      "mt_enable_help": "開啟後，下方「掃描來源」分頁會出現 Metatube 連線設定，可填入自架 metatube server 串接 30+ 來源。",
+      "mt_enable_help": "開啟後在下方展開 Metatube 連線設定，可填入自架 metatube server 串接 30+ 來源。",
       "mt_lan_mode_label": "LAN 自架（允許區網位址）",
       "mt_connecting_btn": "連線中…",
       "mt_connect_network_error": "連線失敗，請確認網路並重試",

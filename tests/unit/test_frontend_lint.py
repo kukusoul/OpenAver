@@ -9546,12 +9546,22 @@ class TestSettingsDmmProxyContract:
         assert ":data-proxy-required" in self._html(), \
             "64b-3 違規：settings.html 缺少 :data-proxy-required（Active Row DMM pill binding）"
 
-    def test_proxy_url_x_model_in_collapsible(self):
+    def test_proxy_url_x_model_in_sources_card(self):
+        """64b-6: proxy x-model 已移至搜尋來源卡（sec-search），不在 scraperAdvanced 摺疊內"""
         html = self._html()
-        assert 'x-model="form.proxyUrl"' in html, \
-            "64b-3 違規：settings.html 缺少 x-model=\"form.proxyUrl\"（proxy input）"
-        # proxy x-model 應在 collapsible-content 之後（摺疊內）
-        collapsible_pos = html.index('class="collapsible-content"')
+        # 1. proxy x-model 存在且只有 1 次（搬移非複製）
+        assert html.count('x-model="form.proxyUrl"') == 1, \
+            "64b-6 違規：x-model=\"form.proxyUrl\" 應恰好出現 1 次（搬移非複製）"
         proxy_model_pos = html.index('x-model="form.proxyUrl"')
-        assert proxy_model_pos > collapsible_pos, \
-            "64b-3 違規：proxy x-model 應在 collapsible-content（進階刮削摺疊）之後"
+        # 2. 位置在 id="sec-search" 之後
+        sec_search_pos = html.index('id="sec-search"')
+        assert proxy_model_pos > sec_search_pos, \
+            "64b-6 違規：proxy x-model 應在 id=\"sec-search\" 之後（在搜尋來源卡內）"
+        # 3. 位置在 id="sec-gallery" 之前
+        sec_gallery_pos = html.index('id="sec-gallery"')
+        assert proxy_model_pos < sec_gallery_pos, \
+            "64b-6 違規：proxy x-model 應在 id=\"sec-gallery\" 之前（在搜尋來源卡內，不在 gallery 卡）"
+        # 4. 位置在第一個 collapsible-content（scraperAdvanced 摺疊）之前（已移出摺疊）
+        collapsible_pos = html.index('class="collapsible-content"')
+        assert proxy_model_pos < collapsible_pos, \
+            "64b-6 違規：proxy x-model 應在第一個 collapsible-content 之前（已移出進階刮削摺疊）"
