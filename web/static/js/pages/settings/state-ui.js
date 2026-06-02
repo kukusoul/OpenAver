@@ -11,6 +11,10 @@ export function stateUI() {
         showPathHelp: false,
         showSampleImagesHelp: false,
 
+        // 64b-1: 進階摺疊開關（x-collapse 驅動）
+        scraperAdvanced: false,
+        galleryAdvanced: false,
+
         // Toast state
         _toast: { message: '', type: 'success', visible: false },
         _toastTimer: null,

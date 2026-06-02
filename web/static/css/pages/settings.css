@@ -63,13 +63,11 @@
 }
 
 
-/* ========== Settings Tab Nav (61b-2) ========== */
-/* Sticky top-tab bar mirroring 61b-1 POC (.smock-tabbar + .smock-anchor glass).
-   Tokens only — no hex; white = oklch(100% 0 0). */
+/* ========== Settings Tab Nav (61b-2) — 64b-1: tab-bar HTML removed; CSS rules kept for reference ========== */
+/* 64b-1: .settings-tab-bar HTML 整段已移除（64b-1 reparent）；
+   nav icon-only 嵌 header 由 64b-2 重建。下方 .settings-tab 規則保留備用。
+   注意：原 position:sticky top:0 z-index:30 已移除（header 接管 z-index:31）。*/
 #settings-components .settings-tab-bar {
-    position: sticky;
-    top: 0;
-    z-index: 30;
     display: flex;
     flex-wrap: wrap;
     gap: 0.35rem;
@@ -275,6 +273,10 @@
     border-bottom: 1px solid var(--stroke-subtle);
     padding-bottom: 1rem;
     margin-bottom: 0.5rem;
+    /* 64b-1: sticky header（tab-bar 移除後，header 接管釘頂；z-index 31 > 舊 tab-bar 30）*/
+    position: sticky;
+    top: 0;
+    z-index: 31;
 }
 
 .settings-header-actions {
