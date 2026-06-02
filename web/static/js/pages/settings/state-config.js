@@ -352,14 +352,10 @@ export function stateConfig() {
                         if (this._toastTimer) clearTimeout(this._toastTimer);
                         // 61b-5: 回收 GSAP inline props（frontend-stack-roles 共存規則 3）
                         this._gsapCtx?.revert();
-                        // 64b-2: 回收 IntersectionObserver scrollspy
-                        this._sectionObserver?.disconnect();
                     }
                 });
             }
 
-            // 61b-3: activeTab / URL hash / localStorage（活在 stateUI，禁加 stateUI.init）
-            if (typeof this._initActiveTab === 'function') this._initActiveTab();
         },
 
         // ===== Methods =====
