@@ -81,6 +81,43 @@
     <!-- 64b-1: form wraps all 3 sections (replaces 6-panel layout). -->
     <form id="settingsForm" @submit.prevent="saveConfig" inert :inert="_configLoading">
 
+        <!-- ── quick-toggle 列（CD-64-B8）：下載劇照 + 進階搜尋，header 下 section 上 ── -->
+        <div class="settings-quick-toggle-row">
+
+            <!-- 下載劇照（extrafanart） -->
+            <div class="settings-form-group popover-anchor">
+                <label class="settings-label">
+                    <input type="checkbox" class="toggle toggle-primary"
+                           x-model="form.downloadSampleImages">
+                    <span class="label-text">{{ t('settings.scraper.download_sample_images_label') }}</span>
+                    <button type="button" class="help-popover-btn"
+                            @click.prevent="showSampleImagesHelp = !showSampleImagesHelp"
+                            :aria-expanded="showSampleImagesHelp">
+                        <i class="bi bi-question-circle"></i>
+                    </button>
+                </label>
+                <div x-show="showSampleImagesHelp" x-cloak x-transition
+                     @click.outside="showSampleImagesHelp = false"
+                     class="help-popover">
+                    <small class="help-popover__body">
+                        {{ t('settings.scraper.download_sample_images_hint') }}
+                    </small>
+                </div>
+            </div>
+
+            <!-- 進階搜尋（Beta） -->
+            <div class="settings-form-group">
+                <label class="settings-label">
+                    <input type="checkbox" class="toggle toggle-primary"
+                           id="advancedSearchToggle"
+                           x-model="form.advancedSearchEnabled">
+                    <span class="label-text">{{ t('settings.advanced_search.toggle_label') }}</span>
+                </label>
+                <small class="settings-hint">{{ t('settings.advanced_search.help') }}</small>
+            </div>
+
+        </div><!-- /settings-quick-toggle-row -->
+
         <!-- ── Section 1: 搜尋與刮削（兩卡同包） ── -->
         <section id="sec-search" class="settings-section">
 
@@ -202,7 +239,7 @@
                     <!-- ===== Section 3 — Metatube Connection (Zone B) — 61c-1 guard wrapper ===== -->
                     <!-- B1: metatubeEnabled hardcoded false → 整段不渲染（disabled state）。
                          idle/connected 結構在此就位，供測試 + B3 接實際連線。 -->
-                    <div class="settings-sources-section3" x-show="metatubeEnabled">
+                    <div class="settings-sources-section3" x-show="metatubeEnabled" x-collapse>
 
                         <!-- STATE: idle — connect form (metatubeEnabled && !metatubeConnected) -->
                         <div class="settings-mt-connect-form"
@@ -364,27 +401,6 @@
           <div class="card mb-4">
             <div class="settings-card-header"><i class="bi bi-gear"></i> {{ t('settings.tabs.scraping') }}</div>
             <div class="card-body">
-
-                    <!-- downloadSampleImages toggle + help popover（主卡，非摺疊） -->
-                    <div class="settings-form-group popover-anchor">
-                        <label class="settings-label">
-                            <input type="checkbox" class="toggle toggle-primary"
-                                   x-model="form.downloadSampleImages">
-                            <span class="label-text">{{ t('settings.scraper.download_sample_images_label') }}</span>
-                            <button type="button" class="help-popover-btn"
-                                    @click.prevent="showSampleImagesHelp = !showSampleImagesHelp"
-                                    :aria-expanded="showSampleImagesHelp">
-                                <i class="bi bi-question-circle"></i>
-                            </button>
-                        </label>
-                        <div x-show="showSampleImagesHelp" x-cloak x-transition
-                             @click.outside="showSampleImagesHelp = false"
-                             class="help-popover">
-                            <small class="help-popover__body">
-                                {{ t('settings.scraper.download_sample_images_hint') }}
-                            </small>
-                        </div>
-                    </div>
 
                     <!-- 我的最愛資料夾（scanner dropdown + favoriteScannerLink） -->
                     <div class="settings-form-row">
@@ -661,17 +677,6 @@
                                 </div>
                             </div>
                         </div>
-                    </div>
-
-                    <!-- 進階搜尋 (Beta) toggle（TASK-61c-7）— 64b-1: 暫置此處（保留 id），64b-3 提升至 quick-toggle 列 -->
-                    <div class="settings-form-group">
-                        <label class="settings-label">
-                            <input type="checkbox" class="toggle toggle-primary"
-                                   id="advancedSearchToggle"
-                                   x-model="form.advancedSearchEnabled">
-                            <span class="label-text">{{ t('settings.advanced_search.toggle_label') }}</span>
-                        </label>
-                        <small class="settings-hint">{{ t('settings.advanced_search.help') }}</small>
                     </div>
 
                     <!-- 進階刮削摺疊（實填既有欄位）；x-collapse 需 @alpinejs/collapse plugin，已在 base.html 載入 -->

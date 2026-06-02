@@ -9437,3 +9437,107 @@ class TestSettingsNavI18nGuard:
         nav = self._zh().get("settings", {}).get("nav", {})
         for key in ("search_scrape", "gallery", "system"):
             assert nav.get(key), f"64b-2 違規：缺 settings.nav.{key}"
+
+
+class TestSettingsQuickToggleGuard:
+    """64b-3: quick-toggle 列存在 + 兩 toggle 在列內（CD-64-B8）"""
+
+    SETTINGS_HTML = Path(__file__).parent.parent.parent / "web" / "templates" / "settings.html"
+
+    def _html(self):
+        return self.SETTINGS_HTML.read_text(encoding="utf-8")
+
+    def test_quick_toggle_row_exists(self):
+        assert 'class="settings-quick-toggle-row"' in self._html(), \
+            "64b-3 違規：settings.html 缺少 .settings-quick-toggle-row"
+
+    def test_quick_toggle_row_inside_form_before_sec_search(self):
+        html = self._html()
+        form_pos = html.index('<form id="settingsForm"')
+        row_pos = html.index('class="settings-quick-toggle-row"')
+        sec_search_pos = html.index('id="sec-search"')
+        assert form_pos < row_pos, \
+            "64b-3 違規：.settings-quick-toggle-row 必須在 <form id=settingsForm> 之後"
+        assert row_pos < sec_search_pos, \
+            "64b-3 違規：.settings-quick-toggle-row 必須在 <section id=sec-search> 之前"
+
+    def test_download_sample_images_in_quick_toggle_row(self):
+        html = self._html()
+        row_start = html.index('class="settings-quick-toggle-row"')
+        # 結束點：取列 div 結束標記（class 末尾）— 用 sec-search 開始當界
+        sec_search_pos = html.index('id="sec-search"')
+        row_block = html[row_start:sec_search_pos]
+        assert 'x-model="form.downloadSampleImages"' in row_block, \
+            "64b-3 違規：form.downloadSampleImages x-model 必須在 .settings-quick-toggle-row 內"
+
+    def test_advanced_search_enabled_in_quick_toggle_row(self):
+        html = self._html()
+        row_start = html.index('class="settings-quick-toggle-row"')
+        sec_search_pos = html.index('id="sec-search"')
+        row_block = html[row_start:sec_search_pos]
+        assert 'x-model="form.advancedSearchEnabled"' in row_block, \
+            "64b-3 違規：form.advancedSearchEnabled x-model 必須在 .settings-quick-toggle-row 內"
+
+    def test_advanced_search_toggle_id_preserved(self):
+        """id=advancedSearchToggle 必須在 quick-toggle 列（不可消失）"""
+        html = self._html()
+        row_start = html.index('class="settings-quick-toggle-row"')
+        sec_search_pos = html.index('id="sec-search"')
+        row_block = html[row_start:sec_search_pos]
+        assert 'id="advancedSearchToggle"' in row_block, \
+            "64b-3 違規：id=advancedSearchToggle 必須保留在 quick-toggle 列內（64b-1 DoD：不得遺失 id）"
+
+    def test_download_sample_images_not_duplicated_in_card(self):
+        """downloadSampleImages x-model 只出現一次（已從 Card ② 搬走）"""
+        html = self._html()
+        count = html.count('x-model="form.downloadSampleImages"')
+        assert count == 1, \
+            f"64b-3 違規：form.downloadSampleImages x-model 出現 {count} 次，應只在 quick-toggle 列（1 次）"
+
+    def test_advanced_search_toggle_id_unique(self):
+        """id=advancedSearchToggle 全頁只出現一次（搬移非複製；重複 id 為無效 HTML）"""
+        html = self._html()
+        count = html.count('id="advancedSearchToggle"')
+        assert count == 1, \
+            f"64b-3 違規：id=advancedSearchToggle 出現 {count} 次，應只在 quick-toggle 列（1 次）"
+
+
+class TestSettingsDmmProxyContract:
+    """64b-3: DMM 灰化 + proxy binding contract 驗證（CD-64-B4）"""
+
+    SETTINGS_HTML = Path(__file__).parent.parent.parent / "web" / "templates" / "settings.html"
+    STATE_CONFIG_JS = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "settings" / "state-config.js"
+
+    def _html(self): return self.SETTINGS_HTML.read_text(encoding="utf-8")
+    def _js(self): return self.STATE_CONFIG_JS.read_text(encoding="utf-8")
+
+    def test_is_dmm_available_in_state_config(self):
+        assert "isDmmAvailable" in self._js(), \
+            "64b-3 違規：state-config.js 缺少 isDmmAvailable 函式（DMM 灰化 binding contract）"
+
+    def test_proxy_url_in_form_state(self):
+        assert "proxyUrl" in self._js(), \
+            "64b-3 違規：state-config.js form 缺少 proxyUrl 狀態"
+
+    def test_is_dmm_available_reads_proxy_url(self):
+        """isDmmAvailable 必須讀 form.proxyUrl（不可改讀其他變數）"""
+        js = self._js()
+        # 找到 isDmmAvailable 函式 block，確認其中含 proxyUrl
+        idx = js.index("isDmmAvailable")
+        block = js[idx:idx+200]
+        assert "proxyUrl" in block, \
+            "64b-3 違規：isDmmAvailable 應讀 form.proxyUrl（DMM 灰化 reactive 來源）"
+
+    def test_dmm_pill_reads_is_dmm_available(self):
+        assert ":data-proxy-required" in self._html(), \
+            "64b-3 違規：settings.html 缺少 :data-proxy-required（Active Row DMM pill binding）"
+
+    def test_proxy_url_x_model_in_collapsible(self):
+        html = self._html()
+        assert 'x-model="form.proxyUrl"' in html, \
+            "64b-3 違規：settings.html 缺少 x-model=\"form.proxyUrl\"（proxy input）"
+        # proxy x-model 應在 collapsible-content 之後（摺疊內）
+        collapsible_pos = html.index('class="collapsible-content"')
+        proxy_model_pos = html.index('x-model="form.proxyUrl"')
+        assert proxy_model_pos > collapsible_pos, \
+            "64b-3 違規：proxy x-model 應在 collapsible-content（進階刮削摺疊）之後"
