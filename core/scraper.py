@@ -543,7 +543,7 @@ def _javbus_keyword_search(
     """JavBus keyword search — extracted from search_actress.
 
     Returns list[dict] (empty list on failure / no ids).
-    JavDB fallback is NOT included; the chain owns that.
+    JavDB fallback is NOT included; fuzzy fallback is limited to FUZZY_SEARCH_SOURCES.
     """
     try:
         if status_callback:
@@ -617,7 +617,7 @@ def _fuzzy_one(
     result_callback: Optional[Callable[[int, Any], None]],
     discovery_only: bool = False,
 ) -> List[Dict[str, Any]]:
-    """統一 adapter：將四個 keyword 入口歸一為 list[dict]（空 → []，永不回 None）。
+    """統一 adapter：將兩個 keyword 入口歸一為 list[dict]（空 → []，永不回 None）。
 
     Caller must already have confirmed DMM is enabled before passing 'dmm' here.
 
@@ -635,25 +635,16 @@ def _fuzzy_one(
         result = _dmm_keyword_search_progressive(
             dmm_scraper, query, limit, status_callback, result_callback, offset=offset
         )
-        return result if result is not None else []
+        result = result if result is not None else []
+        for d in result:
+            d['_source'] = 'dmm'  # 鏡像 javbus（search_jav L354）：模糊結果補內部來源標記
+        return result
 
     if source == 'javbus':
         return _javbus_keyword_search(
             query, limit, offset, status_callback, result_callback,
             discovery_only=discovery_only,
         )
-
-    if source == 'jav321':
-        return search_jav321_keyword(query, limit, status_callback)
-
-    if source == 'javdb':
-        if status_callback:
-            status_callback('javdb', 'searching')
-        videos = JavDBScraper().search_by_keyword(query, limit=limit)
-        results = [v.to_legacy_dict() for v in videos]
-        if status_callback:
-            status_callback('done', f'found:{len(results)}')
-        return results
 
     return []
 

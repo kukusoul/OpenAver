@@ -260,9 +260,9 @@ def test_all_sources_metatube_disabled_still_returned(monkeypatch):
 # FUZZY_SEARCH_SOURCES constant  (TASK-65a-1)
 # ---------------------------------------------------------------------------
 
-def test_fuzzy_search_sources_contains_correct_four():
-    """FUZZY_SEARCH_SOURCES must contain exactly the 4 fuzzy-capable censored sources."""
-    assert sorted(FUZZY_SEARCH_SOURCES) == sorted(['javbus', 'dmm', 'jav321', 'javdb'])
+def test_fuzzy_search_sources_contains_correct_two():
+    """FUZZY_SEARCH_SOURCES must contain exactly the 2 fuzzy-capable censored sources (TASK-65g)."""
+    assert sorted(FUZZY_SEARCH_SOURCES) == sorted(['javbus', 'dmm'])
 
 
 def test_fuzzy_search_sources_excludes_avsox():
