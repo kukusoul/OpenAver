@@ -264,12 +264,20 @@
                  x-cloak
                  @click="openHeroCardLightbox()">
               <div class="av-card-preview-img">
+                <!-- 67-A3: hero 三態（actress photo，獨立 _heroCardImageLoaded，CD-67-4）。首屏 eager+high -->
                 <img :src="_matchedActress?.photo_url || ''"
                      :alt="_matchedActress?.name"
-                     loading="lazy"
-                     x-show="_matchedActress && !_heroCardImageError"
+                     loading="eager"
+                     fetchpriority="high"
+                     x-show="_matchedActress?.photo_url && !_heroCardImageError"
+                     :class="{ 'cover-loaded': _heroCardImageLoaded }"
+                     @load="_heroCardImageLoaded = true"
                      @error="if (_matchedActress?.photo_url) _heroCardImageError = true">
-                <div x-show="_matchedActress && _heroCardImageError"
+                <!-- 67-A3: skeleton overlay。gate 含 photo_url（空 photo 的 img src="" 不觸發 @load/@error → 不卡 shimmer，鏡射 grid cover_url gate）-->
+                <div class="skeleton-cover shimmer"
+                     x-show="_matchedActress?.photo_url && !_heroCardImageError && !_heroCardImageLoaded"></div>
+                <!-- 67/Codex P2#2: 空 photo_url（src="" 不觸發 @error）或 404 error 皆顯破圖 icon；img x-show 同步 gate photo_url，不顯空白框（鏡射 grid no-cover）-->
+                <div x-show="_matchedActress && (!_matchedActress.photo_url || _heroCardImageError)"
                      class="av-card-no-cover">
                   <i class="bi bi-image"></i>
                   <span x-text="t('common.no_image')"></span>
@@ -307,10 +315,25 @@
                      :style="`--card-index: ${index}`"
                      :data-flip-id="video.path">
                     <div class="av-card-preview-img">
+                        <!-- 67-A2: 三態（CD-67-3）。保留單一 <img> 沿用 handleCoverError 換圖；
+                             淡入靠 _imgLoaded 的 .cover-loaded class（A1 CSS）；首屏前 8 張 eager+high（CD-67-5，不可 lazy+high 並存） -->
                         <img :src="video.cover_url"
                              :alt="video.number"
-                             loading="lazy"
+                             :loading="index < 8 ? 'eager' : 'lazy'"
+                             :fetchpriority="index < 8 ? 'high' : 'auto'"
+                             x-show="video.cover_url"
+                             :class="{ 'cover-loaded': video._imgLoaded }"
+                             @load="video._imgLoaded = true"
                              @error="handleCoverError(video, $event)">
+                        <!-- 67-A2: skeleton overlay（pending 時，gate 含 has_cover → stale @error 後 has_cover=false 自動退出）-->
+                        <div class="skeleton-cover shimmer"
+                             x-show="video.cover_url && video.has_cover && !video._imgLoaded"></div>
+                        <!-- 67-A2: no-cover（CD-67-3 (a)：DB 缺封面 cover_url="" 空白 img 不發請求；鏡射 hero :272-276）。
+                             與 stale-@error 換 placeholder 路徑互斥（stale 時 cover_url 仍非空 → 不顯示，不雙重渲染）-->
+                        <div x-show="!video.cover_url" class="av-card-no-cover">
+                          <i class="bi bi-image"></i>
+                          <span x-text="t('common.no_image')"></span>
+                        </div>
                         <div class="av-card-preview-overlay">
                             <button class="btn-glass-circle"
                                     @click.stop="playVideo(video.path)"
@@ -1094,12 +1117,31 @@
 
             <!-- SVG rails 12 條 + 12 sweep lines（id 對映 similar-rail-XX / similar-sweep-XX） -->
             <svg class="similar-stage-rails" viewBox="0 0 960 620" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                <template x-for="anchor in SIMILAR_ANCHORS" :key="anchor.id">
-                    <g>
-                        <line :id="'similar-rail-' + anchor.idShort" class="similar-rail rail--hidden" x1="480" y1="310" x2="480" y2="310" />
-                        <line :id="'similar-sweep-' + anchor.idShort" class="similar-rail-sweep" x1="480" y1="310" x2="480" y2="310" />
-                    </g>
-                </template>
+                <!-- 靜態 12 組 rail + sweep（鏡射 motion_lab.html 無錯 precedent；id 對映 state-similar.js 消費端 'similar-rail-'+idShort / 'similar-sweep-'+idShort，runtime setRailCoords 覆蓋座標，初始為退化點 480,310） -->
+                <line id="similar-rail-01"  class="similar-rail rail--hidden" x1="480" y1="310" x2="480" y2="310" />
+                <line id="similar-sweep-01" class="similar-rail-sweep"        x1="480" y1="310" x2="480" y2="310" />
+                <line id="similar-rail-02"  class="similar-rail rail--hidden" x1="480" y1="310" x2="480" y2="310" />
+                <line id="similar-sweep-02" class="similar-rail-sweep"        x1="480" y1="310" x2="480" y2="310" />
+                <line id="similar-rail-03"  class="similar-rail rail--hidden" x1="480" y1="310" x2="480" y2="310" />
+                <line id="similar-sweep-03" class="similar-rail-sweep"        x1="480" y1="310" x2="480" y2="310" />
+                <line id="similar-rail-04"  class="similar-rail rail--hidden" x1="480" y1="310" x2="480" y2="310" />
+                <line id="similar-sweep-04" class="similar-rail-sweep"        x1="480" y1="310" x2="480" y2="310" />
+                <line id="similar-rail-05"  class="similar-rail rail--hidden" x1="480" y1="310" x2="480" y2="310" />
+                <line id="similar-sweep-05" class="similar-rail-sweep"        x1="480" y1="310" x2="480" y2="310" />
+                <line id="similar-rail-06"  class="similar-rail rail--hidden" x1="480" y1="310" x2="480" y2="310" />
+                <line id="similar-sweep-06" class="similar-rail-sweep"        x1="480" y1="310" x2="480" y2="310" />
+                <line id="similar-rail-07"  class="similar-rail rail--hidden" x1="480" y1="310" x2="480" y2="310" />
+                <line id="similar-sweep-07" class="similar-rail-sweep"        x1="480" y1="310" x2="480" y2="310" />
+                <line id="similar-rail-08"  class="similar-rail rail--hidden" x1="480" y1="310" x2="480" y2="310" />
+                <line id="similar-sweep-08" class="similar-rail-sweep"        x1="480" y1="310" x2="480" y2="310" />
+                <line id="similar-rail-09"  class="similar-rail rail--hidden" x1="480" y1="310" x2="480" y2="310" />
+                <line id="similar-sweep-09" class="similar-rail-sweep"        x1="480" y1="310" x2="480" y2="310" />
+                <line id="similar-rail-10"  class="similar-rail rail--hidden" x1="480" y1="310" x2="480" y2="310" />
+                <line id="similar-sweep-10" class="similar-rail-sweep"        x1="480" y1="310" x2="480" y2="310" />
+                <line id="similar-rail-11"  class="similar-rail rail--hidden" x1="480" y1="310" x2="480" y2="310" />
+                <line id="similar-sweep-11" class="similar-rail-sweep"        x1="480" y1="310" x2="480" y2="310" />
+                <line id="similar-rail-12"  class="similar-rail rail--hidden" x1="480" y1="310" x2="480" y2="310" />
+                <line id="similar-sweep-12" class="similar-rail-sweep"        x1="480" y1="310" x2="480" y2="310" />
             </svg>
 
             <!-- 56c-T4: main image visual center anchor — single source of truth
