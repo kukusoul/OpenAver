@@ -495,3 +495,50 @@ def test_mark_no_generation_arg_backward_compatible(state):
     assert state.is_available('metatube:FANZA') is False
     state.mark_available('metatube:FANZA')  # no generation arg
     assert state.is_available('metatube:FANZA') is True
+
+
+# ===========================================================================
+# CD-66b-3: probe_snapshot() — atomic (names, gen, base_url, token)
+# ===========================================================================
+
+def test_probe_snapshot_after_connect(state):
+    """probe_snapshot() returns connected names/gen/url/token in one atomic read."""
+    state.connect('http://host:8080', 'tok', ['FANZA', 'HEYZO'])
+    names, gen, url, token = state.probe_snapshot()
+    assert set(names) == {'FANZA', 'HEYZO'}
+    assert gen == state.generation
+    assert url == 'http://host:8080'
+    assert token == 'tok'
+
+
+def test_probe_snapshot_none_to_empty_string(state):
+    """Fresh state (no connect): base_url/token None map to '', names empty, gen 0."""
+    names, gen, url, token = state.probe_snapshot()
+    assert names == []
+    assert url == ''
+    assert token == ''
+    assert gen == 0
+
+
+def test_probe_snapshot_names_from_availability_not_providers(state):
+    """CD-66b-3: after disconnect, names still come from _availability keys.
+
+    disconnect() clears _providers but keeps _availability keys (set False), so
+    /test must still list previously-known providers. base_url/token are cleared.
+    """
+    state.connect('http://host:8080', 'tok', ['FANZA', 'HEYZO'])
+    state.disconnect()
+    names, gen, url, token = state.probe_snapshot()
+    # _providers is now empty, but _availability keys are preserved
+    assert set(names) == {'FANZA', 'HEYZO'}
+    # disconnect cleared base_url/token → ''
+    assert url == ''
+    assert token == ''
+
+
+def test_probe_snapshot_names_stripped_prefix(state):
+    """names are stripped of the 'metatube:' prefix."""
+    state.connect('http://host:8080', 'tok', ['FANZA'])
+    names, _gen, _url, _token = state.probe_snapshot()
+    assert 'metatube:FANZA' not in names
+    assert 'FANZA' in names

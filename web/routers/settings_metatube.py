@@ -423,7 +423,6 @@ async def status():
 @router.post("/test")
 async def test_connection():
     """Re-probe all currently known providers in the background."""
-    names = [k.split(":", 1)[1] for k in state.availability_map()]
-    gen = state.generation
-    _fire_probe(state.base_url or "", state.token or "", names, gen)
+    names, gen, base_url, token = state.probe_snapshot()
+    _fire_probe(base_url, token, names, gen)
     return {"success": True, "message": "probe started"}

@@ -190,6 +190,23 @@ class MetatubeConnectionState:
         with self._lock:
             return self._availability.get(source_id, False)
 
+    def probe_snapshot(self) -> tuple[list[str], int, str, str]:
+        """Atomically snapshot (names, generation, base_url, token) for firing a probe.
+
+        Single _lock acquisition so /test cannot dance with a concurrent
+        connect/disconnect across separate reads (CD-66b-3). `names` is sourced
+        from `_availability` keys (stripped of the 'metatube:' prefix) — NOT
+        `_providers` — to preserve the existing behaviour that /test still lists
+        previously-known providers after a disconnect (which clears _providers but
+        keeps _availability keys set False).
+        """
+        with self._lock:
+            names = [k.split(":", 1)[1] for k in self._availability]
+            gen = self._generation
+            base_url = self.base_url or ""
+            token = self.token or ""
+            return names, gen, base_url, token
+
     # ------------------------------------------------------------------
     # Read-only properties
     # ------------------------------------------------------------------
