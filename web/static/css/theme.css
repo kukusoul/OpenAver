@@ -1487,10 +1487,11 @@ body {
     border: 1px solid color-mix(in oklch, var(--accent-pink) 25%, transparent);
 }
 
-/* feature/69 T4: dim 近黑底吃光低% tint，提 tint + solid pink 邊（全彩 pink 文字已部分救） */
+/* feature/69 T4: dim 近黑底吃光低% tint，提 tint 24% + pink 邊 50%（全彩 pink 文字已部分救）。
+   mix partner 用 transparent（同 base 慣例，色相安全；混 dim 藍色相 surface 會使 pink 偏紫）。 */
 [data-theme="dim"] :is(#ds-gallery-components, .ds-gallery-composition) .alias-pill-primary {
-    background: color-mix(in oklch, var(--accent-pink) 24%, var(--surface-0));
-    border-color: color-mix(in oklch, var(--accent-pink) 50%, var(--surface-0));
+    background: color-mix(in oklch, var(--accent-pink) 24%, transparent);
+    border-color: color-mix(in oklch, var(--accent-pink) 50%, transparent);
 }
 
 /* Alias pill */
