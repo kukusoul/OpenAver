@@ -850,6 +850,10 @@ mergeState(..., longPressState());
     @click="longPressClickGuard($event) || tapHandler()"&gt;...&lt;/button&gt;</code></pre>
 </div>
 
+<!-- #settings-components scope wrapper：包 §15 segmented + §16 metatube banner 兩個 demo，
+     使 settings.css 的 #settings-components scoped 規則生效（唯一真 id，避免 duplicate id）。 -->
+<div id="settings-components">
+
 <!-- D.15: Segmented 控件 — 全開 | 無碼模式（TASK-64e-2） -->
 <div class="ds-subsection">
     <h3>15. Segmented 控件（全開 | 無碼模式）</h3>
@@ -861,8 +865,8 @@ mergeState(..., longPressState());
         <code>.is-on</code> 態玻璃高亮（backdrop-filter + shadow-2）。<code>prefers-reduced-motion</code> 停 transition。
     </p>
 
-    <!-- 需 id="settings-components" 使 settings.css scoped 規則生效 -->
-    <div class="ds-card-demo" id="settings-components" style="max-width: 600px; margin: 0 auto; padding: 1.5rem;">
+    <!-- scope 由外層 #settings-components wrapper 提供（見上） -->
+    <div class="ds-card-demo" style="max-width: 600px; margin: 0 auto; padding: 1.5rem;">
         <!-- 態一：全開段亮（全開段 .is-on） -->
         <div style="margin-bottom: 1rem;">
             <small style="color: var(--text-muted); display: block; margin-bottom: 0.5rem;">態一：全開段亮（allBuiltinEnabled &amp;&amp; !uncensoredMode）</small>
@@ -897,4 +901,72 @@ mergeState(..., longPressState());
     無碼模式
   &lt;/button&gt;
 &lt;/div&gt;</code></pre>
+</div>
+
+<!-- D.16: metatube 連線狀態 banner — feature/69 T5 dim 驗證面（P9/P10）-->
+<div class="ds-subsection">
+    <h3>16. metatube 連線狀態 banner（已連線態）</h3>
+    <p class="ds-desc">
+        掃描來源卡 metatube 區「已連線」狀態列（<code>.settings-mt-connect-status</code>，僅 <code>metatubeConnected</code> 分支渲染；
+        未連線是 connect form 非 banner）。綠 ✓ + 伺服器 URL + 編輯／中斷／重測 mini 鈕，下接 tier-hint。
+        CSS scope：<code>#settings-components</code>。
+        <strong>dim 校準（69 T3）</strong>：近黑底吃光 8% success tint → 提 tint 16% + solid 邊 + 3px 左色條，
+        綠態明確可辨。切 dim 對照即 <strong>P9/P10</strong> 驗證點。
+    </p>
+
+    <!-- scope 由外層 #settings-components wrapper 提供（見 §15 之上） -->
+    <div class="ds-card-demo" style="max-width: 700px; margin: 0 auto; padding: 1.5rem;">
+        <div class="settings-mt-connect-status" style="pointer-events: none;" aria-hidden="true">
+            <i class="bi bi-check-circle-fill" aria-hidden="true"></i>
+            <span class="status-text">
+                已連線 metatube
+                <code>http://192.168.1.50:8090</code>
+            </span>
+            <button type="button" class="settings-sources-mini-btn"><i class="bi bi-pencil"></i> 編輯</button>
+            <button type="button" class="settings-sources-mini-btn"><i class="bi bi-x-circle"></i> 中斷</button>
+            <button type="button" class="settings-sources-mini-btn"><i class="bi bi-arrow-clockwise"></i> 重測</button>
+        </div>
+        <div class="settings-mt-tier-hint" style="margin-top: 0.6rem;">
+            <i class="bi bi-stars" aria-hidden="true"></i>
+            <span>已連線 metatube，30+ provider 可用於進階重刮與搜尋。</span>
+        </div>
+    </div>
+</div>
+
+</div><!-- /#settings-components scope wrapper（§15 + §16）-->
+
+<!-- D.17: 進階重刮彈窗 source picker（step-1）— feature/69 T5 dim 驗證面（P1/P20）-->
+<div class="ds-subsection">
+    <h3>17. 進階重刮彈窗 — 來源 picker（step-1）</h3>
+    <p class="ds-desc">
+        🔄 長壓開的進階重刮彈窗 step-1「挑來源」視圖（<code>_rescrape_modal.html</code>）。
+        重用 <code>.source-pill--action</code>（點擊式非拖曳）：auto pill + builtin（有碼／無碼）+ metatube pill（<code>m</code> 角標）；
+        找不到番號就地顯示 <code>.rescrape-inline-error</code>（不換頁）。
+        <strong>dim 校準（69 T2/T4）</strong>：膠囊有碼／無碼一眼可辨（<strong>P1</strong>）、inline-error warning 提 tint + solid 邊（<strong>P20</strong>）。
+        切 dim 對照即 P1/P20 驗證點。
+    </p>
+
+    <div class="ds-card-demo" style="max-width: 700px; margin: 0 auto; padding: 1.5rem;">
+        <label class="rescrape-label" style="display: block; margin-bottom: 0.6rem;">挑選刮削來源</label>
+        <div class="source-pill-row" style="display: flex; flex-wrap: wrap; gap: 8px; pointer-events: none;" aria-hidden="true">
+            <button type="button" class="source-pill source-pill--action" data-enabled="true">
+                <i class="bi bi-stars" aria-hidden="true"></i>
+                <span class="pill-name">自動選擇</span>
+            </button>
+            <button type="button" class="source-pill source-pill--action" data-enabled="true">
+                <span class="pill-name">JavBus</span>
+            </button>
+            <button type="button" class="source-pill source-pill--action source-pill--uncensored" data-enabled="true">
+                <span class="pill-name">AVSOX</span>
+            </button>
+            <button type="button" class="source-pill source-pill--action" data-enabled="true">
+                <span class="pill-name">JAV321</span>
+                <span class="source-pill-mt-badge" aria-hidden="true">m</span>
+            </button>
+        </div>
+        <div class="rescrape-inline-error" style="margin-top: 0.7rem; pointer-events: none;" aria-hidden="true">
+            <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+            <span>找不到此番號，換個來源或確認番號正確</span>
+        </div>
+    </div>
 </div>

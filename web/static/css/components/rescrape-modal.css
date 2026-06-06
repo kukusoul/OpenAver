@@ -280,3 +280,22 @@
         transition: none !important;
     }
 }
+
+/* ─── Dark theme (dim) calibration — feature/69 T4 ───
+ * 近黑 dim surface 吃光低% tint：語義色 banner/按鈕 tint 提至 ~20% + border ~50-55%。
+ * ⚠️ mix partner 用 transparent（同 base 慣例）：dim surface 帶藍色相，oklch 與 warning(70°)
+ * /error(25°) mix 會沿色相環插值變調；transparent 無色相 → 精準保留語義色。
+ * 全彩文字已部分救援，本區補背景/邊結構清晰。狀態色全走命名 token，無硬編碼。 */
+[data-theme="dim"] .rescrape-inline-error {
+    background: color-mix(in oklch, var(--color-warning) 20%, transparent);
+    border-color: color-mix(in oklch, var(--color-warning) 50%, transparent);
+}
+
+[data-theme="dim"] .rescrape-confirm-btn.cancel {
+    background: color-mix(in oklch, var(--color-error) 20%, transparent);
+    border-color: color-mix(in oklch, var(--color-error) 55%, transparent);
+}
+
+[data-theme="dim"] .rescrape-num-input:focus {
+    box-shadow: 0 0 0 3px color-mix(in oklch, var(--accent) 40%, transparent);
+}

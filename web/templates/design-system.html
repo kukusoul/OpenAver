@@ -785,8 +785,8 @@
 
             <!-- §1 Pill 999px 白名單 -->
             <div class="ds-subsection">
-                <h3>§1 Pill 999px 白名單（5 類）</h3>
-                <p class="ds-desc">ui-conventions §1：<code>border-radius: 999px</code>（<code>--radius-pill</code>）限這 5 類使用，其他元件用 <code>var(--fluent-radius-*)</code> token。</p>
+                <h3>§1 Pill 999px 白名單（7 類）</h3>
+                <p class="ds-desc">ui-conventions §1：<code>border-radius: 999px</code>（<code>--radius-pill</code>）限這 7 類使用，其他元件用 <code>var(--fluent-radius-*)</code> token。</p>
                 <div class="ds-pill-whitelist-grid">
 
                     <!-- 1. spotlight-search -->
@@ -859,6 +859,39 @@
                         <div class="ds-pill-card-meta">
                             <span class="ds-pill-card-class">類 5 · <code>.sg-open-btn</code> / <code>.fetch-samples-btn</code> / <code>.mode-toggle</code></span>
                             <p class="ds-pill-card-desc">Lightbox / control action pill</p>
+                            <code class="ds-pill-card-token">--radius-pill: 999px</code>
+                        </div>
+                    </div>
+
+                    <!-- 6. source pill（跨頁共用；完整狀態見下方 §13） -->
+                    <div class="ds-pill-card">
+                        <div class="ds-pill-card-demo" style="display: flex; gap: 0.4rem; flex-wrap: wrap; justify-content: center;">
+                            <div class="source-pill" data-enabled="true" style="pointer-events: none;">
+                                <span class="pill-name">JavBus</span>
+                            </div>
+                            <div class="source-pill source-pill--uncensored" data-enabled="true" style="pointer-events: none;">
+                                <span class="pill-name">AVSOX</span>
+                            </div>
+                        </div>
+                        <div class="ds-pill-card-meta">
+                            <span class="ds-pill-card-class">類 6 · <code>.source-pill</code></span>
+                            <p class="ds-pill-card-desc">掃描來源開關膠囊（完整狀態見 §13）</p>
+                            <code class="ds-pill-card-token">--radius-pill: 999px</code>
+                        </div>
+                    </div>
+
+                    <!-- 7. segmented 控件容器（白名單僅示意 pill 外形，自包含 inline mock；完整可互動 + dim 校準 demo 見 §15。刻意不 clone 生產 id="settings-components"） -->
+                    <div class="ds-pill-card">
+                        <div class="ds-pill-card-demo" style="display: flex; justify-content: center;">
+                            <!-- 白名單僅示意 pill 外形；可互動 + dim 校準的完整 segmented demo 見 §15（不 clone 生產 id） -->
+                            <div style="display: inline-flex; gap: 2px; padding: 2px; border-radius: var(--radius-pill); background: color-mix(in oklch, var(--surface-1) 60%, transparent); border: 1px solid var(--stroke-subtle);">
+                                <span style="padding: 0.25rem 0.75rem; border-radius: var(--radius-pill); background: color-mix(in oklch, var(--surface-2) 80%, transparent); color: var(--text-primary); font-size: 0.85rem; font-weight: 500;">全開</span>
+                                <span style="padding: 0.25rem 0.75rem; color: var(--text-secondary); font-size: 0.85rem; font-weight: 500;">無碼模式</span>
+                            </div>
+                        </div>
+                        <div class="ds-pill-card-meta">
+                            <span class="ds-pill-card-class">類 7 · <code>.settings-sources-segmented</code></span>
+                            <p class="ds-pill-card-desc">搜尋來源 segmented 容器（完整狀態見 §15）</p>
                             <code class="ds-pill-card-token">--radius-pill: 999px</code>
                         </div>
                     </div>
@@ -3065,7 +3098,7 @@
         <!-- Notification Center (53b-T1 demo) -->
         <section id="ds-notif-center" class="ds-section glass"
                  x-data="{
-                     demoDrawerOpen: true,  /* TODO 53b-T4: 接 toggle，本 demo 永遠展開 */
+                     demoDrawerOpen: true,  /* demo 永遠展開；真實鈴鐺 toggle 已在 base.html */
                      demoItemsFull: [],
                      demoItems: [],
                      fakeDataMode: 'has_items',
@@ -3086,7 +3119,7 @@
                      clearAll() { this.demoItems = []; this.fakeDataMode = 'empty'; }
                  }">
             <h2>Notification Center</h2>
-            <p class="ds-note">53b-T1 靜態 demo — 鈴鐺 4 狀態 + 抽屜 4 嚴重度通知樣本。實際 poll / 已讀邏輯 / anchor 定位 / focus trap 在 T2-T5 接入 base.html。</p>
+            <p class="ds-note">53b-T1 靜態 demo — 鈴鐺 4 狀態 + 抽屜 4 嚴重度通知樣本。實際 poll / 已讀邏輯 / anchor 定位 / focus trap 已於 53b-T2~T5 接入 base.html（本頁為靜態樣本登記）。</p>
 
             <!-- Subsection 1: 鈴鐺 4 狀態並排 -->
             <div class="ds-subsection">
