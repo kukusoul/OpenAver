@@ -1915,6 +1915,18 @@ body.sidebar-collapsed .showcase-footer {
     border-color: var(--accent-secondary);
 }
 
+/* Dark theme (dim) calibration — feature/69 T4: 近黑底吃光低% tint，提 tint + solid 色邊。
+   accent-secondary 無 dim override（Apple Blue 暗底可見），只補背景物理隱形。
+   hover override 必要：base hover (3 class) specificity 高於 dim resting，否則 hover 反更淡。 */
+[data-theme="dim"] .fetch-samples-btn {
+    background: color-mix(in oklch, var(--accent-secondary) 25%, var(--surface-0));
+    border-color: color-mix(in oklch, var(--accent-secondary) 55%, var(--surface-0));
+}
+
+[data-theme="dim"] .fetch-samples-btn:hover:not(:disabled) {
+    background: color-mix(in oklch, var(--accent-secondary) 40%, var(--surface-0));
+}
+
 .fetch-samples-btn:disabled {
     filter: grayscale(1);
     opacity: 0.45;

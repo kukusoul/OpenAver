@@ -4999,6 +4999,16 @@ body {
     border: 1px solid color-mix(in oklch, var(--accent-pink) 25%, transparent);
   }
 }
+[data-theme="dim"] :is(#ds-gallery-components, .ds-gallery-composition) .alias-pill-primary {
+  background: var(--accent-pink);
+  @supports (color: color-mix(in lab, red, red)) {
+    background: color-mix(in oklch, var(--accent-pink) 24%, var(--surface-0));
+  }
+  border-color: var(--accent-pink);
+  @supports (color: color-mix(in lab, red, red)) {
+    border-color: color-mix(in oklch, var(--accent-pink) 50%, var(--surface-0));
+  }
+}
 :is(#ds-gallery-components, .ds-gallery-composition) .alias-pill-alias {
   background: var(--color-base-content);
   @supports (color: color-mix(in lab, red, red)) {
