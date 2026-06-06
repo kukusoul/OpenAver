@@ -1984,3 +1984,295 @@ class TestDetectVrCluster:
     def test_duplicate_ambiguous_satisfies_cooccurrence(self):
         """兩個相同 ambiguous token（len(ambiguous)>=2）→ 成立"""
         assert _detect_vr_cluster("NAME_180_180") == "180_180"
+
+
+# ============ organize_file() VR 檔名端到端測試 ============
+
+class TestOrganizeVrFilename:
+    """organize_file() VR tail 端到端測試（TDD-lite，T2 DoD）
+
+    驗證：
+    - VR cluster 正確接到檔名尾（_{cluster}）
+    - suffix × VR 順序 = base + suffix + _vr
+    - 超長截斷時 VR cluster 完整不被切
+    - 無 VR token 檔案 byte 級零變化（reserve=0）
+    - 一般 2D 檔 byte 級零變化
+    - 既有 suffix 路徑不回歸（-cd1/-cd2，無 VR，reserve=0 不影響）
+    """
+
+    # ---- DoD Row 1: VR 檔名尾正確接 _{cluster} ----
+
+    def test_vr_tail_appended_no_suffix(self, tmp_path):
+        """NAME_180_LR.mp4（無 suffix keyword）→ filename 尾帶 _180_LR"""
+        src = tmp_path / "NAME_180_LR.mp4"
+        src.write_bytes(b"vr content")
+
+        config = {
+            "create_folder": False,
+            "filename_format": "[{num}] {title}{suffix}",
+            "download_cover": False,
+            "create_nfo": False,
+            "max_title_length": 50,
+            "max_filename_length": 60,
+            "suffix_keywords": ["-cd1", "-cd2", "-4k", "-uc"],
+        }
+        metadata = {
+            "number": "VR-001",
+            "title": "VR Test Title",
+            "actors": [],
+            "tags": [],
+            "maker": "Studio",
+            "date": "2024-01-15",
+            "cover": "",
+            "url": "",
+        }
+
+        result = organize_file(str(src), metadata, config)
+        assert result["success"] is True, f"organize 失敗: {result.get('error')}"
+        new_name = Path(result["new_filename"]).name
+        assert new_name.endswith("_180_LR.mp4"), (
+            f"VR tail _180_LR 未接到尾：{new_name}"
+        )
+
+    # ---- DoD Row 2: suffix × VR 順序（base + suffix + _vr） ----
+
+    def test_suffix_before_vr_tail(self, tmp_path):
+        """MOVIE-4k_180_3dh_LR.mp4（suffix=-4k, VR cluster=180_3dh_LR）
+        → 輸出順序 = base + -4k + _180_3dh_LR（suffix 在 VR 之前）"""
+        src = tmp_path / "MOVIE-4k_180_3dh_LR.mp4"
+        src.write_bytes(b"vr 4k content")
+
+        config = {
+            "create_folder": False,
+            "filename_format": "[{num}] {title}{suffix}",
+            "download_cover": False,
+            "create_nfo": False,
+            "max_title_length": 50,
+            "max_filename_length": 80,
+            "suffix_keywords": ["-4k", "-cd1", "-uc"],
+        }
+        metadata = {
+            "number": "MOVIE-001",
+            "title": "Some Title",
+            "actors": [],
+            "tags": [],
+            "maker": "Studio",
+            "date": "2024-01-15",
+            "cover": "",
+            "url": "",
+        }
+
+        result = organize_file(str(src), metadata, config)
+        assert result["success"] is True, f"organize 失敗: {result.get('error')}"
+        new_name = Path(result["new_filename"]).name
+        stem = Path(new_name).stem  # 不含副檔名
+
+        # suffix -4k 必須出現
+        assert "-4k" in stem, f"suffix -4k 未在檔名中：{new_name}"
+        # VR tail _180_3dh_LR 必須在最後
+        assert stem.endswith("_180_3dh_LR"), (
+            f"VR tail _180_3dh_LR 未在 stem 最尾：{stem}"
+        )
+        # 順序：-4k 出現位置在 _180 之前
+        idx_suffix = stem.index("-4k")
+        idx_vr = stem.index("_180_3dh_LR")
+        assert idx_suffix < idx_vr, (
+            f"suffix(-4k) 應在 VR tail(_180_3dh_LR) 之前：{stem}"
+        )
+
+    # ---- DoD Row 3: 超長截斷 VR cluster 完整不被切 ----
+
+    def test_long_title_vr_cluster_preserved(self, tmp_path):
+        """超長 title + _180_3dh_LR.mp4：base 被 max_filename_length 截，VR cluster 完整"""
+        src = tmp_path / "VR-999_180_3dh_LR.mp4"
+        src.write_bytes(b"long vr content")
+
+        config = {
+            "create_folder": False,
+            "filename_format": "[{num}] {title}{suffix}",
+            "download_cover": False,
+            "create_nfo": False,
+            "max_title_length": 50,
+            "max_filename_length": 30,  # 故意很短，迫使截斷
+            "suffix_keywords": ["-4k"],
+        }
+        metadata = {
+            "number": "VR-999",
+            "title": "超級無敵長的標題名稱會被截斷但VR尾應完整保留",
+            "actors": [],
+            "tags": [],
+            "maker": "Studio",
+            "date": "2024-01-15",
+            "cover": "",
+            "url": "",
+        }
+
+        result = organize_file(str(src), metadata, config)
+        assert result["success"] is True, f"organize 失敗: {result.get('error')}"
+        new_name = Path(result["new_filename"]).name
+        stem = Path(new_name).stem
+        # VR cluster 必須完整保留（_180_3dh_LR 原樣）
+        assert stem.endswith("_180_3dh_LR"), (
+            f"VR cluster _180_3dh_LR 被截斷：{stem}"
+        )
+        # 核心：reserve budget 真的生效——整個檔名（含 ext）不得超出 max_filename_length。
+        # 沒有這行，「不扣 reserve 直接 overflow」也會讓上面的 endswith 通過（假測試）。
+        assert len(new_name) <= 30, (
+            f"reserve budget 未生效，檔名 {len(new_name)} 字超出 max_filename_length=30：{new_name!r}"
+        )
+        # base 確實被壓縮：超長標題不可能完整出現（證明 reserve 扣掉了 base 預算）
+        assert "超級無敵長的標題名稱會被截斷但VR尾應完整保留" not in stem, (
+            f"base 未被截斷，reserve 未壓縮 base：{stem}"
+        )
+
+    def test_vr_cluster_preserved_when_base_budget_zero(self, tmp_path):
+        """退化邊界（CD-68-7 base_budget==0）：max_filename_length 短到 base 預算歸零，
+        VR cluster 仍完整保留、檔名不超限（reserve 在 base_budget==0 子分支也生效）"""
+        src = tmp_path / "VR-1_180_3dh_LR.mp4"
+        src.write_bytes(b"x")
+
+        config = {
+            "create_folder": False,
+            "filename_format": "[{num}] {title}{suffix}",
+            "download_cover": False,
+            "create_nfo": False,
+            "max_title_length": 50,
+            "max_filename_length": 16,  # ext(.mp4=4)+vr_tail(_180_3dh_LR=11)=15，base 預算 ~1
+            "suffix_keywords": ["-4k"],
+        }
+        metadata = {
+            "number": "VR-1",
+            "title": "X" * 80,
+            "actors": [], "tags": [], "maker": "M", "date": "2024-01-15",
+            "cover": "", "url": "",
+        }
+
+        result = organize_file(str(src), metadata, config)
+        assert result["success"] is True, f"organize 失敗: {result.get('error')}"
+        new_name = Path(result["new_filename"]).name
+        assert Path(new_name).stem.endswith("_180_3dh_LR"), (
+            f"VR cluster 在 base_budget==0 退化時被切：{new_name}"
+        )
+        assert len(new_name) <= 16, (
+            f"base_budget==0 子分支 reserve 未生效，超限：{new_name!r}"
+        )
+
+    # ---- DoD Row 4: 無 VR token，byte 級零變化（SIVR-999.mp4，else 分支） ----
+
+    def test_no_vr_token_byte_identical(self, tmp_path):
+        """SIVR-999.mp4（無 VR token、無 suffix）→ reserve=0，
+        輸出名與未改動前完全相同（byte 級零變化）"""
+        src = tmp_path / "SIVR-999.mp4"
+        src.write_bytes(b"no vr content")
+
+        config = {
+            "create_folder": False,
+            "filename_format": "[{num}] {title}{suffix}",
+            "download_cover": False,
+            "create_nfo": False,
+            "max_title_length": 50,
+            "max_filename_length": 60,
+            "suffix_keywords": ["-cd1", "-cd2", "-4k"],
+        }
+        metadata = {
+            "number": "SIVR-999",
+            "title": "Some Title",
+            "actors": [],
+            "tags": [],
+            "maker": "Studio",
+            "date": "2024-01-15",
+            "cover": "",
+            "url": "",
+        }
+
+        result = organize_file(str(src), metadata, config)
+        assert result["success"] is True, f"organize 失敗: {result.get('error')}"
+        new_name = Path(result["new_filename"]).name
+        # reserve=0 → 與 T2 改動前的預期完全相同（byte-identical path）
+        # expected = "[{num}] {title}" truncated to max_chars, no vr_tail
+        expected_stem = truncate_to_chars("[SIVR-999] Some Title", 60 - len(".mp4"))
+        expected_name = expected_stem + ".mp4"
+        assert new_name == expected_name, (
+            f"零變化失敗：got {new_name!r}, expected {expected_name!r}"
+        )
+
+    # ---- DoD Row 5: 一般 2D 檔 byte 級零變化 ----
+
+    def test_2d_file_byte_identical(self, tmp_path):
+        """一般 2D 檔（無 VR token）→ reserve=0，輸出名與改動前完全相同"""
+        src = tmp_path / "ABP-123.mp4"
+        src.write_bytes(b"2d content")
+
+        config = {
+            "create_folder": False,
+            "filename_format": "[{num}] {title}{suffix}",
+            "download_cover": False,
+            "create_nfo": False,
+            "max_title_length": 50,
+            "max_filename_length": 60,
+            "suffix_keywords": ["-cd1", "-4k"],
+        }
+        metadata = {
+            "number": "ABP-123",
+            "title": "Normal Title",
+            "actors": [],
+            "tags": [],
+            "maker": "Studio",
+            "date": "2024-01-15",
+            "cover": "",
+            "url": "",
+        }
+
+        result = organize_file(str(src), metadata, config)
+        assert result["success"] is True, f"organize 失敗: {result.get('error')}"
+        new_name = Path(result["new_filename"]).name
+        expected_stem = truncate_to_chars("[ABP-123] Normal Title", 60 - len(".mp4"))
+        expected_name = expected_stem + ".mp4"
+        assert new_name == expected_name, (
+            f"2D 零變化失敗：got {new_name!r}, expected {expected_name!r}"
+        )
+
+    # ---- DoD Row 6: 既有 suffix 路徑不回歸（無 VR，reserve=0） ----
+
+    def test_existing_suffix_no_regression(self, tmp_path):
+        """既有 -cd1/-cd2 suffix（無 VR）→ reserve=0，行為完全不回歸"""
+        cd1 = tmp_path / "SONE-205-CD1.mp4"
+        cd1.write_bytes(b"cd1 content")
+        cd2 = tmp_path / "SONE-205-CD2.mp4"
+        cd2.write_bytes(b"cd2 content")
+
+        config = {
+            "create_folder": False,
+            "filename_format": "[{num}] {title}{suffix}",
+            "download_cover": False,
+            "create_nfo": False,
+            "max_title_length": 50,
+            "max_filename_length": 60,
+            "suffix_keywords": ["-cd1", "-cd2", "-4k"],
+        }
+        metadata = {
+            "number": "SONE-205",
+            "title": "Test Title",
+            "actors": [],
+            "tags": [],
+            "maker": "S1",
+            "date": "2024-01-15",
+            "cover": "",
+            "url": "",
+        }
+
+        result1 = organize_file(str(cd1), metadata, config)
+        result2 = organize_file(str(cd2), metadata, config)
+
+        assert result1["success"] is True, f"CD1 失敗: {result1.get('error')}"
+        assert result2["success"] is True, f"CD2 失敗: {result2.get('error')}"
+
+        name1 = Path(result1["new_filename"]).name
+        name2 = Path(result2["new_filename"]).name
+
+        # suffix 保留
+        assert "-cd1" in name1, f"CD1 suffix 消失：{name1}"
+        assert "-cd2" in name2, f"CD2 suffix 消失：{name2}"
+        # 沒有意外 VR tail（無 VR token）
+        assert "_180" not in name1 and "_LR" not in name1, f"CD1 意外多了 VR tail：{name1}"
+        assert "_180" not in name2 and "_LR" not in name2, f"CD2 意外多了 VR tail：{name2}"

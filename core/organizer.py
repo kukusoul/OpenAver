@@ -595,6 +595,11 @@ def organize_file(
     suffix = _detect_suffixes(original_filename, suffix_keywords)
     format_data['suffix'] = suffix
 
+    # 偵測 VR cluster（CD-68-5/6/7）：算一次，作用域涵蓋組裝段與 nfo 呼叫（GA）
+    vr_cluster = _detect_vr_cluster(original_filename)
+    vr_tail = f'_{vr_cluster}' if vr_cluster else ''
+    reserve = len(vr_tail)  # 兩分支共用 budget，CD-68-7
+
     # 記錄哪些欄位實際用了 fallback（僅資料夾層級會觸發 fallback）
     used_fallbacks = []
     if config.get('create_folder', True):
@@ -659,18 +664,20 @@ def organize_file(
 
     suffix = format_data.get('suffix', '')
     if suffix and '{suffix}' in filename_template:
-        # 先用空 suffix 產生 base，截斷後再接回 suffix
+        # 先用空 suffix 產生 base，截斷後再接回 suffix；base_budget 扣 reserve（CD-68-5/7）
         no_suffix_data = dict(format_data, suffix='')
         base_without_suffix = format_string(filename_template, no_suffix_data)
-        base_budget = max(0, max_chars - len(suffix))
+        base_budget = max(0, max_chars - len(suffix) - reserve)
         if base_budget == 0:
-            filename_base = truncate_to_chars(suffix, max_chars)
+            filename_base = truncate_to_chars(suffix, max(0, max_chars - reserve))
         else:
             base_without_suffix = truncate_to_chars(base_without_suffix, base_budget)
             filename_base = base_without_suffix + suffix
     else:
         filename_base = format_string(filename_template, format_data)
-        filename_base = truncate_to_chars(filename_base, max_chars)
+        filename_base = truncate_to_chars(filename_base, max(0, max_chars - reserve))
+    # VR tail 永遠最後接（CD-68-6）；vr_tail='' 時零變化（CD-68-9）
+    filename_base = filename_base + vr_tail
 
     new_filename = filename_base + original_ext
     target_path = os.path.join(target_dir, new_filename)
