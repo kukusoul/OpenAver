@@ -1985,6 +1985,51 @@ class TestDetectVrCluster:
         """兩個相同 ambiguous token（len(ambiguous)>=2）→ 成立"""
         assert _detect_vr_cluster("NAME_180_180") == "180_180"
 
+    # ---- Codex P2 修正（Finding 2）：連續 run 偵測 ----
+
+    def test_none_scattered_ambiguous_across_words(self):
+        """TITLE_180_some_words_LR.mp4 → None
+        （散落 ambiguous 被 non-VR token 隔開，不構成連續 run，不應共現）"""
+        result = _detect_vr_cluster("TITLE_180_some_words_LR.mp4")
+        assert result is None, (
+            f"散落 ambiguous 跨文字不共現，應為 None，實際：{result!r}"
+        )
+
+    def test_none_ambiguous_with_nonvr_between(self):
+        """MOVIE_180_4k_LR.mp4 → None
+        （4k 是 non-VR token，夾在 180 與 LR 之間斷開 run；散落不共現）"""
+        result = _detect_vr_cluster("MOVIE_180_4k_LR.mp4")
+        assert result is None, (
+            f"non-VR token（4k）夾斷 run，兩端散落 ambiguous 不共現，應為 None，實際：{result!r}"
+        )
+
+    def test_partial_run_unique_isolated_lr(self):
+        """A_180x180_word_LR → 180x180
+        （unique 180x180 自成一個 confirmed run；孤立 LR 因中間夾了 non-VR 'word' 不在同 run）"""
+        result = _detect_vr_cluster("A_180x180_word_LR")
+        assert result == "180x180", (
+            f"只有 unique 180x180 那個 run confirmed，孤立 LR 跨字不算，期望 '180x180'，實際：{result!r}"
+        )
+
+    # ---- Codex P2 二次修正（Finding 2, P3）：多 confirmed run 只取第一個 ----
+
+    def test_multiple_confirmed_runs_returns_first(self):
+        """A_180_LR_title_3dh → '180_LR'（只取第一個 confirmed run，不跨 non-VR title 到第二 run）
+
+        Repro：run1=[180,LR]（ambiguous×2，confirmed），non-VR token 'title' 斷開，
+        run2=[3dh]（unique，confirmed）；舊邏輯跨 span → '180_LR_title_3dh'（含 junk）。
+        修正後只取 first confirmed run → '180_LR'。
+        """
+        result = _detect_vr_cluster("A_180_LR_title_3dh")
+        assert result == "180_LR", (
+            f"多個 confirmed run 應只取第一個，期望 '180_LR'，實際：{result!r}"
+        )
+        # 含副檔名同結果
+        result_ext = _detect_vr_cluster("A_180_LR_title_3dh.mp4")
+        assert result_ext == "180_LR", (
+            f"含副檔名：多個 confirmed run 應只取第一個，期望 '180_LR'，實際：{result_ext!r}"
+        )
+
 
 # ============ organize_file() VR 檔名端到端測試 ============
 
@@ -2579,6 +2624,205 @@ class TestVrEndToEnd:
         )
         assert "<genre>VR</genre>" not in nfo_content, (
             f"SIVR-999（無 VR token）NFO 不應含 canonical <genre>VR</genre>"
+        )
+
+    # ---- Codex P2 修正（Finding 1）：中文標題 VR token 雙寫 ----
+
+    def test_chinese_title_vr_no_double_write(self, tmp_path):
+        """ABC-123 中文標題_180_LR.mp4 + create_nfo=True + extracted_title 路徑
+        → 檔名 stem 僅有單一 _180_LR（不雙寫 _180_LR_180_LR）
+        且 NFO sidecar stem 也單一 tail、<tag>VR</tag> count==1。
+
+        Codex P2（Finding 1）：extract_chinese_title 保留 VR token 在 title，
+        之後 vr_tail 再接一次 → _180_LR_180_LR 雙寫。
+        """
+        src = tmp_path / "ABC-123 中文標題_180_LR.mp4"
+        src.write_bytes(b"zh title vr content")
+
+        config = {
+            "create_folder": False,
+            "filename_format": "[{num}] {title}{suffix}",
+            "download_cover": False,
+            "create_nfo": True,
+            "max_title_length": 50,
+            "max_filename_length": 80,
+            "suffix_keywords": [],
+        }
+        # metadata title 空字串 → 迫使走 extracted_title 路徑（title_source=='extracted'）
+        metadata = {
+            "number": "ABC-123",
+            "title": "",         # 空 → 不走 original 路徑
+            "translated_title": "",  # 空 → 不走 translated 路徑
+            "actors": [],
+            "tags": ["單體"],
+            "maker": "Studio",
+            "date": "2024-01-15",
+            "cover": "",
+            "url": "",
+        }
+
+        result = organize_file(str(src), metadata, config)
+        assert result["success"] is True, f"organize 失敗: {result.get('error')}"
+
+        # title_source 應為 extracted（確認走了 extract 路徑）
+        assert result.get("title_source") == "extracted", (
+            f"應走 extracted 路徑，實際 title_source={result.get('title_source')!r}"
+        )
+
+        new_path = Path(result["new_filename"])
+        stem = new_path.stem
+
+        # 關鍵斷言：stem 中 _180_LR 恰好出現一次（不雙寫）
+        assert stem.count("_180_LR") == 1, (
+            f"_180_LR 應恰好出現 1 次（不雙寫），實際 stem：{stem!r}，count={stem.count('_180_LR')}"
+        )
+        # stem 應以 _180_LR 結尾
+        assert stem.endswith("_180_LR"), (
+            f"VR tail 應在 stem 最末，實際 stem：{stem!r}"
+        )
+
+        # NFO sidecar：stem 對齊 + <tag>VR</tag> count==1
+        nfo_path = result.get("nfo_path")
+        assert nfo_path is not None, "create_nfo=True 時 nfo_path 不應為 None"
+        nfo_content = Path(nfo_path).read_text(encoding="utf-8")
+        nfo_stem = Path(nfo_path).stem
+        assert nfo_stem == stem, (
+            f"NFO sidecar stem({nfo_stem!r}) 應與影片 stem({stem!r}) 對齊"
+        )
+        assert nfo_stem.count("_180_LR") == 1, (
+            f"NFO sidecar stem _180_LR 也應單一，實際：{nfo_stem!r}"
+        )
+        assert nfo_content.count("<tag>VR</tag>") == 1, (
+            f"NFO <tag>VR</tag> 應恰一個，count={nfo_content.count('<tag>VR</tag>')}"
+        )
+
+    # ---- Codex P2 二次修正（Finding 1, P2）：bracket/paren 包 cluster 不雙寫 ----
+
+    def test_chinese_title_bracket_vr_no_double_write(self, tmp_path):
+        """ABC-123 中文標題_[180_LR].mp4 + create_nfo=True + extracted_title 路徑
+        → 檔名 stem 僅有單一 _180_LR（不雙寫 _[180_LR]_180_LR）
+        且 stem 中不含 '[180_LR]'、NFO <tag>VR</tag> count==1。
+
+        Codex P2 二次修正（Finding 1, P2）：_detect_vr_cluster 回傳 '180_LR'（不含 bracket），
+        但 extract_chinese_title 萃取的 title 保留 '[180_LR]'，舊 endswith 不命中 →
+        bracket 殘留在 title + vr_tail 再接 → 雙寫。
+        修正：regex 匹配可選 bracket 包裝。
+        """
+        src = tmp_path / "ABC-123 中文標題_[180_LR].mp4"
+        src.write_bytes(b"zh bracket vr content")
+
+        config = {
+            "create_folder": False,
+            "filename_format": "[{num}] {title}{suffix}",
+            "download_cover": False,
+            "create_nfo": True,
+            "max_title_length": 50,
+            "max_filename_length": 80,
+            "suffix_keywords": [],
+        }
+        metadata = {
+            "number": "ABC-123",
+            "title": "",
+            "translated_title": "",
+            "actors": [],
+            "tags": ["單體"],
+            "maker": "Studio",
+            "date": "2024-01-15",
+            "cover": "",
+            "url": "",
+        }
+
+        result = organize_file(str(src), metadata, config)
+        assert result["success"] is True, f"organize 失敗: {result.get('error')}"
+
+        assert result.get("title_source") == "extracted", (
+            f"應走 extracted 路徑，實際 title_source={result.get('title_source')!r}"
+        )
+
+        stem = Path(result["new_filename"]).stem
+
+        # 關鍵：stem 中 _180_LR 恰一次（不雙寫）
+        assert stem.count("_180_LR") == 1, (
+            f"_180_LR 應恰好出現 1 次（不雙寫），實際 stem：{stem!r}"
+        )
+        # stem 中不應含原始 bracket 形式
+        assert "[180_LR]" not in stem, (
+            f"stem 中不應含 '[180_LR]'（bracket 殘留），實際 stem：{stem!r}"
+        )
+        # 不應有雙寫形式
+        assert "_180_LR_180_LR" not in stem, (
+            f"stem 中不應有 _180_LR_180_LR（雙寫），實際 stem：{stem!r}"
+        )
+        # stem 以 _180_LR 結尾
+        assert stem.endswith("_180_LR"), (
+            f"VR tail 應在 stem 最末，實際 stem：{stem!r}"
+        )
+
+        nfo_path = result.get("nfo_path")
+        assert nfo_path is not None, "create_nfo=True 時 nfo_path 不應為 None"
+        nfo_content = Path(nfo_path).read_text(encoding="utf-8")
+        assert nfo_content.count("<tag>VR</tag>") == 1, (
+            f"NFO <tag>VR</tag> 應恰一個，count={nfo_content.count('<tag>VR</tag>')}"
+        )
+
+    def test_chinese_title_paren_vr_no_double_write(self, tmp_path):
+        """ABC-123 中文標題_(180_LR).mp4 + create_nfo=True + extracted_title 路徑
+        → 檔名 stem 僅有單一 _180_LR（不雙寫 _(180_LR)_180_LR）
+        且 stem 中不含 '(180_LR)'、NFO <tag>VR</tag> count==1。
+
+        Codex P2 二次修正（Finding 1, P2）：同 bracket case，paren 版本。
+        """
+        src = tmp_path / "ABC-123 中文標題_(180_LR).mp4"
+        src.write_bytes(b"zh paren vr content")
+
+        config = {
+            "create_folder": False,
+            "filename_format": "[{num}] {title}{suffix}",
+            "download_cover": False,
+            "create_nfo": True,
+            "max_title_length": 50,
+            "max_filename_length": 80,
+            "suffix_keywords": [],
+        }
+        metadata = {
+            "number": "ABC-123",
+            "title": "",
+            "translated_title": "",
+            "actors": [],
+            "tags": ["單體"],
+            "maker": "Studio",
+            "date": "2024-01-15",
+            "cover": "",
+            "url": "",
+        }
+
+        result = organize_file(str(src), metadata, config)
+        assert result["success"] is True, f"organize 失敗: {result.get('error')}"
+
+        assert result.get("title_source") == "extracted", (
+            f"應走 extracted 路徑，實際 title_source={result.get('title_source')!r}"
+        )
+
+        stem = Path(result["new_filename"]).stem
+
+        assert stem.count("_180_LR") == 1, (
+            f"_180_LR 應恰好出現 1 次（不雙寫），實際 stem：{stem!r}"
+        )
+        assert "(180_LR)" not in stem, (
+            f"stem 中不應含 '(180_LR)'（paren 殘留），實際 stem：{stem!r}"
+        )
+        assert "_180_LR_180_LR" not in stem, (
+            f"stem 中不應有 _180_LR_180_LR（雙寫），實際 stem：{stem!r}"
+        )
+        assert stem.endswith("_180_LR"), (
+            f"VR tail 應在 stem 最末，實際 stem：{stem!r}"
+        )
+
+        nfo_path = result.get("nfo_path")
+        assert nfo_path is not None, "create_nfo=True 時 nfo_path 不應為 None"
+        nfo_content = Path(nfo_path).read_text(encoding="utf-8")
+        assert nfo_content.count("<tag>VR</tag>") == 1, (
+            f"NFO <tag>VR</tag> 應恰一個，count={nfo_content.count('<tag>VR</tag>')}"
         )
 
 
