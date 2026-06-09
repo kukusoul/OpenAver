@@ -244,7 +244,10 @@ READY_HEAD = '<html><head><title>JavLibrary</title></head>'
 CF_TITLE = 'Just a moment'
 CF_HEAD = '<html><head><title>Just a moment</title></head><body>cf</body>'
 AGE_GATE_TITLE = 'JavLibrary'
-AGE_GATE_HEAD = '<html><head><title>JavLibrary</title></head><body>利用規約 over18 agreeBtn</body>'
+# 真實同意閘（含 agreeBtn）→ is_ready 應回 False
+AGE_GATE_HEAD = '<html><head><title>JavLibrary</title></head><body><button id="agreeBtn">同意</button></body>'
+# 正常內容頁 footer（含 利用規約/18歳/over18 但無 agreeBtn）→ is_ready 應回 True
+CONTENT_FOOTER_HEAD = '<html><head><title>JavLibrary</title></head><body>利用規約 18歳 over18</body>'
 
 
 class FakeWindowIsReady(FakeWindow):
@@ -294,14 +297,38 @@ class TestIsReady:
         hide_calls = [c for c in win.calls if c[0] == 'hide']
         assert len(hide_calls) == 0, "hide() must NOT be called when not ready"
 
-    def test_age_gate_returns_false_no_hide(self):
-        """Age gate page → False, no hide()."""
+    def test_content_footer_terms_returns_true_and_hides(self):
+        """
+        FIX-1 回歸（收窄語義版）：正常內容頁 footer 含 利用規約/18歳/over18
+        但**無 agreeBtn** → is_ready() 應回 True 並 hide 視窗。
+
+        narrow _is_age_gate 只看 agreeBtn，footer 字不再誤判 False，
+        用戶過了 CF 後不會卡在等待循環。
+        """
+        win = FakeWindowIsReady(AGE_GATE_TITLE, CONTENT_FOOTER_HEAD)
+        transport = PyWebViewCfTransport(win)
+        result = transport.is_ready()
+        assert result is True, (
+            "正常內容頁 footer 含 利用規約/18歳/over18 但無 agreeBtn，"
+            "is_ready() 應回 True（footer 字不觸發 age-gate 偵測）"
+        )
+        hide_calls = [c for c in win.calls if c[0] == 'hide']
+        assert len(hide_calls) == 1, "is_ready()=True 時應 hide() 視窗"
+
+    def test_real_age_gate_with_agree_btn_returns_false_no_hide(self):
+        """
+        spec-70b §2.3 point 5 契約：真實同意閘（含 agreeBtn）→ is_ready() 回 False，
+        視窗不 hide，讓用戶手動點同意按鈕。
+        """
         win = FakeWindowIsReady(AGE_GATE_TITLE, AGE_GATE_HEAD)
         transport = PyWebViewCfTransport(win)
         result = transport.is_ready()
-        assert result is False
+        assert result is False, (
+            "真實 age-gate 同意頁（含 agreeBtn）is_ready() 應回 False，"
+            "保留彈窗讓用戶點同意（spec-70b §2.3 point 5）"
+        )
         hide_calls = [c for c in win.calls if c[0] == 'hide']
-        assert len(hide_calls) == 0
+        assert len(hide_calls) == 0, "age-gate 時不應 hide()，彈窗須保留"
 
     def test_every_call_sets_over18_cookie(self):
         """Every is_ready() call sets over18 cookie (idempotent)."""

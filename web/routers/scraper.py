@@ -200,7 +200,11 @@ def rescrape_preview_endpoint(request: RescrapePreviewRequest) -> dict:
     except CfChallengeRequired:
         t = get_cf_transport()
         if t:
-            t.begin_solve(JAVLIBRARY_ORIGIN, 'javlibrary')  # 非阻塞
+            try:
+                t.begin_solve(JAVLIBRARY_ORIGIN, 'javlibrary')  # 非阻塞
+            except Exception:
+                logger.exception("rescrape_preview: begin_solve 失敗，回 cf_unavailable")
+                return {"success": False, "cf_unavailable": True}
         return {"success": False, "cf_needed": True}
     except CfTransportUnavailable:
         return {"success": False, "cf_unavailable": True}

@@ -64,11 +64,17 @@ def _is_cf_challenge(title: str, html: str) -> bool:
 
 
 def _is_age_gate(html: str) -> bool:
+    """True 表示頁面是 JavLibrary 的 18 歲/利用規約「同意閘」interstitial。
+
+    僅偵測同意頁特有的 agree 控制（agreeBtn）。**不**用 footer 也會出現的
+    「利用規約」/「18歳」文字或 over18 連結——那些在正常內容頁/首頁 footer
+    也有，broad 比對會 false-positive（is_ready 卡死）。同意閘是用戶必須在
+    彈窗手動點過的可恢復步驟，故 is_ready 需辨識它（回 False 讓彈窗保留）。
+
+    [NEEDS CLARIFICATION / T7]：agreeBtn 為既有偵測 id，待 Windows standalone
+    實機確認同意頁 agree 控制的實際 id/結構；若不同，調整此處 marker 即可。
     """
-    判斷頁面是否在 18 歲 / 利用規約同意閘。
-    javlibrary 的同意頁含「利用規約」「18歳」或「agree」按鈕。
-    """
-    return any(kw in html for kw in ["利用規約", "18歳", "over18", "agreeBtn"])
+    return 'agreeBtn' in html
 
 
 # ──────────────────────────────────────────────────────────────
@@ -335,7 +341,9 @@ class JavLibraryScraper(BaseScraper):
         # 步驟 7：single-hit 302 shortcut
         if _is_detail_page(soup):
             detail_html = html
-            detail_url = search_url
+            # FIX-4：single-hit 時 detail_url 留空（search-php URL 不是 canonical，
+            # 寫進 NFO website 欄位語義不正確；正解留 follow-up 由 transport 回 final_url）
+            detail_url = ""
         else:
             # 步驟 8：multi-result
             base_lang_url = f'{BASE_URL}/{LANG}'
@@ -360,6 +368,19 @@ class JavLibraryScraper(BaseScraper):
         # 步驟 10：parse 品質保護
         if not fields.get("title") and not fields.get("cover"):
             logger.debug("javlibrary: parse failed for %s (title+cover both empty)", number)
+            return None
+
+        # FIX-5：番號核對守衛
+        # _extract_detail_url fallback 取 links[0] 可能回到不相關的片子；
+        # parse 出的番號與請求番號 normalize 後不符 → 誠實回 None（優於回錯片資料）。
+        parsed_number_norm = self.normalize_number(fields.get("number") or "")
+        request_number_norm = self.normalize_number(number)
+        if parsed_number_norm and request_number_norm and parsed_number_norm != request_number_norm:
+            logger.warning(
+                "javlibrary: number mismatch — requested %r, parsed %r; returning None",
+                request_number_norm,
+                parsed_number_norm,
+            )
             return None
 
         # 步驟 11：欄位映射 → Video

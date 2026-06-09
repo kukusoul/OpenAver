@@ -9979,3 +9979,32 @@ class TestJavlibraryCfFlowT6Guard:
                 f"70-T6 違規：locales/{lang}.json 缺 jl_cf_solving"
             assert "jl_cf_timeout" in content, \
                 f"70-T6 違規：locales/{lang}.json 缺 notif.jl_cf_timeout"
+
+
+# ── FIX-2 frontend guard: search 入口隱藏 JL pill ──
+
+class TestRescrapeModalSearchHideJlPillGuard:
+    """
+    FIX-2：_rescrape_modal.html builtin pill 在 search 入口隱藏 manual_only && is_beta pill。
+    守衛確認 x-show 條件字串存在（manual_only + is_beta + rescrapeEntryPoint === 'search'）。
+    """
+
+    def _html(self):
+        return _MODAL_HTML_70.read_text(encoding="utf-8")
+
+    def test_modal_builtin_pill_has_search_hide_condition(self):
+        """_rescrape_modal.html builtin pill 含 search 入口 x-show 隱藏條件。"""
+        html = self._html()
+        assert "rescrapeEntryPoint === 'search'" in html, (
+            "FIX-2 違規：_rescrape_modal.html builtin pill 缺 rescrapeEntryPoint === 'search' 條件"
+        )
+
+    def test_modal_builtin_pill_hide_references_manual_only_and_is_beta(self):
+        """_rescrape_modal.html builtin pill x-show 同時含 manual_only 和 is_beta。"""
+        html = self._html()
+        assert "manual_only" in html, (
+            "FIX-2 違規：_rescrape_modal.html builtin pill 缺 manual_only 在 x-show 條件中"
+        )
+        assert "is_beta" in html, (
+            "FIX-2 違規：_rescrape_modal.html builtin pill 缺 is_beta 在 x-show 條件中"
+        )

@@ -149,7 +149,12 @@ class PyWebViewCfTransport:
 
     def is_ready(self, cache_key: str = 'javlibrary') -> bool:
         """
-        Non-blocking fast check: has the user passed CF challenge + age gate?
+        Non-blocking fast check: has the user passed the CF challenge?
+
+        Only checks for CF challenge (title / hidden field markers).
+        Age gate is handled exclusively via the over18=1 cookie set on every
+        call — post-CF pages will not re-show the age gate if the cookie is
+        present (same design as POC scrape_b / javm).
 
         Sets over18 cookie on every call (idempotent, prevents age gate re-appear).
         When first ready, auto-hides the window.
@@ -167,7 +172,14 @@ class PyWebViewCfTransport:
             "document.documentElement.outerHTML.slice(0, 4000)"
         ) or ""
 
-        # 4. Evaluate readiness
+        # 4. Evaluate readiness.
+        # CF challenge: never ready, user must wait for Turnstile.
+        # Age-gate (agreeBtn): not ready, window stays visible so user can click
+        #   the agree button. over18 cookie (step 1) prevents re-appearance in
+        #   most cases; if the interstitial still shows, _is_age_gate (agreeBtn-
+        #   only, narrow) catches it and keeps the window open. Normal content
+        #   pages that contain "利用規約"/"18歳"/"over18" in the footer are NOT
+        #   caught because the narrowed _is_age_gate only matches agreeBtn.
         ready = not _is_cf_challenge(title, head) and not _is_age_gate(head)
 
         # 5. Auto-hide when first ready

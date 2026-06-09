@@ -156,3 +156,71 @@ class TestCfMountingGuard:
         assert resp.status_code != 404, (
             "GET /api/cf/status 回 404 — web/app.py 可能漏了 app.include_router(cf_router.router)"
         )
+
+
+# ── FIX-2: /api/search?source=javlibrary CfChallengeRequired → 非 500 ──────────
+
+class TestSearchJavlibraryCfExceptions:
+    """FIX-2: GET /api/search?source=javlibrary 觸發 CF 例外 → 結構化非 500 回應。"""
+
+    def test_cf_challenge_required_returns_non_500(self, client, mocker):
+        """CfChallengeRequired → 200 + success:false + error 欄位（非 500）。"""
+        # search_jav_single_source 在 search() 函式內以 local import 引入，
+        # patch target 為 core.scraper 模組的屬性（local import 路徑）。
+        mocker.patch(
+            "core.scraper.search_jav_single_source",
+            side_effect=CfChallengeRequired("CF challenge"),
+        )
+        resp = client.get("/api/search", params={"q": "TCD-332", "mode": "exact", "source": "javlibrary"})
+        assert resp.status_code == 200, (
+            f"CfChallengeRequired 不應產生 500，got: {resp.status_code}"
+        )
+        data = resp.json()
+        assert data.get("success") is False
+        assert "error" in data
+        assert data.get("data") == []
+        assert data.get("total") == 0
+
+    def test_cf_transport_unavailable_returns_non_500(self, client, mocker):
+        """CfTransportUnavailable → 200 + success:false + error 欄位（非 500）。"""
+        mocker.patch(
+            "core.scraper.search_jav_single_source",
+            side_effect=CfTransportUnavailable("no transport"),
+        )
+        resp = client.get("/api/search", params={"q": "TCD-332", "mode": "exact", "source": "javlibrary"})
+        assert resp.status_code == 200, (
+            f"CfTransportUnavailable 不應產生 500，got: {resp.status_code}"
+        )
+        data = resp.json()
+        assert data.get("success") is False
+        assert "error" in data
+        assert data.get("data") == []
+
+
+# ── FIX-3: begin_solve 拋例外 → cf_unavailable ───────────────────────────────
+
+class TestRescrapePreviewBeginSolveFail:
+    """FIX-3: begin_solve 拋例外 → {success:false, cf_unavailable:true}，非 500。"""
+
+    def test_begin_solve_exception_returns_cf_unavailable(self, client, mocker):
+        """begin_solve.side_effect=Exception → 200 + cf_unavailable:true（非 500）。"""
+        mocker.patch(
+            "web.routers.scraper.search_jav_single_source",
+            side_effect=CfChallengeRequired("CF challenge"),
+        )
+        mock_transport = MagicMock()
+        mock_transport.begin_solve.side_effect = Exception("window destroyed")
+        mocker.patch("web.routers.scraper.get_cf_transport", return_value=mock_transport)
+
+        resp = client.post("/api/rescrape/preview", json={
+            "number": "TCD-332",
+            "source": "javlibrary",
+        })
+        assert resp.status_code == 200, (
+            f"begin_solve 失敗不應產生 500，got: {resp.status_code}"
+        )
+        data = resp.json()
+        assert data.get("success") is False
+        assert data.get("cf_unavailable") is True, (
+            f"begin_solve 失敗應回 cf_unavailable:true，got: {data!r}"
+        )

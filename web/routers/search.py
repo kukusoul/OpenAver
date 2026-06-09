@@ -204,7 +204,31 @@ def search(
         if source:
             # 指定來源搜索
             from core.scraper import search_jav_single_source
-            data = search_jav_single_source(q, source, proxy_url=proxy_url)
+            from core.cf_transport import CfChallengeRequired, CfTransportUnavailable
+            try:
+                data = search_jav_single_source(q, source, proxy_url=proxy_url)
+            except CfChallengeRequired:
+                logger.warning("search: CfChallengeRequired for source=%s q=%s", source, q)
+                return {
+                    "success": False,
+                    "error": "JavLibrary 需要解決 CF 驗證（請使用桌面應用程式）",
+                    "data": [],
+                    "total": 0,
+                    "mode": "exact",
+                    "has_more": False,
+                    "actress_profile": None,
+                }
+            except CfTransportUnavailable:
+                logger.warning("search: CfTransportUnavailable for source=%s q=%s", source, q)
+                return {
+                    "success": False,
+                    "error": "JavLibrary 僅限桌面應用程式（standalone）使用",
+                    "data": [],
+                    "total": 0,
+                    "mode": "exact",
+                    "has_more": False,
+                    "actress_profile": None,
+                }
             results = [data] if data else []
         else:
             # 精確搜索（使用 smart_search 的 exact 模式）

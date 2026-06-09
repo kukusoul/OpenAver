@@ -88,6 +88,18 @@ def test_search_single_hit_returns_video():
     assert result.source == "javlibrary"
 
 
+def test_search_single_hit_detail_url_is_empty():
+    """FIX-4：single-hit 302 路徑 detail_url 應為空字串（非 search-php URL）"""
+    transport = _make_transport(DETAIL_HTML)
+    with patch(PATCH_TARGET, return_value=transport):
+        scraper = JavLibraryScraper()
+        result = scraper.search("TCD-332")
+    assert result is not None
+    assert result.detail_url == "", (
+        f"single-hit 的 detail_url 應為空字串（非 search-php URL），got: {result.detail_url!r}"
+    )
+
+
 def test_search_single_hit_fetch_called_once():
     """single-hit 路徑 fetch 只應呼叫一次"""
     transport = _make_transport(DETAIL_HTML)
@@ -278,3 +290,59 @@ def test_search_single_hit_duration_is_int():
     assert result is not None
     assert result.duration == 126, f"duration 應為 int 126，got: {result.duration!r}"
     assert isinstance(result.duration, int), f"duration 型別應為 int，got: {type(result.duration)}"
+
+
+# ──────────────────────────────────────
+# FIX-5：number guard — fallback 回錯片守衛
+# ──────────────────────────────────────
+
+# 詳情頁 HTML，番號為 ABW-001（與請求 TCD-332 不符）
+WRONG_NUMBER_DETAIL_HTML = """\
+<html><head><title>ABW-001 別の映像</title></head><body>
+  <h3 class="post-title">ABW-001　別の映像 テスト女優</h3>
+  <div id="video_id"><table><tr><td class="text">ABW-001</td></tr></table></div>
+  <div id="video_date"><table><tr><td class="text">2026-01-10</td></tr></table></div>
+  <div id="video_maker"><table><tr><td class="text"><span><a>テストメーカー</a></span></td></tr></table></div>
+  <img id="video_jacket_img" src="//pics.dmm.co.jp/mono/abw001pl.jpg" />
+  <div id="video_genres"><a>単体作品</a></div>
+</body></html>"""
+
+# 多命中搜尋結果頁（番號 TCD-332 無精確比對，fallback 到第一個連結）
+SEARCH_RESULT_MISMATCH_HTML = """\
+<html><head><title>Search Results</title></head><body>
+  <div class="video"><a href="./javabwxxx.html" title="ABW-001 別の映像">ABW-001 別の映像</a></div>
+  <div class="video"><a href="./javother.html" title="ZZZ-999 他の映像">ZZZ-999 他の映像</a></div>
+</body></html>"""
+
+
+def test_search_multi_result_number_mismatch_returns_none():
+    """
+    FIX-5：多命中 fallback 到 links[0]，parse 出的番號與請求番號不符
+    → search() 應回 None（誠實 miss，不回錯片資料）。
+    """
+    # 第一次 fetch 回搜尋列表（無 TCD-332 精確比對，fallback links[0] = ABW-001 頁）
+    # 第二次 fetch 回 ABW-001 詳情頁（番號不符）
+    transport = _make_transport(SEARCH_RESULT_MISMATCH_HTML, WRONG_NUMBER_DETAIL_HTML)
+    with patch(PATCH_TARGET, return_value=transport):
+        scraper = JavLibraryScraper()
+        result = scraper.search("TCD-332")
+
+    assert result is None, (
+        f"fallback 回錯番號（ABW-001 ≠ TCD-332）時應回 None，got: {result!r}"
+    )
+
+
+def test_search_multi_result_correct_number_returns_video():
+    """
+    FIX-5 正常路徑：多命中，links[0] parse 出的番號與請求番號相符
+    → search() 仍應回 Video（守衛不誤殺合法命中）。
+    """
+    transport = _make_transport(SEARCH_RESULT_HTML, DETAIL_HTML)
+    with patch(PATCH_TARGET, return_value=transport):
+        scraper = JavLibraryScraper()
+        result = scraper.search("TCD-332")
+
+    assert isinstance(result, Video), (
+        f"number 相符的多命中路徑應回 Video，got: {result!r}"
+    )
+    assert result.number == "TCD-332"

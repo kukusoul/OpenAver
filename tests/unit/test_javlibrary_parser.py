@@ -227,19 +227,28 @@ def test_is_cf_challenge_normal_page():
 # (l) _is_age_gate
 # ──────────────────────────────────────
 
-def test_is_age_gate_riyoukiyaku():
-    assert _is_age_gate("利用規約に同意してください") is True
-
-
 def test_is_age_gate_agree_btn():
+    """agreeBtn 在 html → True（同意閘特有控制）。"""
     assert _is_age_gate('<button id="agreeBtn">同意</button>') is True
 
 
-def test_is_age_gate_over18():
-    assert _is_age_gate('<a href="?over18=1">enter</a>') is True
+def test_is_age_gate_riyoukiyaku_only_is_false():
+    """只有「利用規約」（無 agreeBtn）→ False（footer 字不算同意閘）。"""
+    assert _is_age_gate("利用規約に同意してください") is False
+
+
+def test_is_age_gate_over18_only_is_false():
+    """只有 over18 連結（無 agreeBtn）→ False（footer 字不算同意閘）。"""
+    assert _is_age_gate('<a href="?over18=1">enter</a>') is False
+
+
+def test_is_age_gate_18sai_only_is_false():
+    """只有「18歳」文字（無 agreeBtn）→ False（footer 字不算同意閘）。"""
+    assert _is_age_gate("18歳未満の方はご利用できません") is False
 
 
 def test_is_age_gate_normal_page():
+    """正常頁（無 agreeBtn）→ False。"""
     assert _is_age_gate("<html><body>Normal JavLibrary page</body></html>") is False
 
 
