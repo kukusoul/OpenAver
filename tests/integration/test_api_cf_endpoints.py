@@ -54,6 +54,24 @@ class TestCfStatusEndpoint:
         assert resp.status_code == 200
         assert resp.json()["ready"] is False
 
+    def test_status_dead_transport_returns_unavailable(self, client, mocker):
+        """
+        CD-70c-2/3: transport is_ready() raises CfTransportUnavailable (window dead)
+        → {ready: false, unavailable: true}, not {ready: false}.
+        This is distinct from the None-transport path (which also → unavailable:true)
+        and from a transient JS error (RuntimeError → {ready:false} without unavailable).
+        """
+        mock_t = MagicMock()
+        mock_t.is_ready.side_effect = CfTransportUnavailable("JL window destroyed")
+        mocker.patch("web.routers.cf.get_cf_transport", return_value=mock_t)
+        resp = client.get("/api/cf/status")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["ready"] is False
+        assert data.get("unavailable") is True, (
+            f"Dead transport must return unavailable:true, got: {data!r}"
+        )
+
 
 # ── /api/cf/abandon ──────────────────────────────────────────────────────────
 

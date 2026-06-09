@@ -22,12 +22,38 @@ if WINDOWS_DIR not in sys.path:
 
 import cf_transport_impl  # sibling import, same as standalone.py runtime
 from cf_transport_impl import PyWebViewCfTransport, _wv_fetch
-from core.cf_transport import CfChallengeRequired
+from core.cf_transport import CfChallengeRequired, CfTransportUnavailable
 
 
 # ──────────────────────────────────────────────────────────────
 # FakeWindow
 # ──────────────────────────────────────────────────────────────
+class FakeEvents:
+    """
+    Minimal stub for pywebview's EventContainer that supports `+=` handler registration.
+    Registered handlers can be fired by calling fire().
+    """
+
+    def __init__(self):
+        self._handlers: list = []
+
+    def __iadd__(self, handler):
+        self._handlers.append(handler)
+        return self
+
+    def fire(self):
+        for h in self._handlers:
+            h()
+
+
+class FakeWindowEvents:
+    """Stub for window.events, with `closed` and `closing` sub-containers."""
+
+    def __init__(self):
+        self.closed = FakeEvents()
+        self.closing = FakeEvents()
+
+
 class FakeWindow:
     """
     Mock for webview.Window.
@@ -50,6 +76,8 @@ class FakeWindow:
         }
         # Set True to make evaluate_js never call the callback (→ TimeoutError)
         self._never_callback: bool = False
+        # events stub for CD-70c-2 __init__ binding
+        self.events = FakeWindowEvents()
 
     def show(self):
         self.calls.append(('show',))
@@ -258,7 +286,7 @@ class FakeWindowIsReady(FakeWindow):
     """
 
     def __init__(self, title: str, head: str):
-        super().__init__()
+        super().__init__()  # inherits self.events = FakeWindowEvents()
         self._title = title
         self._head = head
 
@@ -408,3 +436,60 @@ class TestStructuralGuards:
         )
         assert result.returncode == 0 and result.stdout.strip() != '', \
             "FAIL: _wv_fetch not found at module level (column 0)"
+
+
+# ──────────────────────────────────────────────────────────────
+# CD-70c-2 Layer 2: dead-flag fail-fast tests
+# ──────────────────────────────────────────────────────────────
+
+class TestDeadFlagFailFast:
+    """
+    CD-70c-2 Layer 2 backstop: once the transport is dead (window destroyed),
+    fetch / begin_solve / is_ready must each raise CfTransportUnavailable immediately
+    rather than operating on a dead window.
+    """
+
+    def test_on_closed_handler_sets_dead(self):
+        """_on_closed() handler sets _dead=True (backstop fire path)."""
+        win = FakeWindow()
+        transport = PyWebViewCfTransport(win)
+        assert transport._dead is False, "_dead must start as False"
+        # Fire the closed event as if the window was destroyed
+        win.events.closed.fire()
+        assert transport._dead is True, "_on_closed should set _dead=True"
+
+    def test_fetch_raises_when_dead(self):
+        """fetch() raises CfTransportUnavailable when _dead=True."""
+        win = FakeWindow()
+        transport = PyWebViewCfTransport(win)
+        transport._dead = True
+        with pytest.raises(CfTransportUnavailable, match="restart OpenAver"):
+            transport.fetch('https://www.javlibrary.com/ja/')
+
+    def test_begin_solve_raises_when_dead(self):
+        """begin_solve() raises CfTransportUnavailable when _dead=True (guard before show())."""
+        win = FakeWindow()
+        transport = PyWebViewCfTransport(win)
+        transport._dead = True
+        with pytest.raises(CfTransportUnavailable, match="restart OpenAver"):
+            transport.begin_solve('https://www.javlibrary.com/ja/')
+        # show() must NOT have been called (dead guard must be before show())
+        show_calls = [c for c in win.calls if c[0] == 'show']
+        assert not show_calls, "show() must not be called after dead guard raises"
+
+    def test_is_ready_raises_when_dead(self):
+        """is_ready() raises CfTransportUnavailable when _dead=True."""
+        win = FakeWindowIsReady(READY_TITLE, READY_HEAD)
+        transport = PyWebViewCfTransport(win)
+        transport._dead = True
+        with pytest.raises(CfTransportUnavailable, match="restart OpenAver"):
+            transport.is_ready()
+
+    def test_dead_via_on_closed_then_fetch_raises(self):
+        """Full path: window closed event fires → _dead=True → fetch raises."""
+        win = FakeWindow()
+        transport = PyWebViewCfTransport(win)
+        # Simulate window being destroyed by OS / crash
+        win.events.closed.fire()
+        with pytest.raises(CfTransportUnavailable):
+            transport.fetch('https://www.javlibrary.com/ja/')

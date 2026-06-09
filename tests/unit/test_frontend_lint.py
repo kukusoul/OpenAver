@@ -10044,3 +10044,104 @@ class TestRescrapeModalSearchHideJlPillGuard:
         assert "is_beta" in html, (
             "FIX-2 違規：_rescrape_modal.html builtin pill 缺 is_beta 在 x-show 條件中"
         )
+
+
+# ──────────────────────────────────────────────────────────────
+# CD-70c-3: frontend CF poll unavailable contract guard
+# ──────────────────────────────────────────────────────────────
+
+STATE_RESCRAPE_JS = (
+    Path(__file__).parent.parent.parent
+    / "web" / "static" / "js" / "shared" / "state-rescrape.js"
+)
+
+
+class TestCfPollUnavailableGuard:
+    """
+    CD-70c-3: C-class API contract guard.
+
+    The frontend _pollCfThenRetry() must consume the backend's
+    {unavailable: true} signal by:
+      1. Checking data.unavailable in the poll callback
+      2. Calling cancelCfPoll() to stop polling and emit the abandon notification
+
+    This is a cross-boundary contract: cf.py response shape × frontend consumption.
+    Per CLAUDE.md: "兩個檔案之間的 API contract → pytest (C/E 類)"
+    """
+
+    def _js(self) -> str:
+        return STATE_RESCRAPE_JS.read_text(encoding="utf-8")
+
+    def test_poll_checks_data_unavailable(self):
+        """
+        state-rescrape.js _pollCfThenRetry() must check data.unavailable.
+        This is the frontend consumer of {ready: false, unavailable: true}
+        from /api/cf/status when the transport window is dead.
+        """
+        js = self._js()
+        assert "data.unavailable" in js, (
+            "state-rescrape.js _pollCfThenRetry() missing data.unavailable check — "
+            "CD-70c-3: frontend must read the backend unavailable signal to stop polling"
+        )
+
+    def test_poll_calls_cancel_cf_poll_on_unavailable(self):
+        """
+        The data.unavailable branch itself must call cancelCfPoll() (not merely
+        have cancelCfPoll defined elsewhere in the file). Verify cancelCfPoll
+        appears within a tight window right after the data.unavailable check —
+        this pins the branch wiring, not just string presence.
+        cancelCfPoll() does clearInterval + POST /api/cf/abandon (emits notification).
+        """
+        js = self._js()
+        idx = js.find("data.unavailable")
+        assert idx != -1, (
+            "state-rescrape.js missing data.unavailable check — "
+            "CD-70c-3: frontend must read the backend unavailable signal"
+        )
+        branch = js[idx: idx + 200]  # the unavailable branch body, right after the check
+        assert "cancelCfPoll" in branch, (
+            "data.unavailable branch does not call cancelCfPoll() — "
+            "CD-70c-3: dead transport must immediately stop the poll loop "
+            "(clearInterval + abandon), not fall through to the timeout"
+        )
+
+    def test_unavailable_check_present_in_poll_interval(self):
+        """
+        Both data.unavailable and cancelCfPoll appear in the same file and are
+        co-located in the polling context (not just in separate unrelated methods).
+        Verify both appear within the _pollCfThenRetry function definition text span.
+        """
+        js = self._js()
+        # Find the function *definition* (not a call site) by searching for the
+        # pattern "methodName(" preceded by whitespace/newline (method definition form).
+        import re as _re
+        # Match the function definition: optional whitespace then _pollCfThenRetry(
+        m = _re.search(r'\b_pollCfThenRetry\s*\(', js)
+        assert m is not None, f"state-rescrape.js missing _pollCfThenRetry function"
+        # Scan from the first match: if it's a call site (short arg like 'number'),
+        # try finding the definition via "function body" marker (contains 'setInterval').
+        # Use rfind to find the last definition (definitions come after call sites).
+        all_matches = list(_re.finditer(r'\b_pollCfThenRetry\s*\(', js))
+        # Prefer the match followed by a simple parameter name (definition) over
+        # a call expression with 'this.' arguments.  The definition looks like:
+        #   _pollCfThenRetry(number) {
+        def_idx = None
+        for match in all_matches:
+            tail = js[match.start(): match.start() + 80]
+            # Definition has a plain identifier parameter, not 'this.'
+            if _re.match(r'\b_pollCfThenRetry\s*\(\s*\w+\s*\)\s*\{', tail):
+                def_idx = match.start()
+                break
+        assert def_idx is not None, (
+            "Could not find _pollCfThenRetry(param) { definition in state-rescrape.js"
+        )
+        # Extract ~1500 chars from the function start to cover the setInterval body
+        snippet = js[def_idx: def_idx + 1500]
+        assert "data.unavailable" in snippet, (
+            "data.unavailable check not found inside _pollCfThenRetry() definition — "
+            "the check must be inside the setInterval callback"
+        )
+        assert "cancelCfPoll" in snippet, (
+            "cancelCfPoll() call not found inside _pollCfThenRetry() definition — "
+            "must be called when data.unavailable is true"
+        )

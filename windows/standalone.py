@@ -296,6 +296,52 @@ def main():
         **create_kwargs,
     )
 
+    # CD-70c-1: JavLibrary CF transport — create + register BEFORE webview.start()
+    # so that _transport is set before first render (eliminates SSR race where
+    # cf_transport_available=false was injected on the initial page load).
+    # pywebview 6.2.1: create_window(hidden=True) before start() is supported;
+    # the native window is only shown after the GUI loop starts via _create_children.
+    jl_win = None
+    try:
+        from cf_transport_impl import PyWebViewCfTransport   # sibling import（WINDOWS_DIR 已在 sys.path）
+        from core.scrapers.javlibrary import JAVLIBRARY_ORIGIN
+        from core.cf_transport import register_cf_transport
+        jl_win = webview.create_window(
+            'JavLibrary — CF 驗證',
+            JAVLIBRARY_ORIGIN,
+            width=1200, height=820,
+            hidden=True,
+        )
+        register_cf_transport(PyWebViewCfTransport(jl_win))
+        logger.info("JavLibrary CF transport registered")
+    except Exception as e:
+        logger.warning(f"JavLibrary CF transport init failed (JL will be unavailable): {e}")
+
+    # CD-70c-2 Layer 1: intercept JL window close → hide instead of destroy.
+    # A destroyed window makes self._win dead, breaking all subsequent fetch/is_ready
+    # calls until restart. Returning False from the closing handler cancels the close.
+    # app-quit guard: when the main window is closing (app is quitting), let the JL
+    # window close normally so we don't trap the shutdown sequence.
+    _app_state = {"quitting": False}
+
+    def _on_main_closing():
+        # main window closing = app is quitting → let JL window close normally
+        _app_state["quitting"] = True
+
+    def _on_jl_closing():
+        # CD-70c-2 Layer 1: user closing the hidden CF window must NOT destroy it
+        # (destroyed window → dead transport → JL broken until restart). Hide instead.
+        # Return False to cancel the close (pywebview: closing handler returning False
+        # cancels). During app quit, allow the close so we don't trap shutdown.
+        if not _app_state["quitting"]:
+            jl_win.hide()
+            return False
+        # app quitting → return None (allow close)
+
+    window.events.closing += _on_main_closing
+    if jl_win is not None:
+        jl_win.events.closing += _on_jl_closing
+
     def startup(w):
         bind_events(w)
         live = window_state.attach(w, saved)
@@ -307,22 +353,6 @@ def main():
                 # Codex P2: maximize 失敗時清 live state，否則 on_resized/on_moved
                 # 永遠 early-return，下次啟動仍寫回 maximized=true 形成 sticky failure
                 live["maximized"] = False
-
-        # JavLibrary CF transport — dedicated hidden window
-        try:
-            from cf_transport_impl import PyWebViewCfTransport   # sibling import（WINDOWS_DIR 已在 sys.path）
-            from core.scrapers.javlibrary import JAVLIBRARY_ORIGIN
-            from core.cf_transport import register_cf_transport
-            jl_win = webview.create_window(
-                'JavLibrary — CF 驗證',
-                JAVLIBRARY_ORIGIN,
-                width=1200, height=820,
-                hidden=True,
-            )
-            register_cf_transport(PyWebViewCfTransport(jl_win))
-            logger.info("JavLibrary CF transport registered")
-        except Exception as e:
-            logger.warning(f"JavLibrary CF transport init failed (JL will be unavailable): {e}")
 
     # 5. 開始 GUI 事件循環（阻塞直到窗口關閉）
     # 根據平台選擇 GUI 後端

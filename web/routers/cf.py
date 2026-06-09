@@ -9,7 +9,7 @@ CF transport 控制端點（與 scraper router 語意正交）。
 """
 from fastapi import APIRouter
 
-from core.cf_transport import get_cf_transport
+from core.cf_transport import get_cf_transport, CfTransportUnavailable
 from core.logger import get_logger
 from web.routers.notifications import emit_notification
 
@@ -26,6 +26,9 @@ def cf_status(key: str = "javlibrary") -> dict:
         return {"ready": False, "unavailable": True}
     try:
         return {"ready": bool(t.is_ready(key))}
+    except CfTransportUnavailable:
+        logger.warning("cf_status: transport dead (window closed) key=%s", key)
+        return {"ready": False, "unavailable": True}
     except Exception:
         logger.exception("cf_status: is_ready(key=%s) 失敗", key)
         return {"ready": False}

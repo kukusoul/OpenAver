@@ -311,6 +311,10 @@ export function rescrapeState() {
                 try {
                     const resp = await fetch('/api/cf/status?key=javlibrary');
                     const data = await resp.json();
+                    if (data && data.unavailable) {   // CD-70c-3: transport dead/unavailable → stop polling now
+                        this.cancelCfPoll();           // clearInterval + POST /api/cf/abandon (emits 通知)
+                        return;
+                    }
                     if (data && data.ready) {
                         clearInterval(this._cfPollHandle);
                         this._cfPollHandle = null;

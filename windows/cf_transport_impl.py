@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 
 from bs4 import BeautifulSoup
 
-from core.cf_transport import CfChallengeRequired, CfTransport
+from core.cf_transport import CfChallengeRequired, CfTransport, CfTransportUnavailable
 from core.scrapers.javlibrary import (
     JAVLIBRARY_ORIGIN,
     _is_age_gate,
@@ -113,6 +113,17 @@ class PyWebViewCfTransport:
 
     def __init__(self, jl_window: webview.Window) -> None:
         self._win = jl_window
+        self._dead = False
+        # Backstop: if the window is genuinely destroyed (crash / OS-forced / app
+        # teardown) despite the closing-intercept in standalone.py, mark dead so
+        # subsequent calls fail-fast instead of raising opaque errors on a dead window.
+        try:
+            self._win.events.closed += self._on_closed
+        except Exception:
+            logger.warning("cf_transport: could not bind events.closed (JL window)")
+
+    def _on_closed(self) -> None:
+        self._dead = True
 
     # ------------------------------------------------------------------
     # CfTransport Protocol
@@ -125,6 +136,8 @@ class PyWebViewCfTransport:
         Raises CfChallengeRequired if the returned page is a CF challenge.
         Does NOT check age gate (age gate is only checked in is_ready()).
         """
+        if self._dead:
+            raise CfTransportUnavailable("JavLibrary CF window was unexpectedly destroyed (crash / forced close); restart OpenAver to use JavLibrary again")
         final_url, status, html = _wv_fetch(self._win, url)  # C1: unpack correctly
 
         # Detect CF challenge via title
@@ -143,6 +156,8 @@ class PyWebViewCfTransport:
         Non-blocking: show the window, navigate to origin_url, set over18 cookie.
         Returns immediately — does NOT wait for the user to solve the challenge.
         """
+        if self._dead:
+            raise CfTransportUnavailable("JavLibrary CF window was unexpectedly destroyed (crash / forced close); restart OpenAver to use JavLibrary again")
         self._win.show()
         self._win.load_url(origin_url)
         self._win.evaluate_js(
@@ -161,6 +176,8 @@ class PyWebViewCfTransport:
         Sets over18 cookie on every call (idempotent, prevents age gate re-appear).
         When first ready, auto-hides the window.
         """
+        if self._dead:
+            raise CfTransportUnavailable("JavLibrary CF window was unexpectedly destroyed (crash / forced close); restart OpenAver to use JavLibrary again")
         # 1. Set over18 cookie every time (idempotent)
         self._win.evaluate_js(
             "document.cookie='over18=1; path=/; domain=.javlibrary.com';"

@@ -207,6 +207,10 @@ def search(
             from core.cf_transport import CfChallengeRequired, CfTransportUnavailable
             try:
                 data = search_jav_single_source(q, source, proxy_url=proxy_url)
+            # CD-70c-4: search entry does NOT wire the interactive CF flow (no begin_solve,
+            # no cf_needed). The JavLibrary pill is hidden in search context when
+            # cf_transport_available is false (frontend isJlUnavailable), so this path is
+            # UI-unreachable; these blocks exist only as a structured 500-guard fallback.
             except CfChallengeRequired:
                 logger.warning("search: CfChallengeRequired for source=%s q=%s", source, q)
                 return {
