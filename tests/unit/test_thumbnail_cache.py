@@ -196,3 +196,23 @@ def test_iter_missing_skips_no_cover(thumb_dir):
         types.SimpleNamespace(path="file:///x/m.mp4"),  # 無 cover_path 屬性
     ]
     assert list(tc.iter_missing(videos)) == []
+
+
+# ── 11. per-thumb 鎖 key 一致性（Codex round-2 P1 修法 A）────────
+def test_lock_for_thumb_same_path_same_lock(thumb_dir):
+    """同一 video_path_uri → thumb_file_for 回同 Path → str 相同 → 同一把鎖。
+
+    這保證 generate(dst) 與 invalidate(tf) 對同 uri 序列化（關閉原地覆寫競態）。
+    """
+    uri = "file:///x/movie.mp4"
+    tf = tc.thumb_file_for(uri)
+    lk1 = tc._lock_for_thumb(tf)
+    lk2 = tc._lock_for_thumb(tc.thumb_file_for(uri))
+    assert lk1 is lk2
+
+
+def test_lock_for_thumb_distinct_paths_distinct_locks(thumb_dir):
+    """不同 thumb path → 不同鎖（不會誤序列化無關縮圖）。"""
+    a = tc.thumb_file_for("file:///x/A.mp4")
+    b = tc.thumb_file_for("file:///x/B.mp4")
+    assert tc._lock_for_thumb(a) is not tc._lock_for_thumb(b)

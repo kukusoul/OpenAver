@@ -13,6 +13,7 @@ import hashlib
 import os
 import shutil
 import tempfile
+import threading
 from pathlib import Path
 from typing import Iterator, Optional, Tuple
 
@@ -23,6 +24,25 @@ from core.logger import get_logger
 from core.path_utils import uri_to_fs_path
 
 logger = get_logger(__name__)
+
+# per-thumb-path 鎖註冊表（Codex round-2 P1 修法 A）。
+# 讓 generate（讀 cover + 原子寫 thumb）與 invalidate（unlink）對「同一 thumb path」
+# 互斥序列化，關閉「enrich 原地覆寫同一 cover.jpg → generate serve 舊內容、stale thumb
+# 殘留」的競態。鎖 key = str(thumb_file_for(uri))，generate 的 dst 與 invalidate 的 tf
+# 對同一 video_path_uri 必是同一 Path → str 相同 → 同一把鎖。
+_thumb_locks: dict = {}              # str(thumb_path) -> threading.Lock
+_thumb_locks_guard = threading.Lock()
+
+
+def _lock_for_thumb(dst) -> threading.Lock:
+    """取得 thumb path 對應的鎖（缺則建）。key 用 str(dst) 確保跨 generate/invalidate 一致。"""
+    key = str(dst)
+    with _thumb_locks_guard:
+        lk = _thumb_locks.get(key)
+        if lk is None:
+            lk = threading.Lock()
+            _thumb_locks[key] = lk
+        return lk
 
 # 縮圖參數（CD-3 / D2，集中為模組常數供日後調參）
 THUMB_WIDTH = 400      # 目標寬度（px）
@@ -52,31 +72,34 @@ def generate(cover_fs_path: str, dst: Path) -> bool:
     原子寫鏡像 core/config.py:_save_config_unlocked（同目錄 tempfile + os.replace，
     fd 先關再 replace；任何例外清 temp 殘檔）。
     """
-    tmp = None
-    try:
-        with Image.open(cover_fs_path) as img:
-            img = img.convert("RGB")  # 去 alpha/CMYK，WebP 友善
-            # 等比縮到寬 THUMB_WIDTH；原圖更窄則不放大
-            if img.width > THUMB_WIDTH:
-                new_h = max(1, round(img.height * THUMB_WIDTH / img.width))
-                img = img.resize((THUMB_WIDTH, new_h), Image.LANCZOS)
+    # 整個「讀 cover → 處理 → 原子寫」包進 per-thumb 鎖內，與 invalidate 的 unlink
+    # 序列化（Codex round-2 P1 修法 A）。失敗回 False 的語義不變，只是被鎖包住。
+    with _lock_for_thumb(dst):
+        tmp = None
+        try:
+            with Image.open(cover_fs_path) as img:
+                img = img.convert("RGB")  # 去 alpha/CMYK，WebP 友善
+                # 等比縮到寬 THUMB_WIDTH；原圖更窄則不放大
+                if img.width > THUMB_WIDTH:
+                    new_h = max(1, round(img.height * THUMB_WIDTH / img.width))
+                    img = img.resize((THUMB_WIDTH, new_h), Image.LANCZOS)
 
-            dst.parent.mkdir(parents=True, exist_ok=True)
-            fd, tmp = tempfile.mkstemp(dir=dst.parent, suffix=".tmp")
-            # fd 必須在 os.replace 前關閉（Windows file-lock）
-            with os.fdopen(fd, "wb") as f:
-                img.save(f, "WEBP", quality=THUMB_QUALITY, method=THUMB_METHOD)
-            os.replace(tmp, dst)
-            tmp = None
-        return True
-    except Exception as e:
-        logger.warning("thumbnail generate failed: cover=%s err=%s", cover_fs_path, e)
-        if tmp is not None:
-            try:
-                os.unlink(tmp)
-            except OSError:
-                pass
-        return False
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                fd, tmp = tempfile.mkstemp(dir=dst.parent, suffix=".tmp")
+                # fd 必須在 os.replace 前關閉（Windows file-lock）
+                with os.fdopen(fd, "wb") as f:
+                    img.save(f, "WEBP", quality=THUMB_QUALITY, method=THUMB_METHOD)
+                os.replace(tmp, dst)
+                tmp = None
+            return True
+        except Exception as e:
+            logger.warning("thumbnail generate failed: cover=%s err=%s", cover_fs_path, e)
+            if tmp is not None:
+                try:
+                    os.unlink(tmp)
+                except OSError:
+                    pass
+            return False
 
 
 def get_or_create(video_path_uri: str, cover_fs_path: str) -> Optional[Path]:
@@ -93,8 +116,14 @@ def get_or_create(video_path_uri: str, cover_fs_path: str) -> Optional[Path]:
 
 
 def invalidate(video_path_uri: str) -> None:
-    """砍掉某影片的縮圖（缺檔 no-op，不拋）。下次 lazy/prewarm 重生（CD-9/CD-11）。"""
-    thumb_file_for(video_path_uri).unlink(missing_ok=True)
+    """砍掉某影片的縮圖（缺檔 no-op，不拋）。下次 lazy/prewarm 重生（CD-9/CD-11）。
+
+    unlink 包在 per-thumb 鎖內，與 generate 的「讀 cover + 寫 thumb」序列化
+    （Codex round-2 P1 修法 A）。tf 與 generate 的 dst 對同 uri 是同一 Path → 同一把鎖。
+    """
+    tf = thumb_file_for(video_path_uri)
+    with _lock_for_thumb(tf):
+        tf.unlink(missing_ok=True)
 
 
 def clear_all() -> None:

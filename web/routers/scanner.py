@@ -814,12 +814,19 @@ def _serve_thumb_file(tf: Path, request: Request) -> Response:
     """serve 一個已存在的 thumb webp：強 ETag + no-cache + If-None-Match → 304。
 
     本地一次 stat（零 DB / 零 NAS）。CD-4 明令不可用 max-age。
+
+    Codex P2(b)：200 路徑改 read_bytes() 在 handler try 內把整檔讀進記憶體，**不再用
+    FileResponse**。FileResponse 會把 stat/open 延到 ASGI send 階段（在 handler try 外），
+    若此時 thumb 被並發 invalidate(unlink)，Starlette 內部 stat 失敗會冒成 500。
+    在此同步讀 bytes → send 階段已不碰磁碟；read 期間的並發 unlink 會在這裡拋 OSError，
+    由呼叫端 get_thumb 既有的 try/except OSError 接住降級 miss 重生（與 M1 一致）。
     """
     etag = f'"{tf.stat().st_mtime_ns}"'
     if request.headers.get("If-None-Match") == etag:
         return Response(status_code=304, headers={"ETag": etag, "Cache-Control": "no-cache"})
-    return FileResponse(
-        tf,
+    data = tf.read_bytes()  # 並發 unlink → OSError 上拋給 get_thumb 降級重生
+    return Response(
+        content=data,
         media_type="image/webp",
         headers={"Cache-Control": "no-cache", "ETag": etag},
     )
@@ -835,9 +842,10 @@ def get_thumb(request: Request, path: str = Query(..., description="影片路徑
     tf = thumbnail_cache.thumb_file_for(path)
 
     # hit：零 DB、零 NAS（只一次本地 stat）— 驗收 4.A 核心
-    # feature/71 T8 M1：hit 判定（tf.exists()）通過後、_serve_thumb_file 內 tf.stat() 前，
-    # thumb 可能被並發 invalidate(unlink) → stat 拋 OSError（含 FileNotFoundError）。
-    # 此時降級 fall through 到下方 miss 重生路徑（DB 有 cover → 重生；無 → 404），不 500。
+    # feature/71 T8 M1（+ Codex P2(b)）：hit 判定（tf.exists()）通過後、_serve_thumb_file
+    # 內讀 thumb（stat / read_bytes）期間，thumb 可能被並發 invalidate(unlink) → 拋 OSError
+    # （含 FileNotFoundError）。整個 serve 在此 try 內把 bytes 讀完（send 時不再碰磁碟），
+    # 拋出時降級 fall through 到下方 miss 重生路徑（DB 有 cover → 重生；無 → 404），不 500。
     if tf.exists():
         try:
             return _serve_thumb_file(tf, request)
@@ -860,9 +868,38 @@ def get_thumb(request: Request, path: str = Query(..., description="影片路徑
         return Response(status_code=404, content="封面不在快取記錄中")
 
     if thumbnail_cache.generate(cover_fs, tf):
-        return _serve_thumb_file(tf, request)
+        # Codex P1（round-1 + round-2）：generate 用的 cover_fs 是 miss 進來時的 DB 值。
+        # 生成期間若 enrich/rescrape 並發換封面，剛寫的 thumb 可能是 stale。re-read DB 一次
+        # （miss 路徑本就碰本地 DB，不違反 D4「serve hit 不碰 NAS」）：
+        #   - fresh is None / cover_path 空（並發刪除）→ stale，invalidate 丟棄剛寫 thumb + 404，
+        #     不 serve 剛生成的 stale thumb（round-2 P1 補強）。
+        #   - cover_path 換了不同 path → invalidate 丟棄 + 把 cover_fs 重指當前封面，
+        #     fall through 到下方 P2(a)-guarded fallback serve 當前封面（下次 view lazy 重生）。
+        #   - 同路徑原地覆寫競態 → 已由 core per-thumb 鎖（修法 A）關閉，web 不再 stat 比對，
+        #     直接 safe-serve（OSError → fall through 重指/fallback，round-2 P2）。
+        fresh = repo.get_by_path(path)
+        if not fresh or not fresh.cover_path:
+            thumbnail_cache.invalidate(path)
+            return Response(status_code=404, content="影片已不存在")
+        fresh_fs = uri_to_fs_path(fresh.cover_path)
+        if fresh_fs != cover_fs:
+            thumbnail_cache.invalidate(path)
+            cover_fs = fresh_fs
+            # fall through 到 fallback：serve 當前封面（cover_fs 已重指）
+        else:
+            # 同路徑：原地覆寫競態已由 core per-thumb 鎖關閉 → 集中 safe-serve。
+            # generate 後 thumb 被並發刪（DB row 刪除 + invalidate）→ OSError，fall through
+            # 到 fallback（round-2 P2：此 serve 過去在 try 外，會冒成 500）。
+            try:
+                return _serve_thumb_file(tf, request)
+            except OSError as e:
+                logger.warning("thumb miss→generate 後並發失效，降級 fallback: path=%s err=%s", path, e)
 
     # generate 失敗 → fallback 原圖（D6 不破圖；非 404）
+    # Codex P2(a)：fallback 前先確認 cover 原圖存在；不存在（並發刪/搬移）→ 回 404，
+    # 讓前端破圖三態接手，而非讓 FileResponse 在 send 階段 stat 失敗冒成 500。
+    if not os.path.isfile(cover_fs):
+        return Response(status_code=404, content="封面檔不存在")
     ext = os.path.splitext(cover_fs)[1].lower()
     media_type = _THUMB_FALLBACK_MIME.get(ext, "application/octet-stream")
     return FileResponse(
@@ -886,8 +923,33 @@ def _prewarm_worker():
             return
         repo = VideoRepository(db_path)
         n = 0
-        for video_uri, cover_fs in thumbnail_cache.iter_missing(repo.get_all()):
-            if thumbnail_cache.generate(cover_fs, thumbnail_cache.thumb_file_for(video_uri)):
+        # round-3 P2：snapshot（iter_missing 吃 repo.get_all()）取得後，用戶可能按
+        # 「清除所有影片快取」→ clear_cache 跑 repo.clear_all()（清空 DB）+
+        # thumbnail_cache.clear_all()（rmtree thumb 目錄）；單筆刪除 / prune 亦同理。
+        # clear_all 只是 rmtree，不 fence 後續生成，故 worker 從 stale snapshot 繼續
+        # generate 會在已清空目錄重建 orphan webp（DB 空 thumb 在）。
+        # surgical fence：逐項用「同一個 repo」re-check get_by_path（reuse，不每筆新建），
+        # 只跳過/清理被移除的那部，存活影片照常完成預熱（不像 generation token 會 abort
+        # 整個 prewarm，也不需 clear_cache cancel/join 背景 thread 卡住同步請求）。
+        # round-4 P2：snapshot 的 cover 只用來「列出待補項」，不用於 generate。enrich /
+        # rescrape 可能在 snapshot 後換封面（video 還在但 cover_path 變），故一律從
+        # fresh DB 讀「當前」cover 生成（與 get_thumb miss 路徑對稱：fresh re-read +
+        # path-change 偵測）；before/after re-check 收 video 消失 / 無 cover / cover 換掉
+        # 三種期間變動（≤1 generate-期間-變動窗口，與 get_thumb 同級）。
+        for video_uri, _stale_cover_fs in thumbnail_cache.iter_missing(repo.get_all()):
+            # before-check：影片已從 DB 移除（clear / prune / 單筆刪除）或無 cover → 不生成孤兒
+            fresh = repo.get_by_path(video_uri)
+            if fresh is None or not fresh.cover_path:
+                continue
+            cover_fs = uri_to_fs_path(fresh.cover_path)  # 用當前 cover，忽略 stale snapshot
+            ok = thumbnail_cache.generate(cover_fs, thumbnail_cache.thumb_file_for(video_uri))
+            # after-check：generate 期間影片被清 / cover 又換（≤1 窗口）→ 丟棄剛寫的 stale thumb
+            after = repo.get_by_path(video_uri)
+            if ok and (after is None or not after.cover_path
+                       or uri_to_fs_path(after.cover_path) != cover_fs):
+                thumbnail_cache.invalidate(video_uri)
+                continue
+            if ok:
                 n += 1
         _emit_notif("success", "notif.thumb_prewarm_done",
                     message=f"{n} 張", task_type="thumb_prewarm")
