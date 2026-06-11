@@ -2275,6 +2275,76 @@ class TestGhostFlyGuards:
             assert idx_animating < idx_open, \
                 f"state-lightbox.js {fn_name}: gsap-animating must precede lightboxOpen = true"
 
+    # ── 71b-T3: both-restore guard（hide/restore 目標皆為 .lightbox-cover 容器）──
+    # element-bound：regex 抽 OPEN(playGridToLightbox) / CLOSE(playLightboxToGrid)
+    # 各自 function body，斷言兩路 hide + restore 都指向 coverEl 容器（非僅單一 img）。
+    # 非檔案層級的 '.lightbox-cover' 字串存在性檢查（comment 留字串無法騙過）。
+
+    GHOST_FLY_JS = Path("web/static/js/shared/ghost-fly.js")
+
+    def _extract_method_body(self, js, method_name):
+        """抓 `methodName: function (...) {` 物件方法的 body（大括號平衡匹配）。"""
+        pattern = re.compile(
+            re.escape(method_name) + r'\s*:\s*function\s*\([^)]*\)\s*\{',
+            re.DOTALL,
+        )
+        m = pattern.search(js)
+        assert m is not None, f"ghost-fly.js 找不到 {method_name} 方法"
+        start = m.end()  # 位於 { 之後
+        depth = 1
+        i = start
+        while i < len(js) and depth > 0:
+            c = js[i]
+            if c == '{':
+                depth += 1
+            elif c == '}':
+                depth -= 1
+            i += 1
+        return js[start:i - 1]
+
+    def test_open_hide_and_restore_target_is_cover_container(self):
+        """OPEN(playGridToLightbox) body：coverEl 取自 .lightbox-cover 容器，
+        hide（data-ghost-hidden + opacity:0）與 cleanupGhost restore 皆指向 coverEl，
+        而非僅單一 lbImg。"""
+        js = self.GHOST_FLY_JS.read_text(encoding="utf-8")
+        body = self._extract_method_body(js, "playGridToLightbox")
+        # coverEl 由 .lightbox-cover 容器取得（closest / querySelector 任一）
+        assert re.search(r'var\s+coverEl\s*=', body), \
+            "playGridToLightbox body 缺少 coverEl 宣告（應隱 .lightbox-cover 容器而非單一 img）"
+        assert "closest('.lightbox-cover')" in body or "querySelector('.lightbox-cover')" in body, \
+            "playGridToLightbox coverEl 必須取自 .lightbox-cover 容器"
+        # hide 目標是 coverEl（attribute + opacity:0）
+        assert re.search(r"coverEl\.setAttribute\(\s*'data-ghost-hidden'", body), \
+            "playGridToLightbox hide 必須對 coverEl 掛 data-ghost-hidden（容器，非僅 lbImg）"
+        assert re.search(r"gsap\.set\(\s*coverEl\s*,\s*\{\s*opacity:\s*0", body), \
+            "playGridToLightbox hide 必須對 coverEl 設 opacity:0（容器，非僅 lbImg）"
+        # restore 目標是 coverEl（cleanupGhost 帶 coverEl）
+        assert re.search(r"cleanupGhost\(\s*ghost\s*,\s*coverEl", body), \
+            "playGridToLightbox cleanupGhost restore 必須帶 coverEl（容器），非僅 lbImg"
+
+    def test_close_hide_and_restore_target_is_cover_container(self):
+        """CLOSE(playLightboxToGrid) body：coverEl 取自 .lightbox-cover 容器，
+        hide 補掛 data-ghost-hidden + opacity:0，abort 還原 coverEl，
+        normal-complete 的 cleanupGhost restore 參數含 coverEl（與 OPEN 對稱）。"""
+        js = self.GHOST_FLY_JS.read_text(encoding="utf-8")
+        body = self._extract_method_body(js, "playLightboxToGrid")
+        # coverEl 由 .lightbox-cover 容器取得
+        assert re.search(r'var\s+coverEl\s*=', body), \
+            "playLightboxToGrid body 缺少 coverEl 宣告（應隱 .lightbox-cover 容器而非單一 fromImg）"
+        assert "closest('.lightbox-cover')" in body or "querySelector('.lightbox-cover')" in body, \
+            "playLightboxToGrid coverEl 必須取自 .lightbox-cover 容器"
+        # hide 目標是 coverEl（補上 attribute，舊版漏掛）+ opacity:0
+        assert re.search(r"coverEl\.setAttribute\(\s*'data-ghost-hidden'", body), \
+            "playLightboxToGrid hide 必須對 coverEl 掛 data-ghost-hidden（舊版漏掛 → stale-cleanup 兜不到）"
+        assert re.search(r"gsap\.set\(\s*coverEl\s*,\s*\{\s*opacity:\s*0", body), \
+            "playLightboxToGrid hide 必須對 coverEl 設 opacity:0（容器，非僅 fromImg）"
+        # abort 還原 coverEl
+        assert re.search(r"gsap\.set\(\s*coverEl\s*,\s*\{\s*opacity:\s*1", body), \
+            "playLightboxToGrid abort 必須還原 coverEl opacity:1（容器，非僅 fromImg）"
+        # normal-complete restore 含 coverEl（對稱還原來源容器，修舊不對稱）
+        assert re.search(r"cleanupGhost\(\s*ghost\s*,\s*targetImg\s*,\s*coverEl", body), \
+            "playLightboxToGrid cleanupGhost restore 參數必須含 coverEl（對稱還原來源容器，非僅 targetImg）"
+
 
 class TestTutorialExpandGuard:
     """T10: 新手教學 7 步守衛 (method folded)
