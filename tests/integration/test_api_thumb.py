@@ -458,14 +458,30 @@ class TestPrewarmClearRace:
     修法：迴圈內 get_by_path re-check（before 跳過 / after 清 TOCTOU 孤兒），surgical。
     """
 
-    def _patch_worker_deps(self, mocker, iter_items, get_by_path_side):
-        """共用：patch worker 內 get_db_path / VideoRepository / iter_missing。
+    def _patch_worker_deps(self, mocker, iter_items, get_by_path_side,
+                           load_config_side=None):
+        """共用：patch worker 內 get_db_path / VideoRepository / iter_missing /
+        load_config（P2 race：worker 每 item 重讀 thumbnail_cache_enabled）。
         回 (gen_spy, invalidate_spy, repo_mock)。
+
+        load_config_side：None → 預設一律回 enabled=True（既有測試不受 enabled-check
+        影響）；傳 list → 逐次 side_effect（精準控制每次 load_config 回值）。
         """
         # db_path.exists() True
         db_path = mocker.MagicMock()
         db_path.exists.return_value = True
         mocker.patch("web.routers.scanner.get_db_path", return_value=db_path)
+
+        if load_config_side is None:
+            mocker.patch(
+                "web.routers.scanner.load_config",
+                return_value={"thumbnail_cache_enabled": True},
+            )
+        else:
+            mocker.patch(
+                "web.routers.scanner.load_config",
+                side_effect=load_config_side,
+            )
 
         repo_mock = mocker.MagicMock()
         repo_mock.get_all.return_value = []  # iter_missing 被 mock，回值不重要
@@ -589,6 +605,107 @@ class TestPrewarmClearRace:
         assert gen_spy.call_args.args[0] == uri_to_fs_path(cover_a)
         # after 偵測 cover 變 B → 丟棄
         invalidate_spy.assert_called_once_with(uri)
+
+    # ---- Codex P2 race：快取被關閉（+clear）期間 worker 仍重建縮圖 ----
+    # 修法 Option A：worker 每 item 重讀 load_config().thumbnail_cache_enabled。
+    # 前端契約「先 save(false) 才 clear」→ config.json 寫 false 必早於 clear fetch，
+    # worker 重讀拿得到 false（load_config 無 lru_cache，每次讀 disk）。
+
+    def test_after_check_invalidates_when_disabled_during_generate(self, mocker):
+        """RED（disabled_after）：item A before-check enabled=True、generate 後
+        after-check enabled=False（generate 期間用戶關閉快取）→ generate 只跑一次
+        （item B 因 break 沒跑）+ invalidate(A) 清掉剛生成的殘留 thumb。"""
+        import web.routers.scanner as scanner_mod
+
+        uri_a = to_file_uri("/m/a.mp4")
+        uri_b = to_file_uri("/m/b.mp4")
+        cover_a = to_file_uri("/cover/a.jpg")
+        items = [(uri_a, "/cover/a.jpg"), (uri_b, "/cover/b.jpg")]
+        # before/after get_by_path 都回有效 video（cover 沒換）；隔離出 enabled 變化
+        video_a = mocker.MagicMock(cover_path=cover_a)
+        # load_config：第 1 次（A before）True、第 2 次（A after）False
+        gen_spy, invalidate_spy, repo_mock = self._patch_worker_deps(
+            mocker, items,
+            get_by_path_side=[video_a, video_a],
+            load_config_side=[
+                {"thumbnail_cache_enabled": True},   # A before-check
+                {"thumbnail_cache_enabled": False},  # A after-check（generate 期間關閉）
+            ],
+        )
+        notif_spy = mocker.patch("web.routers.scanner._emit_notif")
+        scanner_mod._prewarming = True
+        try:
+            scanner_mod._prewarm_worker()
+        finally:
+            scanner_mod._prewarming = False
+
+        # item A generate 跑了一次；item B 因 disabled break 沒跑
+        gen_spy.assert_called_once()
+        # 剛生成的 A thumb 殘留被清
+        invalidate_spy.assert_called_once_with(uri_a)
+        # Codex P3：被 disable 中止 → 不送「完成 N 張」done 通知（避免與關閉並清除打架）
+        done_keys = [c.args[1] for c in notif_spy.call_args_list if len(c.args) > 1]
+        assert "notif.thumb_prewarm_done" not in done_keys
+
+    def test_before_check_skips_all_when_disabled_first_item(self, mocker):
+        """RED（before-check disabled）：第一筆 before-check 就 enabled=False →
+        generate 完全不被呼叫、invalidate 也沒（worker 立即 break）。"""
+        import web.routers.scanner as scanner_mod
+
+        items = [
+            (to_file_uri("/m/a.mp4"), "/cover/a.jpg"),
+            (to_file_uri("/m/b.mp4"), "/cover/b.jpg"),
+        ]
+        video = mocker.MagicMock(cover_path=to_file_uri("/cover/a.jpg"))
+        gen_spy, invalidate_spy, repo_mock = self._patch_worker_deps(
+            mocker, items,
+            get_by_path_side=video,
+            load_config_side=[{"thumbnail_cache_enabled": False}],  # 第一筆 before 就關
+        )
+        notif_spy = mocker.patch("web.routers.scanner._emit_notif")
+        scanner_mod._prewarming = True
+        try:
+            scanner_mod._prewarm_worker()
+        finally:
+            scanner_mod._prewarming = False
+
+        gen_spy.assert_not_called()
+        invalidate_spy.assert_not_called()
+        # Codex P3：第一筆就 disabled → 立即 break，不送「完成 0 張」done 通知
+        done_keys = [c.args[1] for c in notif_spy.call_args_list if len(c.args) > 1]
+        assert "notif.thumb_prewarm_done" not in done_keys
+
+    def test_disabled_after_break_even_when_generate_fails(self, mocker):
+        """RED（Codex P3-2）：最後一筆 generate 回 False（失敗）且 generate 期間用戶關閉
+        快取（disabled_after=True, ok=False）→ 仍須 stopped_disabled break、不送 done
+        通知。失敗無 thumb → 不 invalidate。防 disabled-after 被埋在 `if ok` 下漏 break。"""
+        import web.routers.scanner as scanner_mod
+
+        uri_a = to_file_uri("/m/a.mp4")
+        cover_a = to_file_uri("/cover/a.jpg")
+        # 單筆（即「最後一筆」）：loop 跑完即抵達 done emit，old code 漏 break 會誤送 done（RED）
+        items = [(uri_a, "/cover/a.jpg")]
+        video_a = mocker.MagicMock(cover_path=cover_a)
+        gen_spy, invalidate_spy, repo_mock = self._patch_worker_deps(
+            mocker, items,
+            get_by_path_side=[video_a, video_a],
+            load_config_side=[
+                {"thumbnail_cache_enabled": True},   # A before-check
+                {"thumbnail_cache_enabled": False},  # A after-check（generate 期間關閉）
+            ],
+        )
+        gen_spy.return_value = False  # generate 失敗
+        notif_spy = mocker.patch("web.routers.scanner._emit_notif")
+        scanner_mod._prewarming = True
+        try:
+            scanner_mod._prewarm_worker()
+        finally:
+            scanner_mod._prewarming = False
+
+        gen_spy.assert_called_once()              # A 生成一次（失敗）
+        invalidate_spy.assert_not_called()        # generate 失敗，無 thumb 可清
+        done_keys = [c.args[1] for c in notif_spy.call_args_list if len(c.args) > 1]
+        assert "notif.thumb_prewarm_done" not in done_keys  # 不送誤導 done
 
 
 # ============ POST /api/gallery/thumb/clear (71b-T2) ============

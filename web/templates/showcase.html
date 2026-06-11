@@ -812,11 +812,10 @@
                                 <span class="lb-size" x-show="currentLightboxVideo?.size">
                                     &nbsp;·&nbsp;<span x-text="formatSize(currentLightboxVideo?.size || 0)"></span>
                                 </span>
-                            </div>
-                            <!-- 71b-T1: 從收藏移除（破壞性，只刪 DB row + thumb，不碰磁碟影片/封面）。
-                                 從 hover overlay .cover-actions 搬進 info panel 作常駐 muted icon affordance。-->
-                            <div class="lb-delete-strip" x-show="!!currentLightboxVideo?.path">
+                                <!-- 71b-T1: 從收藏移除（破壞性，只刪 DB row + thumb，不碰磁碟影片/封面）。
+                                     常駐 muted icon，靠右對齊於 metadata size 行末（margin-left:auto 推到行尾）。-->
                                 <button class="lb-delete-btn"
+                                        x-show="!!currentLightboxVideo?.path"
                                         @click.stop="openDeleteVideoModal()"
                                         :data-tooltip="t('showcase.video.delete')"
                                         :aria-label="t('showcase.video.delete')">

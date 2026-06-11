@@ -923,6 +923,7 @@ def _prewarm_worker():
             return
         repo = VideoRepository(db_path)
         n = 0
+        stopped_disabled = False  # Codex P3：被 disable 中止時跳過 done 通知
         # round-3 P2：snapshot（iter_missing 吃 repo.get_all()）取得後，用戶可能按
         # 「清除所有影片快取」→ clear_cache 跑 repo.clear_all()（清空 DB）+
         # thumbnail_cache.clear_all()（rmtree thumb 目錄）；單筆刪除 / prune 亦同理。
@@ -937,22 +938,47 @@ def _prewarm_worker():
         # path-change 偵測）；before/after re-check 收 video 消失 / 無 cover / cover 換掉
         # 三種期間變動（≤1 generate-期間-變動窗口，與 get_thumb 同級）。
         for video_uri, _stale_cover_fs in thumbnail_cache.iter_missing(repo.get_all()):
+            # Codex P2 race：用戶可在 prewarm 進行中關閉快取（toggle false → save →
+            # clear）。worker 每筆重讀 load_config()（無 lru_cache，每次讀 disk）拿前端
+            # 剛 PUT 的 false → 立即 break，不再 generate 後續 item（否則在 clear 已
+            # rmtree 的目錄重建 orphan webp）。before-check：關閉即停。
+            if not load_config().get("thumbnail_cache_enabled", False):
+                stopped_disabled = True
+                break
             # before-check：影片已從 DB 移除（clear / prune / 單筆刪除）或無 cover → 不生成孤兒
             fresh = repo.get_by_path(video_uri)
             if fresh is None or not fresh.cover_path:
                 continue
             cover_fs = uri_to_fs_path(fresh.cover_path)  # 用當前 cover，忽略 stale snapshot
             ok = thumbnail_cache.generate(cover_fs, thumbnail_cache.thumb_file_for(video_uri))
-            # after-check：generate 期間影片被清 / cover 又換（≤1 窗口）→ 丟棄剛寫的 stale thumb
+            # after-check：generate 期間影片被清 / cover 又換 / 快取被關閉（≤1 窗口）→
+            # 丟棄剛寫的 stale thumb。disabled_after：再讀一次 load_config，若快取已關閉
+            # → invalidate 剛生成的 webp + break（關掉 generate-in-flight 的最後殘留窗口）。
+            # 正確性依賴前端契約「先 save(false) 才 clear」（config.json 寫 false 早於
+            # clear fetch）；若未來改成「先清才存」會破此假設。
+            disabled_after = not load_config().get("thumbnail_cache_enabled", False)
             after = repo.get_by_path(video_uri)
+            # disabled-after 拉到 ok 判斷外（Codex P3-2）：generate 期間被關閉時，無論這筆
+            # 成功或失敗都要停止且不送 done 通知。成功才需 invalidate（清剛寫的殘留 thumb）；
+            # 失敗無 thumb 可清。否則「最後一筆 generate 失敗 + 同時關閉」會漏 break → 誤送 done。
+            if disabled_after:
+                if ok:
+                    thumbnail_cache.invalidate(video_uri)
+                stopped_disabled = True
+                break
+            # 既有孤兒處理：generate 成功但影片消失 / 無 cover / cover 換掉 → 丟棄 stale thumb
             if ok and (after is None or not after.cover_path
                        or uri_to_fs_path(after.cover_path) != cover_fs):
                 thumbnail_cache.invalidate(video_uri)
                 continue
             if ok:
                 n += 1
-        _emit_notif("success", "notif.thumb_prewarm_done",
-                    message=f"{n} 張", task_type="thumb_prewarm")
+        # Codex P3：若被 disable 中止（用戶「關閉並清除」），跳過「完成 N 張」通知——那些
+        # 縮圖已被 clear 刪除 / invalidate，顯示完成數會誤導且與「關閉並清除」UX 打架。
+        # disable 流程自身有確認 modal + saveConfig 回饋，無需 done 通知。
+        if not stopped_disabled:
+            _emit_notif("success", "notif.thumb_prewarm_done",
+                        message=f"{n} 張", task_type="thumb_prewarm")
     except Exception:
         logger.exception("縮圖預熱背景任務失敗")
     finally:

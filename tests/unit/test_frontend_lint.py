@@ -1766,22 +1766,22 @@ class TestShowcaseLightboxSentinel:
 
     # ----- 71-T7: video delete trash button + delete modal + x-trap（element-bound）-----
 
-    def test_t7_delete_trash_button_in_lightbox_info_panel(self):
-        """[transient-guard] 71b-T1：垃圾桶鈕從 hover overlay `.cover-actions` 搬進 info panel
-        的 `.lb-delete-strip`（metadata 區常駐 muted icon），綁 openDeleteVideoModal()。
-        搬位是一次性 rename — 舊斷言「鈕在 .cover-actions 內」失效屬預期。"""
+    def test_t7_delete_trash_button_in_lightbox_details_row(self):
+        """[transient-guard] 71b-T1：垃圾桶鈕在 info panel 的 `.lb-details`（番號·片商·日期·size
+        那一行）行末，靠右常駐 muted icon，綁 openDeleteVideoModal()。搬位 / relayout 是一次性 —
+        舊斷言（鈕在 .cover-actions / .lb-delete-strip 內）失效屬預期。"""
         html = self._html()
-        # 抽 info-panel 的 .lb-delete-strip 區塊（常駐刪除條，x-show 限有 path 的影片 lightbox）
+        # 抽 .lb-details 區塊（內部僅 span/a/button，無巢狀 div → 第一個 </div> 即其收尾）
         m = re.search(
-            r'<div class="lb-delete-strip"[^>]*>(.*?)</div>',
+            r'<div class="lb-details">(.*?)</div>',
             html, re.DOTALL,
         )
-        assert m, '.lb-delete-strip（info-panel 常駐刪除條）區塊不存在'
+        assert m, '.lb-details（metadata 行）區塊不存在'
         block = m.group(1)
         # 垃圾桶 button：抽出綁 openDeleteVideoModal() 的 <button> tag，三要素同 tag
         btn = re.search(r'<button\b[^>]*openDeleteVideoModal\(\)[^>]*>.*?</button>',
                         block, re.DOTALL)
-        assert btn, '.lb-delete-strip 內缺綁 openDeleteVideoModal() 的垃圾桶 button'
+        assert btn, '.lb-details 行末缺綁 openDeleteVideoModal() 的垃圾桶 button'
         btn_html = btn.group(0)
         assert 'lb-delete-btn' in btn_html, \
             f'垃圾桶 button 缺 .lb-delete-btn class（muted info-panel 樣式）: {btn_html!r}'
