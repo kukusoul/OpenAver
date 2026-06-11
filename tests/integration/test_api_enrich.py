@@ -536,42 +536,45 @@ class TestEnrichRefreshFullOverwriteGuard:
 
 
 class TestEnrichSingleThumbnailInvalidation:
-    """feature/71 T8 邊界3/4/6：enrich 成功 → invalidate 帶 path_mappings 的 URI；失敗不呼叫。"""
+    """feature/71 T8 邊界3/4/6：enrich/rescrape 成功 → invalidate 用 canonical key；失敗不呼叫。
 
-    _MAPPINGS = {"/nas": "//NAS/share"}
+    PR #60 Codex P2 回歸：生產的 file_path 已是 DB 的 file:/// URI（前端送 v.path）。
+    縮圖 canonical key = 該 URI 原字串 hash（generate/serve/prewarm 同源）。端點須用冪等
+    coerce_to_file_uri（已是 URI 原樣回），**不可**再套 to_file_uri 造成 file:///file:///
+    double-encode 砍錯 hash → 舊縮圖殘留。舊測餵裸 FS path 並斷言 double-encode 後的 mapped
+    URI，是把 bug 行為當合約鎖死，已整套重寫。"""
+
+    # 生產真實輸入：DB v.path（前端 currentLightboxVideo.path / missing-check / rescrape 皆此）
+    _VIDEO_URI = "file:///NAS/share/v.mp4"
 
     def _patch_config(self, mocker):
         mocker.patch(
             "web.routers.scraper.load_config",
-            return_value={
-                "gallery": {"path_mappings": self._MAPPINGS},
-                "search": {},
-            },
+            return_value={"gallery": {}, "search": {}},
         )
 
-    def test_success_invalidates_with_path_mappings_uri(self, client, mocker):
-        """邊界3：enrich 成功 → invalidate 被以 to_file_uri(file_path, mappings) 計算出的 URI 呼叫。"""
-        from core.path_utils import to_file_uri
-        # path_mappings 只在 CURRENT_ENV=='wsl' 生效（path_utils.py:354）。強制 wsl 讓本測
-        # 在純 Linux CI 也確定性走 mapping 分支——否則 mapping 為 no-op、下方 sanity assert
-        # （mapped URI ≠ 不帶 mappings 的 URI）會炸（端點與 expected_uri 共用同一 to_file_uri，
-        # 同步受 patch 影響，契約斷言仍成立）。
-        mocker.patch("core.path_utils.CURRENT_ENV", "wsl")
+    def test_success_invalidates_with_canonical_uri(self, client, mocker):
+        """邊界3：enrich 成功 → invalidate 被以 canonical key（= 輸入 URI 原值）呼叫，
+        非 double-encoded。與縮圖 generate 的 key 同源（thumb_file_for(uri) 同 hash）。"""
+        import core.thumbnail_cache as tc
         self._patch_config(mocker)
         mocker.patch("web.routers.scraper.enrich_single", return_value=_ok_result())
         inval_spy = mocker.patch("web.routers.scraper.thumbnail_cache.invalidate")
 
-        file_path = "/nas/v.mp4"
         response = client.post("/api/enrich-single", json={
-            "file_path": file_path,
+            "file_path": self._VIDEO_URI,
             "number": "SONE-205",
         })
 
         assert response.status_code == 200
-        expected_uri = to_file_uri(file_path, self._MAPPINGS)
-        inval_spy.assert_called_once_with(expected_uri)
-        # path_mappings 確實生效（mapped URI ≠ 不帶 mappings 的 URI）
-        assert expected_uri != to_file_uri(file_path)
+        # canonical：invalidate 用輸入 URI 原值（前端送的 DB v.path）
+        inval_spy.assert_called_once_with(self._VIDEO_URI)
+        invalidated_key = inval_spy.call_args[0][0]
+        # 防 double-encode 回歸（PR #60 Codex P2）
+        assert "file:///file:///" not in invalidated_key, \
+            f"invalidate key double-encoded: {invalidated_key!r}"
+        # 與縮圖生成端 canonical key 同 hash（invalidate 砍到的正是 generate 寫的那張）
+        assert tc.thumb_file_for(invalidated_key) == tc.thumb_file_for(self._VIDEO_URI)
 
     def test_failure_does_not_invalidate(self, client, mocker):
         """邊界4：enrich 回 success=False → invalidate 不被呼叫（封面未換）。"""
@@ -583,7 +586,7 @@ class TestEnrichSingleThumbnailInvalidation:
         inval_spy = mocker.patch("web.routers.scraper.thumbnail_cache.invalidate")
 
         response = client.post("/api/enrich-single", json={
-            "file_path": "/nas/v.mp4",
+            "file_path": self._VIDEO_URI,
             "number": "SONE-205",
         })
 
@@ -600,7 +603,7 @@ class TestEnrichSingleThumbnailInvalidation:
         inval_spy = mocker.patch("web.routers.scraper.thumbnail_cache.invalidate")
 
         response = client.post("/api/enrich-single", json={
-            "file_path": "/nas/v.mp4",
+            "file_path": self._VIDEO_URI,
             "number": "SONE-205",
         })
 
@@ -609,20 +612,19 @@ class TestEnrichSingleThumbnailInvalidation:
         inval_spy.assert_not_called()
 
     def test_refresh_full_success_invalidates(self, client, mocker):
-        """邊界6：rescrape（refresh_full）成功 → invalidate 被呼叫（與 #3 同掛鉤點，不漏）。"""
-        from core.path_utils import to_file_uri
+        """邊界6：rescrape（refresh_full）成功 → invalidate 用 canonical key（與 #3 同掛鉤點，不漏）。"""
         self._patch_config(mocker)
         # refresh_full + overwrite=True 繞過分裂守衛
         mocker.patch("web.routers.scraper.enrich_single", return_value=_ok_result())
         inval_spy = mocker.patch("web.routers.scraper.thumbnail_cache.invalidate")
 
-        file_path = "/nas/v.mp4"
         response = client.post("/api/enrich-single", json={
-            "file_path": file_path,
+            "file_path": self._VIDEO_URI,
             "number": "SONE-205",
             "mode": "refresh_full",
             "overwrite_existing": True,
         })
 
         assert response.status_code == 200
-        inval_spy.assert_called_once_with(to_file_uri(file_path, self._MAPPINGS))
+        inval_spy.assert_called_once_with(self._VIDEO_URI)
+        assert "file:///file:///" not in inval_spy.call_args[0][0]
