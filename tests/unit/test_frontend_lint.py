@@ -9726,6 +9726,88 @@ class TestCoverLoadingUx67Guard:
             ("pagehide handler 未檢查 event.persisted（Codex P2 bfcache）：進 bfcache 時無條件 cleanup "
              "會讓 Back 還原的頁面缺 listener/resource。需 `if (e.persisted) return;`")
 
+    # ---- 71-T6: 燈箱封面 blur-up（thumb 底層秒出 → 原圖淡入）----
+
+    def _lightbox_cover_block(self):
+        """抽出燈箱封面 <div class=\"lightbox-cover\">…</div> 區塊（element-bound，避免整檔裸 grep）"""
+        html = self._html()
+        m = re.search(r'<div class="lightbox-cover">.*?</div>\s*<!-- Metadata Panel', html, re.S)
+        assert m, "showcase.html: <div class=\"lightbox-cover\"> 區塊不存在"
+        return m.group(0)
+
+    def _lb_overlay_img(self):
+        """抽出燈箱封面 overlay <img class=\"lb-full\" …>（blur-up 原圖層）"""
+        block = self._lightbox_cover_block()
+        m = re.search(r'<img class="lb-full"[^>]*>', block, re.S)
+        assert m, "showcase.html .lightbox-cover 內缺 overlay <img class=\"lb-full\">（blur-up 原圖層）"
+        return m.group(0)
+
+    def test_lb_base_img_keeps_cover_url_and_error(self):
+        """71-T6: 底層 <img> 保留 x-ref/cover_url/@error 三態（base 撐容器 + 破圖偵測沿用 base）"""
+        block = self._lightbox_cover_block()
+        m = re.search(r'<img x-ref="lightboxCoverImg"[^>]*>', block, re.S)
+        assert m, "showcase.html .lightbox-cover 缺 base <img x-ref=\"lightboxCoverImg\">"
+        base = m.group(0)
+        assert ':src="currentLightboxVideo?.cover_url"' in base, \
+            "base <img> 須綁 :src=\"currentLightboxVideo?.cover_url\"（快取開啟=小 webp 秒出）"
+        assert '@error="handleCoverError(currentLightboxVideo, $event)"' in base, \
+            "base <img> 須保留 @error=\"handleCoverError\"（破圖三態留 base，不移 overlay）"
+
+    def test_lb_overlay_img_binds_cover_full_url(self):
+        """71-T6: overlay <img class=\"lb-full\"> 須綁 :src=\"currentLightboxVideo?.cover_full_url\"（原圖層）"""
+        overlay = self._lb_overlay_img()
+        assert ':src="currentLightboxVideo?.cover_full_url"' in overlay, \
+            "overlay <img class=\"lb-full\"> 須綁 :src=\"currentLightboxVideo?.cover_full_url\"（原圖載完淡入）"
+
+    def test_lb_overlay_img_load_sets_flag(self):
+        """71-T6: overlay <img> 須含 @load=\"_lbFullLoaded=true\"（原圖載完翻旗標觸發淡入）"""
+        overlay = self._lb_overlay_img()
+        assert re.search(r'@load="_lbFullLoaded\s*=\s*true"', overlay), \
+            "overlay <img class=\"lb-full\"> 須含 @load=\"_lbFullLoaded=true\"（原圖載完觸發淡入）"
+
+    def test_lb_overlay_img_class_binds_shown(self):
+        """71-T6: overlay <img> 須 :class 綁 lb-full-shown（opacity 0→1 淡入，非 x-show/display:none）"""
+        overlay = self._lb_overlay_img()
+        assert re.search(r":class=\"\{\s*'lb-full-shown'\s*:\s*_lbFullLoaded\s*\}\"", overlay), \
+            "overlay <img class=\"lb-full\"> 須 :class=\"{'lb-full-shown':_lbFullLoaded}\"（CSS opacity 淡入）"
+        assert "x-show" not in overlay, \
+            "overlay <img class=\"lb-full\"> 不得用 x-show（display:none 的 img 不載入、@load 永不 fire）"
+
+    def test_lb_full_css_opacity_transition_with_token(self):
+        """71-T6: showcase.css .lb-full 用 opacity:0 + fluent token transition（非裸 .3s）；.lb-full-shown opacity:1"""
+        css = self._css()
+        m = re.search(r'\.lb-full\s*\{([^}]*)\}', css)
+        assert m, "showcase.css 缺 .lb-full 規則"
+        body = m.group(1)
+        assert "position: absolute" in body and "opacity: 0" in body, \
+            ".lb-full 須 position:absolute + opacity:0（疊在 base 上、預設隱藏）"
+        assert "pointer-events: none" in body, \
+            ".lb-full 須 pointer-events:none（overlay 不擋 cover-actions/sparkle 點擊）"
+        assert re.search(r'transition:\s*opacity\s+var\(--fluent-duration-', body), \
+            ".lb-full transition 須用 fluent duration token（不寫裸 .3s magic number）"
+        assert re.search(r'var\(--fluent-ease-(decel|standard)\)', body), \
+            ".lb-full transition 須用 fluent ease token（decel/standard）"
+        shown = re.search(r'\.lb-full-shown\s*\{([^}]*)\}', css)
+        assert shown and "opacity: 1" in shown.group(1), \
+            "showcase.css 缺 .lb-full-shown { opacity: 1 }（淡入終態）"
+
+    def test_lb_full_reduced_motion_no_transition(self):
+        """71-T6: prefers-reduced-motion 內 .lb-full { transition: none }（瞬切，鏡像既有 PRM 範式）"""
+        css = self._css()
+        prm_blocks = re.findall(r'@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{(.*?)\n\}', css, re.S)
+        assert any(re.search(r'\.lb-full\s*\{[^}]*transition:\s*none', b) for b in prm_blocks), \
+            "showcase.css 缺 @media (prefers-reduced-motion: reduce) .lb-full { transition: none }（reduced-motion 瞬切）"
+
+    def test_lightbox_js_declares_and_resets_lbfullloaded(self):
+        """71-T6: state-lightbox.js 宣告 _lbFullLoaded stub（Alpine 3 ReferenceError 防護）+ _setLightboxIndex 內 reset"""
+        src = SHOWCASE_LIGHTBOX_JS.read_text(encoding="utf-8")
+        assert "_lbFullLoaded: false" in src, \
+            "state-lightbox.js 缺 _lbFullLoaded: false 宣告（Alpine 3 未宣告丟 ReferenceError，x||fallback 擋不住）"
+        m = re.search(r'_setLightboxIndex\(idx\)\s*\{(.*?)\n\s{8}\}', src, re.S)
+        assert m, "state-lightbox.js: 找不到 _setLightboxIndex(idx) 方法"
+        assert "this._lbFullLoaded = false" in m.group(1), \
+            "_setLightboxIndex 內缺 this._lbFullLoaded = false（開燈箱/prev-next/重開每次重走 blur-up）"
+
 
 class TestPartsBinStagedAffordanceGuard:
     """Parts Bin 可達/不可達膠囊視覺語義對調守衛（TASK-partsbin-staged-affordance）。

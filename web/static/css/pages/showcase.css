@@ -633,6 +633,34 @@
     border-radius: var(--radius-sm);
 }
 
+/* 71-T6 blur-up overlay：原圖（cover_full_url）疊在 base（cover_url 小圖）之上。
+   sizing 鏡像 .lightbox-cover img 使兩層精準對齊；預設 opacity:0、@load 後翻 .lb-full-shown 淡入。
+   pointer-events:none → overlay 永不攔截 cover-actions / sparkle 的點擊。
+   transition 用 fluent token（不寫裸 .3s）；duration-slow=300ms（= plan .3s）、ease-decel 為進場/淡入角色。 */
+.lb-full {
+    position: absolute;
+    inset: 0;
+    margin: auto;
+    max-width: 100%;
+    max-height: 60vh;
+    object-fit: contain;
+    border-radius: var(--radius-sm);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--fluent-duration-slow) var(--fluent-ease-decel);
+}
+
+.lb-full-shown {
+    opacity: 1;
+}
+
+/* 71-T6 blur-up：reduced-motion 下原圖瞬切（無漸變），仍正確蓋上（鏡像既有 PRM 範式）。 */
+@media (prefers-reduced-motion: reduce) {
+    .lb-full {
+        transition: none;
+    }
+}
+
 /* Metadata Panel — 緊湊版（匹配原版 gallery） */
 .lightbox-metadata {
     padding: 0.5rem 0 0 0;

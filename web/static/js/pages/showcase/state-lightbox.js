@@ -44,6 +44,8 @@ export function stateLightbox() {
 
         currentLightboxVideo: null,
 
+        _lbFullLoaded: false,           // 71-T6 blur-up：原圖（cover_full_url）@load 後翻 true → overlay opacity 淡入
+
         _videoChipsExpanded: false,     // 影片 tag chips +N 展開（T4 使用）
 
         // 49b T4cd: Actress Photo Picker 狀態
@@ -74,6 +76,7 @@ export function stateLightbox() {
             this.currentLightboxActress = null;   // video setter always clear actress
             this.addingLbTag = false;             // 切換影片時重置輸入框
             this._videoChipsExpanded = false;     // 影片切換時 reset chips 展開
+            this._lbFullLoaded = false;           // 71-T6 blur-up：開燈箱/prev-next/重開每次重走（不殘留前一張 true）
         },
 
         // --- Lightbox (M3a) ---
