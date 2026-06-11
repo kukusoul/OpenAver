@@ -589,3 +589,53 @@ class TestPrewarmClearRace:
         assert gen_spy.call_args.args[0] == uri_to_fs_path(cover_a)
         # after 偵測 cover 變 B → 丟棄
         invalidate_spy.assert_called_once_with(uri)
+
+
+# ============ POST /api/gallery/thumb/clear (71b-T2) ============
+
+class TestThumbClear:
+    """71b-T2：DB-safe 清空端點。清 output/thumb/、回 {"cleared": True}，
+    **絕不碰 videos DB**（row 數不變）。鏡像 prewarm 端點測試模式。"""
+
+    def test_clear_returns_cleared_true(self, client, thumb_dir):
+        resp = client.post("/api/gallery/thumb/clear")
+        assert resp.status_code == 200
+        assert resp.json() == {"cleared": True}
+
+    def test_clear_removes_thumb_dir_contents(self, client, thumb_dir):
+        """thumb_dir 內既有 webp → 清後目錄被移除（rmtree，缺目錄 no-op）。"""
+        uri = to_file_uri("/movies/v1.mp4")
+        _make_webp(thumbnail_cache.thumb_file_for(uri))
+        assert any(thumb_dir.iterdir()), "前置：thumb_dir 應有檔"
+
+        resp = client.post("/api/gallery/thumb/clear")
+
+        assert resp.status_code == 200
+        # rmtree(_thumb_dir())：整個目錄移除（CD-11 缺目錄 no-op）
+        assert not thumb_dir.exists() or not any(thumb_dir.iterdir()), \
+            "thumb_dir 應被清空"
+
+    def test_clear_does_not_touch_videos_db(self, client, thumb_dir, temp_db):
+        """硬約束：videos DB row 數清前清後不變（端點絕不碰 DB）。"""
+        from core.database import Video
+        _, repo = temp_db
+        repo.upsert_batch([
+            Video(path=to_file_uri("/movies/a.mp4"), mtime=1.0),
+            Video(path=to_file_uri("/movies/b.mp4"), mtime=2.0),
+            Video(path=to_file_uri("/movies/c.mp4"), mtime=3.0),
+        ])
+        before = repo.count()
+        assert before == 3, "前置：DB 應有 3 筆"
+
+        resp = client.post("/api/gallery/thumb/clear")
+
+        assert resp.status_code == 200
+        assert repo.count() == before, \
+            f"videos DB row 數不得變（清前 {before}，清後 {repo.count()}）"
+
+    def test_clear_idempotent_when_dir_missing(self, client, thumb_dir):
+        """冪等：目錄不存在時再 clear 仍 200 + cleared（rmtree ignore_errors）。"""
+        client.post("/api/gallery/thumb/clear")
+        resp = client.post("/api/gallery/thumb/clear")
+        assert resp.status_code == 200
+        assert resp.json() == {"cleared": True}

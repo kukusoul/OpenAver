@@ -9569,6 +9569,82 @@ class TestSettingsQuickToggleGuard:
         assert '_thumbEstimateMin' in block, \
             "71-T11 違規：confirm modal body 必須用 _thumbEstimateMin（HDD 時間估算）"
 
+    # ===== 71b-T2: disable confirm modal contract =====
+    STATE_CONFIG_JS = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "settings" / "state-config.js"
+    STATE_UI_JS = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "settings" / "state-ui.js"
+    LOCALES_ROOT = Path(__file__).parent.parent.parent / "locales"
+
+    def test_thumb_cache_disable_modal_contract(self):
+        """71b-T2：disable fluent-modal 綁 thumbCacheDisableConfirmOpen + i18n title + confirm/cancel handler（element-bound）。"""
+        html = self._html()
+        # 抽 thumbCacheDisableConfirmOpen 綁定的 <dialog> ... </dialog>
+        m = re.search(
+            r'<dialog\b[^>]*thumbCacheDisableConfirmOpen[^>]*>(.*?)</dialog>',
+            html, re.DOTALL,
+        )
+        assert m, "71b-T2 違規：缺少綁 thumbCacheDisableConfirmOpen 的 disable <dialog>"
+        dialog_open_tag = m.group(0)[:m.group(0).find('>') + 1]
+        block = m.group(1)
+        assert 'fluent-modal' in dialog_open_tag, \
+            f"71b-T2 違規：disable modal 缺 fluent-modal class: {dialog_open_tag!r}"
+        assert 'settings.thumbnail_cache.disable_modal.title' in block, \
+            "71b-T2 違規：disable modal 缺 i18n disable_modal.title"
+        assert 'confirmThumbCacheDisable()' in block, \
+            "71b-T2 違規：disable modal 缺 confirmThumbCacheDisable() 確認 handler"
+        assert 'cancelThumbCacheDisable()' in block, \
+            "71b-T2 違規：disable modal 缺 cancelThumbCacheDisable() 取消 handler"
+
+    def test_thumb_cache_disable_modal_body_releases_mb(self):
+        """71b-T2：disable modal body 引用 disable_modal.body 並動態替換 {mb} 釋放估算。"""
+        html = self._html()
+        m = re.search(
+            r'<dialog\b[^>]*thumbCacheDisableConfirmOpen[^>]*>(.*?)</dialog>',
+            html, re.DOTALL,
+        )
+        assert m, "71b-T2 違規：缺少 disable <dialog>"
+        block = m.group(1)
+        assert 'settings.thumbnail_cache.disable_modal.body' in block, \
+            "71b-T2 違規：disable modal body 必須引用 disable_modal.body"
+        assert "'{mb}'" in block, \
+            "71b-T2 違規：disable modal body 必須 .replace('{mb}', ...) 顯示釋放估算"
+
+    def test_thumb_cache_disable_state_stub_declared(self):
+        """71b-T2：state-ui.js 必須先宣告 thumbCacheDisableConfirmOpen stub（Alpine 3 ReferenceError 防護）。"""
+        js = self.STATE_UI_JS.read_text(encoding="utf-8")
+        assert 'thumbCacheDisableConfirmOpen' in js, \
+            "71b-T2 違規：state-ui.js 缺 thumbCacheDisableConfirmOpen state stub"
+
+    def test_thumb_cache_disable_handlers_in_state_config(self):
+        """71b-T2：state-config.js 含 disable 流程三件（trigger clear + cancel + confirm handler）。"""
+        js = self.STATE_CONFIG_JS.read_text(encoding="utf-8")
+        assert '_triggerThumbClear' in js, \
+            "71b-T2 違規：state-config.js 缺 _triggerThumbClear()（fire-and-forget POST clear）"
+        assert '/api/gallery/thumb/clear' in js, \
+            "71b-T2 違規：_triggerThumbClear 必須 POST /api/gallery/thumb/clear"
+        assert 'cancelThumbCacheDisable' in js, \
+            "71b-T2 違規：state-config.js 缺 cancelThumbCacheDisable()"
+        assert 'confirmThumbCacheDisable' in js, \
+            "71b-T2 違規：state-config.js 缺 confirmThumbCacheDisable()"
+
+    def test_thumb_cache_disable_clear_gated_on_save_success(self):
+        """71b-T2：clear trigger 必綁在 saveConfig 成功分支（prevThumbEnabled true→false 才清，先存才清）。"""
+        js = self.STATE_CONFIG_JS.read_text(encoding="utf-8")
+        # prevThumbEnabled 與 false 的轉換條件 + _triggerThumbClear 同時出現
+        assert re.search(
+            r'prevThumbEnabled\b.*thumbnailCacheEnabled\s*===\s*false',
+            js, re.DOTALL,
+        ), "71b-T2 違規：缺 prevThumbEnabled && thumbnailCacheEnabled===false 的 clear 觸發條件"
+
+    def test_thumb_cache_disable_modal_title_key_in_zh_tw(self):
+        """71b-T2：zh_TW.json 含 thumbnail_cache.disable_modal 四鍵（其餘 3 語系留 milestone）。"""
+        data = json.loads((self.LOCALES_ROOT / "zh_TW.json").read_text(encoding="utf-8"))
+        dm = data.get("settings", {}).get("thumbnail_cache", {}).get("disable_modal", {})
+        for key in ("title", "body", "cancel", "confirm"):
+            assert dm.get(key), \
+                f"71b-T2 違規：zh_TW.json settings.thumbnail_cache.disable_modal.{key} 缺或空"
+        assert "{mb}" in dm["body"], \
+            "71b-T2 違規：disable_modal.body 必須含 {mb} 釋放估算占位"
+
 
 class TestSettingsDmmProxyContract:
     """64b-3: DMM 灰化 + proxy binding contract 驗證（CD-64-B4）"""

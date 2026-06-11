@@ -552,6 +552,19 @@ export function stateConfig() {
             }
         },
 
+        // 71b-T2: DB-safe 清空縮圖快取（由 saveConfig 在「剛關閉並已存檔」時呼叫，
+        // 先存才清——此刻 config.json 已 false）。鏡像 _triggerThumbPrewarm。
+        _triggerThumbClear() {
+            try {
+                // fire-and-forget：不 await；.catch 收 async rejection
+                // （try/catch 只接同步 throw）。端點純 rmtree output/thumb/，不碰 DB。
+                fetch('/api/gallery/thumb/clear', { method: 'POST' })
+                    .catch((e) => console.error('[71b-T2] 縮圖 clear POST 失敗:', e));
+            } catch (e) {
+                console.error('[71b-T2] 觸發縮圖 clear 失敗:', e);
+            }
+        },
+
         async saveConfig() {
             try {
                 // 先載入現有設定
@@ -680,6 +693,12 @@ export function stateConfig() {
                     if (!prevThumbEnabled && this.form.thumbnailCacheEnabled === true) {
                         this._triggerThumbPrewarm();
                     }
+                    // 71b-T2: 縮圖快取「剛被關閉」(persisted true → 現在 false) 才清空 output/thumb/。
+                    // 必在 PUT 成功之後——先存才清（config.json 已寫 false）。confirmThumbCacheDisable
+                    // 自身不 POST clear，統一收斂於此（與 prewarm 對稱）。
+                    if (prevThumbEnabled && this.form.thumbnailCacheEnabled === false) {
+                        this._triggerThumbClear();
+                    }
                 } else {
                     this.showToast('儲存失敗: ' + result.error, 'error');
                 }
@@ -736,8 +755,18 @@ export function stateConfig() {
         // 故進來時 this.form.thumbnailCacheEnabled 已是使用者撥到的新值。
         // 只在「真正首次開啟」（persisted 仍 false）攔截開 modal（Codex P2 #1）。
         onThumbCacheToggleChange() {
-            // ON→OFF：不開 modal，照常 toggle（由表單儲存 persist false）。
-            if (this.form.thumbnailCacheEnabled !== true) return;
+            // x-model 已先翻值 → 進來時 form.thumbnailCacheEnabled 已是使用者撥到的新值。
+            if (this.form.thumbnailCacheEnabled !== true) {
+                // ON→OFF：若「已持久化為啟用」（savedState true，與 enable 豁免同一變數）
+                // → 還原 toggle 回 true（true 留到 confirm 才真正設 false）+ 開 disable modal。
+                if (this.savedState?.thumbnailCacheEnabled === true) {
+                    this.form.thumbnailCacheEnabled = true;
+                    this.thumbCacheDisableConfirmOpen = true;
+                }
+                // 未持久化的 true 撥回 false（savedState 非 true）：照常、不開 modal
+                // （對稱 enable path 的「未存後撥回」豁免）。
+                return;
+            }
             // persisted 已 true（未存的 OFF 後撥回 ON）：不開 modal，讓 toggle 照常變 true。
             if (this.savedState?.thumbnailCacheEnabled === true) return;
             // 真正首次開啟（persisted false）：還原 toggle + 開 confirm modal。
@@ -750,6 +779,20 @@ export function stateConfig() {
         // false，無需再動；不存檔、不 prewarm。
         cancelThumbCacheConfirm() {
             this.thumbCacheConfirmOpen = false;
+        },
+
+        // 71b-T2: 關閉確認取消 → 關 modal、toggle 維持 true（保持啟用）；不存檔、不清快取。
+        cancelThumbCacheDisable() {
+            this.thumbCacheDisableConfirmOpen = false;
+        },
+
+        // 71b-T2: 關閉確認 → 關 modal → set false → saveConfig()
+        //（命中 saveConfig 內 prevThumbEnabled && now false 鏈 → 背景 _triggerThumbClear()；
+        // 自身不 POST clear，先存才清）。
+        async confirmThumbCacheDisable() {
+            this.thumbCacheDisableConfirmOpen = false;
+            this.form.thumbnailCacheEnabled = false;
+            await this.saveConfig();
         },
 
         // 確認：先關 modal（移除確認鈕即防雙擊，無需 :disabled / loading flag）→

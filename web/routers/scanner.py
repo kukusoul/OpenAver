@@ -980,6 +980,18 @@ def thumb_prewarm():
     return {"status": "started"}
 
 
+@router.post("/thumb/clear")
+def thumb_clear():
+    """DB-safe 清空封面縮圖快取（feature/71b T2）。
+
+    僅 rmtree output/thumb/（CD-71b-3）——**絕不碰 videos DB**。前端在
+    「關閉縮圖快取 toggle 且存檔成功」後才 fire-and-forget POST 此端點（先存才清）。
+    冪等：clear_all() 對缺目錄 no-op。sync def → Starlette threadpool。
+    """
+    thumbnail_cache.clear_all()
+    return {"cleared": True}
+
+
 @router.get("/video")
 def get_video(request: Request, path: str = Query(..., description="影片路徑（file:/// URI 或 FS 路徑）")):
     """代理影片請求，解決瀏覽器無法開啟 file:/// URI 的問題"""

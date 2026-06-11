@@ -1101,6 +1101,29 @@
         </div>
     </dialog>
 
+    <!-- 71b-T2: 關閉封面縮圖快取 Confirm Modal（warning 語氣 + 釋放估算 body）-->
+    <dialog class="modal fluent-modal"
+            :class="{ 'modal-open': thumbCacheDisableConfirmOpen }"
+            @click.self="cancelThumbCacheDisable()"
+            @keydown.escape.window="thumbCacheDisableConfirmOpen && cancelThumbCacheDisable()">
+        <div class="modal-box fluent-modal-box">
+            <h3 class="fluent-modal-title">
+                <i class="bi bi-exclamation-triangle text-warning"></i>
+                {{ t('settings.thumbnail_cache.disable_modal.title') }}
+            </h3>
+            <p class="fluent-modal-body"
+               x-text="window.t('settings.thumbnail_cache.disable_modal.body').replace('{mb}', _thumbEstimateMb)"></p>
+            <div class="modal-action fluent-modal-actions">
+                <button type="button" class="btn btn-ghost" @click="cancelThumbCacheDisable()">
+                    {{ t('settings.thumbnail_cache.disable_modal.cancel') }}
+                </button>
+                <button type="button" class="btn btn-error" @click="confirmThumbCacheDisable()">
+                    {{ t('settings.thumbnail_cache.disable_modal.confirm') }}
+                </button>
+            </div>
+        </div>
+    </dialog>
+
 <!-- Toast 容器（Alpine controlled）-->
 <div class="toast toast-end toast-top z-[9999]" x-show="_toast.visible" x-cloak x-transition>
     <div class="alert" :class="`alert-${_toast.type}`">
