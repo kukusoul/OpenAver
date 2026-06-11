@@ -34,6 +34,8 @@ export function rescrapeState() {
         rescrapeLoadingSource: null,       // string | null（明確，:disabled 純 boolean）
         rescrapePreview: null,             // transient（CD-62-2）
         rescrapeNotFound: false,
+        rescrapeCfWaiting: false,          // 70-T6: CF 等待態（polling 中）
+        _cfPollHandle: null,               // 70-T6: setInterval handle；null = 未 polling
 
         // ── private ──
         _rescraping: false,                // commit 連點 guard（鏡像 _enriching）
@@ -134,6 +136,15 @@ export function rescrapeState() {
         },
 
         /**
+         * 70-T5: JavLibrary 不可用 gate（desktop-only / standalone 限定）。
+         * manual_only && is_beta = javlibrary（目前唯一）；cf_transport_available = standalone 已 register。
+         * dev / server 環境：cf_transport_available=false → 此 helper 回 true → pill 灰化不可點。
+         */
+        isJlUnavailable(s) {
+            return !!(s && s.manual_only && s.is_beta && !(window.__ADVANCED_SEARCH__ && window.__ADVANCED_SEARCH__.cf_transport_available));
+        },
+
+        /**
          * 解析 preview 卡的來源顯示名（落差#1：端點回 source id，partial 綁 sourceName）。
          */
         _resolveSourceName(sourceId) {
@@ -148,6 +159,7 @@ export function rescrapeState() {
          */
         async rescrapeWithSource(sourceId) {
             if (this.rescrapeLoadingSource !== null) return;          // 連點防護
+            if (this.rescrapeCfWaiting) return;                       // 等待態不可重入（防 re-entry + UX）
             if (!this.rescrapeNumber.trim()) { this.rescrapeNotFound = true; return; }
             // Search 入口（62c-1）：無預覽卡，繞過 /api/rescrape/preview，直接走 B1 advancedSearch
             // 整包贏（GET /api/search?...&source=），結果進正常結果區，彈窗關閉（spec US5）。
@@ -170,6 +182,20 @@ export function rescrapeState() {
                     }),
                 });
                 const data = await resp.json();
+                // 70-T6（P2 fix）: cf_needed / cf_unavailable 統一在所有入口分支之前處理——
+                // 原本只在 showcase 分支處理，導致 switch-source 入口收到 {cf_needed:true} 時
+                // 因 data.success falsy 而落入 rescrapeNotFound=true，CF flow 從未觸發。
+                // 上移後：search 已在函式頂端 early-return，不受影響；switch-source / showcase
+                // 兩條路徑皆能正確進入 CF flow。finally 確保 rescrapeLoadingSource=null，retry 可進行。
+                if (data && data.cf_needed) {
+                    this.rescrapeCfWaiting = true;
+                    this._pollCfThenRetry(this.rescrapeNumber.trim());
+                    return;
+                }
+                if (data && data.cf_unavailable) {
+                    this.showToast(window.t('showcase.rescrape.jl_desktop_only'), 'warning');
+                    return;
+                }
                 // 62c-3 US7：switch-source 入口（在 showcase 分支之前判斷）。找到 → 只替換捕捉的當前卡 slot
                 // （不重設結果列、currentIndex 不歸零、無 ✓/✗ commit）+ seed cycle state；找不到 → 沿用 not-found。
                 // 2026-05-31：番號改為可編輯（拍板放開唯讀），故 stale 比對仍用捕捉的原 t.number
@@ -204,6 +230,7 @@ export function rescrapeState() {
                 }
                 // Showcase（lightbox / enrich）：找到 → 換頁 preview；找不到 → 留 pick
                 // （Search 入口已在函式開頭提早分流到 advancedSearch，不走到這裡）
+                // （cf_needed / cf_unavailable 已在上方統一提前處理，此處不再重複）
                 if (data && data.success) {
                     this.rescrapePreview = { ...data, sourceName: this._resolveSourceName(sourceId) };
                     this._rescrapeCommitSource = sourceId;
@@ -265,9 +292,65 @@ export function rescrapeState() {
         },
 
         /**
+         * 70-T6: poll /api/cf/status 直到就緒，再 auto-retry 同番號。
+         * MAX_POLLS=150（150 × 2s = 300s = 5 分鐘）。
+         */
+        _pollCfThenRetry(number) {
+            if (this._cfPollHandle !== null) {   // 防覆寫洩漏：清掉任何既有 poll
+                clearInterval(this._cfPollHandle);
+                this._cfPollHandle = null;
+            }
+            const MAX_POLLS = 150;          // 150 × 2s = 300s = 5 分鐘
+            let pollCount = 0;
+            this._cfPollHandle = setInterval(async () => {
+                pollCount++;
+                if (pollCount >= MAX_POLLS) {
+                    this.cancelCfPoll();    // 逾時走 cancel 流程
+                    return;
+                }
+                try {
+                    const resp = await fetch('/api/cf/status?key=javlibrary');
+                    const data = await resp.json();
+                    if (data && data.unavailable) {   // CD-70c-3: transport dead/unavailable → stop polling now
+                        this.cancelCfPoll();           // clearInterval + POST /api/cf/abandon (emits 通知)
+                        return;
+                    }
+                    if (data && data.ready) {
+                        clearInterval(this._cfPollHandle);
+                        this._cfPollHandle = null;
+                        this.rescrapeCfWaiting = false;
+                        // retry 同番號
+                        await this.rescrapeWithSource('javlibrary');
+                    }
+                } catch (_) { /* network 暫時失敗，繼續 poll */ }
+            }, 2000);
+        },
+
+        /**
+         * 70-T6: 取消 CF poll（clearInterval + POST /api/cf/abandon）。
+         * 用於：逾時、用戶點 Cancel 鈕、番號 input 改動。
+         * 注意：closeRescrape 只做 clearInterval，不 POST abandon（關窗 ≠ 顯式取消）。
+         */
+        cancelCfPoll() {
+            if (this._cfPollHandle !== null) {
+                clearInterval(this._cfPollHandle);
+                this._cfPollHandle = null;
+            }
+            this.rescrapeCfWaiting = false;
+            // POST /api/cf/abandon（非阻塞 fire-and-forget；通知中心由後端寫）
+            fetch('/api/cf/abandon?key=javlibrary', { method: 'POST' }).catch(() => {});
+        },
+
+        /**
          * 關閉彈窗（reset transient；_rescrapeVideo/_rescrapeCommitSource 下次 open 覆寫）。
          */
         closeRescrape() {
+            // 70-T6: 清 CF poll handle（關窗不 POST abandon，語意不同）
+            if (this._cfPollHandle !== null) {
+                clearInterval(this._cfPollHandle);
+                this._cfPollHandle = null;
+                this.rescrapeCfWaiting = false;
+            }
             this.rescrapeOpen = false;
             this.rescrapeStep = 'pick';
             this.rescrapePreview = null;

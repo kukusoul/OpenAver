@@ -7,6 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.9] - 2026-06-11
+
+本版單一主軸：**新增 JavLibrary 來源（BETA，桌面專屬）**（feature/70）。JavLibrary 是社群索引站，metatube 聯邦 30+ 來源都沒收錄——它擁有別處拿不到的最豐富社群標籤、用戶評分、以及冷門/長尾番號。但全站受 Cloudflare 人機驗證保護、純自動抓一律失敗。OpenAver 的解法：借桌面版 PyWebView 彈出真實瀏覽器視窗，讓你手動點一次驗證，之後在「已過驗證的分頁」裡抓取。因此 JavLibrary **只在桌面 standalone 可用**、**只能在進階搜尋／重刮來源選單以精確番號查詢**、並標示 BETA。
+
+*This release's main theme: **new JavLibrary source (BETA, desktop-only)** (feature/70). JavLibrary is a community index site not covered by the metatube federation's 30+ sources — it has the richest community tags, user ratings, and obscure/long-tail IDs unavailable elsewhere. However, the entire site is protected by Cloudflare bot challenges, making fully automated scraping impossible. OpenAver's solution: pop a real browser window via PyWebView, let you click through the challenge once, then fetch from the now-verified tab. Consequently JavLibrary is **desktop standalone only**, **exact-ID search only** (via advanced search / re-scrape source picker), and **marked BETA**.*
+
+### Added
+#### 🆕 JavLibrary 來源（BETA）/ JavLibrary source (BETA)
+- **進階搜尋／重刮來源選單新增 JavLibrary（BETA 徽章）**：最豐富社群標籤、用戶評分、冷門番號；metatube 聯邦沒收錄的長尾片在這裡找得到。
+- **Cloudflare 驗證流程**：有效期間內透明直接出結果；首次或過期自動彈出 JavLibrary 視窗，你點一下人機驗證（＋ 18 歲同意），系統自動重試並回填結果；驗證未完成或逾時會明確通知——不假裝成功、不靜默換來源。
+- **僅桌面 standalone 可用**：dev / 伺服器模式下 JavLibrary 選項灰色不可點，附帶說明；不會出現在 AI 能力清單（`is_beta + manual_only` 雙重排除）。
+- **永不進自動搜尋池**：不佔來源順序上限、不參與路由選擇、不影響其他來源行為。
+
+### Internal
+- 平台無關 CF transport DI 接縫（`core/cf_transport.py` Protocol）＋ PyWebView 實作（`windows/cf_transport_impl.py`）＋ 來源註冊（`utils/source_config`、scraper、config migration）＋ picker BETA 視覺 / 非桌面 gate ＋ `/api/cf/status`、`/api/cf/abandon` 端點 ＋ 前端 poll 協調（後端無狀態，try-fetch-first）。
+- **`_wv_fetch` auto-retry（12s×3）**：同一 session 其他番號 1 秒就回、特定番號卡滿 40 秒才 timeout（隱藏視窗 mid-fetch 導航、JS callback 永不觸發）；縮短單次 timeout 至 12 秒、最多 3 次重試、每次使用獨立 queue + callback（舊 attempt 的遲發 callback 落進已廢棄的 queue，不汙染下一次）；修復 START-492 等間歇性「無結果」。
+- 三輪 AI review（Codex ＋ Opus）修正：age-gate 偵測收窄為 `agreeBtn`（避免正常頁 footer 誤判）、search 入口防 500（結構化回應 ＋ 隱藏 JL pill）、`begin_solve` 例外防護、單一命中 `detail_url` 留空、番號核對守衛防回錯片。
+- **70c hardening pass**（TASK-70c-B，第二輪 Opus review）：
+  - **殭屍行程修正（B1，P1）**：`_on_main_closing` 設 `quitting=True` 後加 `jl_win.destroy()`——pywebview 只在 `instances==0` 才 `_shutdown()`，隱藏的 JL 視窗若未銷毀，關閉主視窗後 process 持續佔 port；此修正啟用了原本的 quitting-guard（舊 dead code）。
+  - **關窗攔截（T70c-A，close-intercept）**：`_on_jl_closing` 回 `False` 取消關閉 → 用戶按 ✕ 只隱藏，transport 物件存活、免重啟（Layer 1 root-fix）；`_on_main_closing` quitting=True guard 讓 app 退出時正常放行。
+  - **spinner CSS（B2，P2-1）**：`rescrape-cf-waiting` 底下 `.pill-spin` 缺 ancestor-scoped 規則 → 渲染空白；補 `.rescrape-cf-waiting .pill-spin` + 容器 flex layout（token-based，複用 `source-pill-spin` keyframes）。
+  - **通知 i18n（B3，P3-2）**：`/api/cf/abandon` 的 `emit_notification` `message=` 硬編碼中文 → EN/JA 看到中文；`title_key = notif.jl_cf_timeout` 四語系均已有翻譯，直接移除 `message=`，toast 僅顯示 title（i18n-compliant，零架構改動）。
+  - **守衛強化（P3-1）**：`cf_needed` 位置守衛由 `js.index("cf_needed")`（命中第 185 行註解）改錨 `data.cf_needed`（實際消費表達式）；`TestRescrapeModalSearchHideJlPillGuard` 改錨完整 `x-show` 表達式（L49），防止留空殼字串騙過守衛。
+  - **B1 AST 守衛**：`test_standalone_init_order_guard.py` 新增 `test_on_main_closing_destroys_jl_win` 鎖定 `jl_win.destroy()` 呼叫（AST，防靜默回退）。
+
+### Fixed
+#### 🔧 JavLibrary CF flow 修通（70d）/ CF re-verify flow fixed
+- **40 分鐘後重新驗證從「永久壞、要重開程式」變「打一次勾自動完成」**：clearance 過期後，舊流程把隱藏視窗導到首頁（那裡沒有 CF 可解），又因 `evaluate_js` 在 CF 頁卡 20 秒拖垮整個 JS 橋接 → JavLibrary 從此壞掉、必須重啟。現在彈窗直接帶你到「剛被擋下的搜尋頁」，你點一次人機驗證（或它自己過），視窗約 9 秒自動關閉、結果自動回填——全程不必碰 18 歲同意鈕、不必點頁面任何內容。
+  *The 40-minute re-verification went from "permanently broken, restart required" to "one click, auto-completes": after clearance expired, the old flow navigated the hidden window to the homepage (no CF to solve there) and `evaluate_js` blocked ~20s on the CF page, stranding the JS bridge — JavLibrary stayed broken until restart. Now the popup takes you straight to the just-blocked search page; you click the challenge once (or it passes on its own), the window auto-closes in ~9s and results auto-fill — no 18+ consent button, no page clicks.*
+- 18+ 同意閘改用 `over18=18` cookie（站台真值；舊 `over18=1` 不被接受、遮罩不消）；此為視覺正確性，不影響資料抓取（mask 是 client-side overlay，從不擋 fetch/parse）。
+  *The 18+ gate now uses the `over18=18` cookie (the site's real value; the old `over18=1` was rejected and the mask stayed); cosmetic only — the mask is a client-side overlay that never blocks fetch/parse.*
+
+### Non-Goals（明確不做）
+- 不支援 server / NAS / Docker（CF 需真人 ＋ 真瀏覽器 ＋ 桌面 GUI）、不做自動繞過 CF、不做模糊／演員搜尋、Transport A（cookie→curl_cffi）結構性死路不實作。
+
+- **`fetch()` 主動設 `over18` cookie（Codex P2）**：`fetch()` 在呼叫 `_wv_fetch` 前先主動設 `over18=18` cookie，冷啟動 CF 自動過關後首次 fetch 不會收到 18+ 同意閘 → 不再靜默「無結果」。備用路徑：若 cookie 仍未抑制閘門（race/agreeBtn），改拋 `CfChallengeRequired` 路入 solve/poll 流程，而非回傳空殼 HTML。*`fetch()` now sets the `over18` cookie proactively so the 18+ age gate never returns as empty "no results" (Codex P2); persistent-gate fallback routes into the solve flow.*
+
+### 測試
+- 全套 pytest **3743 passed, 2 skipped**（unit ＋ integration，排除 smoke / e2e）＋ `npm run lint`（eslint ＋ stylelint）綠。
+- 新增測試：`test_cf_transport` / `test_javlibrary_parser` / `test_javlibrary_scraper` / `test_javlibrary_contracts` / `test_cf_transport_impl` / `test_javlibrary_cf_flow` / `test_api_cf_endpoints` ＋ 前端守衛（`TestJavlibraryPickerT5Guard` / `T6Guard` / `SearchHideJlPillGuard`）＋ 70c-B 強化守衛（`test_on_main_closing_destroys_jl_win` ＋ 強化 cf_needed / x-show 守衛）＋ `_wv_fetch` retry 守衛（`test_retry_then_succeed` / `test_all_attempts_exhausted_raises_timeout` / `test_stale_callback_isolation`）＋ over18 cookie / age-gate fallback 守衛（`test_age_gate_html_raises_cf_challenge_required` / `test_fetch_sets_over18_cookie_before_fetch`）。
+
 ## [0.9.8] - 2026-06-06
 
 本版單一主軸：**dim（暗色）主題色彩編碼修復**（feature/69），純前端 CSS、零後端、零依賴、零 i18n、零 ZIP 影響。問題：切到 dim 主題時大量「靠顏色區分狀態」的 UI 變得無法分辨——有碼 vs 無碼來源膠囊長一樣、metatube 連沒連看不出、segmented 選中態消失、警告 banner 跟一般容器混同。根因兩 factor 疊加：(A) 狀態用 `color-mix(語義色 ≤15%, transparent/surface)` 當背景 tint，dim surface 近黑（oklch 26–31%）把低% 色調吃光；(B) dim 沒 override `--color-primary` → 有碼膠囊掉回 DaisyUI 萊姆綠（139°），與無碼 success 綠（166°）只差 27° → 都綠。修復後每個色彩編碼狀態在 dim 下都能一眼辨識，且 light 主題完全不回歸。

@@ -9831,3 +9831,336 @@ class TestPartsBinStagedAffordanceGuard:
         assert 'data-available="false"' in ds, (
             "TASK-partsbin 違規 C6：design-system D.13 缺 is-partsbin data-available=\"false\" demo（不可達態）。"
         )
+
+
+# ── TASK-70-T5: JavLibrary Picker BETA 視覺 + 不可用 gate 靜態守衛 ──
+
+_BOOTSTRAP_HTML = Path(__file__).parent.parent.parent / "web" / "templates" / "_advanced_search_bootstrap.html"
+_STATE_RESCRAPE_JS = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "shared" / "state-rescrape.js"
+_APP_PY = Path(__file__).parent.parent.parent / "web" / "app.py"
+_MODAL_HTML_70 = Path(__file__).parent.parent.parent / "web" / "templates" / "_rescrape_modal.html"
+_LOCALES_ROOT_70 = Path(__file__).parent.parent.parent / "locales"
+
+
+class TestJavlibraryPickerT5Guard:
+    """70-T5: javlibrary picker BETA 視覺 + 不可用 gate 靜態守衛。
+
+    守衛靜態字串契約（HTML/JS/Python）：
+      (1) bootstrap template 含 cf_transport_available 注入
+      (2) app.py get_common_context 注入 cf_transport_available
+      (3) state-rescrape.js 定義 isJlUnavailable
+      (4) _rescrape_modal.html builtin pill 含 source-pill-badge（BETA）綁於 manual_only && is_beta
+      (5) _rescrape_modal.html builtin pill 含 isJlUnavailable gate（aria-disabled + jl_desktop_only toast）
+      (6) 4 locale 檔含 jl_desktop_only key
+    """
+
+    def test_bootstrap_cf_transport_available(self):
+        """(1) _advanced_search_bootstrap.html 含 cf_transport_available 注入。"""
+        html = _BOOTSTRAP_HTML.read_text(encoding="utf-8")
+        assert "cf_transport_available" in html, (
+            "70-T5 違規：_advanced_search_bootstrap.html 未注入 cf_transport_available 到 __ADVANCED_SEARCH__"
+        )
+
+    def test_app_py_get_common_context_cf_transport(self):
+        """(2) web/app.py get_common_context() 注入 cf_transport_available。"""
+        src = _APP_PY.read_text(encoding="utf-8")
+        assert "cf_transport_available" in src, (
+            "70-T5 違規：web/app.py get_common_context() 未包含 cf_transport_available key"
+        )
+        assert "get_cf_transport" in src, (
+            "70-T5 違規：web/app.py 未 import 或呼叫 get_cf_transport（cf_transport_available 值的來源）"
+        )
+
+    def test_state_rescrape_has_isJlUnavailable(self):
+        """(3) state-rescrape.js 定義 isJlUnavailable helper。"""
+        js = _STATE_RESCRAPE_JS.read_text(encoding="utf-8")
+        assert "isJlUnavailable" in js, (
+            "70-T5 違規：state-rescrape.js 未定義 isJlUnavailable helper"
+        )
+
+    def test_modal_builtin_pill_has_beta_badge(self):
+        """(4) _rescrape_modal.html builtin pill 模板含 source-pill-badge（BETA badge）。"""
+        html = _MODAL_HTML_70.read_text(encoding="utf-8")
+        assert "source-pill-badge" in html, (
+            "70-T5 違規：_rescrape_modal.html builtin pill 模板缺 source-pill-badge（BETA badge）"
+        )
+        assert "manual_only" in html and "is_beta" in html, (
+            "70-T5 違規：source-pill-badge 未綁於 manual_only && is_beta 條件（不應對所有 pill 顯示）"
+        )
+
+    def test_modal_builtin_pill_jl_unavailable_gate(self):
+        """(5) _rescrape_modal.html builtin pill 含 isJlUnavailable gate（aria-disabled + jl_desktop_only）。"""
+        html = _MODAL_HTML_70.read_text(encoding="utf-8")
+        assert "isJlUnavailable" in html, (
+            "70-T5 違規：_rescrape_modal.html builtin pill 模板未使用 isJlUnavailable gate"
+        )
+        assert "aria-disabled" in html, (
+            "70-T5 違規：_rescrape_modal.html builtin pill 缺 aria-disabled 綁定（不可用語義）"
+        )
+        assert "jl_desktop_only" in html, (
+            "70-T5 違規：_rescrape_modal.html builtin pill 缺 jl_desktop_only i18n key（toast / title）"
+        )
+
+    def test_i18n_jl_desktop_only_parity(self):
+        """(6) 4 locale 檔（zh_TW/zh_CN/en/ja）皆含 jl_desktop_only key。"""
+        for lang in ("zh_TW", "zh_CN", "en", "ja"):
+            locale_path = _LOCALES_ROOT_70 / f"{lang}.json"
+            content = locale_path.read_text(encoding="utf-8")
+            assert "jl_desktop_only" in content, (
+                f"70-T5 違規：locales/{lang}.json 缺 showcase.rescrape.jl_desktop_only key（i18n parity）"
+            )
+
+
+# ── TASK-70-T6: CF flow 前端靜態守衛 ──
+
+class TestJavlibraryCfFlowT6Guard:
+    """70-T6: CF flow 前端靜態守衛。"""
+
+    # (1) state-rescrape.js factory 宣告 rescrapeCfWaiting
+    def test_state_rescrape_declares_rescrapeCfWaiting(self):
+        js = _STATE_RESCRAPE_JS.read_text(encoding="utf-8")
+        assert "rescrapeCfWaiting" in js, \
+            "70-T6 違規：state-rescrape.js factory 未宣告 rescrapeCfWaiting"
+
+    # (2) state-rescrape.js factory 宣告 _cfPollHandle
+    def test_state_rescrape_declares_cfPollHandle(self):
+        js = _STATE_RESCRAPE_JS.read_text(encoding="utf-8")
+        assert "_cfPollHandle" in js, \
+            "70-T6 違規：state-rescrape.js factory 未宣告 _cfPollHandle"
+
+    # (3) state-rescrape.js 定義 _pollCfThenRetry
+    def test_state_rescrape_has_pollCfThenRetry(self):
+        js = _STATE_RESCRAPE_JS.read_text(encoding="utf-8")
+        assert "_pollCfThenRetry" in js, \
+            "70-T6 違規：state-rescrape.js 未定義 _pollCfThenRetry"
+
+    # (4) state-rescrape.js 定義 cancelCfPoll
+    def test_state_rescrape_has_cancelCfPoll(self):
+        js = _STATE_RESCRAPE_JS.read_text(encoding="utf-8")
+        assert "cancelCfPoll" in js, \
+            "70-T6 違規：state-rescrape.js 未定義 cancelCfPoll"
+
+    # (5) rescrapeWithSource 含 cf_needed 且在 rescrapeNotFound = true 之前
+    def test_state_rescrape_cf_needed_before_notfound(self):
+        js = _STATE_RESCRAPE_JS.read_text(encoding="utf-8")
+        # Anchor on the consuming expression `data.cf_needed` (not bare `cf_needed`
+        # which could match a comment at an earlier position — B2-P3-1 hardening).
+        assert "data.cf_needed" in js, \
+            "70-T6 違規：state-rescrape.js 未含 data.cf_needed 消費表達式"
+        cf_pos = js.index("data.cf_needed")
+        # rescrapeNotFound = true 在 showcase 分支的 else 中（最後一次出現）
+        notfound_pos = js.rindex("rescrapeNotFound = true")
+        assert cf_pos < notfound_pos, \
+            "70-T6 違規：cf_needed check 必須在 rescrapeNotFound = true 之前"
+
+    # (6) closeRescrape 含 clearInterval（清 CF poll）
+    def test_close_rescrape_clears_interval(self):
+        js = _STATE_RESCRAPE_JS.read_text(encoding="utf-8")
+        # 找 closeRescrape 方法定義（定義行含 `closeRescrape() {`）
+        # 用 rindex 找最後一個出現的 closeRescrape()，往後 500 chars 覆蓋方法體
+        close_pos = js.rindex("closeRescrape()")
+        segment = js[close_pos:close_pos + 500]
+        assert "clearInterval" in segment, \
+            "70-T6 違規：closeRescrape 未呼叫 clearInterval 清 CF poll handle"
+
+    # (7) _rescrape_modal.html 含 rescrapeCfWaiting div + jl_cf_solving + cancelCfPoll
+    def test_modal_has_cf_waiting_block(self):
+        html = _MODAL_HTML_70.read_text(encoding="utf-8")
+        assert "rescrapeCfWaiting" in html, \
+            "70-T6 違規：_rescrape_modal.html 缺 rescrapeCfWaiting waiting 區塊"
+        assert "jl_cf_solving" in html, \
+            "70-T6 違規：_rescrape_modal.html 缺 jl_cf_solving i18n key"
+        assert "cancelCfPoll" in html, \
+            "70-T6 違規：_rescrape_modal.html Cancel 鈕缺 cancelCfPoll() 綁定"
+
+    # (8) 4 locale 有 jl_cf_solving + notif.jl_cf_timeout
+    def test_i18n_t6_keys_parity(self):
+        for lang in ("zh_TW", "zh_CN", "en", "ja"):
+            content = (_LOCALES_ROOT_70 / f"{lang}.json").read_text(encoding="utf-8")
+            assert "jl_cf_solving" in content, \
+                f"70-T6 違規：locales/{lang}.json 缺 jl_cf_solving"
+            assert "jl_cf_timeout" in content, \
+                f"70-T6 違規：locales/{lang}.json 缺 notif.jl_cf_timeout"
+
+    # (9) P2 fix: cf_needed / cf_unavailable 必須在 switch-source 分支之前（字串位置守衛）
+    # 防回歸：確保 cf_needed 處理不再被 switch-source 分支攔截而落入 rescrapeNotFound=true
+    def test_cf_needed_before_switch_source_branch(self):
+        """70-T6 P2：cf_needed / cf_unavailable 處理必須在 switch-source 分支之前。
+
+        Codex P2 指出：switch-source 收到 {cf_needed:true} 時，因 data.success falsy
+        落入 rescrapeNotFound=true，CF flow 不觸發。修法：上移 cf_needed/cf_unavailable
+        至所有入口分支（switch-source / showcase）之前統一處理。
+        此守衛確保上移後不回歸（字串位置比對）。
+
+        B2-P3-1 hardening: anchor on `data.cf_needed` (the consuming expression),
+        not bare `cf_needed` which could match a comment appearing earlier in the file.
+        """
+        js = _STATE_RESCRAPE_JS.read_text(encoding="utf-8")
+        assert "data.cf_needed" in js, \
+            "70-T6 P2 違規：state-rescrape.js 未含 data.cf_needed 消費表達式"
+        assert "rescrapeEntryPoint === 'switch-source'" in js, \
+            "70-T6 P2 違規：state-rescrape.js 未含 switch-source 分支"
+        cf_pos = js.index("data.cf_needed")
+        sw_pos = js.index("rescrapeEntryPoint === 'switch-source'")
+        assert cf_pos < sw_pos, (
+            f"70-T6 P2 違規：data.cf_needed 處理（pos={cf_pos}）必須在 switch-source 分支"
+            f"（pos={sw_pos}）之前，否則 switch-source 入口永遠看不到 CF flow"
+        )
+
+    def test_cf_unavailable_before_switch_source_branch(self):
+        """70-T6 P2：cf_unavailable 處理必須在 switch-source 分支之前（與 cf_needed 同理）。"""
+        js = _STATE_RESCRAPE_JS.read_text(encoding="utf-8")
+        assert "cf_unavailable" in js, \
+            "70-T6 P2 違規：state-rescrape.js 未含 cf_unavailable 處理"
+        assert "rescrapeEntryPoint === 'switch-source'" in js, \
+            "70-T6 P2 違規：state-rescrape.js 未含 switch-source 分支"
+        cf_unav_pos = js.index("cf_unavailable")
+        sw_pos = js.index("rescrapeEntryPoint === 'switch-source'")
+        assert cf_unav_pos < sw_pos, (
+            f"70-T6 P2 違規：cf_unavailable 處理（pos={cf_unav_pos}）必須在 switch-source 分支"
+            f"（pos={sw_pos}）之前"
+        )
+
+
+# ── FIX-2 frontend guard: search 入口隱藏 JL pill ──
+
+class TestRescrapeModalSearchHideJlPillGuard:
+    """
+    FIX-2：_rescrape_modal.html builtin pill 在 search 入口隱藏 manual_only && is_beta pill。
+
+    B2-P3-1 hardening: anchor on the full x-show expression from _rescrape_modal.html ~L49
+    instead of the three component strings individually. Each component string exists
+    elsewhere in the modal independently, so individual checks are comment-foolable.
+    Exact expression: x-show="!(s.manual_only && s.is_beta && rescrapeEntryPoint === 'search')"
+    """
+
+    # The full load-bearing x-show expression (from _rescrape_modal.html ~L49).
+    _XSHOW_EXPR = 'x-show="!(s.manual_only && s.is_beta && rescrapeEntryPoint === \'search\')"'
+
+    def _html(self):
+        return _MODAL_HTML_70.read_text(encoding="utf-8")
+
+    def test_modal_builtin_pill_has_search_hide_condition(self):
+        """_rescrape_modal.html builtin pill 含 search 入口 x-show 隱藏條件。
+
+        B2-P3-1: anchored on the full x-show expression so removing/changing the
+        condition fails the guard, even if the component strings remain as comments.
+        """
+        html = self._html()
+        assert self._XSHOW_EXPR in html, (
+            "FIX-2 違規：_rescrape_modal.html builtin pill 缺完整 x-show 隱藏表達式 "
+            f"{self._XSHOW_EXPR!r}（~L49）"
+        )
+
+    def test_modal_builtin_pill_hide_references_manual_only_and_is_beta(self):
+        """_rescrape_modal.html builtin pill x-show 同時含 manual_only 和 is_beta。
+
+        B2-P3-1: also anchored via the full expression (backward-compat assertion —
+        the full x-show expression implicitly covers both; kept for readable error messages).
+        """
+        html = self._html()
+        assert self._XSHOW_EXPR in html, (
+            "FIX-2 違規：_rescrape_modal.html builtin pill 完整 x-show 表達式（含 manual_only "
+            "及 is_beta）遺失"
+        )
+
+
+# ──────────────────────────────────────────────────────────────
+# CD-70c-3: frontend CF poll unavailable contract guard
+# ──────────────────────────────────────────────────────────────
+
+STATE_RESCRAPE_JS = (
+    Path(__file__).parent.parent.parent
+    / "web" / "static" / "js" / "shared" / "state-rescrape.js"
+)
+
+
+class TestCfPollUnavailableGuard:
+    """
+    CD-70c-3: C-class API contract guard.
+
+    The frontend _pollCfThenRetry() must consume the backend's
+    {unavailable: true} signal by:
+      1. Checking data.unavailable in the poll callback
+      2. Calling cancelCfPoll() to stop polling and emit the abandon notification
+
+    This is a cross-boundary contract: cf.py response shape × frontend consumption.
+    Per CLAUDE.md: "兩個檔案之間的 API contract → pytest (C/E 類)"
+    """
+
+    def _js(self) -> str:
+        return STATE_RESCRAPE_JS.read_text(encoding="utf-8")
+
+    def test_poll_checks_data_unavailable(self):
+        """
+        state-rescrape.js _pollCfThenRetry() must check data.unavailable.
+        This is the frontend consumer of {ready: false, unavailable: true}
+        from /api/cf/status when the transport window is dead.
+        """
+        js = self._js()
+        assert "data.unavailable" in js, (
+            "state-rescrape.js _pollCfThenRetry() missing data.unavailable check — "
+            "CD-70c-3: frontend must read the backend unavailable signal to stop polling"
+        )
+
+    def test_poll_calls_cancel_cf_poll_on_unavailable(self):
+        """
+        The data.unavailable branch itself must call cancelCfPoll() (not merely
+        have cancelCfPoll defined elsewhere in the file). Verify cancelCfPoll
+        appears within a tight window right after the data.unavailable check —
+        this pins the branch wiring, not just string presence.
+        cancelCfPoll() does clearInterval + POST /api/cf/abandon (emits notification).
+        """
+        js = self._js()
+        idx = js.find("data.unavailable")
+        assert idx != -1, (
+            "state-rescrape.js missing data.unavailable check — "
+            "CD-70c-3: frontend must read the backend unavailable signal"
+        )
+        branch = js[idx: idx + 200]  # the unavailable branch body, right after the check
+        assert "cancelCfPoll" in branch, (
+            "data.unavailable branch does not call cancelCfPoll() — "
+            "CD-70c-3: dead transport must immediately stop the poll loop "
+            "(clearInterval + abandon), not fall through to the timeout"
+        )
+
+    def test_unavailable_check_present_in_poll_interval(self):
+        """
+        Both data.unavailable and cancelCfPoll appear in the same file and are
+        co-located in the polling context (not just in separate unrelated methods).
+        Verify both appear within the _pollCfThenRetry function definition text span.
+        """
+        js = self._js()
+        # Find the function *definition* (not a call site) by searching for the
+        # pattern "methodName(" preceded by whitespace/newline (method definition form).
+        import re as _re
+        # Match the function definition: optional whitespace then _pollCfThenRetry(
+        m = _re.search(r'\b_pollCfThenRetry\s*\(', js)
+        assert m is not None, f"state-rescrape.js missing _pollCfThenRetry function"
+        # Scan from the first match: if it's a call site (short arg like 'number'),
+        # try finding the definition via "function body" marker (contains 'setInterval').
+        # Use rfind to find the last definition (definitions come after call sites).
+        all_matches = list(_re.finditer(r'\b_pollCfThenRetry\s*\(', js))
+        # Prefer the match followed by a simple parameter name (definition) over
+        # a call expression with 'this.' arguments.  The definition looks like:
+        #   _pollCfThenRetry(number) {
+        def_idx = None
+        for match in all_matches:
+            tail = js[match.start(): match.start() + 80]
+            # Definition has a plain identifier parameter, not 'this.'
+            if _re.match(r'\b_pollCfThenRetry\s*\(\s*\w+\s*\)\s*\{', tail):
+                def_idx = match.start()
+                break
+        assert def_idx is not None, (
+            "Could not find _pollCfThenRetry(param) { definition in state-rescrape.js"
+        )
+        # Extract ~1500 chars from the function start to cover the setInterval body
+        snippet = js[def_idx: def_idx + 1500]
+        assert "data.unavailable" in snippet, (
+            "data.unavailable check not found inside _pollCfThenRetry() definition — "
+            "the check must be inside the setInterval callback"
+        )
+        assert "cancelCfPoll" in snippet, (
+            "cancelCfPoll() call not found inside _pollCfThenRetry() definition — "
+            "must be called when data.unavailable is true"
+        )

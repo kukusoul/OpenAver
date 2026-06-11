@@ -20,6 +20,7 @@ from core.scrapers import (
     JavBusScraper, JAV321Scraper, JavDBScraper,
     FC2Scraper, AVSOXScraper,
     D2PassScraper, HEYZOScraper, DMMScraper,
+    JavLibraryScraper,          # T3 新增
     Video, ScraperConfig, BaseScraper
 )
 from core.scrapers.utils import extract_number as _new_extract_number, FUZZY_SEARCH_SOURCES
@@ -243,6 +244,7 @@ def search_jav(number: str, source: str = 'auto', proxy_url: str = '', javbus_la
         'heyzo': lambda: [HEYZOScraper()],
         'fc2': lambda: [FC2Scraper()],
         'avsox': lambda: [AVSOXScraper()],
+        'javlibrary': lambda: [JavLibraryScraper()],
     }
 
     # 63c：動態注入 metatube provider（CD-63c-2）
@@ -325,7 +327,13 @@ def search_jav(number: str, source: str = 'auto', proxy_url: str = '', javbus_la
                     all_data[video.source] = video
                     logger.debug(f"[Search] {scraper_name} 找到結果")
             except Exception as e:
-                logger.debug(f"[Search] {scraper_name} 錯誤: {e}")
+                from core.cf_transport import CfChallengeRequired, CfTransportUnavailable
+                if isinstance(e, (CfChallengeRequired, CfTransportUnavailable)):
+                    raise          # bubble 給 router，不 continue
+                # [CF-DIAG] DEBUG→INFO + 例外型別：explicit 分支是 JL 的唯一路徑
+                # （manual_only）。型別讓 40 分鐘重現能分辨 WebViewException（死窗）
+                # vs TimeoutError（靜默死亡）vs 其他——之前藏在 DEBUG 看不到。
+                logger.info("[Search] %s 例外 %s: %s", scraper_name, type(e).__name__, e)
                 continue
 
     if not all_data:
