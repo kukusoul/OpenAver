@@ -11,7 +11,7 @@ import requests
 import html
 from pathlib import Path
 from PIL import Image
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Tuple
 
 from core.path_utils import normalize_path
 from core.scrapers.utils import has_chinese, check_subtitle, strip_subtitle_markers
@@ -151,6 +151,77 @@ def _detect_suffixes(filename: str, keywords: list) -> str:
         if re.search(re.escape(kw_lower) + r'(?=[-_.\s]|$)', lower):
             matched.append(kw_lower)
     return ''.join(matched)
+
+
+# ---------------------------------------------------------------------------
+# 多段（multi-part）token 偵測與剝除（CD-8 / plan-72b §1.4）
+# ---------------------------------------------------------------------------
+
+#: 支援的多段 token 前綴集合（全小寫）
+MULTIPART_TOKENS: frozenset = frozenset({'cd', 'dvd', 'part', 'pt', 'disc'})
+
+# 共用編譯正則：前後邊界皆檢查，數字限 1-9 且後不可再接數字
+# - 前緣 (?<![A-Za-z0-9])：避免 apartment1 誤命中 part1
+# - 後緣 (?=[-_.\s\[\]()]|$)：token 後須為分隔符 / bracket / 字串終點
+_MULTIPART_RE = re.compile(
+    r'(?<![A-Za-z0-9])(cd|dvd|part|pt|disc)([1-9])(?![0-9])(?=[-_.\s\[\]()]|$)',
+    re.IGNORECASE,
+)
+
+
+def _detect_multipart_token(filename: str) -> Optional[Tuple[str, int]]:
+    """
+    偵測原始檔名中的多段 token（cd/dvd/part/pt/disc 後接 1-9）。
+
+    Args:
+        filename: 原始檔名（含副檔名，如 ``MIRD-151-cd1.mkv``）。
+
+    Returns:
+        ``(raw_token_lower, part_number)`` — 如 ``("cd1", 1)``；無匹配回 ``None``。
+        多個匹配時取 stem 中位置最靠後者（避免標題中段巧合字串蓋過尾端 token）。
+    """
+    if not filename:
+        return None
+    stem = os.path.splitext(filename)[0]
+    lower_stem = stem.lower()
+    matches = list(_MULTIPART_RE.finditer(lower_stem))
+    if not matches:
+        return None
+    # 取最靠後（span 最大 start）的匹配
+    last = matches[-1]
+    prefix = last.group(1).lower()
+    digit = int(last.group(2))
+    return (f'{prefix}{digit}', digit)
+
+
+def _strip_part_token(stem: str) -> str:
+    """
+    從已去副檔名的 stem 剝除最靠後的多段 token（含其前導分隔符）。
+
+    與 ``_detect_multipart_token`` 共用同一套邊界正則，確保契約一致。
+
+    Args:
+        stem: 已去副檔名的字串（如 ``MIRD-151-cd1``）。
+
+    Returns:
+        剝除多段 token 及其前導分隔符後的 stem；無 token 時原樣回傳（no-op）。
+        保留 base 段原始大小寫。
+    """
+    if not stem:
+        return stem
+    lower_stem = stem.lower()
+    matches = list(_MULTIPART_RE.finditer(lower_stem))
+    if not matches:
+        return stem
+    last = matches[-1]
+    token_start = last.start()  # token 本體在 lower_stem 的起始位置
+    token_end = last.end()      # 不含後緣 lookahead（lookahead 不消耗）
+    # 若 token 前有分隔符，一併剝除（[-_.\s\[(]）
+    if token_start > 0 and stem[token_start - 1] in '-_. \t([':
+        strip_from = token_start - 1
+    else:
+        strip_from = token_start
+    return stem[:strip_from] + stem[token_end:]
 
 
 _VR_UNIQUE: frozenset = frozenset({
