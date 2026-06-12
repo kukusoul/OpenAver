@@ -454,6 +454,190 @@ class VideoRepository:
         finally:
             conn.close()
 
+    # ── B1 helper ─────────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _union_tags(a: list, b: list) -> list:
+        """去重保序的 tag 聯集。b 為空時回傳 a。"""
+        if not b:
+            return list(a)
+        seen = list(a)
+        for t in b:
+            if t not in seen:
+                seen.append(t)
+        return seen
+
+    def repath(self, old_uri: str | None, new_uri: str, video: Video) -> None:
+        """將 DB 中 old_uri 那筆重新對應到 new_uri，保留 id / created_at。
+
+        四分支：
+        1. self-no-op : old_uri is None 或 old_uri == new_uri → upsert(video)
+        2. 正常 UPDATE : old 在 DB、new 不在 → UPDATE SET path=new_uri + metadata
+        3. 碰撞 delete-merge : new 已有一筆 → DELETE old + INSERT...ON CONFLICT
+        4. old-not-in-DB : 兩者皆不在 → upsert(video)
+
+        Connection pattern 鏡射 update_user_tags（database.py:840-860），
+        禁用 context manager（gotchas-backend）。
+        """
+        # ── 分支 1：self-no-op ─────────────────────────────────────────────
+        if old_uri is None or old_uri == new_uri:
+            self.upsert(video)
+            return
+
+        # 讀取 old / new 是否存在
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("SELECT 1 FROM videos WHERE path = ?", (old_uri,))
+            old_exists = cursor.fetchone() is not None
+            cursor.execute("SELECT 1 FROM videos WHERE path = ?", (new_uri,))
+            new_exists = cursor.fetchone() is not None
+        finally:
+            conn.close()
+
+        # ── 分支 4：old-not-in-DB ─────────────────────────────────────────
+        if not old_exists and not new_exists:
+            self.upsert(video)
+            return
+
+        # ── 分支 2：正常 UPDATE（old 在 DB、new 不在 DB）────────────────────
+        if old_exists and not new_exists:
+            old_row = self.get_by_path(old_uri)
+            merged_tags = self._union_tags(
+                old_row.user_tags if old_row else [],
+                video.user_tags,
+            )
+
+            # 動態建 SET 子句（鏡射 upsert 的 column list 邏輯）
+            video_dict = video.to_dict()
+            video_dict.pop('id', None)
+            video_dict.pop('created_at', None)
+            video_dict.pop('updated_at', None)
+            video_dict.pop('path', None)   # path 會另外指定
+
+            set_parts = []
+            set_values = []
+            for col, val in video_dict.items():
+                if col == 'user_tags':
+                    continue  # handled separately
+                set_parts.append(f"{col} = ?")
+                set_values.append(val)
+
+            # user_tags（Python-side union，JSON 序列化）
+            set_parts.append("user_tags = ?")
+            set_values.append(json.dumps(merged_tags, ensure_ascii=False))
+
+            # path + updated_at
+            set_parts.append("path = ?")
+            set_values.append(new_uri)
+            set_parts.append("updated_at = CURRENT_TIMESTAMP")
+
+            sql = f"UPDATE videos SET {', '.join(set_parts)} WHERE path = ?"
+            set_values.append(old_uri)
+
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            try:
+                cursor.execute(sql, set_values)
+                conn.commit()
+            finally:
+                conn.close()
+
+            # ranker invalidate（不繼承 upsert，必須顯式呼叫）
+            try:
+                from core.similar.ranker_cache import SimilarRankerCache
+                SimilarRankerCache.invalidate()
+            except Exception:
+                logger.exception("SimilarRankerCache invalidate failed (non-fatal)")
+            return
+
+        # ── 分支 3：碰撞 delete-merge（new 已有一筆）──────────────────────────
+        old_row = self.get_by_path(old_uri) if old_exists else None
+        new_row = self.get_by_path(new_uri)
+
+        # 三方 tag 聯集
+        tags_a = old_row.user_tags if old_row else []
+        tags_b = new_row.user_tags if new_row else []
+        tags_c = video.user_tags
+        merged_tags = self._union_tags(self._union_tags(tags_a, tags_b), tags_c)
+
+        # created_at 取較早
+        old_ca = old_row.created_at if old_row else None
+        new_ca = new_row.created_at if new_row else None
+        if old_ca and new_ca:
+            earliest_ca = min(str(old_ca), str(new_ca))
+        elif old_ca:
+            earliest_ca = str(old_ca)
+        elif new_ca:
+            earliest_ca = str(new_ca)
+        else:
+            earliest_ca = None
+
+        # 動態建 INSERT 欄位 / upsert update_clause（鏡射 upsert）
+        video_dict = video.to_dict()
+        video_dict.pop('id', None)
+        video_dict.pop('created_at', None)
+        video_dict.pop('updated_at', None)
+
+        columns = list(video_dict.keys())
+        values = list(video_dict.values())
+
+        # 強制覆蓋 path + user_tags
+        for i, col in enumerate(columns):
+            if col == 'path':
+                values[i] = new_uri
+            elif col == 'user_tags':
+                values[i] = json.dumps(merged_tags, ensure_ascii=False)
+
+        # 顯式帶入 created_at
+        if earliest_ca:
+            columns.append('created_at')
+            values.append(earliest_ca)
+
+        placeholders = ', '.join(['?'] * len(columns))
+
+        update_parts = []
+        for col in columns:
+            if col == 'path':
+                continue
+            elif col == 'created_at':
+                # 碰撞分支：強制寫入較早的 created_at（DO UPDATE 也要更新）
+                update_parts.append("created_at = excluded.created_at")
+            elif col == 'user_tags':
+                update_parts.append(
+                    "user_tags = CASE WHEN excluded.user_tags = '[]' "
+                    "THEN videos.user_tags ELSE excluded.user_tags END"
+                )
+            else:
+                update_parts.append(f"{col} = excluded.{col}")
+        update_parts.append("updated_at = CURRENT_TIMESTAMP")
+        update_clause = ', '.join(update_parts)
+
+        insert_sql = (
+            f"INSERT INTO videos ({', '.join(columns)}) VALUES ({placeholders})\n"
+            f"ON CONFLICT(path) DO UPDATE SET {update_clause}"
+        )
+
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        try:
+            if old_exists:
+                cursor.execute("DELETE FROM videos WHERE path = ?", (old_uri,))
+            cursor.execute(insert_sql, values)
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+        # ranker invalidate
+        try:
+            from core.similar.ranker_cache import SimilarRankerCache
+            SimilarRankerCache.invalidate()
+        except Exception:
+            logger.exception("SimilarRankerCache invalidate failed (non-fatal)")
+
     def upsert_batch(self, videos: List[Video]) -> tuple:
         """批次新增或更新
 

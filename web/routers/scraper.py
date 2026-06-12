@@ -128,7 +128,7 @@ def scrape_single(request: ScrapeRequest) -> dict:
     if result.get("success"):
         target_file = result.get("new_filename")
         if target_file:
-            db_sync_status = try_inflow_upsert(target_file)
+            db_sync_status = try_inflow_upsert(target_file, old_file_path=file_path)
         else:
             logger.warning("scrape_single: organize_file 回傳缺 new_filename，skip in-flow upsert")
 

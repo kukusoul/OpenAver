@@ -1,0 +1,611 @@
+"""
+test_db_inflow.py — TDD-lite: VideoRepository.repath + try_inflow_upsert B1 邊界條件
+
+U1  正常 UPDATE — id 保留
+U2  正常 UPDATE — created_at 保留
+U3  正常 UPDATE — user_tags 沿用舊（scanned 空）
+U4  正常 UPDATE — user_tags 聯集（scanned 非空）
+U5  正常 UPDATE — 舊路徑消失、count 不增
+U6  self-no-op（old==new）
+U7  碰撞 delete-merge — tag 三方聯集
+U8  碰撞 delete-merge — created_at 取較早
+U9  碰撞分支單一 transaction atomicity（INSERT 失敗 → rollback）
+U10 old-not-in-DB（純 Search，無前置 Scanner）
+U11 old_file_path=None 向後相容
+U12 scan-fail 保卡（保 path/title/cover/tags/created_at/id，回 "failed"）
+U13 ranker invalidate — 正常 UPDATE 分支
+U14 ranker invalidate — scan-fail 保卡分支
+U15 ranker invalidate — 碰撞 delete-merge 分支
+U16 old_uri 使用 to_file_uri(normalize_path(...))，無手拼 URI、無 [8:] strip
+"""
+
+from __future__ import annotations
+
+import json
+import sqlite3
+import tempfile
+from datetime import datetime
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+from core.database import Video, VideoRepository, init_db
+from core.gallery_scanner import VideoInfo
+
+
+# ─── helpers ─────────────────────────────────────────────────────────────────
+
+def _make_db(tmp_path: Path) -> Path:
+    """建立並初始化 in-memory-style temp SQLite DB，回傳路徑。"""
+    db_path = tmp_path / "test.db"
+    init_db(db_path)
+    return db_path
+
+
+def _seed_video(repo: VideoRepository, path: str, user_tags=None,
+                created_at_str: str | None = None, cover_path: str = "",
+                title: str = "Old Title") -> Video:
+    """INSERT 一筆 video，保留 created_at。回傳 get_by_path 取到的實際 row。"""
+    v = Video(
+        path=path,
+        number="ABC-001",
+        title=title,
+        original_title="",
+        actresses=[],
+        maker="",
+        director="",
+        series=None,
+        label="",
+        tags=[],
+        user_tags=user_tags or [],
+        sample_images=[],
+        duration=None,
+        size_bytes=0,
+        cover_path=cover_path,
+        release_date="",
+        mtime=0.0,
+        nfo_mtime=0.0,
+    )
+    repo.upsert(v)
+    # 若 created_at_str 給定，直接 UPDATE（upsert 不帶 created_at）
+    if created_at_str:
+        conn = repo._get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                "UPDATE videos SET created_at = ? WHERE path = ?",
+                (created_at_str, path),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+    return repo.get_by_path(path)
+
+
+def _make_video_info(path: str, user_tags=None, num: str = "ABC-001",
+                     title: str = "New Title") -> VideoInfo:
+    """建立 VideoInfo stub（scan_file 的回傳值）。"""
+    info = VideoInfo()
+    info.path = path
+    info.num = num
+    info.title = title
+    info.originaltitle = ""
+    info.actor = ""
+    info.genre = ""
+    info.maker = ""
+    info.director = ""
+    info.series = None
+    info.label = ""
+    info.user_tags = user_tags or []
+    info.sample_images = []
+    info.duration = None
+    info.size = 0
+    info.img = ""
+    info.date = ""
+    info.mtime = 0
+    return info
+
+
+# ─── U1: 正常 UPDATE — id 保留 ──────────────────────────────────────────────
+
+def test_u1_normal_update_id_preserved(tmp_path):
+    """整理後 id 不變（browse ORDER BY id 不跳位）。"""
+    db_path = _make_db(tmp_path)
+    repo = VideoRepository(db_path=db_path)
+
+    old_path = "/tmp/old.mp4"
+    new_path = "/tmp/new.mp4"
+    old_uri = f"file://{old_path}"
+    new_uri = f"file://{new_path}"
+
+    old_row = _seed_video(repo, old_uri)
+    old_id = old_row.id
+    assert old_id is not None
+
+    new_video = Video(path=new_uri, number="ABC-001", title="New Title",
+                      original_title="", actresses=[], maker="", director="",
+                      series=None, label="", tags=[], user_tags=[],
+                      sample_images=[], duration=None, size_bytes=0,
+                      cover_path="", release_date="", mtime=0.0, nfo_mtime=0.0)
+
+    with patch("core.similar.ranker_cache.SimilarRankerCache"):
+        repo.repath(old_uri, new_uri, new_video)
+
+    new_row = repo.get_by_path(new_uri)
+    assert new_row is not None
+    assert new_row.id == old_id, f"id 應保留 {old_id}，但得到 {new_row.id}"
+
+
+# ─── U2: 正常 UPDATE — created_at 保留 ─────────────────────────────────────
+
+def test_u2_normal_update_created_at_preserved(tmp_path):
+    """整理後 created_at 不變。"""
+    db_path = _make_db(tmp_path)
+    repo = VideoRepository(db_path=db_path)
+
+    old_uri = "file:///tmp/old.mp4"
+    new_uri = "file:///tmp/new.mp4"
+    old_created = "2024-01-15 10:00:00"
+
+    _seed_video(repo, old_uri, created_at_str=old_created)
+
+    new_video = Video(path=new_uri, number="ABC-001", title="New Title",
+                      original_title="", actresses=[], maker="", director="",
+                      series=None, label="", tags=[], user_tags=[],
+                      sample_images=[], duration=None, size_bytes=0,
+                      cover_path="", release_date="", mtime=0.0, nfo_mtime=0.0)
+
+    with patch("core.similar.ranker_cache.SimilarRankerCache"):
+        repo.repath(old_uri, new_uri, new_video)
+
+    new_row = repo.get_by_path(new_uri)
+    assert new_row is not None
+    # created_at 可以是 datetime 或字串，取字串比對前綴
+    ca_str = str(new_row.created_at) if new_row.created_at else ""
+    assert "2024-01-15" in ca_str, f"created_at 應含 2024-01-15，實際: {ca_str!r}"
+
+
+# ─── U3: user_tags 沿用舊（scanned 空）─────────────────────────────────────
+
+def test_u3_user_tags_preserve_when_scanned_empty(tmp_path):
+    """搬檔 NFO 給 user_tags=[]，browse tag 存活。"""
+    db_path = _make_db(tmp_path)
+    repo = VideoRepository(db_path=db_path)
+
+    old_uri = "file:///tmp/old.mp4"
+    new_uri = "file:///tmp/new.mp4"
+
+    _seed_video(repo, old_uri, user_tags=["看過"])
+
+    new_video = Video(path=new_uri, number="ABC-001", title="New Title",
+                      original_title="", actresses=[], maker="", director="",
+                      series=None, label="", tags=[], user_tags=[],  # 空
+                      sample_images=[], duration=None, size_bytes=0,
+                      cover_path="", release_date="", mtime=0.0, nfo_mtime=0.0)
+
+    with patch("core.similar.ranker_cache.SimilarRankerCache"):
+        repo.repath(old_uri, new_uri, new_video)
+
+    new_row = repo.get_by_path(new_uri)
+    assert new_row is not None
+    assert new_row.user_tags == ["看過"], f"user_tags 應為 ['看過']，實際: {new_row.user_tags}"
+
+
+# ─── U4: user_tags 聯集（scanned 非空）────────────────────────────────────
+
+def test_u4_user_tags_union_when_scanned_nonempty(tmp_path):
+    """scanned 給非空 user_tags → 取聯集。"""
+    db_path = _make_db(tmp_path)
+    repo = VideoRepository(db_path=db_path)
+
+    old_uri = "file:///tmp/old.mp4"
+    new_uri = "file:///tmp/new.mp4"
+
+    _seed_video(repo, old_uri, user_tags=["看過"])
+
+    new_video = Video(path=new_uri, number="ABC-001", title="New Title",
+                      original_title="", actresses=[], maker="", director="",
+                      series=None, label="", tags=[], user_tags=["HD"],
+                      sample_images=[], duration=None, size_bytes=0,
+                      cover_path="", release_date="", mtime=0.0, nfo_mtime=0.0)
+
+    with patch("core.similar.ranker_cache.SimilarRankerCache"):
+        repo.repath(old_uri, new_uri, new_video)
+
+    new_row = repo.get_by_path(new_uri)
+    assert new_row is not None
+    assert set(new_row.user_tags) == {"看過", "HD"}, \
+        f"user_tags 應為聯集 {{看過, HD}}，實際: {new_row.user_tags}"
+
+
+# ─── U5: 正常 UPDATE — 舊路徑消失、count 不增 ──────────────────────────────
+
+def test_u5_old_path_gone_count_unchanged(tmp_path):
+    """整理後舊 URI get_by_path 回 None，count 不增。"""
+    db_path = _make_db(tmp_path)
+    repo = VideoRepository(db_path=db_path)
+
+    old_uri = "file:///tmp/old.mp4"
+    new_uri = "file:///tmp/new.mp4"
+
+    _seed_video(repo, old_uri)
+    count_before = repo.count()
+
+    new_video = Video(path=new_uri, number="ABC-001", title="New Title",
+                      original_title="", actresses=[], maker="", director="",
+                      series=None, label="", tags=[], user_tags=[],
+                      sample_images=[], duration=None, size_bytes=0,
+                      cover_path="", release_date="", mtime=0.0, nfo_mtime=0.0)
+
+    with patch("core.similar.ranker_cache.SimilarRankerCache"):
+        repo.repath(old_uri, new_uri, new_video)
+
+    assert repo.get_by_path(old_uri) is None, "舊 URI 應消失"
+    assert repo.count() == count_before, "count 不應增加"
+
+
+# ─── U6: self-no-op（old==new） ───────────────────────────────────────────
+
+def test_u6_self_noop_same_path(tmp_path):
+    """old_uri == new_uri → 不刪、id/created_at 不變。"""
+    db_path = _make_db(tmp_path)
+    repo = VideoRepository(db_path=db_path)
+
+    uri = "file:///tmp/same.mp4"
+    old_created = "2024-03-01 08:00:00"
+    old_row = _seed_video(repo, uri, user_tags=["看過"], created_at_str=old_created)
+    old_id = old_row.id
+
+    same_video = Video(path=uri, number="ABC-001", title="Updated Title",
+                       original_title="", actresses=[], maker="", director="",
+                       series=None, label="", tags=[], user_tags=["HD"],
+                       sample_images=[], duration=None, size_bytes=0,
+                       cover_path="", release_date="", mtime=0.0, nfo_mtime=0.0)
+
+    with patch("core.similar.ranker_cache.SimilarRankerCache"):
+        repo.repath(uri, uri, same_video)
+
+    row = repo.get_by_path(uri)
+    assert row is not None
+    assert row.id == old_id, "self-no-op 後 id 不應變"
+
+
+# ─── U7: 碰撞 delete-merge — tag 三方聯集 ──────────────────────────────────
+
+def test_u7_collision_merge_tags_union(tmp_path):
+    """new path 早有一筆 → 收斂一筆、user_tags = A∪B∪C。"""
+    db_path = _make_db(tmp_path)
+    repo = VideoRepository(db_path=db_path)
+
+    old_uri = "file:///tmp/old.mp4"
+    new_uri = "file:///tmp/new.mp4"
+
+    _seed_video(repo, old_uri, user_tags=["B"])
+    _seed_video(repo, new_uri, user_tags=["A"])
+
+    # scan 給 C
+    collision_video = Video(path=new_uri, number="ABC-001", title="New Title",
+                            original_title="", actresses=[], maker="", director="",
+                            series=None, label="", tags=[], user_tags=["C"],
+                            sample_images=[], duration=None, size_bytes=0,
+                            cover_path="", release_date="", mtime=0.0, nfo_mtime=0.0)
+
+    with patch("core.similar.ranker_cache.SimilarRankerCache"):
+        repo.repath(old_uri, new_uri, collision_video)
+
+    merged = repo.get_by_path(new_uri)
+    assert merged is not None
+    assert repo.get_by_path(old_uri) is None, "old URI 應消失"
+    assert repo.count() == 1, "收斂後應只有 1 筆"
+    assert set(merged.user_tags) == {"A", "B", "C"}, \
+        f"三方聯集應為 {{A,B,C}}，實際: {merged.user_tags}"
+
+
+# ─── U8: 碰撞 delete-merge — created_at 取較早 ─────────────────────────────
+
+def test_u8_collision_merge_created_at_min(tmp_path):
+    """碰撞 merge 後 created_at = min(old_row, new_row)。"""
+    db_path = _make_db(tmp_path)
+    repo = VideoRepository(db_path=db_path)
+
+    old_uri = "file:///tmp/old.mp4"
+    new_uri = "file:///tmp/new.mp4"
+
+    _seed_video(repo, old_uri, created_at_str="2024-01-01 00:00:00")
+    _seed_video(repo, new_uri, created_at_str="2024-06-01 00:00:00")
+
+    collision_video = Video(path=new_uri, number="ABC-001", title="New Title",
+                            original_title="", actresses=[], maker="", director="",
+                            series=None, label="", tags=[], user_tags=[],
+                            sample_images=[], duration=None, size_bytes=0,
+                            cover_path="", release_date="", mtime=0.0, nfo_mtime=0.0)
+
+    with patch("core.similar.ranker_cache.SimilarRankerCache"):
+        repo.repath(old_uri, new_uri, collision_video)
+
+    merged = repo.get_by_path(new_uri)
+    assert merged is not None
+    ca_str = str(merged.created_at) if merged.created_at else ""
+    assert "2024-01-01" in ca_str, \
+        f"created_at 應取較早的 2024-01-01，實際: {ca_str!r}"
+
+
+# ─── U9: 碰撞分支 atomicity（INSERT 失敗 → rollback） ──────────────────────
+
+
+def test_u9_collision_rollback_via_real_repath(tmp_path):
+    """U9 替代測試：使用真實 repath，確保 old row 在 rollback 後存活。"""
+    db_path = _make_db(tmp_path)
+    repo = VideoRepository(db_path=db_path)
+
+    old_uri = "file:///tmp/old9.mp4"
+    new_uri = "file:///tmp/new9.mp4"
+
+    _seed_video(repo, old_uri, user_tags=["看過"])
+    _seed_video(repo, new_uri, user_tags=["A"])
+
+    # 直接模擬 DB 層：conn.commit 時拋錯以觸發 rollback 路徑
+    real_get_connection = repo._get_connection
+
+    call_count = [0]
+
+    def failing_get_connection():
+        conn = real_get_connection()
+        original_commit = conn.commit
+
+        def patched_commit():
+            call_count[0] += 1
+            if call_count[0] == 1:
+                # 第一次 commit → 讓 DELETE 成功但 INSERT 失敗
+                conn.rollback()
+                raise sqlite3.OperationalError("Simulated commit failure")
+            return original_commit()
+
+        conn.commit = patched_commit
+        return conn
+
+    with patch.object(repo, "_get_connection", failing_get_connection):
+        with patch("core.similar.ranker_cache.SimilarRankerCache"):
+            try:
+                repo.repath(old_uri, new_uri, Video(
+                    path=new_uri, number="ABC-001", title="Fail",
+                    original_title="", actresses=[], maker="", director="",
+                    series=None, label="", tags=[], user_tags=["C"],
+                    sample_images=[], duration=None, size_bytes=0,
+                    cover_path="", release_date="", mtime=0.0, nfo_mtime=0.0,
+                ))
+            except Exception:
+                pass
+
+    # rollback 後 old row 應仍在
+    assert repo.get_by_path(old_uri) is not None, \
+        "rollback 後 old row 應存活（不雙失）"
+
+
+# ─── U10: old-not-in-DB（純 Search，無前置 Scanner）───────────────────────
+
+def test_u10_old_not_in_db_falls_back_to_upsert(tmp_path):
+    """old_uri 不在 DB → repath 退化為 upsert，new 正常寫入。"""
+    db_path = _make_db(tmp_path)
+    repo = VideoRepository(db_path=db_path)
+
+    old_uri = "file:///tmp/nonexistent_old.mp4"
+    new_uri = "file:///tmp/new10.mp4"
+
+    assert repo.get_by_path(old_uri) is None
+
+    new_video = Video(path=new_uri, number="ABC-001", title="New Title",
+                      original_title="", actresses=[], maker="", director="",
+                      series=None, label="", tags=[], user_tags=[],
+                      sample_images=[], duration=None, size_bytes=0,
+                      cover_path="", release_date="", mtime=0.0, nfo_mtime=0.0)
+
+    with patch("core.similar.ranker_cache.SimilarRankerCache"):
+        repo.repath(old_uri, new_uri, new_video)
+
+    assert repo.get_by_path(new_uri) is not None, "new_uri 應寫入"
+    assert repo.count() == 1
+
+
+# ─── U11: old_file_path=None 向後相容 ──────────────────────────────────────
+
+def test_u11_old_file_path_none_backward_compat(tmp_path):
+    """try_inflow_upsert(new, old_file_path=None) 行為等同原本純 upsert。"""
+    new_path = "/tmp/new11.mp4"
+    new_uri = "file:///tmp/new11.mp4"
+
+    video_info = _make_video_info(new_uri)
+
+    import core.db_inflow as _db_inflow_mod
+
+    mock_repo = MagicMock()
+    mock_video = MagicMock()
+    mock_video.path = new_uri
+
+    with (
+        patch.object(_db_inflow_mod, "load_config", return_value={
+            "gallery": {"directories": ["/tmp"], "path_mappings": None}
+        }),
+        patch.object(_db_inflow_mod, "find_matched_directory", return_value="/tmp"),
+        patch.object(_db_inflow_mod, "VideoScanner") as MockScanner,
+        patch.object(_db_inflow_mod, "VideoRepository", return_value=mock_repo),
+        patch.object(_db_inflow_mod, "Video") as MockVideo,
+        patch("core.similar.ranker_cache.SimilarRankerCache"),
+    ):
+        MockScanner.return_value.scan_file.return_value = video_info
+        MockVideo.from_video_info.return_value = mock_video
+        mock_repo.repath.return_value = None
+
+        result = _db_inflow_mod.try_inflow_upsert(new_path, old_file_path=None)
+
+    assert result == "synced"
+    # repath 應以 old_uri=None 呼叫
+    mock_repo.repath.assert_called_once()
+    call_args = mock_repo.repath.call_args
+    assert call_args[0][0] is None, "old_uri 應為 None（無 old_file_path）"
+
+
+# ─── U12: scan-fail 保卡 ──────────────────────────────────────────────────
+
+def test_u12_scan_fail_path_only_update(tmp_path):
+    """
+    scan_file 回 None → UPDATE-path-only 保卡：
+    - get_by_path(old_uri) is None（舊 URI 不再存在）
+    - get_by_path(new_uri) 有效（卡在新位置）
+    - title/cover_path/user_tags/created_at/id 全部保留
+    - 回傳 "failed"
+    """
+    from core.path_utils import normalize_path, to_file_uri
+
+    db_path = _make_db(tmp_path)
+    repo = VideoRepository(db_path=db_path)
+
+    old_path_fs = str(tmp_path / "old_scan_fail.mp4")
+    new_path_fs = str(tmp_path / "new_scan_fail.mp4")
+    # 用 to_file_uri 算出真實 URI（與 try_inflow_upsert 內部一致）
+    old_uri = to_file_uri(normalize_path(old_path_fs), None)
+    new_uri = to_file_uri(normalize_path(new_path_fs), None)
+    old_created = "2023-11-01 00:00:00"
+
+    # seed 舊 row
+    _seed_video(repo, old_uri,
+                user_tags=["看過"],
+                created_at_str=old_created,
+                cover_path="old_cover.jpg",
+                title="Preserved Title")
+    old_row = repo.get_by_path(old_uri)
+    assert old_row is not None, f"seed 失敗，old_uri={old_uri!r}"
+    old_id = old_row.id
+
+    import core.db_inflow as _db_inflow_mod
+
+    with (
+        patch.object(_db_inflow_mod, "load_config", return_value={
+            "gallery": {"directories": [str(tmp_path)], "path_mappings": None}
+        }),
+        patch.object(_db_inflow_mod, "find_matched_directory", return_value=str(tmp_path)),
+        patch.object(_db_inflow_mod, "VideoScanner") as MockScanner,
+        patch.object(_db_inflow_mod, "VideoRepository", return_value=repo),
+        patch("core.similar.ranker_cache.SimilarRankerCache"),
+    ):
+        MockScanner.return_value.scan_file.return_value = None  # scan 失敗
+
+        result = _db_inflow_mod.try_inflow_upsert(new_path_fs, old_file_path=old_path_fs)
+
+    assert result == "failed", f"scan-fail 應回 'failed'，實際: {result!r}"
+
+    # 舊 URI 消失（保卡搬到新位置）
+    assert repo.get_by_path(old_uri) is None, "舊 URI 應消失（保卡已搬到新位置）"
+
+    # 新 URI 存在，metadata 保留
+    new_row = repo.get_by_path(new_uri)
+    assert new_row is not None, f"新 URI 應存在（new_uri={new_uri!r}）"
+    assert new_row.id == old_id, f"id 應保留 {old_id}，得 {new_row.id}"
+    assert new_row.title == "Preserved Title", f"title 應保留，得 {new_row.title!r}"
+    assert new_row.cover_path == "old_cover.jpg", f"cover_path 應保留，得 {new_row.cover_path!r}"
+    assert "看過" in new_row.user_tags, f"user_tags 應含 '看過'，得 {new_row.user_tags}"
+    ca_str = str(new_row.created_at) if new_row.created_at else ""
+    assert "2023-11-01" in ca_str, f"created_at 應保留，得 {ca_str!r}"
+
+
+# ─── U13: ranker invalidate — 正常 UPDATE 分支 ────────────────────────────
+
+def test_u13_ranker_invalidate_normal_update(tmp_path):
+    """正常 UPDATE 分支 → SimilarRankerCache.invalidate 被呼叫恰 1 次。"""
+    db_path = _make_db(tmp_path)
+    repo = VideoRepository(db_path=db_path)
+
+    old_uri = "file:///tmp/old13.mp4"
+    new_uri = "file:///tmp/new13.mp4"
+    _seed_video(repo, old_uri)
+
+    new_video = Video(path=new_uri, number="ABC-001", title="New",
+                      original_title="", actresses=[], maker="", director="",
+                      series=None, label="", tags=[], user_tags=[],
+                      sample_images=[], duration=None, size_bytes=0,
+                      cover_path="", release_date="", mtime=0.0, nfo_mtime=0.0)
+
+    with patch("core.similar.ranker_cache.SimilarRankerCache") as MockRanker:
+        repo.repath(old_uri, new_uri, new_video)
+
+    MockRanker.invalidate.assert_called_once()
+
+
+# ─── U14: ranker invalidate — scan-fail 保卡分支 ──────────────────────────
+
+def test_u14_ranker_invalidate_scan_fail(tmp_path):
+    """scan-fail 保卡分支 → SimilarRankerCache.invalidate 被呼叫恰 1 次。"""
+    from core.path_utils import normalize_path, to_file_uri
+
+    db_path = _make_db(tmp_path)
+    repo = VideoRepository(db_path=db_path)
+
+    old_path_fs = str(tmp_path / "old14.mp4")
+    new_path_fs = str(tmp_path / "new14.mp4")
+    old_uri = to_file_uri(normalize_path(old_path_fs), None)
+    new_uri = to_file_uri(normalize_path(new_path_fs), None)
+
+    _seed_video(repo, old_uri, user_tags=["看過"])
+
+    import core.db_inflow as _db_inflow_mod
+
+    with (
+        patch.object(_db_inflow_mod, "load_config", return_value={
+            "gallery": {"directories": [str(tmp_path)], "path_mappings": None}
+        }),
+        patch.object(_db_inflow_mod, "find_matched_directory", return_value=str(tmp_path)),
+        patch.object(_db_inflow_mod, "VideoScanner") as MockScanner,
+        patch.object(_db_inflow_mod, "VideoRepository", return_value=repo),
+        patch("core.similar.ranker_cache.SimilarRankerCache") as MockRanker,
+    ):
+        MockScanner.return_value.scan_file.return_value = None
+
+        _db_inflow_mod.try_inflow_upsert(new_path_fs, old_file_path=old_path_fs)
+
+    # scan-fail 保卡後新路徑應存在
+    new_row = repo.get_by_path(new_uri)
+    assert new_row is not None, "scan-fail 保卡後新路徑應存在"
+    # invalidate 應被呼叫（db_inflow 的 scan-fail 保卡路徑顯式 invalidate）
+    MockRanker.invalidate.assert_called_once()
+
+
+# ─── U15: ranker invalidate — 碰撞 delete-merge 分支 ──────────────────────
+
+def test_u15_ranker_invalidate_collision(tmp_path):
+    """碰撞 delete-merge 分支 → SimilarRankerCache.invalidate 被呼叫恰 1 次。"""
+    db_path = _make_db(tmp_path)
+    repo = VideoRepository(db_path=db_path)
+
+    old_uri = "file:///tmp/old15.mp4"
+    new_uri = "file:///tmp/new15.mp4"
+    _seed_video(repo, old_uri, user_tags=["B"])
+    _seed_video(repo, new_uri, user_tags=["A"])
+
+    collision_video = Video(path=new_uri, number="ABC-001", title="New",
+                            original_title="", actresses=[], maker="", director="",
+                            series=None, label="", tags=[], user_tags=["C"],
+                            sample_images=[], duration=None, size_bytes=0,
+                            cover_path="", release_date="", mtime=0.0, nfo_mtime=0.0)
+
+    with patch("core.similar.ranker_cache.SimilarRankerCache") as MockRanker:
+        repo.repath(old_uri, new_uri, collision_video)
+
+    MockRanker.invalidate.assert_called_once()
+
+
+# ─── U16: grep 守衛 — 無手拼 URI ─────────────────────────────────────────
+
+def test_u16_no_manual_uri_construction():
+    """db_inflow.py 中不應有 'file:///' 手拼或 '[8:]' strip。"""
+    import re
+    db_inflow_path = Path(__file__).parent.parent.parent / "core" / "db_inflow.py"
+    content = db_inflow_path.read_text(encoding="utf-8")
+
+    # 禁止手拼 file:/// URI（comment 內也算）
+    bad_furi = re.findall(r'"file:///|\'file:///', content)
+    assert not bad_furi, f"db_inflow.py 不應手拼 file:/// URI，發現: {bad_furi}"
+
+    # 禁止 [8:] URI strip
+    bad_strip = re.findall(r'\[8:\]', content)
+    assert not bad_strip, f"db_inflow.py 不應有 [8:] strip，發現: {bad_strip}"
