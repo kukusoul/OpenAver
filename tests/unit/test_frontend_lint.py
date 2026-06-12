@@ -4900,11 +4900,18 @@ class TestJellyfinFrontend:
     """確認 Jellyfin 前端基礎設施完整"""
 
     def test_jellyfin_toggle_in_settings(self):
-        """settings.html 包含 jellyfinMode 的 Alpine 綁定"""
+        """settings.html Jellyfin toggle 綁定 externalManager（interim fix，T8 再換 segmented control）
+        - 舊的 x-model="form.jellyfinMode" 已移除（dead field）
+        - 新的 :checked / @change 雙向驅動 form.externalManager === 'jellyfin_emby'
+        """
         html_file = PROJECT_ROOT / "web" / "templates" / "settings.html"
         content = html_file.read_text(encoding='utf-8')
-        assert 'jellyfinMode' in content, \
-            "settings.html 缺少 jellyfinMode 綁定（Jellyfin 圖片模式開關）"
+        assert 'x-model="form.jellyfinMode"' not in content, \
+            "settings.html 不應再有 x-model=\"form.jellyfinMode\"（dead field，已由 externalManager 取代）"
+        assert ":checked=\"form.externalManager === 'jellyfin_emby'\"" in content, \
+            "settings.html Jellyfin toggle 缺少 :checked binding（應驅動 externalManager）"
+        assert "@change=\"form.externalManager = $event.target.checked ? 'jellyfin_emby' : 'off'\"" in content, \
+            "settings.html Jellyfin toggle 缺少 @change binding（應驅動 externalManager）"
 
     def test_jellyfin_update_in_scanner(self):
         """scanner/state-scan.js 包含 runJellyfinImageUpdate method"""

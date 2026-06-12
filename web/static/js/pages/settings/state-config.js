@@ -32,7 +32,6 @@ export function stateConfig() {
             maxFilenameLength: 200,
             videoExtensions: '.mp4, .avi, .mkv, .wmv, .rmvb, .flv, .mov, .m4v, .ts',
             suffixKeywords: [],
-            jellyfinMode: false,
             externalManager: 'off',
             downloadSampleImages: false,
 
