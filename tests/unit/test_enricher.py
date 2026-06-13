@@ -1241,6 +1241,38 @@ class TestWriteExternalImages:
         result = _write_external_images(str(tmp_path / "SONE-205.mp4"), "unknown_mode", True)
         assert result == {"poster": False, "fanart": False}
 
+    def test_no_cover_but_stem_poster_fanart_exist_returns_true(self, tmp_path):
+        """72d-P2B：無 {stem}.jpg，但 stem-poster + stem-fanart 皆存在，overwrite=False
+        → {"poster": True, "fanart": True}，且兩檔內容不被修改（無 copy/crop）。"""
+        # 不建立 {stem}.jpg（cover）
+        poster = tmp_path / "SONE-205-poster.jpg"
+        fanart = tmp_path / "SONE-205-fanart.jpg"
+        poster.write_bytes(b"existing-poster")
+        fanart.write_bytes(b"existing-fanart")
+        poster_content = poster.read_bytes()
+        fanart_content = fanart.read_bytes()
+
+        from core.enricher import _write_external_images
+        result = _write_external_images(str(tmp_path / "SONE-205.mp4"), "jellyfin", False)
+
+        assert result == {"poster": True, "fanart": True}
+        # 檔案未被覆蓋（bytes 不變）
+        assert poster.read_bytes() == poster_content
+        assert fanart.read_bytes() == fanart_content
+
+    def test_no_cover_stem_poster_only_partial_return(self, tmp_path):
+        """72d-P2B：無 {stem}.jpg，只有 stem-poster.jpg（無 fanart），overwrite=False
+        → {"poster": True, "fanart": False}。"""
+        # 不建立 {stem}.jpg（cover）
+        poster = tmp_path / "SONE-205-poster.jpg"
+        poster.write_bytes(b"existing-poster")
+        # 不建立 fanart
+
+        from core.enricher import _write_external_images
+        result = _write_external_images(str(tmp_path / "SONE-205.mp4"), "jellyfin", False)
+
+        assert result == {"poster": True, "fanart": False}
+
 
 # ── T6-B. enrich_single external_manager 整合測試（mock scraper/DB/generate_nfo）──
 

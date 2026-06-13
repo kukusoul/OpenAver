@@ -252,11 +252,6 @@ def _write_external_images(
         return {"poster": False, "fanart": False}
 
     cover_path = Path(fs_path).with_suffix(".jpg")
-
-    # 底圖不存在 → 無法產生 poster/fanart
-    if not cover_path.exists():
-        return {"poster": False, "fanart": False}
-
     stem = str(cover_path.with_suffix(""))  # 去副檔名的完整路徑前綴
 
     # 依模式決定目標路徑（jellyfin / emby 與 kodi 均使用 stem 長格式）
@@ -265,6 +260,17 @@ def _write_external_images(
         fanart_path = Path(stem + "-fanart.jpg")
     else:
         # 未知 external_manager 值：不產圖、不崩（防呆）
+        return {"poster": False, "fanart": False}
+
+    # 底圖不存在 → 無法產生 poster/fanart；
+    # 但若 stem-poster/fanart 已獨立存在（MDCX/Javinizer 匯入）且 overwrite=False，
+    # 則直接認可磁碟現況，不嘗試生成（72d-P2B）
+    if not cover_path.exists():
+        if not overwrite_existing:
+            poster_ok = poster_path.exists()
+            fanart_ok = fanart_path.exists()
+            if poster_ok or fanart_ok:
+                return {"poster": poster_ok, "fanart": fanart_ok}
         return {"poster": False, "fanart": False}
 
     poster_ok = False
