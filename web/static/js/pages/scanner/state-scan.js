@@ -229,6 +229,8 @@ export function stateScan() {
         // ===== Leave Guard =====
         shouldWarnBeforeLeave() {
             // T7b: 改為讀取 Alpine state，而非全域變數
+            // TODO(milestone i18n): 下方三條 leave-warning message 為硬編碼繁中（pre-existing），
+            // milestone i18n pass 應統一改 window.t() + 加 zh_TW key + 四語系翻譯（72d Codex P2 deferred）。
             if (this.isGenerating) {
                 return {
                     shouldWarn: true,
@@ -240,7 +242,7 @@ export function stateScan() {
             if (this.jellyfinCheckState === 'checking') {
                 return {
                     shouldWarn: true,
-                    message: 'Jellyfin 圖片檢查進行中，離開將會中斷！',
+                    message: '圖片檢查進行中，離開將會中斷！',
                     useModal: false
                 };
             }
@@ -364,7 +366,9 @@ export function stateScan() {
 
         // ===== T6d: Jellyfin Image Check =====
         async checkJellyfinImages() {
-            if (!this.config?.scraper?.jellyfin_mode) return;
+            // 正向白名單（fail-closed）：config 未載入 / 載入失敗 / 缺 external_manager 時
+            // 一律不補圖（對應後端 _STEM_IMAGE_MODES）。勿改回 === 'off'（undefined 會 fail-open）。
+            if (!['jellyfin', 'emby', 'kodi'].includes(this.config?.scraper?.external_manager)) return;
 
             // T2(40c): 取消上一次未完成的請求（防重複點擊）
             if (this._jellyfinCheckController) {

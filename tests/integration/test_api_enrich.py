@@ -534,6 +534,81 @@ class TestEnrichRefreshFullOverwriteGuard:
         )
         mock_enrich.assert_not_called()
 
+    def _patch_paths_jellyfin(self, mocker, nfo_exists, cover_exists, poster_exists, fanart_exists):
+        """jellyfin モード用：mock resolve_nfo_cover_paths + load_config(jellyfin) +
+        uri_to_fs_path + os.path.exists（NFO/cover/poster/fanart の 4 経路すべて）。"""
+        mocker.patch(
+            "web.routers.scraper.resolve_nfo_cover_paths",
+            return_value=("/video/SONE-205.nfo", "/video/SONE-205.jpg"),
+        )
+        mocker.patch(
+            "web.routers.scraper.load_config",
+            return_value={"scraper": {"external_manager": "jellyfin"}, "search": {}},
+        )
+        mocker.patch(
+            "web.routers.scraper.uri_to_fs_path",
+            return_value="/video/SONE-205.mp4",
+        )
+        exists_map = {
+            "/video/SONE-205.nfo": nfo_exists,
+            "/video/SONE-205.jpg": cover_exists,
+            "/video/SONE-205-poster.jpg": poster_exists,
+            "/video/SONE-205-fanart.jpg": fanart_exists,
+        }
+        mocker.patch(
+            "web.routers.scraper.os.path.exists",
+            side_effect=lambda p: exists_map.get(p, False),
+        )
+
+    def test_refresh_full_overwrite_false_external_images_missing_passes(self, client, mocker):
+        """72d-P2A：jellyfin mode + NFO+cover 齊 + stem-poster/fanart 缺 → 200 放行
+        （守衛不應因只檢查 will_write_nfo/will_write_cover 就回 400）。"""
+        self._patch_paths_jellyfin(
+            mocker,
+            nfo_exists=True, cover_exists=True,
+            poster_exists=False, fanart_exists=False,
+        )
+        mock_enrich = mocker.patch(
+            "web.routers.scraper.enrich_single", return_value=_ok_result()
+        )
+
+        response = client.post("/api/enrich-single", json={
+            "file_path": "file:///video/SONE-205.mp4",
+            "number": "SONE-205",
+            "mode": "refresh_full",
+            "overwrite_existing": False,
+        })
+
+        assert response.status_code == 200, (
+            f"jellyfin mode + external images missing 應 200 放行，實際 {response.status_code}: {response.json()}"
+        )
+        mock_enrich.assert_called_once()
+
+    def test_refresh_full_overwrite_false_external_images_all_exist_returns_400(self, client, mocker):
+        """72d-P2A：jellyfin mode + NFO+cover+poster+fanart 全齊 → 400（無任何寫出機會）。"""
+        self._patch_paths_jellyfin(
+            mocker,
+            nfo_exists=True, cover_exists=True,
+            poster_exists=True, fanart_exists=True,
+        )
+        mock_enrich = mocker.patch(
+            "web.routers.scraper.enrich_single", return_value=_ok_result()
+        )
+
+        response = client.post("/api/enrich-single", json={
+            "file_path": "file:///video/SONE-205.mp4",
+            "number": "SONE-205",
+            "mode": "refresh_full",
+            "overwrite_existing": False,
+        })
+
+        assert response.status_code == 400, (
+            f"全齊時應 400，實際 {response.status_code}: {response.json()}"
+        )
+        detail = response.json().get("detail", "")
+        assert "overwrite" in detail or "分裂" in detail
+        mock_enrich.assert_not_called()
+
 
 class TestEnrichSingleThumbnailInvalidation:
     """feature/71 T8 邊界3/4/6：enrich/rescrape 成功 → invalidate 用 canonical key；失敗不呼叫。
@@ -628,3 +703,100 @@ class TestEnrichSingleThumbnailInvalidation:
         assert response.status_code == 200
         inval_spy.assert_called_once_with(self._VIDEO_URI)
         assert "file:///file:///" not in inval_spy.call_args[0][0]
+
+
+# ── 72b-T6：endpoint 穿線 external_manager（方案 B）─────────────────────────
+
+class TestEnrichEndpointExternalManagerThreading:
+    """enrich_single_endpoint 從 config['scraper']['external_manager'] 取值穿線進 enrich_single。"""
+
+    def test_external_manager_from_config_passed_to_enrich_single(self, client, mocker):
+        """F4-T6：external_manager='jellyfin' 從 config 取出並傳入 enrich_single。"""
+        captured_calls = []
+
+        def fake_enrich(**kwargs):
+            captured_calls.append(kwargs)
+            return _ok_result()
+
+        mocker.patch("web.routers.scraper.enrich_single", side_effect=fake_enrich)
+        mocker.patch("web.routers.scraper.load_config", return_value={
+            "search": {"proxy_url": ""},
+            "scraper": {"external_manager": "jellyfin"},
+        })
+
+        client.post("/api/enrich-single", json={
+            "file_path": "/video/SONE-205.mp4",
+            "number": "SONE-205",
+        })
+
+        assert captured_calls, "enrich_single 應被呼叫"
+        assert captured_calls[0].get("external_manager") == "jellyfin", (
+            f"external_manager 應從 config['scraper'] 取，實際: {captured_calls[0].get('external_manager')}"
+        )
+
+    def test_emby_manager_from_config_passed_to_enrich_single(self, client, mocker):
+        """F4-T6：external_manager='emby' 從 config 取出並傳入 enrich_single（等價 jellyfin）。"""
+        captured_calls = []
+
+        def fake_enrich(**kwargs):
+            captured_calls.append(kwargs)
+            return _ok_result()
+
+        mocker.patch("web.routers.scraper.enrich_single", side_effect=fake_enrich)
+        mocker.patch("web.routers.scraper.load_config", return_value={
+            "search": {"proxy_url": ""},
+            "scraper": {"external_manager": "emby"},
+        })
+
+        client.post("/api/enrich-single", json={
+            "file_path": "/video/SONE-205.mp4",
+            "number": "SONE-205",
+        })
+
+        assert captured_calls, "enrich_single 應被呼叫"
+        assert captured_calls[0].get("external_manager") == "emby", (
+            f"external_manager 應從 config['scraper'] 取，實際: {captured_calls[0].get('external_manager')}"
+        )
+
+    def test_external_manager_defaults_to_off_when_missing(self, client, mocker):
+        """config 無 scraper.external_manager → 穿線 'off'（byte-identical 邊界）。"""
+        captured_calls = []
+
+        def fake_enrich(**kwargs):
+            captured_calls.append(kwargs)
+            return _ok_result()
+
+        mocker.patch("web.routers.scraper.enrich_single", side_effect=fake_enrich)
+        mocker.patch("web.routers.scraper.load_config", return_value={
+            "search": {},
+            "scraper": {},  # 無 external_manager
+        })
+
+        client.post("/api/enrich-single", json={
+            "file_path": "/video/SONE-205.mp4",
+            "number": "SONE-205",
+        })
+
+        assert captured_calls, "enrich_single 應被呼叫"
+        assert captured_calls[0].get("external_manager") == "off"
+
+    def test_kodi_external_manager_passed(self, client, mocker):
+        """external_manager='kodi' 正確穿線。"""
+        captured_calls = []
+
+        def fake_enrich(**kwargs):
+            captured_calls.append(kwargs)
+            return _ok_result()
+
+        mocker.patch("web.routers.scraper.enrich_single", side_effect=fake_enrich)
+        mocker.patch("web.routers.scraper.load_config", return_value={
+            "search": {},
+            "scraper": {"external_manager": "kodi"},
+        })
+
+        client.post("/api/enrich-single", json={
+            "file_path": "/video/SONE-205.mp4",
+            "number": "SONE-205",
+        })
+
+        assert captured_calls[0].get("external_manager") == "kodi"

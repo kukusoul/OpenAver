@@ -11,8 +11,9 @@ import requests
 import html
 from pathlib import Path
 from PIL import Image
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Tuple
 
+from core.config import _STEM_IMAGE_MODES
 from core.path_utils import normalize_path
 from core.scrapers.utils import has_chinese, check_subtitle, strip_subtitle_markers
 from core.logger import get_logger
@@ -151,6 +152,167 @@ def _detect_suffixes(filename: str, keywords: list) -> str:
         if re.search(re.escape(kw_lower) + r'(?=[-_.\s]|$)', lower):
             matched.append(kw_lower)
     return ''.join(matched)
+
+
+# ---------------------------------------------------------------------------
+# B2：標題 junk-validation + 前綴剝除 helpers（plan-72c FIX A / FIX B）
+# ---------------------------------------------------------------------------
+
+def _extracted_has_organize_junk(
+    extracted: str,
+    number: str,
+    metadata: dict,
+    config: dict,
+) -> bool:
+    """
+    判斷 extract_chinese_title 的結果是否殘留 organize 模板 artifact。
+    回 True（= 應丟棄 extracted）IFF 以下任一命中：
+      (i)  日期 token：YYYY[-.]MM[-.]DD 格式
+      (ii) 刮削 maker 殘留：maker 非空且出現在提取結果中（大小寫不敏感）
+      (iii) suffix token 殘留：config['suffix_keywords'] 中帶前導 '-' 的 token
+            以整段帶 dash 比對（不去 dash），尾端加 boundary——
+            避免誤殺生檔 standalone '4K'（B-1）。
+    mode-agnostic：不讀 external_manager。
+    """
+    if not extracted:
+        return False
+
+    # (i) 日期 token
+    if re.search(r'\d{4}[-.]\d{2}[-.]\d{2}', extracted):
+        return True
+
+    # (ii) maker 殘留（非空才比對）
+    maker = (metadata.get('maker') or '').strip()
+    if maker and maker.lower() in extracted.lower():
+        return True
+
+    # (iii) suffix token 殘留（保留前導 '-'，帶 boundary）
+    for kw in config.get('suffix_keywords', []):
+        kw_l = kw.lower().strip()
+        if not kw_l:
+            continue
+        if re.search(re.escape(kw_l) + r'(?=[-_.\s]|$)', extracted.lower()):
+            return True
+
+    return False
+
+
+def _strip_num_prefixes(s: str, number: str) -> str:
+    """
+    迴圈剝除字串開頭的番號前綴層，直到 fixpoint。
+    支援 bracket 形式 [number] 及裸 number（後接非英數邊界）。
+    使用 re.escape(number) 防特殊番號（如 FC2-PPV-123）。
+    邊界 guard 保證不 over-strip 真標題、不誤命中 ABC-1234 開頭的 ABC-123。
+    """
+    if not s or not number:
+        return s
+    _re = re.compile(
+        r'^(?:\[' + re.escape(number) + r'\]|' + re.escape(number) + r'(?![0-9A-Za-z]))[\s\-_]*',
+        re.IGNORECASE,
+    )
+    while s:
+        nxt = _re.sub('', s, count=1)
+        if nxt == s:
+            break
+        s = nxt
+    return s
+
+
+# ---------------------------------------------------------------------------
+# 多段（multi-part）token 偵測與剝除（CD-8 / plan-72b §1.4）
+# ---------------------------------------------------------------------------
+
+#: 支援的多段 token 前綴集合（全小寫）
+MULTIPART_TOKENS: frozenset = frozenset({'cd', 'dvd', 'part', 'pt', 'disc'})
+
+# 共用編譯正則：前後邊界皆檢查，數字限 1-9 且後不可再接數字
+# - 前緣 (?<![A-Za-z0-9])：避免 apartment1 誤命中 part1
+# - 後緣 (?=[-_.\s\[\]()]|$)：token 後須為分隔符 / bracket / 字串終點
+_MULTIPART_RE = re.compile(
+    r'(?<![A-Za-z0-9])(cd|dvd|part|pt|disc)([1-9])(?![0-9])(?=[-_.\s\[\]()]|$)',
+    re.IGNORECASE,
+)
+
+
+def _detect_multipart_token(filename: str) -> Optional[Tuple[str, int]]:
+    """
+    偵測原始檔名中的多段 token（cd/dvd/part/pt/disc 後接 1-9）。
+
+    Args:
+        filename: 原始檔名（含副檔名，如 ``MIRD-151-cd1.mkv``）。
+
+    Returns:
+        ``(raw_token_lower, part_number)`` — 如 ``("cd1", 1)``；無匹配回 ``None``。
+        多個匹配時取 stem 中位置最靠後者（避免標題中段巧合字串蓋過尾端 token）。
+    """
+    if not filename:
+        return None
+    stem = os.path.splitext(filename)[0]
+    lower_stem = stem.lower()
+    matches = list(_MULTIPART_RE.finditer(lower_stem))
+    if not matches:
+        return None
+    # 取最靠後（span 最大 start）的匹配
+    last = matches[-1]
+    prefix = last.group(1).lower()
+    digit = int(last.group(2))
+    return (f'{prefix}{digit}', digit)
+
+
+def _strip_part_token(stem: str) -> str:
+    """
+    從已去副檔名的 stem 剝除最靠後的多段 token（含其前導分隔符）。
+
+    與 ``_detect_multipart_token`` 共用同一套邊界正則，確保契約一致。
+
+    Args:
+        stem: 已去副檔名的字串（如 ``MIRD-151-cd1``）。
+
+    Returns:
+        剝除多段 token 及其前導分隔符後的 stem；無 token 時原樣回傳（no-op）。
+        保留 base 段原始大小寫。
+    """
+    if not stem:
+        return stem
+    lower_stem = stem.lower()
+    matches = list(_MULTIPART_RE.finditer(lower_stem))
+    if not matches:
+        return stem
+    last = matches[-1]
+    token_start = last.start()  # token 本體在 lower_stem 的起始位置
+    token_end = last.end()      # 不含後緣 lookahead（lookahead 不消耗）
+    # 若 token 前有分隔符，一併剝除（[-_.\s\[(]）
+    if token_start > 0 and stem[token_start - 1] in '-_. \t([':
+        strip_from = token_start - 1
+    else:
+        strip_from = token_start
+    return stem[:strip_from] + stem[token_end:]
+
+
+def _is_multipart_kw(kw: str) -> bool:
+    """
+    判斷一個 suffix keyword 是否為多段 token（cd/dvd/part/pt/disc 後接 1-9）。
+
+    外部模式下用來濾掉 suffix_keywords 中的多段 token，避免與 part_tail 雙寫。
+    複用 `_MULTIPART_RE` 與 `MULTIPART_TOKENS`，確保契約與 `_detect_multipart_token` 一致。
+
+    Args:
+        kw: suffix keyword，如 ``'-cd1'``、``'_uc'``、``'-4k'``。
+
+    Returns:
+        True 若 keyword 是多段 token（strip 前導分隔符後 fullmatch）；否則 False。
+        ``'-cd1'`` / ``'-dvd1'`` / ``'part2'`` → True；``'-4k'`` / ``'_uc'`` → False。
+    """
+    if not kw:
+        return False
+    # strip 前導分隔符（keyword 慣例帶 -/_/.，也允許無前綴如 'cd1'）
+    stripped = kw.lstrip('-_. ')
+    if not stripped:
+        return False
+    # fullmatch：整個 stripped 字串必須是 (prefix)(1-9)，且後不再接數字
+    # 與 _MULTIPART_RE 用同一 MULTIPART_TOKENS 集合、同一數字規則（1-9，不含 cd10+）
+    m = re.fullmatch(r'(cd|dvd|part|pt|disc)([1-9])', stripped, re.IGNORECASE)
+    return m is not None
 
 
 _VR_UNIQUE: frozenset = frozenset({
@@ -390,6 +552,8 @@ def download_image(url: str, save_path: str, referer: str = '') -> bool:
     return False
 
 
+
+
 def generate_nfo(
     number: str,
     title: str,
@@ -412,6 +576,7 @@ def generate_nfo(
     summary: str = '',
     rating: Optional[float] = None,
     mpaa: str = 'JP-18+',
+    external_manager: str = 'off',
 ) -> bool:
     """
     生成 NFO 檔案
@@ -427,6 +592,11 @@ def generate_nfo(
         url: 來源 URL
         has_subtitle: 是否有字幕
         output_path: NFO 輸出路徑
+        external_manager: 外部媒體管理器模式（"off" / "jellyfin" / "emby" / "kodi"）
+            - "off"（預設）：最小輸出，無 F3 欄位
+            - "jellyfin" / "emby"：附加 F3 五欄位，poster/fanart 使用 stem 長格式命名
+            - "kodi"：附加 F3 五欄位；poster/fanart 與 jellyfin/emby 相同（stem 長格式），
+              Kodi 在所有資料夾 layout 下均識別 {basename}-poster.jpg/{basename}-fanart.jpg
     """
     if not output_path:
         return False
@@ -439,11 +609,18 @@ def generate_nfo(
     # 封面檔名（不含副檔名）
     basename = os.path.splitext(os.path.basename(output_path))[0]
 
-    # 顯示標題
-    display_title = f"[{number}]{title}" if title else f"[{number}]{original_title}"
+    # 顯示標題（belt-and-suspenders：剝除前置番號前綴後組 display_title，B2 FIX B CD-c7）
+    _t = title or original_title
+    _t = _strip_num_prefixes(_t, number) if _t else _t
+    display_title = f"[{number}]{_t}" if _t else f"[{number}]"
 
     poster_suffix = '-poster' if has_poster else ''
     fanart_suffix = '-fanart' if has_fanart else ''
+
+    # poster/fanart tag：所有模式（off / jellyfin / emby / kodi）均使用 stem 長格式。
+    # off → poster_suffix='' → {basename}.jpg；jellyfin/emby/kodi → {basename}-poster.jpg。
+    poster_tag = f'{html.escape(basename)}{poster_suffix}.jpg'
+    fanart_tag = f'{html.escape(basename)}{fanart_suffix}.jpg'
 
     set_tag = (
         f"<set><name>{html.escape(series)}</name></set>" if series else "<set></set>"
@@ -469,9 +646,9 @@ def generate_nfo(
   <mpaa>{html.escape(mpaa)}</mpaa>
   {runtime_tag}
   {director_tag}
-  <poster>{html.escape(basename)}{poster_suffix}.jpg</poster>
+  <poster>{poster_tag}</poster>
   <thumb>{html.escape(basename)}.jpg</thumb>
-  <fanart>{html.escape(basename)}{fanart_suffix}.jpg</fanart>
+  <fanart>{fanart_tag}</fanart>
 '''
 
     # 演員
@@ -506,11 +683,25 @@ def generate_nfo(
     if has_vr and not any(t.strip().lower() == 'vr' for t in tags):
         nfo_content += '  <genre>VR</genre>\n'
 
+    # T3：F3 五欄位區塊（僅 external_manager != "off" 時輸出）
+    # 注意：這會造成 NFO 內同時有兩個 default="true" 的 uniqueid（home + num）。
+    # POC 實證 Jellyfin 容忍（兩個 ProviderId 都正確讀到），故意保留 home 行不動。
+    if external_manager != 'off':
+        external_block = (
+            f'  <lockdata>true</lockdata>\n'
+            f'  <uniqueid type="num" default="true">{html.escape(number)}</uniqueid>\n'
+            f'  <sorttitle>{html.escape(display_title)}</sorttitle>\n'
+            f'  <country>Japan</country>\n'
+            f'  <language>ja</language>\n'
+        )
+    else:
+        external_block = ''
+
     nfo_content += f'''  <num>{html.escape(number)}</num>
   <release>{html.escape(date)}</release>
   <cover></cover>
   <website>{html.escape(url)}</website>
-  <uniqueid type="home" default="true">{html.escape(number)}</uniqueid>
+{external_block}  <uniqueid type="home" default="true">{html.escape(number)}</uniqueid>
 </movie>'''
 
     try:
@@ -610,11 +801,20 @@ def organize_file(
     original_ext = os.path.splitext(file_path)[1]
     original_filename = os.path.basename(file_path)
 
+    # 外部管理器模式（單一來源，早偵測層；CD-72b-T5）
+    ext_mode = config.get('external_manager', 'off')
+
     # 偵測 VR cluster（CD-68-5/6/7）：算一次，作用域涵蓋 title 剝除、組裝段與 nfo 呼叫（GA）
     # 上移至 extract_chinese_title 之前，用於剝除 extracted_title 尾端的 VR token（Codex P2）
     vr_cluster = _detect_vr_cluster(original_filename)
     vr_tail = f'_{vr_cluster}' if vr_cluster else ''
-    reserve = len(vr_tail)  # 兩分支共用 budget，CD-68-7
+
+    # 多段（multipart）token 早偵測（CD-72b-T5）；off 模式恆不啟用（part_tail=''）
+    part_match = _detect_multipart_token(original_filename) if ext_mode != 'off' else None
+    part_tail = f'-{part_match[0]}' if part_match else ''   # e.g. '-cd1'；off 模式恆 ''
+
+    # budget reserve：兩分支共用，part_tail 也預留；off 模式 part_tail='' → 等同現狀（CD-68-7/CD-72b-T5）
+    reserve = len(vr_tail) + len(part_tail)
 
     # 準備格式化資料
     actors = metadata.get('actors', [])
@@ -634,6 +834,11 @@ def organize_file(
             _trimmed = extracted_title[:_m.start()].rstrip('_-. ')
             extracted_title = _trimmed or extracted_title
 
+    # FIX A：B2 junk-validation（CD-c5/c6）
+    # 若提取結果殘留 organize 模板 artifact（日期/maker/suffix），丟棄改用翻譯/刮削源
+    if extracted_title and _extracted_has_organize_junk(extracted_title, number, metadata, config):
+        extracted_title = None   # fall through 到翻譯/刮削源（CD-c6）
+
     # 決定最終使用的標題
     if translated_title:
         title = translated_title
@@ -646,6 +851,13 @@ def organize_file(
         title = original_title
         result['title_source'] = 'original'
 
+    # FIX B：B2 標題決定段去前綴（CD-c7）
+    # 勝出 title 若帶 [{number}]/{number} 前綴，迴圈剝盡至本體
+    # → 檔名（format_data['title']）、NFO <title>、<sorttitle> 同時受惠
+    # → 迴圈剝盡可修復舊 bug 寫進磁碟/DB 的 [ABC-123][ABC-123]Title 雙重堆疊
+    if title:
+        title = _strip_num_prefixes(title, number)
+
     format_data = {
         'number': number,
         'title': truncate_title(title, config.get('max_title_length', 50)),
@@ -654,9 +866,14 @@ def organize_file(
         'date': metadata.get('date', ''),
     }
 
-    # 偵測版本後綴
+    # 偵測版本後綴；外部模式過濾掉多段 token 避免 {suffix}+part_tail 雙寫（CD-72b-T5）
+    # 注意：絕不 mutate config['suffix_keywords']，只過濾傳入 _detect_suffixes 的區域變數
     suffix_keywords = config.get('suffix_keywords', [])
-    suffix = _detect_suffixes(original_filename, suffix_keywords)
+    if ext_mode != 'off':
+        detect_keywords = [kw for kw in suffix_keywords if not _is_multipart_kw(kw)]
+    else:
+        detect_keywords = suffix_keywords   # off 模式：原始未過濾 list，byte-identical
+    suffix = _detect_suffixes(original_filename, detect_keywords)
     format_data['suffix'] = suffix
 
     # 記錄哪些欄位實際用了 fallback（僅資料夾層級會觸發 fallback）
@@ -737,10 +954,20 @@ def organize_file(
         filename_base = truncate_to_chars(filename_base, max(0, max_chars - reserve))
     # VR tail 永遠最後接（CD-68-6）；vr_tail='' 時零變化（CD-68-9）
     filename_base = filename_base + vr_tail
+    # P1-A 修正（Codex）：{title} 欄位（尤其是 extracted_title）可能殘留多段 token
+    # （如 extract_chinese_title 保留 '某中文標題-part2[HD]'），導致 part_tail 雙寫。
+    # 在接 part_tail 之前，先從 filename_base 剝除最靠後的多段 token（_strip_part_token
+    # 無 token 時為 no-op → 乾淨標題案例完全不影響輸出）。
+    # off 模式 part_tail='' → if 分支不進入，行為與修前 byte-identical。
+    # 注意：不需另在 extracted_title 層剝除，組裝後整體剝更穩健（任何欄位來源均覆蓋）。
+    if part_tail:
+        filename_base = _strip_part_token(filename_base)  # 移除 {title} 等欄位遺留的多段 token
+    # part token 接在 VR tail 之後（最末）；off 模式 part_tail='' → no-op（CD-72b-T5）
+    # 順序：{base}{vr_tail}{part_tail}；Jellyfin stacking 要求 part token 落在 stem 最末
+    filename_base = filename_base + part_tail
     # 最終長度上限保護（Codex PR P2）：即使退化情形也不突破 max_filename_length。
-    # 正常/spec 情形 reserve 已預留 → base+vr_tail == max_chars → 此為 no-op、VR tail 完整；
-    # 僅 max_filename_length 被設到連 ext+VR cluster 都裝不下（低於 UI 下限的 config/API 值）時才作用，
-    # 鏡射 suffix 路徑的 truncate_to_chars(suffix, max_chars) 上限語意。
+    # 正常/spec 情形 reserve 已預留 → base+vr_tail+part_tail == max_chars → 此為 no-op；
+    # 僅 max_filename_length 被設到連 ext+VR cluster+part token 都裝不下時才作用。
     filename_base = truncate_to_chars(filename_base, max_chars)
 
     new_filename = filename_base + original_ext
@@ -786,20 +1013,30 @@ def organize_file(
             if download_image(img_url, cover_path):
                 result['cover_path'] = cover_path
 
-        # Jellyfin 模式：產生 poster + fanart
-        if config.get('jellyfin_mode') and result.get('cover_path'):
+        # 外部管理器模式：依 ext_mode 決定 poster/fanart 命名規則（ext_mode 已在早偵測層定義）
+        # jellyfin/emby 與 kodi 均使用 stem 長格式（{stem}-poster.jpg / {stem}-fanart.jpg），
+        # Kodi 在所有資料夾 layout 下均識別此命名，無需 per-folder 偵測。
+        if ext_mode != 'off' and result.get('cover_path'):
             cover_jpg = result['cover_path']
-            # fanart = 原圖複製
-            fanart_path = os.path.join(target_dir, filename_base + '-fanart.jpg')
-            try:
-                shutil.copy2(cover_jpg, fanart_path)
-                result['fanart_path'] = fanart_path
-            except Exception as e:
-                logger.warning(f"[!] Fanart 複製失敗: {e}")
-            # poster = 裁切
-            poster_path = os.path.join(target_dir, filename_base + '-poster.jpg')
-            if crop_to_poster(cover_jpg, poster_path):
-                result['poster_path'] = poster_path
+            if ext_mode in _STEM_IMAGE_MODES:
+                # 兩種模式均使用 stem 長格式（collision-free，Kodi 正典）
+                fanart_path = os.path.join(target_dir, filename_base + '-fanart.jpg')
+                poster_path = os.path.join(target_dir, filename_base + '-poster.jpg')
+            else:
+                # 未知值防禦：不產圖
+                fanart_path = None
+                poster_path = None
+            if fanart_path:
+                # fanart = 原圖複製
+                try:
+                    shutil.copy2(cover_jpg, fanart_path)
+                    result['fanart_path'] = fanart_path
+                except Exception as e:
+                    logger.warning(f"[!] Fanart 複製失敗: {e}")
+            if poster_path:
+                # poster = 裁切
+                if crop_to_poster(cover_jpg, poster_path):
+                    result['poster_path'] = poster_path
 
         # extrafanart 下載（download_sample_images 控制，需 create_folder=True 才有 per-video 目錄）
         # create_folder=False 時多片共用同一資料夾，fanart1.jpg 會互相覆蓋，故禁用
@@ -820,33 +1057,41 @@ def organize_file(
 
         # 生成 NFO（檔名跟隨影片命名）
         nfo_path = os.path.join(target_dir, filename_base + '.nfo')
-        tags = metadata.get('tags', [])
-        user_tags = metadata.get('user_tags', [])
-        if generate_nfo(
-            number=number,
-            title=format_data['title'],
-            original_title=original_title,  # 日文原始標題
-            actors=actors,
-            tags=tags,
-            user_tags=user_tags,
-            date=metadata.get('date', ''),
-            maker=metadata.get('maker', ''),
-            url=metadata.get('url', ''),
-            has_subtitle=has_subtitle,
-            has_vr=(vr_cluster is not None),
-            output_path=nfo_path,
-            has_poster=bool(result.get('poster_path')),
-            has_fanart=bool(result.get('fanart_path')),
-            director=metadata.get('director', ''),
-            duration=metadata.get('duration'),
-            series=metadata.get('series', ''),
-            label=metadata.get('label', ''),
-            # 63c-5：metadata 是 raw search_jav 結果 dict，summary/rating 走 _ 前綴 carrier
-            # （server re-search 路徑帶值；frontend-passed 路徑因 echo strip 無值 → default）
-            summary=metadata.get('_summary', ''),
-            rating=metadata.get('_rating'),
-        ):
-            result['nfo_path'] = nfo_path
+        # part-2+ 且外部模式：跳過 NFO（CD-2 只有一份 metadata 由 cd1 產；封面/poster/fanart 照常）
+        # off 模式恆不跳（即使 cd2 也照產 NFO，byte-identical）（CD-72b-T5）
+        skip_nfo = bool(part_match) and part_match[1] >= 2 and ext_mode != 'off'
+        if skip_nfo:
+            result['nfo_path'] = None            # dict 初值已 None，明確設更清楚
+            result['skipped_nfo_multipart'] = True
+        else:
+            tags = metadata.get('tags', [])
+            user_tags = metadata.get('user_tags', [])
+            if generate_nfo(
+                number=number,
+                title=format_data['title'],
+                original_title=original_title,  # 日文原始標題
+                actors=actors,
+                tags=tags,
+                user_tags=user_tags,
+                date=metadata.get('date', ''),
+                maker=metadata.get('maker', ''),
+                url=metadata.get('url', ''),
+                has_subtitle=has_subtitle,
+                has_vr=(vr_cluster is not None),
+                output_path=nfo_path,
+                has_poster=bool(result.get('poster_path')),
+                has_fanart=bool(result.get('fanart_path')),
+                director=metadata.get('director', ''),
+                duration=metadata.get('duration'),
+                series=metadata.get('series', ''),
+                label=metadata.get('label', ''),
+                # 63c-5：metadata 是 raw search_jav 結果 dict，summary/rating 走 _ 前綴 carrier
+                # （server re-search 路徑帶值；frontend-passed 路徑因 echo strip 無值 → default）
+                summary=metadata.get('_summary', ''),
+                rating=metadata.get('_rating'),
+                external_manager=ext_mode,
+            ):
+                result['nfo_path'] = nfo_path
 
         result['used_fallbacks'] = used_fallbacks
         result['success'] = True

@@ -128,7 +128,15 @@ def scrape_single(request: ScrapeRequest) -> dict:
     if result.get("success"):
         target_file = result.get("new_filename")
         if target_file:
-            db_sync_status = try_inflow_upsert(target_file)
+            # 72d-P2C：cd2/part2 外部模式下 organizer F2 skip NFO，scan_file 無 NFO 可讀
+            # → 傳 scraped_metadata 讓 db_inflow overlay scraped fields，cd2 row 與 cd1 一致。
+            # 非 multipart（skipped_nfo_multipart 不存在或 False）一律傳 None（byte-identical）。
+            _multipart_meta = metadata if result.get("skipped_nfo_multipart") else None
+            db_sync_status = try_inflow_upsert(
+                target_file,
+                old_file_path=file_path,
+                scraped_metadata=_multipart_meta,
+            )
         else:
             logger.warning("scrape_single: organize_file 回傳缺 new_filename，skip in-flow upsert")
 
@@ -232,7 +240,20 @@ def enrich_single_endpoint(request: EnrichRequest) -> dict:
         nfo_path, cover_path = resolve_nfo_cover_paths(request.file_path)
         will_write_nfo = request.write_nfo and not os.path.exists(nfo_path)
         will_write_cover = request.write_cover and not os.path.exists(cover_path)
-        if not will_write_nfo and not will_write_cover:
+        # 72d-P2A：外部圖寫出機會也是合法的寫出路徑（72b-T6 加入 external_manager 後守衛未同步）
+        external_manager = config.get("scraper", {}).get("external_manager", "off")
+        if external_manager != "off":
+            stem = os.path.splitext(uri_to_fs_path(request.file_path))[0]
+            poster_path = stem + "-poster.jpg"
+            fanart_path = stem + "-fanart.jpg"
+            # 底圖存在 + 至少一張外部圖缺 → _write_external_images 有寫出機會
+            cover_exists_on_disk = os.path.exists(cover_path)
+            will_write_external = cover_exists_on_disk and (
+                not os.path.exists(poster_path) or not os.path.exists(fanart_path)
+            )
+        else:
+            will_write_external = False
+        if not will_write_nfo and not will_write_cover and not will_write_external:
             raise HTTPException(
                 status_code=400,
                 detail="refresh_full + overwrite_existing=false 在此設定下不會寫出任何 NFO/封面，只會更新 DB 造成與磁碟分裂；請開 overwrite_existing、確保 NFO/封面有實際寫入，或補劇照請改用 /api/scraper/fetch-samples",
@@ -247,6 +268,7 @@ def enrich_single_endpoint(request: EnrichRequest) -> dict:
             write_cover=request.write_cover,
             write_extrafanart=request.write_extrafanart,
             overwrite_existing=request.overwrite_existing,
+            external_manager=config.get("scraper", {}).get("external_manager", "off"),
             proxy_url=proxy_url,
             source=request.source,
             javbus_lang=request.javbus_lang,
@@ -378,6 +400,7 @@ async def batch_enrich_endpoint(request: BatchEnrichRequest):
                             write_cover=request.write_cover,
                             write_extrafanart=request.write_extrafanart,
                             overwrite_existing=request.overwrite_existing,
+                            external_manager=config.get("scraper", {}).get("external_manager", "off"),
                             proxy_url=proxy_url,
                             source=effective_source if effective_source != "auto" else None,
                             javbus_lang=effective_lang,

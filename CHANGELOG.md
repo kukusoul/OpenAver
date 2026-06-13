@@ -5,7 +5,53 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.9.11] - 2026-06-13
+
+本版主軸：**外部媒體管理器相容模式（Jellyfin / Emby / Kodi）**（feature/72）。OpenAver 的 NFO 本來就是 Kodi/Jellyfin/Emby 共用的 XML schema，「基本相容」沒問題，但離「掛上去就正確顯示」還差一截——圖片命名偏好不同、多段影片（cd1/cd2）會被當成兩部片、NFO 少了幾個媒體庫排序/過濾用的欄位。本版在 Settings 新增「外部媒體管理器模式」**四態選擇器（預設｜Jellyfin｜Emby｜Kodi，每態各有一行說明）**：選任一外部模式後，刮削/整理會另存 `{番號}-poster.jpg`／`{番號}-fanart.jpg`、把 cd1/cd2/part1 等多段自動合併成一部片（第 2 段以後只跳 NFO、保留封面）、並補上 NFO 辨識欄位（番號 ID／排序／產地／語言）。掃描端也學會讀外部工具（MDCX/Javinizer）或 OpenAver 自己產生的 `{番號}-fanart/-poster.jpg`，直接接手已刮削的收藏庫。另含 issue #44 後續回報的兩個整理 pipeline 修復（B1 搬檔不再產生重複死卡、B2 已整理檔再整理標題不疊加）。
+
+*This release's main theme: **external media-manager compatibility mode (Jellyfin / Emby / Kodi)** (feature/72). OpenAver's NFO has always been the shared Kodi/Jellyfin/Emby XML schema, so "basically compatible" was fine — but "mount it and it just shows up correctly" was still a gap: image-naming preferences differ, multi-part videos (cd1/cd2) were treated as two separate movies, and the NFO lacked a few fields media servers use for sorting/filtering. This release adds an "external media-manager mode" **four-state selector (Default | Jellyfin | Emby | Kodi, each with a one-line hint)** in Settings: pick any external mode and scraping/organizing also writes `{stem}-poster.jpg`/`{stem}-fanart.jpg`, auto-merges multi-part files (cd1/cd2/part1 — part-2+ skip only the NFO and keep the cover), and adds NFO recognition fields (number ID / sort / country / language). The Scanner also learned to read `{stem}-fanart/-poster.jpg` produced by external tools (MDCX/Javinizer) or by OpenAver itself, so you can take over an already-scraped collection directly. Also includes two organize-pipeline fixes reported as issue #44 follow-ups (B1 — moving a file during organize no longer leaves a duplicate dead card; B2 — re-organizing an already-organized file no longer stacks the title).*
+
+### Added
+#### 🎬 外部媒體管理器相容模式 / External media-manager compatibility mode
+- **F1 — 外部媒體管理器四態選擇器**：Settings 新增「外部媒體管理器模式」segmented 控件，四格「預設｜Jellyfin｜Emby｜Kodi」，每態旁邊一行說明（trailing hint，跟在選擇器同一橫列）清楚講「會產生什麼檔案」。選「預設」行為與現狀完全相同。
+- **F2 — cd1/cd2 多段自動合併**：開外部模式後，偵測檔名多段 token（cd1/cd2、dvd1/dvd2、part1/part2、pt、disc）；第 1 段正常輸出 NFO + 封面，第 2 段以後**只跳過 NFO、保留封面**（媒體庫靠 NFO 認片數，只留第 1 段 NFO 就會收成「一部片、兩段」；多出的封面不破壞合併，OpenAver 自己的瀏覽頁仍逐段顯示各自封面）。多段 token 一律移到輸出檔名最尾端（夾在後綴中間會讓 Jellyfin 認不出來）。
+- **F3 — NFO 補強欄位**：任一外部模式下，NFO 額外寫入 `<lockdata>`（best-effort，仍輸出但不保證生效）、`<uniqueid type="num" default="true">`（番號 ID，Jellyfin/Emby 偏好格式）、`<sorttitle>`（排序用）、`<country>Japan</country>`、`<language>ja</language>`（供媒體庫過濾）。這些欄位不影響 OpenAver 自身（OpenAver 讀資料庫、不讀 NFO）。
+- **F5 — Scanner 識別外部封面**：掃描封面查找新增一層（同名圖之後、固定名稱之前），辨識 `{番號}-fanart.{ext}`（優先，橫版全圖供瀏覽顯示）與 `{番號}-poster.{ext}`（次之）。能讀回 OpenAver 自己在外部模式產生的封面，也能直接接手 MDCX/Javinizer 等工具已刮削的收藏庫。
+- **F6 — Help 多版本手動指引**：Help 新增一段純文字教學，說明「同片多版本（流出/4K/中文）在 Emby/Jellyfin 合併成一筆 + 版本下拉」這件**整個生態圈都靠手動結構解決**的事該怎麼擺檔案，附可照抄的資料夾範例與兩個限制。
+- **F7 — 「就地補資料 vs 整理歸檔」措辭換軸**：把 Settings/Help/新手教學描述兩條刮資料路徑的用詞，從暗示「新手用 Scanner、老手用 Search」的技能分層，改為「動不動你的檔案」的意圖區分——就地補資料（Scanner，不改名、適合唯讀網盤）vs 整理歸檔（Search，改名搬移建乾淨媒體庫）。
+- **補圖入口擴及 Kodi**（72d）：掃描頁的「補齊外部封面」工具原本只在 Jellyfin/Emby 模式出現，現擴及 Kodi（Kodi 模式掃描本就產同樣的 sidecar 封面，卻拿不到補圖工具——補上既有缺口）。
+
+### Changed
+- **F4 — 修正過時/錯誤說明**：移除「Emby 不支援 fanart」的錯誤說明（Emby 同樣支援 `{stem}-fanart.jpg`），README 與 Settings 文案一併更新；Kodi 文案從裸 `poster.jpg` 改正為 `{番號}-poster.jpg`（72c 起 Kodi 也輸出 stem 長格式）。
+- **補圖流程文字中性化**（72d，mode-agnostic）：補圖按鈕/提示/通知/log 從寫死「Jellyfin 圖片」改為「外部媒體管理器圖片／封面」，三態（Jellyfin/Emby/Kodi）用戶看到的措辭一致（i18n value 中性化，key 名與端點 path 不變）。
+- **Settings 外部管理器改四格 segmented**：由舊三態「關閉｜Jellyfin / Emby｜Kodi」拆成四格「預設｜Jellyfin｜Emby｜Kodi」，記住用戶選的是 Jellyfin 還是 Emby（重整頁面高亮正確）。
+
+### Fixed
+#### 🔧 整理 pipeline 附帶修復（issue #44 後續，feature/72-T-c1/T-c2）/ Organize-pipeline drive-by fixes
+- **B1 — 整理搬檔時 DB 跟著搬，消除重複死卡**：先用列表生成（Scanner）原地索引一批片、之後又在搜尋頁對其中某片「整理」（改名搬移）時，舊路徑那筆會變成孤兒死卡，同一片在瀏覽出現兩張（其中一張封面壞掉）。現在整理搬檔會把 DB 那筆原地跟著搬到新路徑（保留入庫時間、瀏覽排序位置、以及你在瀏覽頁加的標籤），整理完當下就只剩一張正確的卡、不必等下次重掃。**任何外部媒體管理器模式皆修，與模式無關。**
+  *B1 — when you index videos in-place via the list generator (Scanner) and later "organize" (rename+move) one of them from search, the old path used to linger as an orphan dead card (the same video showed twice, one with a broken cover). Now the organize move carries the DB record to the new path in place (preserving created-at time, browse ordering, and your browse-page tags); you get a single correct card immediately, no rescan needed. Mode-agnostic.*
+- **B2 — 已整理過的檔再整理一次，標題不再疊加**：對 OpenAver 自己整理出來的成品檔（檔名已是 `[番號][廠商] 標題-後綴` 格式）再整理一次，過去會把整段已格式化檔名誤當「標題」塞回去，越疊越長（番號/廠商/後綴重複）。現在會辨識「這是已整理過的成品」而改用刮削/翻譯標題，並把標題開頭多餘的番號前綴剝乾淨（連舊版本已寫進磁碟/資料庫的雙重前綴也一併修好）；真正的原始下載檔名行為不變，中文標題搶救照舊。
+  *B2 — re-organizing a file OpenAver already produced (filename already in `[number][maker] title-suffix` form) used to mistake the whole formatted name for the "title" and stack it endlessly (duplicated number/maker/suffix). It now recognizes an already-organized file and uses the scraped/translated title instead, stripping redundant leading number prefixes from the title (repairing even doubled prefixes previously written to disk/DB); genuine raw download filenames are unaffected and Chinese-title rescue still works.*
+
+#### 🔧 外部管理器相容修正 / External-manager compat fixes
+- **補圖 gate 改正向白名單、fail-closed**（72d Codex P2）：掃描頁補圖入口的開關由「不是 jellyfin_emby 就不出現」改為「是 off 才不出現」（正向白名單），新增的 Kodi/Emby 模式正確觸發、未知值安全地不觸發。
+- **Kodi sidecar 一律 stem 長格式**（72b Codex P1）：Kodi 模式的封面從裸 `poster.jpg`/`fanart.jpg` 改為與 Jellyfin/Emby 相同的 `{stem}-poster.jpg`/`{stem}-fanart.jpg`，避免同資料夾多部片時裸命名互相覆蓋（多片碰撞）。
+
+### Internal
+- **external_manager 升真四態 config**（`Literal["off","jellyfin","emby","kodi"]`）+ migration（既有存檔 `jellyfin_emby` → load 時就地改寫為 `jellyfin`，idempotent）；圖片命名分支抽共用常數 `_STEM_IMAGE_MODES = ('jellyfin','emby','kodi')`（organizer/enricher 共用，避免 drift）。`!= 'off'` 的 F3 NFO / 多段偵測分支原樣涵蓋三個非 off 值、不動。
+- **多段 token 偵測** `_detect_multipart_token` / `_strip_part_token`（cd/dvd/part/pt/disc 系列，token 必落輸出檔名尾端）。
+- 補圖 check/generate 後端本就 generic（只認兩 sidecar、零 Jellyfin 特有邏輯），gate 擴三態後零後端改動；`jellyfin_check` capability 描述/data 文字隨補圖中性化（端點 path 與 schema 不變、contract no-op）。
+
+### Non-Goals（明確不做）
+- **不支援 Plex**（無原生 NFO 讀取，Settings 不加 Plex）、**不做多版本自動合併**（整個 JAV 生態圈都靠手動結構解決，本版改文檔化手動指引 F6）、**不做 `.actors/` 演員縮圖資料夾**（Kodi-specific、無法共用）、**不做獨立輸出目錄（decoupled output）**（架構改動大、屬獨立 feature）、**不做 NFO 演員名翻譯**（日文名在 Jellyfin/Emby 顯示無問題）、**不讓 Scanner 改名**（維持唯讀原地索引定位，可安全掃唯讀網盤）、**不把版本後綴寫成 tag**、**不做 Scanner 批次整理/一鍵歸檔**（屬未來獨立 feature，本版只先把 F7 措辭換軸做好）。
+
+### i18n
+- zh_TW 文案本版交付（settings 四段 hint + 補圖中性化 + Help 四模式措辭）。zh_CN/en/ja 對應 key（settings 四段 hint + 補圖中性化）依專案慣例**待 milestone 同步**（執行階段 i18n fallback 到 zh_TW，不顯示 raw key；HELP_KEYS parity 守衛維持綠）。
+
+### 測試
+- 全套 pytest **4078 passed, 2 skipped**（unit + integration，排除 smoke / e2e）+ `npm run lint`（eslint + stylelint）綠。
+- 新增測試：`test_db_inflow`（B1 整理搬檔 DB repath）/ `test_organizer_multipart`（F2 多段 token 偵測 + 尾端）/ `test_organizer_title`（B2 已整理檔不疊加標題）/ `test_enricher`（enrich 路徑外部模式）/ `test_generate_nfo`（F3 補強欄位）/ `test_jellyfin_compat`（smoke harness，CI 排除）+ 前端守衛（settings 四態 segmented / 補圖 gate 三態化 / Kodi stem）。
+- **transient-guard**：`test_frontend_lint` 中針對舊 `jellyfin_emby` 字面 / `!= 'off'` 的 negative-fingerprint 斷言標 `[transient-guard]`（四態遷移一次性，下個 milestone 評估移除）。
 
 ## [0.9.10] - 2026-06-12
 

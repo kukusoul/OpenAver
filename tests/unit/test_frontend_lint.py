@@ -441,12 +441,43 @@ class TestJellyfinCheckManualGuard:
             f"scanner.js jellyfinCheckState = 'idle' 出現 {count} 次，期望 >= 2（cleanup + clearCache）"
 
     def test_trigger_row_xshow_uses_jellyfin_image_visible(self):
-        """T3(40c) Codex fix: 觸發列 x-show 改為 !jellyfinImageVisible 而非 jellyfinCheckState !== 'done'"""
+        """T3(40c) / T-d4 / 72d-codexP2: 觸發列 x-show 用正向白名單 gate（fail-closed，含 kodi）"""
+        from bs4 import BeautifulSoup
         html = self._html()
-        assert "config?.scraper?.jellyfin_mode && !jellyfinImageVisible" in html, \
-            "scanner.html 觸發列 x-show 應使用 !jellyfinImageVisible（而非 jellyfinCheckState !== 'done'）"
-        assert "config?.scraper?.jellyfin_mode && jellyfinCheckState !== 'done'" not in html, \
-            "scanner.html 觸發列 x-show 仍使用舊的 jellyfinCheckState !== 'done' 條件"
+        soup = BeautifulSoup(html, "html.parser")
+        # There are multiple nfo-update-row divs; the jellyfin trigger row is the one
+        # whose x-show references jellyfinImageVisible (not nfoUpdateVisible etc.)
+        rows = soup.find_all("div", class_="nfo-update-row")
+        jellyfin_row = next(
+            (r for r in rows if "jellyfinImageVisible" in r.get("x-show", "") and "config" in r.get("x-show", "")),
+            None
+        )
+        assert jellyfin_row is not None, \
+            "scanner.html 找不到含 jellyfinImageVisible + config 的 nfo-update-row element"
+        xshow = jellyfin_row.get("x-show", "")
+        # 正向白名單（fail-closed）：config={} / undefined 時 gate 為 false，不顯示
+        assert "['jellyfin', 'emby', 'kodi'].includes(config?.scraper?.external_manager)" in xshow, \
+            f"nfo-update-row x-show 應使用正向白名單 .includes() gate（fail-closed），實際: {xshow!r}"
+        assert "!jellyfinImageVisible" in xshow, \
+            f"nfo-update-row x-show 應含 !jellyfinImageVisible，實際: {xshow!r}"
+        # forbidden：舊 jellyfin_emby gate 與 interim !='off'（fail-open）皆不得殘留
+        assert "=== 'jellyfin_emby'" not in html, \
+            "scanner.html 仍殘留舊 === 'jellyfin_emby' gate"
+        assert "config?.scraper?.external_manager !== 'off' && !jellyfinImageVisible" not in html, \
+            "scanner.html 觸發列仍用 interim !== 'off' gate（undefined 會 fail-open，須改正向白名單）"
+        assert "config?.scraper?.jellyfin_mode && !jellyfinImageVisible" not in html, \
+            "scanner.html 觸發列 x-show 仍使用舊的 jellyfin_mode 讀取點（應已 repoint 為 external_manager）"
+
+    def test_check_jellyfin_method_gate_is_fail_closed(self):
+        """72d-codexP2: checkJellyfinImages() 方法端 gate 用正向白名單，config 未載入時 fail-closed 不打 API"""
+        js = self._js()
+        assert "async checkJellyfinImages()" in js, "state-scan.js 找不到 checkJellyfinImages() 方法"
+        # 正向白名單 early-return（fail-closed）；此字串為該 gate 獨有
+        assert "!['jellyfin', 'emby', 'kodi'].includes(this.config?.scraper?.external_manager)" in js, \
+            "checkJellyfinImages() 應以正向白名單 early-return（fail-closed），不可用 === 'off'（undefined fail-open）"
+        # forbidden：舊 fail-open gate（undefined === 'off' 為 false → 不 return → 打 /jellyfin-check）
+        assert "this.config?.scraper?.external_manager === 'off'" not in js, \
+            "state-scan.js 仍殘留 external_manager === 'off' gate（undefined 會 fail-open）"
 
     def test_trigger_row_done_state_text_present(self):
         """T3(40c) Codex fix: 觸發列包含 done 狀態顯示文字"""
@@ -4900,11 +4931,59 @@ class TestJellyfinFrontend:
     """確認 Jellyfin 前端基礎設施完整"""
 
     def test_jellyfin_toggle_in_settings(self):
-        """settings.html 包含 jellyfinMode 的 Alpine 綁定"""
+        """settings.html externalManager segmented control（T-d2：4 態 segmented，off/jellyfin/emby/kodi）
+        - 舊的 x-model="form.jellyfinMode" 已移除（dead field）
+        - 舊的 interim :checked / @change checkbox 綁定已移除
+        - 舊的 jellyfin_emby 合併態已拆為獨立 jellyfin / emby（T-d2）
+        - 新的 4 態 segmented control + trailing hint 版面
+        """
+        import re
         html_file = PROJECT_ROOT / "web" / "templates" / "settings.html"
         content = html_file.read_text(encoding='utf-8')
-        assert 'jellyfinMode' in content, \
-            "settings.html 缺少 jellyfinMode 綁定（Jellyfin 圖片模式開關）"
+        # 舊 dead field 不存在
+        assert 'x-model="form.jellyfinMode"' not in content, \
+            "settings.html 不應再有 x-model=\"form.jellyfinMode\"（dead field，已由 externalManager 取代）"
+        # interim checkbox 綁定已移除（負守衛）
+        assert ":checked=\"form.externalManager === 'jellyfin_emby'\"" not in content, \
+            "settings.html 不應再有 interim :checked binding（T8 已換 segmented control）"
+        assert "@change=\"form.externalManager = $event.target.checked" not in content, \
+            "settings.html 不應再有 interim @change checkbox binding（T8 已換 segmented control）"
+        # segmented 容器存在
+        assert 'class="settings-sources-segmented"' in content, \
+            "settings.html 缺少 .settings-sources-segmented 容器（T8 segmented control）"
+
+        # ---- 負守衛（forbidden）：舊 jellyfin_emby binding 不得殘留 ----
+        assert "'is-on': form.externalManager === 'jellyfin_emby'" not in content, \
+            "settings.html 不應殘留 jellyfin_emby is-on binding（T-d2 已拆四態）"
+        assert "@click=\"form.externalManager = 'jellyfin_emby'\"" not in content, \
+            "settings.html 不應殘留 @click = 'jellyfin_emby'（T-d2 已拆四態）"
+
+        # ---- 正斷言：四態 is-on（element-bound 到 segmented 區塊）----
+        #   從 content 擷取 settings-form-row--external-manager 區塊後再斷言，
+        #   確保 is-on 綁在外部管理器的 segmented button 而非其他地方（element-bound）
+        seg_match = re.search(
+            r'class="settings-sources-segmented" role="group".*?</div>',
+            content, re.DOTALL
+        )
+        assert seg_match, "settings.html 缺少 .settings-sources-segmented[role=group] 容器（外部管理器）"
+        seg_block = seg_match.group(0)
+
+        for val in ('off', 'jellyfin', 'emby', 'kodi'):
+            assert f"'is-on': form.externalManager === '{val}'" in seg_block, \
+                f"settings.html segmented 缺少 externalManager === '{val}' 的 is-on binding"
+            assert f"@click=\"form.externalManager = '{val}'\"" in seg_block, \
+                f"settings.html segmented 缺少 @click 設 externalManager = '{val}'"
+
+        # ---- 正斷言：四段 hint x-show（trailing） ----
+        for val in ('off', 'jellyfin', 'emby', 'kodi'):
+            assert f"x-show=\"form.externalManager === '{val}'\"" in content, \
+                f"settings.html 缺少 externalManager === '{val}' 的 hint x-show"
+
+        # ---- 正斷言：off hint 的 i18n key（新增，驗證 T-d3 key 已引用） ----
+        assert "external_manager_off_hint" in content, \
+            "settings.html 缺少 external_manager_off_hint i18n key 引用（T-d3 key）"
+        assert "external_manager_emby_hint" in content, \
+            "settings.html 缺少 external_manager_emby_hint i18n key 引用（T-d3 key）"
 
     def test_jellyfin_update_in_scanner(self):
         """scanner/state-scan.js 包含 runJellyfinImageUpdate method"""
@@ -10652,4 +10731,38 @@ class TestLightboxCoverSizeGuards:
         assert "cover_full_url" in snippet, (
             "state-similar.js similarExitVideo 缺少 cover_full_url 欄位"
             "（slip-through 路徑缺此欄 → .lb-full src=undefined → @load 永不 fire → opacity:0 卡死）"
+        )
+
+
+class TestSkippedNfoMultipartToastGuard:
+    """72b-T9: skipped_nfo_multipart toast consumer 守衛
+
+    確認 batch.js 兩個 consumer（scrapeAll / scrapeSingle）
+    都引用了 skipped_nfo_multipart flag + i18n key。
+    """
+
+    BATCH_JS = (
+        Path(__file__).parent.parent.parent
+        / "web" / "static" / "js" / "pages" / "search" / "state" / "batch.js"
+    )
+
+    def _js(self) -> str:
+        return self.BATCH_JS.read_text(encoding="utf-8")
+
+    def test_skipped_nfo_multipart_flag_referenced(self):
+        """batch.js 引用 skipped_nfo_multipart flag（至少 2 次，對應兩個 consumer）"""
+        js = self._js()
+        count = js.count("skipped_nfo_multipart")
+        assert count >= 2, (
+            f"batch.js skipped_nfo_multipart 出現 {count} 次，期望 >= 2"
+            "（scrapeAll 成功分支 + scrapeSingle 成功分支各一）"
+        )
+
+    def test_skipped_nfo_multipart_i18n_key_referenced(self):
+        """batch.js 引用 search.toast.skipped_nfo_multipart i18n key（至少 2 次）"""
+        js = self._js()
+        count = js.count("search.toast.skipped_nfo_multipart")
+        assert count >= 2, (
+            f"batch.js 'search.toast.skipped_nfo_multipart' 出現 {count} 次，期望 >= 2"
+            "（scrapeAll + scrapeSingle 各一條 showToast 呼叫）"
         )
