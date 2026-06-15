@@ -7,6 +7,100 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 > 此檔案為歷史封存，最新版本紀錄請見 [CHANGELOG.md](CHANGELOG.md)
 
+## 版本索引
+
+> 定位某版完整內容：搜尋 `## [版本號]`（編輯器 Ctrl-F 或 `grep -n '## \[X.Y.Z\]'`），再讀該段；無需載入整檔。
+
+### 0.9.x
+
+- [0.9.6] 2026-06-06 — 封面三態 skeleton/淡入/破圖 + Showcase console 清零（SVG `<template>` bug 修正）
+- [0.9.5] 2026-06-06 — async def 同步 I/O 移出 event loop（NAS HDD 凍屏根治）+ 並發硬化 config 鎖
+- [0.9.4] 2026-06-04 — 拔除 `primary_source`，搜尋路由統一以 Active Row 拖曳順序為唯一真理
+- [0.9.3] 2026-06-03 — Settings IA 退回單欄、metatube 膠囊三態語意修正、無碼 segmented 控件
+- [0.9.2] 2026-06-01 — metatube HTTP client 接通（30 provider + SSRF 防護 + NFO `<plot>` 寫出）
+- [0.9.1] 2026-05-30 — 進階重刮彈窗（任一片改番號挑來源預覽後覆蓋），三入口統一
+- [0.9.0] 2026-05-29 — scraper-federation B1：SourceConfig schema + Settings 6-tab IA + 掃描來源 tab
+
+### 0.8.x
+
+- [0.8.10] 2026-05-28 — 技術債清理：SSRF 白名單、Scanner DB-miss tag 修正、女優查詢改 json_each
+- [0.8.9] 2026-05-15 — Onboarding Scanner-first 翻轉、E2E 劇本 v2（7 User Story）、測試守衛體檢
+- [0.8.8] 2026-05-13 — 跨語言 Tag Alias 系統 + Search→Showcase pipeline 即時化 + GhostFly 飛行
+- [0.8.7] 2026-05-10 — 拔除 CLIP ML 引擎，改純規則式 metadata 多訊號相似探索，ZIP 回 ~43MB
+- [0.8.6] 2026-05-09 — 以圖搜圖 Beta（CLIP 512 維向量 + 探索星空 UI），opt-in 80MB 模型本地推論
+- [0.8.5] 2026-05-03 — eslint flat config + stylelint 補工具鏈，pytest frontend_lint 測試縮減 50%
+- [0.8.4] 2026-05-03 — 全站前端 ESM 模組化（Import Maps + per-page main.js，三大巨型單檔拆解）
+- [0.8.3] 2026-05-02 — Alpine 官方插件升級（persist/collapse/focus/intersect）+ 通知中心（sidebar 鈴鐺）
+- [0.8.2] 2026-04-29 — ui-conventions 套用剩餘 5 頁，alert()/confirm() 全換 fluent-modal/toast
+- [0.8.1] 2026-04-29 — ui-conventions 擴展到 Showcase 女優模式 + Search，Lightbox 開門動畫共用化
+- [0.8.0] 2026-04-28 — Fluent 2 視覺語言統一（token / 白名單 / ease 三角色 / §6 5 檢查點，Showcase 影片模式）
+
+### 0.7.x
+
+- [0.7.8] 2026-04-26 — 女優模式動畫補齊 + Physics2D Burst 換照片 picker + Actress Lightbox ghost-fly
+- [0.7.7] 2026-04-25 — WinFsp/rclone 相容修正、劇照幽靈 URL 根治、字幕標記誤認番號修正
+- [0.7.6] 2026-04-18 — Scanner 一鍵補完大批量（>500 片）confirm gate + resume 流程修正
+- [0.7.5] 2026-04-16 — Ghost Fly Grid↔Lightbox 轉場動畫、Floating Hearts 特效、7 步新手教學
+- [0.7.4] 2026-04-14 — Actress Alias CRUD 系統 + Scanner 一鍵缺 NFO/封面補完（batch-enrich SSE）
+- [0.7.3] 2026-04-13 — Showcase 女優模式（Grid/Lightbox/CRUD）+ 精準匹配 Hero Card
+- [0.7.2] 2026-04-12 — Actress Favorite 系統（DB + 照片下載）+ /search DB 優先查詢整合
+- [0.7.1] 2026-04-11 — 女優爬蟲重整（Minnano + Wikipedia JP + 4 路 Orchestrator）+ JavBus 女優移除
+- [0.7.0] 2026-04-10 — AI API 平台（batch-enrich / fix-numbers / analysis）+ User Tags + 封面補抓
+
+### 0.6.x
+
+- [0.6.7] 2026-04-09 — 整理動效回饋（checkmark/shake/進度條）+ Load More 三入口動畫 + CTA 文案
+- [0.6.6] 2026-04-09 — Alpine.js 技術債清理（inline x-data 抽離、消除 window.SearchCore 全域）
+- [0.6.5] 2026-04-09 — OpenAI Compatible 翻譯 Provider + Grid「載入更多」+ DMM 分頁 offset 修正
+- [0.6.4] 2026-04-04 — Scanner Jellyfin 圖片檢查改手動觸發、打包修復、Design System 元件補齊
+- [0.6.3] 2026-04-02 — 測試分層修正（integration→unit）+ E2E 場景清單 + Agentic AI 驗證
+- [0.6.2] 2026-04-01 — Agentic AI API 平台（batch-search / generate-from-ids / enrich-single / SQL / capabilities）
+- [0.6.1] 2026-03-31 — i18n 補齊（翻譯跟隨 UI 語系 + Tutorial 四語系 + 日文自動跳過翻譯）
+- [0.6.0] 2026-03-29 — 四語系 UI i18n（繁中/簡中/日文/英文，~477 key，Settings 語系切換按鈕）
+
+### 0.5.x
+
+- [0.5.5] 2026-03-28 — 字幕檔自動跟隨整理 + Proxy direct 模式 + Settings 搜尋來源 UI 簡化
+- [0.5.4] 2026-03-28 — Maker 名稱對照表重建（雙層格式 + DMM 72 筆），統一供三路徑共用
+- [0.5.3] 2026-03-28 — Sample Gallery 元件（extrafanart 本地劇照 + GSAP slide 動畫 + 鍵盤/swipe）
+- [0.5.2] 2026-03-27 — Metadata Pipeline 補齊（director/duration/series/label NFO 全鏈路 + Showcase 顯示）
+- [0.5.1] 2026-03-27 — DMM Scraper 增強（模糊搜尋 SSE + per-item enrichment）+ 各來源欄位補齊
+- [0.5.0] 2026-03-25 — JavBus Scraper 完全重寫（移除 jvav）+ Sample Images Gallery + Video Model 擴充
+
+### 0.4.x
+
+- [0.4.4] 2026-03-19 — Lightbox 按鈕改 glass circle overlay + 安裝升級腳本自動清舊版 python/
+- [0.4.3] 2026-03-13 — 流暢轉場動畫系統（Showcase/Search）+ 自動化安裝腳本 + Debug 腳本
+- [0.4.2] 2026-03-11 — GSAP Showcase 動效系統（全頁動畫）+ Alpine 效能優化（videos[] 移出 reactive）
+- [0.4.1] 2026-03-08 — 測試套件整合（去重 + conftest 統一 + 結構歸位 + 覆蓋率補強）
+- [0.4.0] 2026-03-08 — GSAP 搜尋頁動畫系統（SSE 漸進搜尋 + Staging Card + Ghost Shared-Cover 轉場）
+- [0.4.0] 2026-01-21 — SQLite Data Layer + Thin Client 重構（已併入 0.2.1）
+
+### 0.3.x
+
+- [0.3.6] 2026-02-20 — UNC 路徑修正（WinFsp/NAS 影片播放），path_utils 全反斜線輸出保證
+- [0.3.5] 2026-02-20 — suffix_keywords 版本標記 + Jellyfin 圖片模式 + 路徑工具統一 + Design System 補齊
+- [0.3.3] 2026-02-19 — Scraper 來源擴充（D2Pass / HEYZO / DMM + Proxy）+ 女優資料卡（gfriends/Graphis）
+- [0.3.2] 2026-02-18 — GSAP 前置 + Fluent Material Boost（Canvas/Shell/Surface 三層毛玻璃）
+- [0.3.1] 2026-02-11 — Showcase 動態化（SQLite SSR + Grid/Table/List 三模式）+ Alpine.js 全站遷移
+- [0.3.0] 2026-02-08 — Bootstrap → DaisyUI 全站遷移 + Alpine.js + 路由 /gallery → /scanner
+- [0.3.0] 2026-01-20 — Scraper 模組化（BaseScraper + 5 模組）+ 無碼搜尋（已併入 0.2.1）
+
+### 0.2.x
+
+- [0.2.4] 2026-02-07 — Design System（Fluent Design 2 + AV Card 4 變體 + Toast/Button 元件）
+- [0.2.3] 2026-01-23 — Gallery 路徑名搜尋 + 點擊 📁 badge 複製路徑到剪貼簿
+- [0.2.2] 2026-01-22 — 番號後綴清理（-UC/-UNCEN 等），搜尋查詢與檔名萃取一致
+- [0.2.1] 2026-01-22 — FC2/無碼搜尋 + SQLite 本地片庫 + Actress alias 管理（scraper 模組化整合版）
+- [0.2.0] 2026-01-18 — macOS 支援（Apple Silicon）+ 多來源循環切換 + Gemini 翻譯雙引擎
+
+### 0.1.x
+
+- [0.1.4] 2026-01-17 — Tutorial Step 5 + 教學範例檔（Windows 包）+ 測試框架（115 case）
+- [0.1.3] 2026-01-17 — path_utils 集中化路徑處理，NFO updater / image proxy 全部改用
+- [0.1.1] 2026-01-17 — 圖片 proxy Windows 路徑修正 + Settings 手動更新檢查按鈕
+- [0.1.0] 2026-01-15 — 初始版本（Spotlight Search + Gallery Generator + Ollama 翻譯 + PyWebView）
+
 ## [0.9.6] - 2026-06-06
 
 本版單一主軸：**封面載入體感優化（Cover Loading UX）+ Showcase Console 清零**，純前端、零後端、零新依賴。兩條正交軌。**Track A**：封面在 NAS(HDD) 上一頁 90 張陸續慢慢冒，過去圖沒到是空白、到了「啪」一下出現；本版讓每張 grid 卡片與 Hero card 在等待時顯示 skeleton/shimmer、圖到淡入、抓不到顯示業界標準破圖 icon——把 HDD 喚醒/seek 的等待填上「正在載入」的視覺。**不縮短實際載入**（那是縮圖快取的事），只解「等待時看到什麼」。**Track B**：清掉 `/showcase` 開 F12 固定噴的 4 條 console 紅字——SVG namespace 下誤放 `<template x-for>`（3 條）+ 過時的 `unload` 事件（1 條，site-wide）；修好 SVG bug 後相似探索的連接線也恢復顯示（原被 bug 壓住從未畫出）。
