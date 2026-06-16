@@ -1061,8 +1061,9 @@ def organize_file(
                 except Exception as e:
                     logger.warning(f"extrafanart 目錄建立失敗: {e}")
 
-        # 生成 NFO（檔名跟隨影片命名）
-        nfo_path = os.path.join(target_dir, filename_base + '.nfo')
+        # 生成 NFO（使用 nfo_format）
+        nfo_base = format_string(config.get('nfo_format', '{num}'), format_data)
+        nfo_path = os.path.join(target_dir, nfo_base + '.nfo')
         # part-2+ 且外部模式：跳過 NFO（CD-2 只有一份 metadata 由 cd1 產；封面/poster/fanart 照常）
         # off 模式恆不跳（即使 cd2 也照產 NFO，byte-identical）（CD-72b-T5）
         skip_nfo = bool(part_match) and part_match[1] >= 2 and ext_mode != 'off'
