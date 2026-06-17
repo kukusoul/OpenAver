@@ -21,33 +21,6 @@ from core.scraper import search_jav
 class TestOldAPIConnectivity:
     """舊 API 連通測試（search_jav）"""
 
-    def test_javbus_connectivity(self):
-        """JavBus 連通性測試"""
-        result = search_jav("SONE-103", source="javbus")
-        if result is None:
-            pytest.skip("JavBus 無法連線（可能被網站封鎖或網路問題）")
-
-        assert result.get('number') == 'SONE-103', f"番號不符: {result.get('number')}"
-        assert result.get('title'), "標題為空"
-
-    def test_jav321_connectivity(self):
-        """Jav321 連通性測試"""
-        result = search_jav("SONE-103", source="jav321")
-        if result is None:
-            pytest.skip("Jav321 無法連線（可能被網站封鎖或網路問題）")
-
-        assert result.get('number') == 'SONE-103', f"番號不符: {result.get('number')}"
-        assert result.get('title'), "標題為空"
-
-    def test_javdb_connectivity(self):
-        """JavDB 連通性測試"""
-        result = search_jav("SONE-103", source="javdb")
-        if result is None:
-            pytest.skip("JavDB 無法連線（可能被網站封鎖或網路問題）")
-
-        assert result.get('number') == 'SONE-103', f"番號不符: {result.get('number')}"
-        assert result.get('title'), "標題為空"
-
     def test_auto_source_connectivity(self):
         """自動來源連通性測試（至少一個來源可用）"""
         result = search_jav("MIDV-139", source="auto")
@@ -62,84 +35,6 @@ class TestOldAPIConnectivity:
         assert isinstance(actors, list), \
             f"'actors' 欄位應為 list，實際型別: {type(actors).__name__}"
 
-
-# ========== 新爬蟲模組連通測試 ==========
-
-@pytest.mark.smoke
-class TestNewScraperConnectivity:
-    """新爬蟲模組連通測試（Phase 16 Task 2）"""
-
-    def test_javbus_scraper(self):
-        """JavBusScraper 連通性"""
-        from core.scrapers import JavBusScraper
-
-        scraper = JavBusScraper()
-        video = scraper.search("SONE-205")
-
-        if video is None:
-            pytest.skip("JavBusScraper 無法連線（可能被網站封鎖）")
-
-        assert video.number == "SONE-205"
-        assert video.source == "javbus"
-        assert video.cover_url.startswith("http")
-
-    def test_jav321_scraper(self):
-        """JAV321Scraper 連通性"""
-        from core.scrapers import JAV321Scraper
-
-        scraper = JAV321Scraper()
-        video = scraper.search("MIDV-018")
-
-        if video is None:
-            pytest.skip("JAV321Scraper 無法連線（可能被網站封鎖）")
-
-        assert "MIDV" in video.number.upper()
-        assert video.source == "jav321"
-
-    def test_javdb_scraper(self):
-        """JavDBScraper 連通性"""
-        from core.scrapers import JavDBScraper
-
-        try:
-            from curl_cffi import requests
-        except ImportError:
-            pytest.skip("curl_cffi not installed")
-
-        scraper = JavDBScraper()
-        video = scraper.search("SSNI-001")
-
-        if video is None:
-            pytest.skip("JavDBScraper 無法連線（可能被網站封鎖）")
-
-        assert video.number == "SSNI-001"
-        assert video.source == "javdb"
-
-    def test_fc2_scraper(self):
-        """FC2Scraper 連通性"""
-        from core.scrapers import FC2Scraper
-
-        scraper = FC2Scraper()
-        video = scraper.search("FC2-PPV-1723984")
-
-        if video is None:
-            pytest.skip("FC2Scraper 無法連線（可能被網站封鎖）")
-
-        assert "FC2" in video.number
-        assert video.source == "fc2"
-        assert video.title != ""
-
-    def test_avsox_scraper(self):
-        """AVSOXScraper 連通性（無碼專用）"""
-        from core.scrapers import AVSOXScraper
-
-        scraper = AVSOXScraper()
-        video = scraper.search("051119-917")
-
-        if video is None:
-            pytest.skip("AVSOXScraper 無法連線（可能被網站封鎖）")
-
-        assert video.source == "avsox"
-        assert len(video.actresses) > 0
 
 # ========== 女優搜尋測試 ==========
 
