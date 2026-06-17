@@ -5,6 +5,46 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - 2026-06-18
+
+本版主軸：**來源穩定性 + 測試硬化**（feature/73，0.10 線首版）。不是新功能，是**可信度硬化**——讓你相信「來源還活著、parser 沒爛、我的 NFO 不會被默默寫壞」。兩個觸發點：外部 AI 審查回報「測試覆蓋率不足」（查證後確認帳面被 smoke skip 低估，但流程定型前的歷史真債確實存在，最高風險是會改寫用戶 NFO 卻零測試的 `nfo_updater`），以及用戶回報 Tokyo Hot 番號（`n0762`）永遠查不到。本版做了六件事：把 8 個來源用真實番號做成「健康金絲雀」smoke 套件（連不上只警告、改版才報紅）、修掉 Tokyo Hot 單字母番號被誤插 hyphen 的 bug、清償五項離線單元測試真債、立覆蓋率流程地板防老債再被遺忘、復活站方轉 SPA 後失效的 avsox 來源、並把舊 smoke 與金絲雀重疊的冗餘測試整併清掉。
+
+### Added
+#### 🐤 8 源真實番號健康金絲雀 smoke 套件 / Source canary smoke suite
+- **新增 `tests/smoke/test_source_canary.py`**：對 8 個 fan-out 來源（有碼 javbus/jav321/javdb/dmm + 無碼 d2pass/heyzo/fc2/avsox）各用 3~5 個常青真實番號做真連線健康檢查。**三態判讀**：連不上/逾時/404/空結果 → **skip + 警告**（無碼片易下架、javdb 查多被 ban 都正常，不擋 PR）；拿到正常 HTTP 回應卻解析空 → **fail**（網站改版打死 parser，這才是要修的）；拿到 Video + 番號相符 + 核心欄位有料 → pass。**多番號 quorum**：同源 ≥1 番號 pass 即綠，全部「拿到回應卻解析空」才紅。
+- **結構式斷言**：只驗「有 Video + number 相符 + title/cover 非空」算 parser 健康，不驗 maker/series/date 精確值（那些會隨站方資料微調誤報，精確值回歸交給離線 mock）。標 `@pytest.mark.smoke`、不進 CI、pre-merge / milestone 手動跑當金絲雀，失敗靠人工判讀「下架/被 ban（忽略）」還是「改版（修 parser）」。
+
+#### 📊 覆蓋率流程地板（cov-floor）/ Coverage floor
+- **新增 `scripts/run_cov.sh` + `.coveragerc`**：把「增量審計」的盲區補上「存量地板」——`pytest --cov=core --cov=web --cov-fail-under=84`（地板 84% = 實測 86% − 2pp 緩衝防 flaky）。效果：下次誰碰到老模組被強迫順手補測試，老債漸進清償。`web/*`（端點 I/O，integration 部分覆蓋）omit；`core/scrapers/utils.py` 刻意保留在地板內（大半是已測純邏輯）。CI 不強制此 fail-under（CI 維持只跑 pytest、不擋 PR）。
+
+### Fixed
+#### 🔧 Tokyo Hot 單字母無碼番號修復 / Tokyo Hot single-letter number fix
+- **`[無碼]n0762 Tokyo Hot` 這類單字母前綴無碼番號不再查無**。根因：`n0762` 被正規化成 `n-0762`（多插一個 hyphen），送進 scraper 全部 404。查證發現問題不在無碼源，而在 hyphen 把查詢打死——Tokyo Hot 其實由 JavBus / JAV321 收錄（兩者都接 `N0762` 無 hyphen、都拒 `N-0762`），只是它們從沒收到合法查詢。修法（採「單字母 + 恰 4 位數字 → 不插 hyphen」窄規則，涵蓋 n/k/c/m/s 全系列，雙重約束天然排除所有有碼 collision）：`normalize_number` / `validate_number`（`base.py`）+ `extract_number`（`utils.py`，檔名也能抽出）三個 regex 觸點。**通用番號（`sone103` → `SONE-103`）完全不回歸**，不需新源/改路由（既有 JavBus/JAV321 即可）。
+
+#### 🔧 avsox scraper 復活 / avsox scraper revival
+- **avsox 來源恢復「給番號回得了料」**。站方已從 server-side render 轉純 client-side Vue SPA 且對 `requests` 回 403，舊 XPath scraper 只拿到空殼、任何番號都回 None（8 源裡唯一的通用無碼聚合站等於斷一條腿）。改打 SPA 背後的**兩段式 JSON API**（search → movie detail），number/title/cover（含 caribbean/1pondo/heyzo/Tokyo Hot 型）都回得了；既有單元測試改 JSON-mock + 真實 fixture，金絲雀 avsox 從紅轉綠。
+
+### Changed
+#### 🧪 測試技術債清償（五項離線單元測試）/ Offline unit-test debt repayment
+- 全部 mock / fixture 驅動、不連網，補在流程定型前零測試或低覆蓋的程式上（按風險）：`core/nfo_updater.py`（**會改寫用戶 NFO 檔**的 add_actor / tags 去重 / user_tag 重寫 / 補欄分支，最高風險）、`core/translate_service.py`（_clean_output / batch 解析 + Gemini 四分支）、`core/scrapers/javdb.py`（fixture 離線測試 14%→68%）、`core/scrapers/jav321.py`（genre tags + else 分支 64%→72%）、`core/nfo_utils.py`（CDATA 區塊不被誤 sanitize 43%→100%）。離線 fixture 同趟由金絲雀 research sweep 順手抓存（既驗 live 番號又餵離線 mock）。
+
+#### 🧹 source smoke 整併（consolidation）/ Source smoke consolidation
+- 金絲雀上線後，對三個舊 source-smoke 檔（`test_scraper_live.py` / `test_scrapers.py` / `test_javbus_smoke.py`，33 測試）做 inventory，發現混用四種職責，分四桶各別處置（**整併而非裸刪、先有替代品才退役**）：桶 A 14 個 liveness **退役**（金絲雀 quorum 嚴格替代）；桶 B 欄位斷言**搬離線**（javdb tags + javbus JUR-688/SNOS-143 HTML fixture，deterministic、不受站方微調誤報）；桶 C 9 個金絲雀不覆蓋的獨特 live 路徑（fan-out / 女優 / smart_search 無碼路由 / keyword / 多語言 tags）收進新 `test_extra_paths_live.py`（slim live，連不上顯式 skip）；桶 D 9 個純邏輯測試**搬 `tests/unit/`**（原誤放 smoke 目錄、CI 看不見）。三舊檔覆蓋全有去處後刪除。
+
+### Internal
+- 金絲雀架構：純 decision-core（`_canary_core.py`，三態判讀邏輯不連網、可 deterministic 單元測試）+ probe（`_probe.py`，`_probe_reachable` 走各 scraper 既有 reachability）+ 番號清單（`_canary_numbers.py`）。
+- 爬蟲 HTML/JSON fixture 落 `tests/fixtures/scrapers/`（`.gitattributes` `-whitespace` 豁免保 byte-faithful + `.gitignore` negation 放行 `*.html`）。
+- Tokyo Hot 入口層守衛（`is_number_format` gate + `search_jav` 把 `N0762` 傳進 scraper）。
+
+### Non-Goals（明確不做）
+- **不把 `javlibrary` 納入 smoke**（CF 真人驗證 + 桌面專屬，無法自動化）、**不在 CI 跑真連線 smoke**（CI 維持只 pytest unit+integration、不連網）、**不做欄位級 live 回歸測試**（smoke 只結構式金絲雀；精確值回歸歸離線 mock）、**不為拉覆蓋率硬補** `app.py`/`config.py`/`gemini.py` 的連線 I/O 與頁面路由、**不重分類 metatube `TOKYO-HOT`**（用戶決議；雖確認誤歸有碼，與番號修復無關）、**不重寫 scraper 架構**（avsox 只讓它重新抓得到料）、**不建來源自動下架偵測/告警系統**（金絲雀失敗靠人工判讀）、**US6 不裸刪**（替代品存在前絕不刪原測試）。
+
+### 測試
+- 全套 pytest **4238 passed, 2 skipped**（unit + integration，排除 smoke / e2e，較 0.9.11 的 4089 +149）+ `npm run lint`（eslint + stylelint）綠。
+- 覆蓋率地板：`core`+`web` **86.28% ≥ 84%**（`scripts/run_cov.sh`）。
+- 來源金絲雀：**8 源全 PASS**（含 avsox 復活）。
+- 新增測試：`test_source_canary` / `test_source_canary_logic`（三態 + quorum decision-core）/ `test_extract_number`（Tokyo Hot 單字母 + 截斷邊界）/ `test_scraper_parser`（normalize 路徑）/ `test_avsox_scraper`（改 JSON-mock + Tokyo Hot）/ `test_nfo_updater` / `test_translate_service` / `test_javdb_scraper` / `test_jav321_scraper` / `test_nfo_utils`（離線債）/ `test_scraper_smoke_pure_logic`（桶 D 搬遷）/ `test_javbus_scraper`（JUR-688/SNOS-143 fixture）/ `test_extra_paths_live`（桶 C slim live）。
+
 ## [0.9.11] - 2026-06-13
 
 本版主軸：**外部媒體管理器相容模式（Jellyfin / Emby / Kodi）**（feature/72）。OpenAver 的 NFO 本來就是 Kodi/Jellyfin/Emby 共用的 XML schema，「基本相容」沒問題，但離「掛上去就正確顯示」還差一截——圖片命名偏好不同、多段影片（cd1/cd2）會被當成兩部片、NFO 少了幾個媒體庫排序/過濾用的欄位。本版在 Settings 新增「外部媒體管理器模式」**四態選擇器（預設｜Jellyfin｜Emby｜Kodi，每態各有一行說明）**：選任一外部模式後，刮削/整理會另存 `{番號}-poster.jpg`／`{番號}-fanart.jpg`、把 cd1/cd2/part1 等多段自動合併成一部片（第 2 段以後只跳 NFO、保留封面）、並補上 NFO 辨識欄位（番號 ID／排序／產地／語言）。掃描端也學會讀外部工具（MDCX/Javinizer）或 OpenAver 自己產生的 `{番號}-fanart/-poster.jpg`，直接接手已刮削的收藏庫。另含 issue #44 後續回報的兩個整理 pipeline 修復（B1 搬檔不再產生重複死卡、B2 已整理檔再整理標題不疊加）。
