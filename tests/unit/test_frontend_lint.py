@@ -8645,6 +8645,47 @@ class TestSwitchSourcePickGuard:
             f"window.SearchUI 必須 export seedSwitchState，實際 export: {m.group(1)!r}"
 
 
+class TestSwitchSourceAutoCycle:
+    """TASK-74a-T4 US2：picker 由結果面板來源膠囊開啟（switch-source 入口）時，點「自動」pill
+    直接走 switchSource() 循環（picker 先關閉），不再 POST /api/rescrape/preview 的 auto 路徑。
+
+    source-bound 靜態守衛斷言新增的 auto short-circuit 分支存在（含 `&& sourceId === 'auto'`
+    + closeRescrape + switchSource 兩動作）。不重複 TestSwitchSourcePickGuard.test_switch_source_branch_present
+    （後者守既有 preview 路徑分支）。async cycle 的實際循環 / shake / 關窗時序走手動 checklist。
+    """
+
+    STATE_RESCRAPE_JS = (
+        Path(__file__).parent.parent.parent / "web" / "static" / "js"
+        / "shared" / "state-rescrape.js"
+    )
+
+    def _rescrape(self):
+        return self.STATE_RESCRAPE_JS.read_text(encoding="utf-8")
+
+    def test_switch_source_auto_short_circuit_branch_present(self):
+        """state-rescrape.js 含 switch-source + auto short-circuit 分支（含 closeRescrape + switchSource）。
+
+        過「三問」：刪 `&& sourceId === 'auto'` 子式 → 紅（退化成既有 bare switch-source 分支）；
+        刪 closeRescrape / switchSource → 紅。distinguishes 新 short-circuit 分支與既有 preview 分支
+        （後者無 `&& sourceId === 'auto'`）。
+        """
+        src = self._rescrape()
+        # short-circuit 分支條件：rescrapeEntryPoint === 'switch-source' && sourceId === 'auto'（容許空白）
+        m = re.search(
+            r"rescrapeEntryPoint\s*===\s*'switch-source'\s*&&\s*sourceId\s*===\s*'auto'\s*\)\s*\{(.*?)\}",
+            src, re.DOTALL,
+        )
+        assert m, (
+            "state-rescrape.js 缺 switch-source + auto short-circuit 分支"
+            "（rescrapeEntryPoint === 'switch-source' && sourceId === 'auto'）"
+        )
+        block = m.group(1)
+        assert "closeRescrape(" in block, \
+            "switch-source + auto short-circuit 分支內必須呼叫 closeRescrape()（先關 picker）"
+        assert "switchSource(" in block, \
+            "switch-source + auto short-circuit 分支內必須呼叫 switchSource()（循環到下一來源）"
+
+
 class TestDesignSystemLongPressCard:
     """62c-2 (b)：/design-system 登記 long-press 互動 pattern demo card（D.14）。
 
@@ -10415,30 +10456,43 @@ class TestJavlibraryCfFlowT6Guard:
 
         B2-P3-1 hardening: anchor on `data.cf_needed` (the consuming expression),
         not bare `cf_needed` which could match a comment appearing earlier in the file.
+
+        74a-T4 hardening: anchor sw_pos on the PREVIEW switch-source branch opener
+        `rescrapeEntryPoint === 'switch-source') {` (bare, closing-paren + brace),
+        NOT the bare-first-occurrence `.index()`. 74a-T4 introduces a switch-source + auto
+        short-circuit branch (`rescrapeEntryPoint === 'switch-source' && sourceId === 'auto'`)
+        that runs BEFORE the fetch — it cannot intercept CF data, so it is irrelevant to the
+        property this guard protects (CF handling must precede the data-consuming PREVIEW branch).
+        Anchoring on the bare-opener keeps the guard meaningful (the auto branch opener has
+        `&& sourceId === 'auto'` before `)`, so it never matches this anchor).
         """
         js = _STATE_RESCRAPE_JS.read_text(encoding="utf-8")
         assert "data.cf_needed" in js, \
             "70-T6 P2 違規：state-rescrape.js 未含 data.cf_needed 消費表達式"
-        assert "rescrapeEntryPoint === 'switch-source'" in js, \
-            "70-T6 P2 違規：state-rescrape.js 未含 switch-source 分支"
+        assert "rescrapeEntryPoint === 'switch-source') {" in js, \
+            "70-T6 P2 違規：state-rescrape.js 未含 preview switch-source 分支"
         cf_pos = js.index("data.cf_needed")
-        sw_pos = js.index("rescrapeEntryPoint === 'switch-source'")
+        sw_pos = js.index("rescrapeEntryPoint === 'switch-source') {")
         assert cf_pos < sw_pos, (
-            f"70-T6 P2 違規：data.cf_needed 處理（pos={cf_pos}）必須在 switch-source 分支"
+            f"70-T6 P2 違規：data.cf_needed 處理（pos={cf_pos}）必須在 preview switch-source 分支"
             f"（pos={sw_pos}）之前，否則 switch-source 入口永遠看不到 CF flow"
         )
 
     def test_cf_unavailable_before_switch_source_branch(self):
-        """70-T6 P2：cf_unavailable 處理必須在 switch-source 分支之前（與 cf_needed 同理）。"""
+        """70-T6 P2：cf_unavailable 處理必須在 switch-source 分支之前（與 cf_needed 同理）。
+
+        74a-T4 hardening: 同 test_cf_needed_before_switch_source_branch，sw_pos 錨在 preview
+        switch-source 分支 opener（bare `) {`），不受 74a-T4 fetch 前的 auto short-circuit 分支影響。
+        """
         js = _STATE_RESCRAPE_JS.read_text(encoding="utf-8")
         assert "cf_unavailable" in js, \
             "70-T6 P2 違規：state-rescrape.js 未含 cf_unavailable 處理"
-        assert "rescrapeEntryPoint === 'switch-source'" in js, \
-            "70-T6 P2 違規：state-rescrape.js 未含 switch-source 分支"
+        assert "rescrapeEntryPoint === 'switch-source') {" in js, \
+            "70-T6 P2 違規：state-rescrape.js 未含 preview switch-source 分支"
         cf_unav_pos = js.index("cf_unavailable")
-        sw_pos = js.index("rescrapeEntryPoint === 'switch-source'")
+        sw_pos = js.index("rescrapeEntryPoint === 'switch-source') {")
         assert cf_unav_pos < sw_pos, (
-            f"70-T6 P2 違規：cf_unavailable 處理（pos={cf_unav_pos}）必須在 switch-source 分支"
+            f"70-T6 P2 違規：cf_unavailable 處理（pos={cf_unav_pos}）必須在 preview switch-source 分支"
             f"（pos={sw_pos}）之前"
         )
 

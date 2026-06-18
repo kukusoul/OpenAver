@@ -170,6 +170,15 @@ export function rescrapeState() {
                 await this.advancedSearch(sourceId);  // 'auto' 直接傳給 /api/search（後端 merger）
                 return;
             }
+            // 74a US2：switch-source 入口點「自動」= 直接 cycle（picker 關閉 + switchSource 循環）
+            // spec-74 §US2：picker「自動」= 原本 🔄 tap 的「換到下一個來源」循環功能。
+            // 必須在 POST /api/rescrape/preview fetch 之前短路（DROP：switch-source + auto 不再打 preview）；
+            // 具體 source pick 不受影響，繼續走下面 fetch + in-place replace 分支。
+            if (this.rescrapeEntryPoint === 'switch-source' && sourceId === 'auto') {
+                this.closeRescrape();
+                await this.switchSource();
+                return;
+            }
             this.rescrapeNotFound = false;
             this.rescrapeLoadingSource = sourceId;
             try {
