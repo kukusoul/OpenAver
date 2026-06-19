@@ -5982,6 +5982,9 @@ body.fluent-canvas:not(.ds-page)::before {
 .page-showcase #main-content {
   view-transition-name: none;
 }
+html.theme-transition-active #sidebar, html.theme-transition-active #main-content {
+  view-transition-name: none;
+}
 :root {
   --fluent-radius-none: 0px;
   --fluent-radius-sm: 2px;

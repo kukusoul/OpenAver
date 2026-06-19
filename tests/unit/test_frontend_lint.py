@@ -150,6 +150,20 @@ class TestPageTransitionDomGuard:
         assert re.search(r"\.page-showcase\s+#main-content\s*\{\s*view-transition-name:\s*none", css), \
             "theme.css 缺少 .page-showcase #main-content { view-transition-name: none }（feature/76 CD-11 輔助）"
 
+    def test_theme_css_theme_toggle_denames_named_groups(self):
+        """主題切換（same-doc startViewTransition）期間 de-name sidebar/main-content（Codex P1）。
+
+        view-transition-name 對 same-document VT 同樣生效 → 不 de-name 則命名群組脫離 root、
+        破壞 theme-transition.js 的圓形 reveal（main-content 還會跑 250ms fade 撞 500ms 圓形）。
+        守 html.theme-transition-active 期間兩區 view-transition-name: none。
+        """
+        css = self._theme()
+        assert re.search(
+            r"html\.theme-transition-active\s+#sidebar\s*,\s*"
+            r"html\.theme-transition-active\s+#main-content\s*\{\s*view-transition-name:\s*none",
+            css,
+        ), "theme.css 缺少 theme-transition-active 期間 de-name sidebar/main-content（feature/76 Codex P1 主題切換共存）"
+
     def test_base_html_showcase_skip_script_in_head(self):
         """showcase 硬切 head script（pagereveal/pageswap + skipTransition）存在且在 </head> 之前（CD-11/F8）。
 

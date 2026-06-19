@@ -2440,3 +2440,14 @@ body.fluent-canvas:not(.ds-page)::before {
  * 不達硬切——元素退回 root 快照仍 crossfade。真硬切靠 base.html <head> classic script 的
  * pageswap/pagereveal skipTransition()（URL gate /showcase），見 plan CD-11 / TASK-76-T-showcase。 */
 .page-showcase #main-content { view-transition-name: none; }
+
+/* 主題切換共存（Codex P1）：view-transition-name 對 same-document startViewTransition() 同樣生效
+ * → 主題圓形展開（theme-transition.js 的 ::view-transition-new(root) clipPath）期間，sidebar/
+ * main-content 會脫離 root 快照、自行 crossfade（main-content 還會跑上方 250ms fade），破壞圓形 reveal。
+ * theme-transition.js 切換期間掛 html.theme-transition-active → 此時 de-name 兩區、塌回 root 單一快照、
+ * 圓形 reveal 涵蓋整頁。specificity (1,1,1) > 基礎 #sidebar (1,0,0)，不論順序皆勝；class 移除後命名恢復、
+ * 跨頁轉場照常。 */
+html.theme-transition-active #sidebar,
+html.theme-transition-active #main-content {
+    view-transition-name: none;
+}
