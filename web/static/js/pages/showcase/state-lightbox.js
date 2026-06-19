@@ -92,6 +92,9 @@ export function stateLightbox() {
             this.currentLightboxActress = null;   // video setter always clear actress
             this.addingLbTag = false;             // 切換影片時重置輸入框
             this._videoChipsExpanded = false;     // 影片切換時 reset chips 展開
+            // BUGfix-mobile-similar-stale-cover P2b: in-grid 切換後清除 standalone 旗標，
+            // 確保連點 tier2/3 再 tier1 時 prev/next + fly-back 恢復正常（不殘留 standalone）
+            this.similarExitVideo = null;
             // 71c-P2: 抽至 _refreshLbFullBlurUp helper（slip-through 路徑共用）
             this._refreshLbFullBlurUp();
         },

@@ -12363,3 +12363,127 @@ class TestCoverCacheBustGuard:
             "lightbox overlay（.lb-full `:src='cover_full_url'`）不加 cache-bust 會吃 max-age=86400 舊快取。\n"
             f"當前函式體（去注釋後）：\n{body[:500]}"
         )
+
+
+SHOWCASE_SIMILAR_JS = (
+    Path(__file__).parent.parent.parent
+    / "web" / "static" / "js" / "pages" / "showcase" / "state-similar.js"
+)
+
+
+class TestMobileSimilarDrillFallbackGuard:
+    """BUGfix-mobile-similar-stale-cover: 守衛 mobile similar drill 三層 fallback 合約
+
+    (a) state-lightbox.js 的 _setLightboxIndex 函式體必須清除 similarExitVideo（= null），
+        確保 in-grid 切換後不殘留 standalone 旗標（Codex P2b 根治）。
+    (b) state-similar.js 的 onSimilarMobileCardClick 函式體必須含：
+        - `_videos` 查找（tier 2 fallback）
+        - 設置 `similarExitVideo`（standalone 旗標）
+        - 呼叫 `_refreshLbFullBlurUp`（blur-up reset）
+    """
+
+    def _lightbox_js(self):
+        return SHOWCASE_LIGHTBOX_JS.read_text(encoding="utf-8")
+
+    def _similar_js(self):
+        return SHOWCASE_SIMILAR_JS.read_text(encoding="utf-8")
+
+    @staticmethod
+    def _extract_function_body(js, func_pattern):
+        """用計數括弧深度方式擷取函式體，從 func_pattern regex 匹配處起算。"""
+        m = re.search(func_pattern, js)
+        if not m:
+            return None
+        start = m.start()
+        body_start = js.index('{', start)
+        depth = 0
+        for i, ch in enumerate(js[body_start:], body_start):
+            if ch == '{':
+                depth += 1
+            elif ch == '}':
+                depth -= 1
+                if depth == 0:
+                    return js[body_start:i + 1]
+        return None
+
+    def test_set_lightbox_index_clears_similar_exit_video(self):
+        """_setLightboxIndex 函式體必須含 similarExitVideo = null（清除 standalone 旗標）。
+        根治：in-grid 切換（tier 1）後不殘留 standalone，prev/next + fly-back 恢復正常。
+        """
+        js = self._lightbox_js()
+        body = self._extract_function_body(js, r'_setLightboxIndex\s*\(')
+        assert body is not None, \
+            "state-lightbox.js 找不到 _setLightboxIndex 函式宣告"
+        # 允許有無空格兩種寫法
+        assert re.search(r'similarExitVideo\s*=\s*null', body), (
+            "_setLightboxIndex 函式體未含 'similarExitVideo = null'。\n"
+            "in-grid 切換（tier 1）後 similarExitVideo 不清除，\n"
+            "連點 tier2/3 再 tier1 時 standalone 旗標殘留，prev/next 被錯誤禁用。\n"
+            f"當前函式體：\n{body[:400]}"
+        )
+
+    def test_on_similar_mobile_card_click_has_videos_lookup(self):
+        """onSimilarMobileCardClick 函式體必須含 _videos 查找（tier 2 fallback）。
+        tier 2：被 filter 排除但仍在庫內的片用 _videos.findIndex 撈回完整 metadata。
+        """
+        js = self._similar_js()
+        body = self._extract_function_body(js, r'onSimilarMobileCardClick\s*\(')
+        assert body is not None, \
+            "state-similar.js 找不到 onSimilarMobileCardClick 函式宣告"
+        # 收緊：鎖 `_videos.findIndex` code-form，避免被註解中的 '_videos' vacuously 滿足
+        assert re.search(r'_videos\s*\.\s*findIndex', body), (
+            "onSimilarMobileCardClick 函式體未含 '_videos.findIndex' 查找。\n"
+            "tier 2 fallback（filter-subset 片）缺失，完整 metadata 撈不回，\n"
+            "被 filter 排除的片點擊後只能降級到 tier 3 snapshot 而非完整物件。\n"
+            f"當前函式體：\n{body[:400]}"
+        )
+
+    def test_on_similar_mobile_card_click_sets_similar_exit_video(self):
+        """onSimilarMobileCardClick 函式體必須含 similarExitVideo 指派（standalone 旗標）。
+        tier 2/3 fallback 路徑必須設置 similarExitVideo，確保 prev/next 禁用、close 不 fly-back。
+        """
+        js = self._similar_js()
+        body = self._extract_function_body(js, r'onSimilarMobileCardClick\s*\(')
+        assert body is not None, \
+            "state-similar.js 找不到 onSimilarMobileCardClick 函式宣告"
+        # 收緊：鎖 `similarExitVideo =` 賦值形，避免被註解中的字串 vacuously 滿足
+        assert re.search(r'similarExitVideo\s*=', body), (
+            "onSimilarMobileCardClick 函式體未含 'similarExitVideo =' 指派。\n"
+            "tier 2/3 standalone 旗標缺失：close 會飛回舊卡、prev/next 從舊 index 起跳（Codex P2a）。\n"
+            f"當前函式體：\n{body[:400]}"
+        )
+
+    def test_on_similar_mobile_card_click_calls_refresh_lb_full_blur_up(self):
+        """onSimilarMobileCardClick 函式體必須含 _refreshLbFullBlurUp 呼叫。
+        tier 2/3 路徑繞過 _setLightboxIndex，需手動觸發 blur-up reset + same-URL complete-check，
+        否則 overlay opacity:0 可能卡死。
+        """
+        js = self._similar_js()
+        body = self._extract_function_body(js, r'onSimilarMobileCardClick\s*\(')
+        assert body is not None, \
+            "state-similar.js 找不到 onSimilarMobileCardClick 函式宣告"
+        assert '_refreshLbFullBlurUp' in body, (
+            "onSimilarMobileCardClick 函式體未含 '_refreshLbFullBlurUp' 呼叫。\n"
+            "tier 2/3 slip-through 路徑缺 blur-up reset，.lb-full overlay opacity:0 可能卡死。\n"
+            f"當前函式體：\n{body[:400]}"
+        )
+
+    def test_close_similar_mode_fallback_has_videos_tier(self):
+        """closeSimilarMode 退場 fallback 必須與 onSimilarMobileCardClick 同採三層策略：
+        _filteredVideos miss 後先查 _videos.findIndex（命中保完整 metadata + path），
+        且仍保留 _similarLastDrilledItem snapshot 當孤兒列 fallback（Codex P2）。
+        否則 mobile tier2 的完整 metadata 會在關閉 similar mode 時被重新降級。
+        """
+        js = self._similar_js()
+        body = self._extract_function_body(js, r'async\s+closeSimilarMode\s*\(')
+        assert body is not None, \
+            "state-similar.js 找不到 closeSimilarMode 函式宣告"
+        assert re.search(r'_videos\s*\.\s*findIndex', body), (
+            "closeSimilarMode fallback 未含 '_videos.findIndex'（tier 2）。\n"
+            "退場時 _filteredVideos miss 直接降級成 5 欄 snapshot，\n"
+            "mobile tier2 點擊時的完整 metadata + path 會在關閉 similar mode 時被重新降級。"
+        )
+        assert '_similarLastDrilledItem' in body, (
+            "closeSimilarMode fallback 未保留 '_similarLastDrilledItem' snapshot（孤兒列 fallback）。\n"
+            "_videos 也 miss（孤兒列 / demo）時需 snapshot 兜底，不可移除。"
+        )
