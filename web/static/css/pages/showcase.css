@@ -318,6 +318,20 @@
     :is(#ds-gallery-components, .ds-gallery-composition) .showcase-grid .av-card-preview:not(.hero-card) .av-card-preview-img img {
         object-position: right center; /* (1,4,1) 贏 theme.css 基準 img (1,0,2)；基準本無 object-position（此為加值）；只露封面正面 */
     }
+
+    /* US5-75b：3 欄 poster 格 caption（CD-75b-9）——番號單行 ellipsis、女優名次行隱藏。
+       次行 class = .av-actress（非 .av-maker；grid 卡無 .av-maker，誤用會 silent no-op）。
+       同帶 :is(…) scope + :not(.hero-card) 防誤殺 hero footer（其 footer 也有 .av-num/.av-actress，Codex F5）。 */
+    :is(#ds-gallery-components, .ds-gallery-composition) .showcase-grid .av-card-preview:not(.hero-card) .av-card-preview-footer .footer-default .av-num {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        font-size: 0.7rem; /* 略縮字型容納番號（3 欄每欄 ≈107px） */
+    }
+
+    :is(#ds-gallery-components, .ds-gallery-composition) .showcase-grid .av-card-preview:not(.hero-card) .av-card-preview-footer .footer-default .av-actress {
+        display: none; /* narrow 下次要資訊，空間不足 */
+    }
 }
 
 /* ==================== Actress Grid — Collection Wall (44c-T6) ==================== */
