@@ -1,0 +1,101 @@
+/* fluent-materials.css — Fluent Material Token System (77a-T1)
+ *
+ * PURPOSE: Declares all 6 Fluent material role tokens for the dim theme.
+ * LOAD ORDER: This file is linked LAST site-wide in base.html (after the
+ *   {% block extra_css %} expansion) to achieve source-order override (CD-A2).
+ *   Do NOT move this link into the component CSS block (L76–L84) — that placement
+ *   would be overridden by extra_css page stylesheets (e.g. design-system.css).
+ *
+ * SCOPE RULE (iron): ALL declarations are inside [data-theme="dim"].
+ *   These tokens are undefined in light theme. Any unscoped application of
+ *   --mica-canvas / --glass-shell-fill etc. in light would trigger IACVT
+ *   (Invalid At Computed Value Time) → property reverts to initial → bg disappears.
+ *
+ * TOKEN ONLY (A-T1): This file declares tokens only. Surface application rules
+ *   (body.fluent-canvas, .sidebar, .showcase-container, etc.) are in A-T2/T3/T5.
+ *
+ * DO NOT redefine: --fluent-blur / --fluent-blur-light / --fluent-blur-heavy /
+ *   --fluent-shadow-{8,16,28,64} / --color-primary — all exist in input.css / theme.css.
+ *
+ * Token source: feature/77-fluent-materials/token-spec-77.md §1
+ *   Values extracted from poc-settings-glass-v3.css (S3) / poc-showcase-glass-v5.css (S5).
+ *   canvas/shell configurations are 100% identical between S3 and S5 (true shared tokens).
+ */
+
+[data-theme="dim"] {
+  /* ── Mica canvas (body background; fixed; no blur) ── S3=S5 identical ── */
+  --mica-canvas:
+    radial-gradient(ellipse 95% 72% at 5% -8%,  oklch(0.52 0.075 238 / 0.46), transparent 68%),
+    radial-gradient(ellipse 80% 70% at 105% 32%, oklch(0.43 0.065 276 / 0.34), transparent 66%),
+    linear-gradient(138deg, oklch(0.31 0.045 244) 0%, oklch(0.21 0.03 258) 48%, oklch(0.115 0.018 272) 100%);
+  /* grain: fine-grain ::before, opacity ~0.03, mix-blend-mode:soft-light (premium invisible-grade) */
+
+  /* ── Glass shell (sidebar / header / toolbar / footer / mobile nav·drawer) ── S3=S5 identical ── */
+  --glass-shell-gradient: linear-gradient(110deg,
+      color-mix(in oklch, white 7%, transparent) 0%, transparent 34%,
+      color-mix(in oklch, black 10%, transparent) 100%);
+  --glass-shell-fill: oklch(0.17 0.018 258 / 0.48);
+  --glass-shell-saturate: 130%;                 /* backdrop-filter: blur(var(--fluent-blur-light)) saturate(130%) */
+  --glass-shell-edge-top:    color-mix(in oklch, white 11%, transparent);
+  --glass-shell-edge-left:   color-mix(in oklch, white 6%,  transparent);
+  --glass-shell-edge-bottom: color-mix(in oklch, black 16%, transparent);
+  --glass-shell-border:      color-mix(in oklch, white 14%, transparent);
+  /* shadow: sidebar=--fluent-shadow-16; header/toolbar=--fluent-shadow-8 */
+
+  /* ── Glass shell — mobile (top-navbar / offcanvas; slightly thicker) ── S3=S5 identical ── */
+  --glass-shell-mobile-gradient: linear-gradient(145deg,
+      color-mix(in oklch, white 8%, transparent), transparent 42%,
+      color-mix(in oklch, black 9%, transparent));
+  --glass-shell-mobile-fill: oklch(0.17 0.018 258 / 0.52);
+  --glass-shell-mobile-edge-top:    color-mix(in oklch, white 10%, transparent);
+  --glass-shell-mobile-edge-bottom: color-mix(in oklch, black 14%, transparent);
+  --glass-shell-mobile-border:      color-mix(in oklch, white 14%, transparent);
+
+  /* ── Glass panel (Settings/Help/Scanner/Search reading pane) ── S3 ── */
+  --glass-panel-gradient: linear-gradient(145deg,
+      color-mix(in oklch, white 8%, transparent) 0%, color-mix(in oklch, white 2%, transparent) 28%,
+      transparent 52%, color-mix(in oklch, black 11%, transparent) 100%);
+  --glass-panel-fill: oklch(0.17 0.016 258 / 0.48);
+  --glass-panel-saturate: 125%;                 /* backdrop-filter: blur(var(--fluent-blur)) saturate(125%) */
+  --glass-panel-edge-top:    color-mix(in oklch, white 12%, transparent);
+  --glass-panel-edge-left:   color-mix(in oklch, white 7%,  transparent);
+  --glass-panel-edge-bottom: color-mix(in oklch, black 18%, transparent);
+  --glass-panel-border:      color-mix(in oklch, white 15%, transparent);
+  --glass-panel-header-tint:   color-mix(in oklch, white 4%,  transparent);
+  --glass-panel-header-border: color-mix(in oklch, white 10%, transparent);
+  /* shadow: --fluent-shadow-16 */
+
+  /* ── Glass caption (grid card title bar; 77b) ── S5 ── */
+  --glass-caption-gradient: linear-gradient(150deg,
+      color-mix(in oklch, white 16%, transparent) 0%, color-mix(in oklch, var(--color-primary) 8%, transparent) 36%,
+      transparent 58%, color-mix(in oklch, black 18%, transparent) 100%);
+  --glass-caption-fill: oklch(0.16 0.026 252 / 0.46);
+  --glass-caption-fill-hover: oklch(0.15 0.024 252 / 0.62);   /* hover raises opacity */
+  --glass-caption-border-top: color-mix(in oklch, white 24%, transparent);
+  --glass-caption-edge-top:    color-mix(in oklch, white 15%, transparent);
+  --glass-caption-edge-bottom: color-mix(in oklch, black 24%, transparent);
+  /* card shell is transparent; no per-card backdrop-filter; card border white22% + outer black24% + shadow-16 */
+
+  /* ── Glass overlay (lightbox/modal/popover/drawer; 77b) ── S5 ── */
+  --glass-overlay-fill-gradient: linear-gradient(155deg,
+      oklch(0.29 0.035 244 / 0.68) 0%, oklch(0.18 0.025 258 / 0.72) 65%, oklch(0.11 0.018 272 / 0.92) 100%);
+  --glass-overlay-border-gradient: linear-gradient(135deg,
+      color-mix(in oklch, white 34%, transparent) 0%, color-mix(in oklch, white 11%, transparent) 38%,
+      color-mix(in oklch, black 30%, transparent) 100%);   /* padding-box/border-box technique */
+  --glass-overlay-saturate: 130%;
+  --glass-overlay-edge-top:    color-mix(in oklch, white 22%, transparent);
+  --glass-overlay-edge-bottom: color-mix(in oklch, black 28%, transparent);
+  --glass-overlay-divider:     color-mix(in oklch, white 13%, transparent);   /* metadata hairline (no card-in-card) */
+  /* modal box = overlay glass but with high opacity end (≈0.9 fill) to protect dense text (spec §2.5) */
+
+  /* ── Media frame (star space; 77b) ── POC §6 ── */
+  --media-frame-stroke: color-mix(in oklch, white 22%, transparent);   /* + box-sizing:border-box, no new transition:transform */
+
+  /* ── Shared edge steps (combinatorial use; avoids repeating raw color-mix) ── */
+  --glass-edge-highlight-strong: color-mix(in oklch, white 22%, transparent);
+  --glass-edge-highlight-mid:    color-mix(in oklch, white 12%, transparent);
+  --glass-edge-highlight-soft:   color-mix(in oklch, white 7%,  transparent);
+  --glass-edge-lowlight-strong:  color-mix(in oklch, black 24%, transparent);
+  --glass-edge-lowlight-mid:     color-mix(in oklch, black 16%, transparent);
+  --glass-edge-lowlight-soft:    color-mix(in oklch, black 10%, transparent);
+}
