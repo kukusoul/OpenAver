@@ -2084,197 +2084,6 @@
     color: var(--accent);
 }
 
-/* ==================== Materials Layer System (T8.4) ==================== */
-
-.ds-materials-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 1.5rem;
-    margin-top: 1rem;
-}
-
-.ds-material-item {
-    border-radius: var(--fluent-radius-xl);
-    overflow: hidden;
-    border: 1px solid var(--border-light);
-    box-shadow: var(--fluent-shadow-4);
-}
-
-/* Preview 區域 */
-.ds-material-preview {
-    height: 120px;
-    position: relative;
-    overflow: hidden;
-}
-
-/* Info 區域 */
-.ds-material-info {
-    padding: 1rem;
-    background: var(--surface-1);
-    display: flex;
-    flex-direction: column;
-    gap: 0.4rem;
-}
-
-.ds-material-name {
-    font-weight: 600;
-    font-size: 0.95rem;
-    color: var(--text-primary);
-}
-
-.ds-material-class {
-    font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
-    font-size: 0.8rem;
-    color: var(--accent);
-    background: color-mix(in oklch, var(--accent) 10%, transparent);
-    padding: 0.2rem 0.5rem;
-    border-radius: var(--fluent-radius-sm);
-    align-self: flex-start;
-}
-
-.ds-material-desc {
-    font-size: 0.85rem;
-    color: var(--text-secondary);
-    line-height: 1.5;
-}
-
-.ds-material-tokens {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-    margin-top: 0.25rem;
-}
-
-.ds-material-tokens code {
-    font-size: 0.75rem;
-    color: var(--text-muted);
-    font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
-}
-
-/* Canvas Layer Demo */
-.ds-material-canvas-demo {
-    width: 100%;
-    height: 100%;
-    background:
-        radial-gradient(ellipse 100% 60% at 50% -10%, rgba(var(--ds-glow-rgb), 0.25), transparent),
-        radial-gradient(ellipse 70% 50% at 100% 100%, oklch(55% 0.12 85 / 0.12), transparent),
-        var(--bg-body);
-    position: relative;
-}
-
-.ds-material-canvas-demo::after {
-    content: 'Mica Canvas';
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.85rem;
-    font-weight: 600;
-    color: var(--text-secondary);
-}
-
-[data-theme="dim"] .ds-material-canvas-demo {
-    background:
-        radial-gradient(ellipse 100% 60% at 50% -10%, rgba(var(--ds-glow-rgb), 0.12), transparent),
-        radial-gradient(ellipse 70% 50% at 100% 100%, oklch(55% 0.15 260 / 0.10), transparent),
-        var(--bg-body);
-}
-
-/* Toolbar Demo — 背景漸層 + Acrylic 效果直接寫，不依賴 .fluent-toolbar class */
-.ds-material-toolbar-demo {
-    width: 100%;
-    height: 100%;
-    display: flex;
-    align-items: center;
-    padding: 0 1.25rem;
-    background:
-        radial-gradient(ellipse 80% 80% at 20% 50%, rgba(var(--ds-glow-rgb), 0.3), transparent),
-        linear-gradient(135deg, oklch(65% 0.15 250 / 0.3) 0%, oklch(55% 0.12 85 / 0.2) 100%);
-    backdrop-filter: blur(var(--fluent-blur)) saturate(130%);
-    -webkit-backdrop-filter: blur(var(--fluent-blur)) saturate(130%);
-}
-
-.ds-material-toolbar-label {
-    font-size: 0.85rem;
-    font-weight: 600;
-    color: var(--text-primary);
-}
-
-/* Surface Elevation Demo */
-.ds-material-surface-demo {
-    width: 100%;
-    height: 100%;
-    background: color-mix(in oklch, var(--color-base-200) 80%, transparent);
-    box-shadow:
-        inset 0 1px 0 color-mix(in oklch, var(--color-base-content) 8%, transparent),
-        var(--fluent-shadow-4);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-[data-theme="dim"] .ds-material-surface-demo {
-    background: color-mix(in oklch, var(--color-base-200) 55%, transparent);
-}
-
-.ds-material-surface-label {
-    font-size: 0.85rem;
-    font-weight: 600;
-    color: var(--text-secondary);
-}
-
-/* Material Table */
-.ds-material-table-wrap {
-    overflow-x: auto;
-}
-
-.ds-material-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.875rem;
-}
-
-.ds-material-table th {
-    text-align: left;
-    padding: 0.6rem 1rem;
-    background: var(--surface-0);
-    color: var(--text-muted);
-    font-weight: 600;
-    font-size: 0.75rem;
-    letter-spacing: 0.05em;
-    border-bottom: 2px solid var(--border-light);
-}
-
-.ds-material-table td {
-    padding: 0.6rem 1rem;
-    color: var(--text-primary);
-    border-bottom: 1px solid var(--stroke-subtle);
-    vertical-align: top;
-}
-
-.ds-material-table td:first-child {
-    font-weight: 600;
-    color: var(--accent);
-    white-space: nowrap;
-}
-
-.ds-material-table td code {
-    font-size: 0.8rem;
-    background: color-mix(in oklch, var(--color-base-content) 8%, transparent);
-    padding: 0.15rem 0.4rem;
-    border-radius: var(--fluent-radius-sm);
-    font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
-}
-
-.ds-material-table tr:last-child td {
-    border-bottom: none;
-}
-
-.ds-material-table tr:hover td {
-    background: color-mix(in oklch, var(--color-base-content) 3%, transparent);
-}
-
 /* ==================== Icon Catalog (#ds-icons) ==================== */
 .ds-icon-card {
     display: flex;
@@ -2650,4 +2459,414 @@
     background: color-mix(in oklch, var(--color-base-content) 8%, transparent);
     color: var(--text-muted);
     word-break: break-all;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * Fluent Material Token System Demo (77a-T1)
+ * All dim-scoped rules use [data-theme="dim"] prefix.
+ * In light mode: swatch placeholders render; material styles are absent (correct).
+ * In dim mode: real glass renders on the Mica stage backdrop.
+ * ───────────────────────────────────────────────────────────────────────── */
+
+/* Light mode fallback notice — visible in light, hidden in dim */
+.ds-fm-light-notice {
+    display: block;
+}
+
+[data-theme="dim"] .ds-fm-light-notice {
+    display: none;
+}
+
+/* ── Stage (Mica backdrop strip) ── */
+.ds-fm-stage {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.25rem;
+    padding: 1.5rem;
+    border-radius: var(--fluent-radius-lg);
+    margin-top: 1rem;
+    /* Light fallback: neutral surface */
+    background: color-mix(in oklch, var(--color-base-200) 80%, transparent);
+    border: 1px solid color-mix(in oklch, var(--color-base-content) 8%, transparent);
+}
+
+/* In dim: stage IS the Mica canvas — glass swatches blur what's behind them */
+[data-theme="dim"] .ds-fm-stage {
+    background: var(--mica-canvas);
+}
+
+/* ── Role Card ── */
+.ds-fm-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+/* ── Swatch base ── */
+.ds-fm-swatch {
+    position: relative;
+    height: 96px;
+    border-radius: var(--fluent-radius-lg);
+    overflow: hidden;
+    /* Light mode placeholder: checkerboard hint */
+    background:
+        repeating-conic-gradient(
+            color-mix(in oklch, var(--color-base-content) 6%, transparent) 0% 25%,
+            color-mix(in oklch, var(--color-base-content) 3%, transparent) 0% 50%
+        ) 0 0 / 12px 12px,
+        color-mix(in oklch, var(--color-base-200) 90%, transparent);
+    border: 1px solid color-mix(in oklch, var(--color-base-content) 10%, transparent);
+}
+
+.ds-fm-swatch-inner {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1;
+}
+
+.ds-fm-swatch-label {
+    font-family: ui-monospace, 'Cascadia Code', monospace;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: color-mix(in oklch, var(--color-base-content) 50%, transparent);
+    text-shadow: 0 1px 2px oklch(0 0 0 / 0.4);
+}
+
+/* ── Edge lines ── */
+.ds-fm-edge {
+    position: absolute;
+    z-index: 2;
+    pointer-events: none;
+}
+
+.ds-fm-edge--top {
+    inset: 0 0 auto 0;
+    height: 1px;
+}
+
+.ds-fm-edge--left {
+    inset: 0 auto 0 0;
+    width: 1px;
+}
+
+.ds-fm-edge--bottom {
+    inset: auto 0 0 0;
+    height: 1px;
+}
+
+/* ── Panel header sub-area ── */
+.ds-fm-panel-header {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 24px;
+    z-index: 1;
+    /* Light fallback */
+    background: color-mix(in oklch, var(--color-base-content) 4%, transparent);
+    border-bottom: 1px solid color-mix(in oklch, var(--color-base-content) 6%, transparent);
+}
+
+/* ── Overlay divider hairline ── */
+.ds-fm-divider {
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    bottom: 28px;
+    height: 1px;
+    z-index: 2;
+    background: color-mix(in oklch, var(--color-base-content) 10%, transparent);
+}
+
+/* ── Card info area ── */
+.ds-fm-card-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+
+.ds-fm-role-name {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--color-base-content);
+}
+
+.ds-fm-role-desc {
+    font-size: 0.7rem;
+    color: var(--text-secondary, color-mix(in oklch, var(--color-base-content) 60%, transparent));
+    line-height: 1.4;
+}
+
+.ds-fm-tokens-mini {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    margin-top: 0.2rem;
+}
+
+.ds-fm-tokens-mini code {
+    font-size: 0.65rem;
+    padding: 1px 5px;
+    border-radius: var(--fluent-radius-sm);
+    background: color-mix(in oklch, var(--color-base-content) 6%, transparent);
+    color: var(--text-muted, color-mix(in oklch, var(--color-base-content) 50%, transparent));
+    font-family: ui-monospace, 'Cascadia Code', monospace;
+}
+
+/* ── Supplementary grid ── */
+.ds-fm-supp-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.25rem;
+    margin-top: 1rem;
+}
+
+.ds-fm-supp-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.ds-fm-supp-preview {
+    position: relative;
+    height: 80px;
+    border-radius: var(--fluent-radius-lg);
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: color-mix(in oklch, var(--color-base-200) 80%, transparent);
+    border: 1px solid color-mix(in oklch, var(--color-base-content) 8%, transparent);
+}
+
+/* ── Media frame demo ── */
+.ds-fm-media-frame-box {
+    width: 48px;
+    height: 48px;
+    border-radius: var(--fluent-radius-sm);
+    border: 2px solid color-mix(in oklch, var(--color-base-content) 15%, transparent);
+    box-sizing: border-box;
+}
+
+/* ── Edge strip ── */
+.ds-fm-edge-strip {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+
+.ds-fm-edge-chip {
+    width: 28px;
+    height: 28px;
+    border-radius: var(--fluent-radius-sm);
+    border: 1px solid color-mix(in oklch, var(--color-base-content) 8%, transparent);
+    /* Light fallback */
+    background: color-mix(in oklch, var(--color-base-content) 8%, transparent);
+}
+
+.ds-fm-edge-labels {
+    position: absolute;
+    bottom: 6px;
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: space-between;
+    padding: 0 12px;
+    font-size: 0.6rem;
+    color: color-mix(in oklch, var(--color-base-content) 40%, transparent);
+    font-family: ui-monospace, 'Cascadia Code', monospace;
+    pointer-events: none;
+}
+
+/* ── Intro text ── */
+.ds-fm-intro {
+    margin-bottom: 0.5rem;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * DIM-ONLY MATERIAL RULES
+ * All rules below apply only in [data-theme="dim"].
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Canvas swatch: pure gradient, no blur ── */
+[data-theme="dim"] .ds-fm-swatch--canvas {
+    background: var(--mica-canvas);
+    border-color: color-mix(in oklch, white 8%, transparent);
+}
+
+[data-theme="dim"] .ds-fm-swatch--canvas .ds-fm-swatch-label {
+    color: oklch(0.78 0.01 258 / 0.9);
+}
+
+[data-theme="dim"] .ds-fm-swatch--canvas .ds-fm-edge--top {
+    background: color-mix(in oklch, white 18%, transparent);
+}
+
+/* ── Shell swatch: blur-light + shell tokens ── */
+[data-theme="dim"] .ds-fm-swatch--shell {
+    background-color: var(--glass-shell-fill);
+    background-image: var(--glass-shell-gradient);
+    -webkit-backdrop-filter: blur(var(--fluent-blur-light)) saturate(var(--glass-shell-saturate));
+    backdrop-filter: blur(var(--fluent-blur-light)) saturate(var(--glass-shell-saturate));
+    border-color: var(--glass-shell-border);
+}
+
+[data-theme="dim"] .ds-fm-swatch--shell .ds-fm-swatch-label {
+    color: oklch(0.82 0.01 258 / 0.9);
+}
+
+[data-theme="dim"] .ds-fm-swatch--shell .ds-fm-edge--top {
+    background: var(--glass-shell-edge-top);
+}
+
+[data-theme="dim"] .ds-fm-swatch--shell .ds-fm-edge--left {
+    background: var(--glass-shell-edge-left);
+}
+
+[data-theme="dim"] .ds-fm-swatch--shell .ds-fm-edge--bottom {
+    background: var(--glass-shell-edge-bottom);
+}
+
+/* ── Shell Mobile swatch: blur-light + mobile tokens ── */
+[data-theme="dim"] .ds-fm-swatch--shell-mobile {
+    background-color: var(--glass-shell-mobile-fill);
+    background-image: var(--glass-shell-mobile-gradient);
+    /* shell-mobile shares --glass-shell-saturate by design (no mobile-specific saturate token) */
+    -webkit-backdrop-filter: blur(var(--fluent-blur-light)) saturate(var(--glass-shell-saturate));
+    backdrop-filter: blur(var(--fluent-blur-light)) saturate(var(--glass-shell-saturate));
+    border-color: var(--glass-shell-mobile-border);
+}
+
+[data-theme="dim"] .ds-fm-swatch--shell-mobile .ds-fm-swatch-label {
+    color: oklch(0.82 0.01 258 / 0.9);
+}
+
+[data-theme="dim"] .ds-fm-swatch--shell-mobile .ds-fm-edge--top {
+    background: var(--glass-shell-mobile-edge-top);
+}
+
+[data-theme="dim"] .ds-fm-swatch--shell-mobile .ds-fm-edge--bottom {
+    background: var(--glass-shell-mobile-edge-bottom);
+}
+
+/* ── Panel swatch: full blur (30px) + panel tokens ── */
+[data-theme="dim"] .ds-fm-swatch--panel {
+    background-color: var(--glass-panel-fill);
+    background-image: var(--glass-panel-gradient);
+    -webkit-backdrop-filter: blur(var(--fluent-blur)) saturate(var(--glass-panel-saturate));
+    backdrop-filter: blur(var(--fluent-blur)) saturate(var(--glass-panel-saturate));
+    border-color: var(--glass-panel-border);
+}
+
+[data-theme="dim"] .ds-fm-swatch--panel .ds-fm-swatch-label {
+    color: oklch(0.80 0.01 258 / 0.9);
+}
+
+[data-theme="dim"] .ds-fm-swatch--panel .ds-fm-edge--top {
+    background: var(--glass-panel-edge-top);
+}
+
+[data-theme="dim"] .ds-fm-swatch--panel .ds-fm-edge--left {
+    background: var(--glass-panel-edge-left);
+}
+
+[data-theme="dim"] .ds-fm-swatch--panel .ds-fm-edge--bottom {
+    background: var(--glass-panel-edge-bottom);
+}
+
+[data-theme="dim"] .ds-fm-panel-header {
+    background: var(--glass-panel-header-tint);
+    border-bottom-color: var(--glass-panel-header-border);
+}
+
+/* ── Caption swatch: gradient fill, no backdrop-filter ── */
+[data-theme="dim"] .ds-fm-swatch--caption {
+    background-color: var(--glass-caption-fill);
+    background-image: var(--glass-caption-gradient);
+    border-color: var(--glass-caption-border-top);
+}
+
+[data-theme="dim"] .ds-fm-swatch--caption .ds-fm-swatch-label {
+    color: oklch(0.80 0.015 252 / 0.9);
+}
+
+[data-theme="dim"] .ds-fm-swatch--caption .ds-fm-edge--top {
+    background: var(--glass-caption-edge-top);
+}
+
+[data-theme="dim"] .ds-fm-swatch--caption .ds-fm-edge--bottom {
+    background: var(--glass-caption-edge-bottom);
+}
+
+/* ── Overlay swatch: fill-gradient + blur ── */
+[data-theme="dim"] .ds-fm-swatch--overlay {
+    background-color: oklch(0.18 0.025 258 / 0.72); /* WKWebView fallback: gradient mid-point */
+    background: var(--glass-overlay-fill-gradient);
+    -webkit-backdrop-filter: blur(var(--fluent-blur)) saturate(var(--glass-overlay-saturate));
+    backdrop-filter: blur(var(--fluent-blur)) saturate(var(--glass-overlay-saturate));
+    /* Overlay border uses border-gradient technique (padding-box/border-box) */
+    border: 1px solid color-mix(in oklch, white 22%, transparent);
+}
+
+[data-theme="dim"] .ds-fm-swatch--overlay .ds-fm-swatch-label {
+    color: oklch(0.85 0.01 258 / 0.95);
+}
+
+[data-theme="dim"] .ds-fm-swatch--overlay .ds-fm-edge--top {
+    background: var(--glass-overlay-edge-top);
+}
+
+[data-theme="dim"] .ds-fm-swatch--overlay .ds-fm-edge--bottom {
+    background: var(--glass-overlay-edge-bottom);
+}
+
+[data-theme="dim"] .ds-fm-divider {
+    background: var(--glass-overlay-divider);
+}
+
+/* ── Supplementary: stage background in dim ── */
+[data-theme="dim"] .ds-fm-supp-preview {
+    background: var(--mica-canvas);
+    border-color: color-mix(in oklch, white 8%, transparent);
+}
+
+/* ── Media frame box in dim ── */
+[data-theme="dim"] .ds-fm-media-frame-box {
+    border: 2px solid var(--media-frame-stroke);
+    box-sizing: border-box;
+    background: transparent;
+}
+
+/* ── Edge chips in dim ── */
+[data-theme="dim"] .ds-fm-edge-chip {
+    border-color: color-mix(in oklch, white 6%, transparent);
+}
+
+/* Highlight chips: white alpha on dark stage */
+[data-theme="dim"] .ds-fm-edge-chip--h-strong { background: var(--glass-edge-highlight-strong); }
+[data-theme="dim"] .ds-fm-edge-chip--h-mid    { background: var(--glass-edge-highlight-mid); }
+[data-theme="dim"] .ds-fm-edge-chip--h-soft   { background: var(--glass-edge-highlight-soft); }
+
+/* Lowlight chips: black alpha — overlay on top of the Mica stage strip to read */
+[data-theme="dim"] .ds-fm-edge-chip--l-soft   { background: var(--glass-edge-lowlight-soft); }
+[data-theme="dim"] .ds-fm-edge-chip--l-mid    { background: var(--glass-edge-lowlight-mid); }
+[data-theme="dim"] .ds-fm-edge-chip--l-strong { background: var(--glass-edge-lowlight-strong); }
+
+/* ── Media-frame preview: mica stage so --media-frame-stroke hairline reads clearly ── */
+[data-theme="dim"] .ds-fm-supp-preview--media-frame {
+    background: var(--mica-canvas);
+    border-color: color-mix(in oklch, white 8%, transparent);
+    /* Child .ds-fm-media-frame-box demonstrates the --media-frame-stroke token */
+}
+
+/* ── Edge-steps preview: mica stage so highlight/lowlight chips read against the gradient ── */
+[data-theme="dim"] .ds-fm-supp-preview--edge-steps {
+    background: var(--mica-canvas);
+    border-color: color-mix(in oklch, white 8%, transparent);
+    /* Child .ds-fm-edge-chip variants use --glass-edge-highlight-* / --glass-edge-lowlight-* */
 }

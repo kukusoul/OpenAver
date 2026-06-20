@@ -336,6 +336,10 @@
     </style>
 
     {% block extra_css %}{% endblock %}
+    <!-- Fluent Material Token System (77a-T1): must be LAST stylesheet site-wide.
+         Placed after extra_css expansion so source-order beats page-specific CSS (CD-A2).
+         Do NOT move into the component link block above — it would be overridden. -->
+    <link href="/static/css/components/fluent-materials.css" rel="stylesheet">
 
     <!-- i18n: 注入合併後的完整字典 + window.t() -->
     <script>
@@ -694,7 +698,7 @@
          x-trap.inert="notifBell.drawerOpen"
          @click.outside="closeDrawer()"
          @keydown.escape.window="if (notifBell.drawerOpen) closeDrawer()"
-         class="w-80 bg-base-100 border border-base-300 rounded-xl shadow-lg"
+         class="w-80 bg-base-100 border border-base-300 rounded-xl shadow-lg notification-drawer"
          style="z-index: 1010; position: fixed;"
          role="dialog"
          :aria-label="window.t ? window.t('notif.dialog_label') : '通知中心'">

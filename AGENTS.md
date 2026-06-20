@@ -2,6 +2,32 @@
 
 ## Review guidelines
 
+### Review stages and scope
+
+- Plan review is doc-first. Verify source only for load-bearing assumptions that
+  could invalidate architecture or task scope.
+- Implementation review is diff-first. Inspect changed hunks, their direct
+  callers/consumers, and relevant DoD; do not repeat full plan archaeology.
+- Follow-up review is delta-only plus same-root-cause siblings.
+- Review statically — do NOT run tests, lint, builds, or coverage. The implementing
+  change runs targeted tests pre-commit; pre-merge and CI run the full suite plus
+  lint. Trust the review packet's test summary; if edge-case coverage is in doubt,
+  read the test file rather than executing it. (Empirically, running them caught 0
+  unique issues across 24 reviews while consuming large amounts of context.)
+- Expand to repository-wide audit only for exhaustive-coverage claims,
+  shared/global infrastructure, concurrency/lifecycle, migrations, security,
+  external-service contracts, or when the first contradiction is found.
+- Stop expanding when each high-risk claim has direct evidence and no new
+  sibling contradiction remains.
+
+### Review focus areas
+
+- Cross-component and cross-thread timing.
+- Error/early-return state symmetry and cleanup.
+- External-service behavior versus code assumptions.
+- Shared/global CSS, lifecycle, serialization, and configuration contracts.
+- Architecture drift across multiple entry points.
+
 ### Security
 
 - API responses MUST NOT contain `str(e)` or Python exception details. Error messages to frontend must be fixed Chinese strings (e.g. `"操作失敗"`), with details logged server-side via `logger.error()` or `logger.exception()`.

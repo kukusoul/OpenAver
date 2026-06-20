@@ -5,6 +5,49 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.4] - 2026-06-20
+
+本版主軸：**Fluent 材質系統全站統一 — 6 角色材質 + B 浮動 chrome**（feature/77）。純前端、零後端／API／DB、**theme.css 全程零改**——所有材質規則寫進全站最後載入的 `fluent-materials.css`（source-order 覆寫），永不觸發 Tailwind recompile。全部 `[data-theme="dim"]`-scoped（light 模式維持現狀；dim 下材質才生效，避免 light 引用未定義 token 導致背景消失）。把過去零散的「材質三層」收斂成一套**單一 token 系統的 6 角色**：Mica canvas（整頁氛圍）→ Glass shell（側欄／頁首／工具列等殼層）→ Glass panel（閱讀面）→ Glass caption（卡片標題條）→ Glass overlay（燈箱／modal／popover／抽屜）→ Media frame（星空外框）。封面海報維持 100% 乾淨（不加任何 blur／tint，封面是主角）。並把「浮動圓角玻璃條」從 showcase 工具列擴及 search 搜尋列與 settings／scanner 頁首，桌面 chrome 視覺統一。
+
+### Added
+#### 🎨 6 角色 Fluent 材質系統（77a / 77b）
+- **Mica canvas**：body 整頁漸層氛圍底（fixed、無 blur、隱形級顆粒 grain ~0.03 soft-light），全站 dim 套用。
+- **Glass shell**：sidebar／頁首／工具列／footer／手機 nav・抽屜統一毛玻璃殼層（blur-light + saturate + 邊緣高光 inset）。
+- **Glass panel**：Settings／Help／Scanner／Search 閱讀面卡片（較重 blur）；卡內子面板只用 sub-tint 不疊第二層 backdrop-filter（避免糊上加糊 + GPU 浪費）。
+- **Glass caption**：grid 卡底部標題條改玻璃漸層（gradient + fill，hover 升不透明），**封面海報零材質**、**卡片不加 per-card backdrop-filter**（90 卡效能）；hover 收斂出貨值並中和舊 accent glow。影片卡與女優卡同步。
+- **Glass overlay**：lightbox 改單一連續玻璃 shell（metadata 退為 hairline 分隔、非卡中卡）；modal box 用專用 uniform fill token 保護密集文字；help popover／variable-menu／scanner 資料夾下拉／通知抽屜統一浮層玻璃。
+- **Media frame**：星空中央封面補 neutral hairline border、與 slot 外框共用同一 token（dim 下整片一致）。
+
+#### 🛸 B 浮動 chrome（77c）
+- **showcase 工具列**圓角浮動玻璃條（封面從底下滑過）；**search 搜尋列**桌面（≥1024px）同款浮動圓角（mobile 維持全寬層架，行動相容不變）。
+- **Settings／Scanner 頁首**桌面浮動圓角 + 四邊框，並修正標題文字貼左緣（補水平 padding）；置中窄欄頁採「欄寬對齊」（不側內縮，避免與下方滿欄卡片左緣錯位）。
+
+#### 🌗 chrome 置頂條 dim↔light 主題一致（77d）
+- **search 搜尋列／Settings／Scanner 頁首／showcase 工具列**的浮動圓角玻璃從原本只在 dim 生效，擴及 **light 模式**——同一條 chrome 在深色／淺色主題下形狀（圓角／浮動／邊框）與材質（玻璃）一致（先前 light 下這些置頂條無浮動、無玻璃，與 dim 長得不一樣）。
+- **light 玻璃**為近白霜面 acrylic：半透明 fill（base-100 @55%）+ backdrop blur + 細暗髮絲邊框，深色文字／icon 維持可讀；以 DaisyUI base 調色盤 derive（theme-aware，不硬編碼）。
+- **範圍限定**：只置頂條 shell 角色雙主題；其他材質角色（panel／caption／overlay／media-frame）與其餘 shell 面（sidebar／offcanvas／top-navbar／footer）維持 dim-only、light 現狀不變。
+
+### Changed
+- **lightbox / modal 由實心 surface 改浮層玻璃**：燈箱內容與 modal 框從 `--surface-2` 實心改為玻璃材質（padding-box／border-box 邊框漸層 + backdrop-filter）；燈箱背幕 scrim 維持中性、封面不染色（否決環境光取色方案）。
+
+### Fixed
+- **search 燈箱背景「逐格模糊」（POC 否決效果意外引入）**：search 開 lightbox 時背景每張封面各自被模糊、footer 番號卻銳利（showcase 是整片均勻糊）。根因為 feature/76 給 `#main-content` 加的 `view-transition-name` 使該元素成為 backdrop root，破壞 `position:fixed` 燈箱 scrim 的 `backdrop-filter` 跨格採樣。修法：用 `:has()` 僅在燈箱開啟時退掉該 vt-name（純 CSS、零 JS、feature/76 導航轉場保留），背景恢復整片統一模糊。
+- **Settings／Scanner 頁首標題貼左緣**：補水平 padding，文字離邊。
+
+### Internal
+- 材質規則 **shell 角色置頂條（search／頁首／toolbar）77d 起雙主題**（dim + light，消費同名 shell token，light 值另定義於新 `[data-theme="light"]` 區塊）；**其餘材質角色與 shell 面維持 `[data-theme="dim"]`-scoped**（light IACVT 安全）。blur 一律走 token（無 hardcoded `blur(30px)`）；每處 `backdrop-filter` 雙寫 `-webkit-backdrop-filter`（macOS WKWebView）。
+- 守衛測試套件 `tests/unit/test_fluent_materials_guards.py` 由 12 → **14 條**：77d 改寫 3 條（#2 backdrop 角色分流＝置頂條允許非 dim、其餘須 dim；#10/#11 浮動幾何改 theme-agnostic 斷言）+ 新增 2 條（`test_light_shell_tokens_complete`＝6 個 shell token 須同存 dim+light block 防 IACVT；`test_non_shell_roles_stay_dim_scoped`＝panel／caption／overlay／media-frame 須維持 dim-scoped 防 S-2 越界）。dim-scope／`-webkit-`／no-blur 三條仍標 `[CI-backstop]`（CI 只跑 pytest，stylelint 純本地）。
+- 移除 Design System 頁舊「Materials Layer System」demo（HTML subsection + `.ds-material-*` CSS 共 306 行），已被新 `#ds-fluent-materials` 6 角色 demo 完整取代；不留殭屍。
+
+### Non-Goals（明確不做）
+- **不動 theme.css**（全寫 fluent-materials.css 覆寫層，免 recompile footgun）、**封面海報零材質**（不加 blur／tint，封面是主角）、**caption 不加 per-card backdrop-filter**（90 卡效能）、**light 材質僅 shell 置頂條雙主題**（77d；其餘角色維持 dim-only、light 現狀不變，不做全材質 light 移植）、**不做封面環境光取色**（scrim 中性）、**不 SPA 化 / 不改後端任何路由・API・DB**。
+
+### 測試
+- 全套 pytest **4355 passed, 2 skipped**（unit + integration，排除 smoke / e2e，較 0.10.3 的 4334 +21；77d +2 守衛）+ `npm run lint`（eslint + stylelint）綠。
+- `TestFluentMaterialsGuards` **14 條**（含 3 條 `[CI-backstop]`；77d 改寫 3 + 新增 2）。
+- 視覺驗收（CP-B1 / CP-C1）：dim 下 showcase／search／settings／scanner／help 五頁材質 + 浮動 chrome，由 owner 真機眼驗（純視覺，不跑 e2e 截圖）。
+- 視覺驗收（CP-D1，77d）：light↔dim 並排，chrome 置頂條形狀＋材質一致、light 玻璃對比可讀，由 owner 真機眼驗並拍板採更玻璃版（fill 55% / saturate 140%）。
+
 ## [0.10.3] - 2026-06-20
 
 本版主軸：**MPA 跨頁無縫轉場（Cross-Document View Transitions）**（feature/76）。純前端、零後端/DB/依賴。每次點 sidebar 切頁的白屏閃爍消失，改為主內容區約 250ms 平滑淡入淡出（crossfade），sidebar／logo／通知鈴鐺等持久殼元素視覺靜止不重繪——用瀏覽器原生的跨文件 View Transition 達成，不需 SPA 化、不引入前端路由。漸進增強：不支援的舊版 WebView2／瀏覽器、開啟「減少動態效果」的用戶自動退回現狀硬切，功能零損失、UI 零差異。Showcase 因常駐動畫（燈箱環境光／相似探索星空）與大頁快照成本退出轉場、維持硬切。另含兩個一併修掉的問題：主題切換圓形展開被新命名群組破壞、以及 showcase／search 狀態框在前端初始化前的閃爍（FOUC）。

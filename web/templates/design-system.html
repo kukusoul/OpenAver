@@ -51,6 +51,7 @@
         <a href="#ds-showcase-elements">Showcase Elements</a>
         <a href="#ds-search-elements">Search Elements</a>
         <a href="#ds-notif-center">Notification Center</a>
+        <a href="#ds-fluent-materials">Fluent Materials</a>
     </nav>
 
     <!-- 右側內容 -->
@@ -594,121 +595,6 @@
                         <code>blur: 30px, saturate: 140%</code>
                     </div>
                 </div>
-            </div>
-
-            <!-- Materials Layer System (T8 新增) -->
-            <div class="ds-subsection">
-                <h3>Materials Layer System</h3>
-                <p class="ds-desc">
-                    Fluent Design 2 材質三層架構：Canvas（整頁氛圍）→ Shell（毛玻璃工具列）→ Surface（卡片邊界感）。
-                    Light / Dim 模式皆自動適配。
-                </p>
-
-                <div class="ds-materials-grid">
-
-                    <!-- Layer 1: Canvas (Mica) -->
-                    <div class="ds-material-item ds-material-canvas">
-                        <div class="ds-material-preview">
-                            <div class="ds-material-canvas-demo"></div>
-                        </div>
-                        <div class="ds-material-info">
-                            <span class="ds-material-name">Canvas Layer</span>
-                            <span class="ds-material-class">body.fluent-canvas</span>
-                            <span class="ds-material-desc">Mica 氛圍背景 — 全頁底層漸層 + noise overlay</span>
-                            <div class="ds-material-tokens">
-                                <code class="ds-token-label">--fluent-blur-heavy (60px)</code>
-                                <code>radial-gradient + noise 0.025 opacity</code>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Layer 2: Toolbar (Acrylic Light) -->
-                    <div class="ds-material-item ds-material-toolbar">
-                        <div class="ds-material-preview">
-                            <div class="ds-material-toolbar-demo">
-                                <span class="ds-material-toolbar-label">.fluent-toolbar</span>
-                            </div>
-                        </div>
-                        <div class="ds-material-info">
-                            <span class="ds-material-name">Toolbar (Shell)</span>
-                            <span class="ds-material-class">.fluent-toolbar</span>
-                            <span class="ds-material-desc">工具列標準 Acrylic — Overlay 階毛玻璃，背景透出氛圍層</span>
-                            <div class="ds-material-tokens">
-                                <code class="ds-token-label">--fluent-blur (30px)</code>
-                                <code>saturate: 130% · bg: var(--bg-header)</code>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Layer 3: Surface Elevation -->
-                    <div class="ds-material-item ds-material-surface">
-                        <div class="ds-material-preview">
-                            <div class="ds-material-surface-demo">
-                                <span class="ds-material-surface-label">Surface Card</span>
-                            </div>
-                        </div>
-                        <div class="ds-material-info">
-                            <span class="ds-material-name">Surface Elevation</span>
-                            <span class="ds-material-class">inset highlight + shadow</span>
-                            <span class="ds-material-desc">卡片材質邊界感 — 頂部 1px 高光線 + Fluent 陰影，無 blur（floating-control 用 <code class="ds-token-label">--fluent-blur-light (12px)</code>）</span>
-                            <div class="ds-material-tokens">
-                                <code>inset 0 1px 0 oklch(base-content 8%)</code>
-                                <code>+ var(--fluent-shadow-4)</code>
-                            </div>
-                        </div>
-                    </div>
-
-                </div>
-
-                <!-- 對照表 -->
-                <div class="ds-material-table-wrap" style="margin-top: 1.5rem;">
-                    <table class="ds-material-table">
-                        <thead>
-                            <tr>
-                                <th>Layer</th>
-                                <th>Class / Selector</th>
-                                <th>Effect</th>
-                                <th>用途</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td>Canvas</td>
-                                <td><code>body.fluent-canvas</code></td>
-                                <td>radial-gradient + noise</td>
-                                <td>全頁 Mica 氛圍（Search / Settings / Scanner / Help）</td>
-                            </tr>
-                            <tr>
-                                <td>Shell</td>
-                                <td><code>.fluent-acrylic</code></td>
-                                <td>blur(30px) saturate(140%)</td>
-                                <td>Offcanvas / Mobile Navbar</td>
-                            </tr>
-                            <tr>
-                                <td>Shell</td>
-                                <td><code>.sidebar</code>（自訂）</td>
-                                <td>blur(30px) saturate(140%) + color-mix 75%</td>
-                                <td>Desktop Sidebar</td>
-                            </tr>
-                            <tr>
-                                <td>Shell</td>
-                                <td><code>.search-bar</code> / <code>.settings-header</code> / <code>.avlist-header</code>（直寫，非 class hook）</td>
-                                <td>blur(12–16px) saturate(120–130%)</td>
-                                <td>頁面工具列 header（search-bar 16px / settings-header·avlist-header 12px）；<code>.fluent-toolbar</code> 為備用 utility，尚未套用</td>
-                            </tr>
-                            <tr>
-                                <td>Surface</td>
-                                <td>inset 0 1px 0 + shadow</td>
-                                <td>頂部高光 + 陰影（無 blur）</td>
-                                <td>卡片、terminal、state-page</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-
-                <p class="ds-note">
-                    Canvas 層使用 <code>body.fluent-canvas:not(.ds-page)</code>，排除 Design System 頁自身（DS 頁有獨立背景定義）。
-                </p>
             </div>
 
             <!-- 動畫時長 -->
@@ -3224,6 +3110,225 @@
                 <br><strong>Demo Controls 文案 i18n 例外</strong>：「切換假資料 / 有通知 / 空抽屜 / 清空 (demo no-op)」為 design-system 內部開發者用文案，沿 ds-desc 中文慣例不抽 i18n。
             </div>
         </section>
+
+        <!-- Fluent Material Token System (77a-T1) -->
+        <!-- Section showcases the 6 material roles. All material CSS is [data-theme="dim"]-scoped.  -->
+        <!-- In light mode: swatch placeholders are shown. In dim mode: real glass renders.         -->
+        <section id="ds-fluent-materials" class="ds-section glass">
+            <h2>Fluent Material Tokens</h2>
+            <p class="ds-desc ds-fm-intro">
+                6 役材質 token 系統（77a-T1）。所有 token 皆限定於
+                <code>[data-theme="dim"]</code> 範圍 — 切換至 dim 主題才能看到真實玻璃渲染效果。
+                Shell / Panel / Overlay 使用 <code>backdrop-filter</code>；Canvas 為純漸層；
+                Caption 與 Media-Frame 表面套用於 77b。
+                Token 來源：<code>feature/77-fluent-materials/token-spec-77.md §1</code>。
+            </p>
+
+            <!-- Role Grid -->
+            <div class="ds-subsection">
+                <h3>Material Roles</h3>
+                <p class="ds-desc">
+                    色塊放置於 Mica canvas 背景（stage 條帶）之上，玻璃角色可在底層漸層前呈現真實的 <code>backdrop-filter</code> 模糊效果。
+                </p>
+
+                <!-- Light mode notice: shown only when not in dim -->
+                <div class="ds-fm-light-notice ds-note">
+                    <strong>僅限 dim 模式：</strong>材質 token 的範圍限定為 <code>[data-theme="dim"]</code>。
+                    切換至 dim（右上角主題切換）才能看到玻璃色塊的渲染結果。
+                    在 light 模式下，色塊顯示為佔位方塊 — 此為正確行為；
+                    在 light 模式套用 dim 專屬 token 會觸發 IACVT，使屬性重置為 <code>initial</code>。
+                </div>
+
+                <!-- Stage: the Mica backdrop strip that glass swatches sit on top of -->
+                <div class="ds-fm-stage">
+
+                    <!-- Role 1: Mica Canvas -->
+                    <div class="ds-fm-card">
+                        <div class="ds-fm-swatch ds-fm-swatch--canvas">
+                            <div class="ds-fm-swatch-inner">
+                                <span class="ds-fm-swatch-label">Canvas</span>
+                            </div>
+                            <div class="ds-fm-edge ds-fm-edge--top"></div>
+                        </div>
+                        <div class="ds-fm-card-info">
+                            <span class="ds-fm-role-name">Mica Canvas</span>
+                            <code class="ds-token-label">--mica-canvas</code>
+                            <span class="ds-fm-role-desc">Body background · fixed attachment · no blur</span>
+                            <div class="ds-fm-tokens-mini">
+                                <code>radial×2 + linear gradient</code>
+                                <code>grain ::before · opacity ~0.03 · soft-light (77b)</code>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Role 2: Glass Shell -->
+                    <div class="ds-fm-card">
+                        <div class="ds-fm-swatch ds-fm-swatch--shell">
+                            <div class="ds-fm-swatch-inner">
+                                <span class="ds-fm-swatch-label">Shell</span>
+                            </div>
+                            <div class="ds-fm-edge ds-fm-edge--top"></div>
+                            <div class="ds-fm-edge ds-fm-edge--left"></div>
+                            <div class="ds-fm-edge ds-fm-edge--bottom"></div>
+                        </div>
+                        <div class="ds-fm-card-info">
+                            <span class="ds-fm-role-name">Glass Shell</span>
+                            <code class="ds-token-label">--glass-shell-*</code>
+                            <span class="ds-fm-role-desc">Sidebar · header · toolbar · footer · mobile nav/drawer</span>
+                            <div class="ds-fm-tokens-mini">
+                                <code>blur-light (12px) · saturate 130%</code>
+                                <code>fill oklch(0.17 / 0.48) · shadow-16/8</code>
+                                <code>edge: top white11% · left white6% · bottom black16%</code>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Role 3: Glass Shell Mobile -->
+                    <div class="ds-fm-card">
+                        <div class="ds-fm-swatch ds-fm-swatch--shell-mobile">
+                            <div class="ds-fm-swatch-inner">
+                                <span class="ds-fm-swatch-label">Shell Mobile</span>
+                            </div>
+                            <div class="ds-fm-edge ds-fm-edge--top"></div>
+                            <div class="ds-fm-edge ds-fm-edge--bottom"></div>
+                        </div>
+                        <div class="ds-fm-card-info">
+                            <span class="ds-fm-role-name">Glass Shell Mobile</span>
+                            <code class="ds-token-label">--glass-shell-mobile-*</code>
+                            <span class="ds-fm-role-desc">Top-navbar · offcanvas · slightly thicker fill (0.52)</span>
+                            <div class="ds-fm-tokens-mini">
+                                <code>blur-light (12px) · 145° gradient</code>
+                                <code>fill oklch(0.17 / 0.52)</code>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Role 4: Glass Panel -->
+                    <div class="ds-fm-card">
+                        <div class="ds-fm-swatch ds-fm-swatch--panel">
+                            <div class="ds-fm-panel-header"></div>
+                            <div class="ds-fm-swatch-inner">
+                                <span class="ds-fm-swatch-label">Panel</span>
+                            </div>
+                            <div class="ds-fm-edge ds-fm-edge--top"></div>
+                            <div class="ds-fm-edge ds-fm-edge--left"></div>
+                            <div class="ds-fm-edge ds-fm-edge--bottom"></div>
+                        </div>
+                        <div class="ds-fm-card-info">
+                            <span class="ds-fm-role-name">Glass Panel</span>
+                            <code class="ds-token-label">--glass-panel-*</code>
+                            <span class="ds-fm-role-desc">Settings · Help · Scanner · Search reading pane</span>
+                            <div class="ds-fm-tokens-mini">
+                                <code>blur (30px) · saturate 125%</code>
+                                <code>fill oklch(0.17 / 0.48) · shadow-16</code>
+                                <code>header-tint white4% · header-border white10%</code>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Role 5: Glass Caption -->
+                    <div class="ds-fm-card">
+                        <div class="ds-fm-swatch ds-fm-swatch--caption">
+                            <div class="ds-fm-swatch-inner">
+                                <span class="ds-fm-swatch-label">Caption</span>
+                            </div>
+                            <div class="ds-fm-edge ds-fm-edge--top"></div>
+                            <div class="ds-fm-edge ds-fm-edge--bottom"></div>
+                        </div>
+                        <div class="ds-fm-card-info">
+                            <span class="ds-fm-role-name">Glass Caption</span>
+                            <code class="ds-token-label">--glass-caption-*</code>
+                            <span class="ds-fm-role-desc">Grid card title bar · no per-card backdrop-filter · applied in 77b</span>
+                            <div class="ds-fm-tokens-mini">
+                                <code>fill oklch(0.16 / 0.46) · hover 0.62</code>
+                                <code>border-top white 24% · 150° gradient</code>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Role 6: Glass Overlay -->
+                    <div class="ds-fm-card">
+                        <div class="ds-fm-swatch ds-fm-swatch--overlay">
+                            <div class="ds-fm-swatch-inner">
+                                <span class="ds-fm-swatch-label">Overlay</span>
+                            </div>
+                            <div class="ds-fm-edge ds-fm-edge--top"></div>
+                            <div class="ds-fm-edge ds-fm-edge--bottom"></div>
+                            <div class="ds-fm-divider"></div>
+                        </div>
+                        <div class="ds-fm-card-info">
+                            <span class="ds-fm-role-name">Glass Overlay</span>
+                            <code class="ds-token-label">--glass-overlay-*</code>
+                            <span class="ds-fm-role-desc">Lightbox · modal · popover · drawer · applied in 77b</span>
+                            <div class="ds-fm-tokens-mini">
+                                <code>blur (30px) · saturate 130%</code>
+                                <code>fill 0.68→0.72→0.92 (dense protection)</code>
+                                <code>border-gradient · edge top/bottom · divider</code>
+                            </div>
+                        </div>
+                    </div>
+
+                </div><!-- /ds-fm-stage -->
+            </div>
+
+            <!-- Supplementary: Media Frame + Edge Steps -->
+            <div class="ds-subsection">
+                <h3>Supplementary Tokens</h3>
+
+                <div class="ds-fm-supp-grid">
+
+                    <!-- Media Frame -->
+                    <div class="ds-fm-supp-card">
+                        <div class="ds-fm-supp-preview ds-fm-supp-preview--media-frame">
+                            <div class="ds-fm-media-frame-box"></div>
+                        </div>
+                        <div class="ds-fm-card-info">
+                            <span class="ds-fm-role-name">Media Frame</span>
+                            <code class="ds-token-label">--media-frame-stroke</code>
+                            <span class="ds-fm-role-desc">
+                                Star space border · white 22% · <code>box-sizing: border-box</code> · applied in 77b
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Edge Step Tokens -->
+                    <div class="ds-fm-supp-card">
+                        <div class="ds-fm-supp-preview ds-fm-supp-preview--edge-steps">
+                            <div class="ds-fm-edge-strip">
+                                <div class="ds-fm-edge-chip ds-fm-edge-chip--h-strong" title="--glass-edge-highlight-strong (white 22%)"></div>
+                                <div class="ds-fm-edge-chip ds-fm-edge-chip--h-mid"    title="--glass-edge-highlight-mid (white 12%)"></div>
+                                <div class="ds-fm-edge-chip ds-fm-edge-chip--h-soft"   title="--glass-edge-highlight-soft (white 7%)"></div>
+                                <div class="ds-fm-edge-chip ds-fm-edge-chip--l-soft"   title="--glass-edge-lowlight-soft (black 10%)"></div>
+                                <div class="ds-fm-edge-chip ds-fm-edge-chip--l-mid"    title="--glass-edge-lowlight-mid (black 16%)"></div>
+                                <div class="ds-fm-edge-chip ds-fm-edge-chip--l-strong" title="--glass-edge-lowlight-strong (black 24%)"></div>
+                            </div>
+                            <div class="ds-fm-edge-labels">
+                                <span>highlight strong→soft</span>
+                                <span>lowlight soft→strong</span>
+                            </div>
+                        </div>
+                        <div class="ds-fm-card-info">
+                            <span class="ds-fm-role-name">Edge Step Tokens</span>
+                            <code class="ds-token-label">--glass-edge-*</code>
+                            <span class="ds-fm-role-desc">
+                                Shared combinatorial steps. Highlight: strong (white 22%) · mid (12%) · soft (7%).
+                                Lowlight: soft (black 10%) · mid (16%) · strong (24%).
+                                Avoids repeating raw <code>color-mix</code> across roles.
+                            </span>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <div class="ds-note">
+                <strong>77a-T1 範圍：</strong>僅 token 宣告 — 不含表面選擇器。
+                A-T2（canvas）、A-T3（shell）、A-T5（panel）將這些 token 套用至真實頁面表面。
+                Caption / Overlay / Media-Frame 表面套用於 77b。
+            </div>
+
+        </section>
+
     </div>
 </div>
 
