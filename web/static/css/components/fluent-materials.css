@@ -782,3 +782,30 @@
         border: 1px solid var(--glass-shell-border);
     }
 }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * 77c-T2: Settings / Scanner headers — flush-left fix + B floating (dim)
+ * Base material (glass + backdrop-filter + box-shadow) provided by Rule 10/11;
+ * this section only adds: padding fix (all widths) + radius/4-side border (desktop).
+ * Position untouched: settings-header stays sticky (settings.css:224); avlist-header
+ *   stays non-sticky (no position in scanner.css or Rule 11).
+ * NO margin (C-夾4: column-width alignment for the centered 900/800px columns —
+ *   a side inset would make the header narrower than the full-width content cards).
+ * :is(.settings-header, .avlist-header) = (0,1,0); with [data-theme="dim"] = (0,2,0),
+ *   tying Rule 10/11 — appended later → source order wins.
+ * ───────────────────────────────────────────────────────────────────────────── */
+
+/* Rule 46 — CD-C2: flush-left padding fix (all widths)
+ * padding shorthand fully overrides Rule 10/11 `padding: 1rem 0` (horizontal 0). */
+[data-theme="dim"] :is(.settings-header, .avlist-header) {
+    padding: 1rem 1.5rem;
+}
+
+/* Rule 47 — CD-C2: B floating treatment (desktop ≥1024px)
+ * 4-side border overrides Rule 10/11 border-bottom-color via source order. NO margin. */
+@media (min-width: 1024px) {
+    [data-theme="dim"] :is(.settings-header, .avlist-header) {
+        border-radius: var(--fluent-radius-xl);
+        border: 1px solid var(--glass-shell-border);
+    }
+}
