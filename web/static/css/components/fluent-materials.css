@@ -809,3 +809,45 @@
         border: 1px solid var(--glass-shell-border);
     }
 }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * 77c-T3: Search lightbox — uniform background blur (remove rejected per-card look)
+ *
+ * NOT dim-scoped — this is a theme-independent rendering fix (the lightbox exists
+ * in both themes). Placed here (last-loaded) rather than theme.css to avoid the
+ * Tailwind recompile footgun (theme.css is raw-linked AND @import-ed into tailwind.css).
+ *
+ * Bug: on /search, opening the lightbox blurred each grid cover individually with
+ * sharp footers, instead of the uniform background blur seen on /showcase.
+ * Root cause: feature/76 gives #main-content `view-transition-name: main-content`
+ * (theme.css:2433) for the cross-page crossfade. A non-`none` view-transition-name
+ * makes the element a backdrop root even at rest, so the position:fixed lightbox
+ * scrim's `backdrop-filter` (showcase.css:565) cannot sample the grid behind it →
+ * each cover paints sharp; 77b footers (no backdrop-filter) stay sharp too.
+ * Showcase strips the name unconditionally (theme.css:2442) AND hard-cuts its
+ * transition, so it never crossfades; search DOES crossfade, so we must NOT strip
+ * the name unconditionally (that would downgrade search's nav crossfade from the
+ * custom Fluent fade at theme.css:2434-2435 to the default root fade).
+ *
+ * Fix: release the backdrop root while the lightbox is open, gated purely on the
+ * Alpine open-state class (`:class="{ 'show': lightboxOpen }"`, search.html:23) via
+ * `:has()` — zero JS. Specificity (1,3,0) beats base #main-content (1,0,0); last-loaded too.
+ *
+ * Scope of the nav-crossfade guarantee (honest): for normal in-page use the lightbox
+ * is closed before any deliberate page change (the fixed scrim covers the sidebar, so
+ * sidebar navigation isn't reachable while it's open) → #main-content keeps its name
+ * during navigation and feature/76's custom Fluent crossfade (theme.css:2434-2435) is
+ * preserved. The ONE edge that loses it: navigating away (browser back / programmatic
+ * location change) WHILE the lightbox is still open — then the pageswap snapshot sees
+ * `.show`, so the outgoing #main-content falls to the root snapshot for that single
+ * transition (still a crossfade — momentarily showcase's own transition model — never
+ * broken). We accept that over closing the lightbox on every leave (JS lifecycle cost +
+ * symmetry risk) since the delta is an easing difference on one rare transition.
+ *
+ * Graceful degradation: if :has() were unsupported, the rule simply no-ops (current
+ * behaviour), never breaks. Does NOT touch the .showcase-lightbox backdrop rule or
+ * the approved 77b caption glass (Rules 27–30).
+ * ───────────────────────────────────────────────────────────────────────────── */
+.page-search #main-content:has(.showcase-lightbox.show) {
+    view-transition-name: none;
+}
