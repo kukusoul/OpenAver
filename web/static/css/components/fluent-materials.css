@@ -115,22 +115,25 @@
  *   --glass-shell-edge-left and NO --glass-shell-mobile-* here. The other 4 roles
  *   (panel/caption/overlay/media-frame) stay dim-only (S-2) — NOT redeclared here.
  *
- * DERIVE (D-夾3, parity-first conservative): invert lightness (dark fill → near-white
- *   fill) + swap highlight↔lowlight logic (white bloom → faint dark hairline) + keep
- *   fill HIGH-opacity so dark text/icons stay readable (NOT strong transparency).
- *   Owner tunes toward more-glass at CP-D1 (only while text stays legible).
+ * DERIVE (D-夾3 → CP-D1 more-glass pass): invert lightness (dark fill → near-white
+ *   fill) + swap highlight↔lowlight logic (white bloom → faint dark hairline). This is
+ *   the frostier-acrylic tuning past the conservative first cut — the glass-strength
+ *   knobs are FILL OPACITY (lowered 70%→55% so the blurred background tints through) and
+ *   SATURATE (120%→140% acrylic vibrancy). White-dominant fill + the --fluent-blur-light
+ *   backdrop keep dark text/icons legible over the blurred wash. Dial fill opacity UP if
+ *   text floats; that is the single legibility lever.
  *   Theme-aware: built from the DaisyUI base palette (--color-base-100 / -content),
  *   no hardcoded oklch literal → tracks the light theme automatically.
  * ────────────────────────────────────────────────────────────────────────── */
 [data-theme="light"] {
   --glass-shell-gradient: linear-gradient(110deg,
-      color-mix(in oklch, white 40%, transparent) 0%, transparent 42%,
-      color-mix(in oklch, var(--color-base-content) 5%, transparent) 100%);
-  --glass-shell-fill: color-mix(in oklch, var(--color-base-100) 70%, transparent);
-  --glass-shell-saturate: 120%;
-  --glass-shell-edge-top:    color-mix(in oklch, white 60%, transparent);
-  --glass-shell-edge-bottom: color-mix(in oklch, var(--color-base-content) 8%, transparent);
-  --glass-shell-border:      color-mix(in oklch, var(--color-base-content) 14%, transparent);
+      color-mix(in oklch, white 55%, transparent) 0%, transparent 40%,
+      color-mix(in oklch, var(--color-base-content) 6%, transparent) 100%);
+  --glass-shell-fill: color-mix(in oklch, var(--color-base-100) 55%, transparent);
+  --glass-shell-saturate: 140%;
+  --glass-shell-edge-top:    color-mix(in oklch, white 75%, transparent);
+  --glass-shell-edge-bottom: color-mix(in oklch, var(--color-base-content) 9%, transparent);
+  --glass-shell-border:      color-mix(in oklch, var(--color-base-content) 13%, transparent);
 }
 
 /* ==========================================================================
