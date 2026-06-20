@@ -309,3 +309,41 @@
         inset 0 -1px 0 var(--glass-shell-edge-bottom),
         var(--fluent-shadow-8);
 }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * A-T4: showcase toolbar — B floating glass bar (dim; CD-A6)
+ * showcase.css:21 .showcase-toolbar (0,1,0) — source-order override via (0,2,0).
+ * Two-rule pattern (Opus 審核決議 Q2 breakpoint-gating):
+ *   Rule 13a — base dim (ALL widths): glass material only (full-width shelf).
+ *              NO margin / NO border-radius / NO grid-template-columns here.
+ *              Mobile (≤768) and tablet (769–1023) responsive grids in showcase.css
+ *              are untouched — base rule adds material; desktop B-floating is
+ *              gated in Rule 13b (≥1024px) so phone/tablet grids never drift.
+ *   Rule 13b — desktop (≥1024px): B floating treatment — margin inset, radius,
+ *              full 4-side border, fluid central column.
+ * backdrop changed from --fluent-blur (30px) to --fluent-blur-light (12px) — shelf role.
+ * box-shadow: inset only for edges (top + bottom horizontal surface).
+ * NO ::after, NO position added (toolbar is already position:sticky in showcase.css).
+ * ───────────────────────────────────────────────────────────────────────────── */
+
+/* Rule 13a — base dim (ALL widths): glass material only */
+[data-theme="dim"] .showcase-toolbar {
+    background: var(--glass-shell-gradient), var(--glass-shell-fill);
+    backdrop-filter: blur(var(--fluent-blur-light)) saturate(var(--glass-shell-saturate));
+    -webkit-backdrop-filter: blur(var(--fluent-blur-light)) saturate(var(--glass-shell-saturate));
+    border-bottom-color: var(--glass-shell-border);
+    box-shadow:
+        inset 0 1px 0 var(--glass-shell-edge-top),
+        inset 0 -1px 0 var(--glass-shell-edge-bottom),
+        var(--fluent-shadow-8);
+}
+
+/* Rule 13b — desktop only (≥1024px): B floating treatment */
+@media (min-width: 1024px) {
+    [data-theme="dim"] .showcase-toolbar {
+        margin: 0 1rem;
+        border-radius: var(--fluent-radius-xl);
+        border: 1px solid var(--glass-shell-border);
+        grid-template-columns: 1fr min(var(--spotlight-width), 100% - 30rem) 1fr;
+    }
+}
