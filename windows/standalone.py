@@ -291,7 +291,9 @@ def main():
             logger.warning("auto-start LAN listener failed: %s", e)
             try:
                 from web.routers.notifications import emit_notification
-                emit_notification("error", "settings.server_info.autostart_failed", str(e))
+                # 不傳 str(e)：Python 例外細節不可暴露給前端（安全規則）。
+                # 細節已由上方 logger.warning 寫入 server-side log。
+                emit_notification("error", "settings.server_info.autostart_failed")
             except Exception:  # noqa: BLE001,S110 — emit_notification failure is harmless; best-effort only
                 pass
 

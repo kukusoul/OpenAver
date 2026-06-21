@@ -12785,6 +12785,18 @@ class TestServerModeToggleGuard:
         assert "settings.server_info.no_lan_ip" in html, \
             "settings.html 缺少 settings.server_info.no_lan_ip i18n key（lanIp 空白提示）"
 
+    def test_settings_server_info_distinguishes_listener_down_from_no_ip(self):
+        """Codex P2：banner 須區分「listener 未啟動」(lanIp 在但 lanPort 缺) 與「取不到 IP」。
+        listener_down 分支須 lanIp-gated（`!serverUrl() && lanIp`），no_lan_ip 須 `!serverUrl() && !lanIp`。
+        若兩者合併回單一 `!serverUrl()` → autostart 失敗時誤顯「取不到 IP」誤導排查 → 此測 RED。"""
+        html = self._html()
+        assert "settings.server_info.listener_down" in html, \
+            "settings.html 缺少 settings.server_info.listener_down（listener 未啟動的專屬訊息）"
+        assert 'x-if="!serverUrl() && lanIp"' in html, \
+            "listener_down 分支須 gate 在 '!serverUrl() && lanIp'（lanIp 在但無 port）"
+        assert 'x-if="!serverUrl() && !lanIp"' in html, \
+            "no_lan_ip 分支須 gate 在 '!serverUrl() && !lanIp'（真的取不到 IP）"
+
     # ── JS guards ──────────────────────────────────────────────────────────────
 
     def test_state_config_server_mode_put_endpoint(self):

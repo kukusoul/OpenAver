@@ -140,3 +140,60 @@ class TestServerModeToggleAPI:
 
         assert resp.status_code == 200
         assert resp.json() == {"lan_port": None}
+
+    # ── P1 rollback / persist-first 修復守衛 ───────────────────────────────────
+
+    def test_toggle_true_persist_failure_rolls_back_listener(
+        self, client, mock_config_path, monkeypatch
+    ):
+        """start() 成功但 mutate_config 拋例外 → response success False，
+        lan_listener.stop() 被呼叫（rollback），config 不寫 true。"""
+        stop_called = []
+
+        monkeypatch.setattr("web.lan_listener.lan_listener.start", lambda *a, **k: 49200)
+        monkeypatch.setattr("web.lan_listener.lan_listener.stop",
+                            lambda *a, **k: stop_called.append(True))
+
+        def _fail_persist(fn):
+            raise OSError("disk full")
+
+        monkeypatch.setattr("web.routers.config.mutate_config", _fail_persist)
+
+        resp = client.put("/api/config/general/server_mode", json={"value": True})
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["success"] is False, "persist 失敗應回傳 success=False"
+        assert stop_called, "listener 應被 rollback stop() 呼叫"
+        # config 檔案未被 mutate_config 修改（mock 拋例外前沒有寫入）
+        saved = json.loads(mock_config_path.read_text())
+        assert saved.get("general", {}).get("server_mode") is not True, (
+            "config 不應寫入 true（persist 失敗時）"
+        )
+
+    def test_toggle_false_persist_failure_keeps_running(
+        self, client, mock_config_path, monkeypatch
+    ):
+        """disable 路徑：mutate_config 拋例外 → response success False，
+        lan_listener.stop() 不被呼叫（config 仍 true，listener 仍跑，兩者一致）。"""
+        stop_called = []
+
+        monkeypatch.setattr("web.lan_listener.lan_listener.stop",
+                            lambda *a, **k: stop_called.append(True))
+
+        def _fail_persist(fn):
+            raise OSError("disk full")
+
+        monkeypatch.setattr("web.routers.config.mutate_config", _fail_persist)
+
+        resp = client.put("/api/config/general/server_mode", json={"value": False})
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["success"] is False, "persist 失敗應回傳 success=False"
+        assert not stop_called, "stop() 不應被呼叫（config 未改、listener 繼續跑保持一致）"
+        # config 檔案仍為原始值（false，因為 mock_config_path 初始是 false）
+        saved = json.loads(mock_config_path.read_text())
+        assert saved.get("general", {}).get("server_mode") is False, (
+            "config server_mode 應維持 false（初始值，persist 失敗時不可改）"
+        )

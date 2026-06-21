@@ -75,7 +75,12 @@
                     </button>
                 </div>
             </template>
-            <template x-if="!serverUrl()">
+            <!-- lanIp 在但 lanPort 缺（listener 未啟動，如重啟 auto-start 失敗）→ 指向正確問題，非「取不到 IP」 -->
+            <template x-if="!serverUrl() && lanIp">
+                <div class="settings-server-no-ip" x-text="window.t('settings.server_info.listener_down')"></div>
+            </template>
+            <!-- 連 lanIp 都沒有 → 真的是區網 IP 偵測失敗 -->
+            <template x-if="!serverUrl() && !lanIp">
                 <div class="settings-server-no-ip" x-text="window.t('settings.server_info.no_lan_ip')"></div>
             </template>
         </div>

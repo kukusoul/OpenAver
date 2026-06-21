@@ -155,3 +155,17 @@ class TestStandaloneLoopbackOnlyGuard:
         assert "f'http://{BIND_HOST}:{port}'" not in src, (
             "主視窗 URL 不可用 BIND_HOST（桌面 App 須走 loopback）"
         )
+
+    def test_emit_notification_autostart_does_not_pass_str_e(self):
+        """
+        auto-start 失敗的 emit_notification 呼叫不可傳入 str(e)（安全規則：
+        Python 例外細節不暴露給前端）。
+        """
+        _, src = _parse()
+        # 找 emit_notification(... 那一行
+        lines = [line for line in src.splitlines() if "emit_notification" in line]
+        assert lines, "standalone.py 中找不到 emit_notification 呼叫"
+        for line in lines:
+            assert "str(e)" not in line, (
+                f"emit_notification 呼叫不可包含 str(e)（安全規則）：{line!r}"
+            )

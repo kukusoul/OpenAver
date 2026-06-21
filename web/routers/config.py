@@ -133,20 +133,40 @@ def update_general_field(field: str, request: GeneralFieldRequest) -> dict:
         if field == "server_mode" and not isinstance(request.value, bool):
             raise HTTPException(status_code=400, detail="server_mode 必須為布林值")
 
-        # server_mode 專屬分支：start/stop LAN listener，成功才 persist（早期回傳）
+        # server_mode 專屬分支：start/stop LAN listener，確保 runtime ≠ persisted 不分離
         if field == "server_mode":
             from web.lan_listener import lan_listener
             if request.value is True:
+                # Enable 順序：先 start()（失敗→乾淨回傳，config 不變），再 persist。
+                # persist 失敗→ rollback stop()（best-effort）避免 listener ON / config false。
                 try:
-                    lan_port = lan_listener.start()      # 先啟動，成功才 persist
+                    lan_port = lan_listener.start()
                 except Exception as e:                    # noqa: BLE001
                     logger.error("server_mode 啟用失敗: %s", e)
                     return {"success": False, "error": "無法啟動 LAN 伺服器"}
-                mutate_config(lambda cfg: cfg.setdefault("general", {}).update({"server_mode": True}))
+                try:
+                    mutate_config(lambda cfg: cfg.setdefault("general", {}).update({"server_mode": True}))
+                except Exception as e:                    # noqa: BLE001
+                    # Rollback：listener 已啟動但 config 寫入失敗 → 停止 listener 保持一致
+                    logger.error("server_mode persist 失敗，rollback stop(): %s", e)
+                    try:
+                        lan_listener.stop()
+                    except Exception:                     # noqa: BLE001,S110 — rollback best-effort
+                        pass
+                    return {"success": False, "error": "無法儲存伺服器模式設定"}
                 return {"success": True, "lan_port": lan_port}
             else:
+                # Disable 順序：先 persist false，再 stop()。
+                # 原因：middleware lan_access_gate 讀 load_config().get("server_mode")，
+                # persist false 後 gate 立即阻擋新 LAN 連線（defense-in-depth），
+                # 即使 stop() 尚未完成也已安全。若 persist 失敗 → config 仍 true，
+                # listener 仍跑，兩者一致（不需 rollback）。
+                try:
+                    mutate_config(lambda cfg: cfg.setdefault("general", {}).update({"server_mode": False}))
+                except Exception as e:                    # noqa: BLE001
+                    logger.error("server_mode disable persist 失敗: %s", e)
+                    return {"success": False, "error": "無法儲存伺服器模式設定"}
                 lan_listener.stop()
-                mutate_config(lambda cfg: cfg.setdefault("general", {}).update({"server_mode": False}))
                 return {"success": True, "lan_port": None}
 
         # locale 驗證在 mutate 前（保留既有順序：驗證 → 寫入 → translate reset）
