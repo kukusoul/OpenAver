@@ -320,3 +320,48 @@ class TestServerModeToggleAPI:
         # loopback 通過 guard，進入 disable 分支（stop 被呼叫 → success=True）
         assert data["success"] is True, "loopback 應通過 guard（success=True）"
         assert stop_called, "loopback disable：lan_listener.stop 應被呼叫"
+
+    def test_toggle_serialized_by_lock(self, mock_config_path, monkeypatch):
+        """Codex P2：toggle 交易由 _server_mode_toggle_lock 序列化。
+
+        持有鎖時，併發的 loopback toggle 請求必須被阻擋在鎖上、不得完成；釋放後才完成。
+        mutation：若移除 `with _server_mode_toggle_lock`，請求會在持鎖期間就完成 → 本測 RED。
+        """
+        import threading
+        import time
+        from web.routers import config as _cfgmod
+
+        monkeypatch.setattr("web.lan_listener.lan_listener.start", lambda *a, **k: 49200)
+        monkeypatch.setattr("web.lan_listener.get_lan_ip", lambda: "192.168.1.50")
+
+        result = {}
+
+        def _fire():
+            c = TestClient(app, client=("127.0.0.1", 50000))
+            r = c.put("/api/config/general/server_mode", json={"value": True})
+            result["status"] = r.status_code
+
+        _cfgmod._server_mode_toggle_lock.acquire()
+        t = threading.Thread(target=_fire, daemon=True)
+        try:
+            t.start()
+            time.sleep(0.3)  # 給請求時間抵達鎖
+            assert "status" not in result, "持鎖期間 toggle 不應完成（應阻塞在 _server_mode_toggle_lock）"
+        finally:
+            _cfgmod._server_mode_toggle_lock.release()
+
+        t.join(timeout=5)
+        assert result.get("status") == 200, "釋放鎖後 toggle 應完成（200）"
+
+    def test_toggle_transaction_wrapped_in_lock(self):
+        """結構守衛（deterministic，不依賴 timing）：toggle 交易 + reset 路徑須在
+        _server_mode_toggle_lock 內。補強 test_toggle_serialized_by_lock（時間敏感）——
+        移除任一 `with _server_mode_toggle_lock:` → count<2 → 本測 RED（mutation-sensitive）。"""
+        import pathlib
+        src = pathlib.Path(__file__).parents[2].joinpath(
+            "web", "routers", "config.py"
+        ).read_text(encoding="utf-8")
+        assert "_server_mode_toggle_lock = threading.Lock()" in src, \
+            "config.py 缺少 _server_mode_toggle_lock 模組級鎖"
+        assert src.count("with _server_mode_toggle_lock:") >= 2, \
+            "toggle 交易與 reset 路徑都須在 _server_mode_toggle_lock 內（Codex P2 序列化）"

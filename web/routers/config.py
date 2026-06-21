@@ -20,6 +20,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, StrictBool, StrictStr
 import asyncio
 import httpx
+import threading
 
 from core.logger import get_logger
 from core.config import (
@@ -34,6 +35,12 @@ from core.translate_service import LANGUAGE_PROMPTS
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api", tags=["config"])
+
+# 序列化「server_mode 切換交易」的單一鎖（Codex P2）：toggle（start/persist/stop）與
+# reset（clear/stop）共用此鎖，避免併發 enable/disable/reset 交錯導致 config↔listener
+# 分離（如 stale enable 在 disable 之後才寫回 true）。鎖序：本鎖 → _config_write_lock
+# →lan_listener._lock（單向，無死鎖）。本機端點、執行於 threadpool，故用 threading.Lock。
+_server_mode_toggle_lock = threading.Lock()
 
 # Import reset function (避免循環導入，在需要時才導入)
 def _reset_translate_service():
@@ -86,13 +93,15 @@ def update_config(config: AppConfig) -> dict:
 def reset_config() -> dict:
     """恢復原廠設定 - 刪除 config.json"""
     try:
-        reset_config_file()  # 鎖內 exists/unlink，無 TOCTOU（CD-66b-1）
-        _reset_translate_service()  # 清除舊服務實例
-        # reset 清除 server_mode（defaults → false）→ listener 必須同步停止，
-        # 否則 runtime（listener 跑）≠ persisted（server_mode absent/false）分離。
-        # stop() 是 idempotent：listener 未跑時為 no-op，安全。
+        # reset 清除 server_mode（defaults → false）→ listener 必須同步停止，否則
+        # runtime（listener 跑）≠ persisted 分離。clear+stop 與 toggle 交易共用
+        # _server_mode_toggle_lock 序列化（Codex P2），防 reset 與併發 enable 交錯。
+        # stop() idempotent：listener 未跑時 no-op，安全。
         from web.lan_listener import lan_listener
-        lan_listener.stop()
+        with _server_mode_toggle_lock:
+            reset_config_file()  # 鎖內 exists/unlink，無 TOCTOU（CD-66b-1）
+            lan_listener.stop()
+        _reset_translate_service()  # 清除舊服務實例（與 server_mode 無關，鎖外）
         return {"success": True, "message": "已恢復預設設定"}
     except Exception as e:
         logger.error("恢復預設設定失敗: %s", e)
@@ -164,43 +173,46 @@ def update_general_field(field: str, request: GeneralFieldRequest, raw_request: 
                 return {"success": False, "reason": "remote_forbidden",
                         "error": "server_mode 僅能在主機本機切換"}
 
-        # server_mode 專屬分支：start/stop LAN listener，確保 runtime ≠ persisted 不分離
+        # server_mode 專屬分支：start/stop LAN listener，確保 runtime ≠ persisted 不分離。
+        # 整個交易在 _server_mode_toggle_lock 內序列化（Codex P2）：防併發 enable/disable
+        # /reset 交錯（如 stale enable 在 disable 之後才寫回 true → config 開、listener 關）。
         if field == "server_mode":
             from web.lan_listener import lan_listener
-            if request.value is True:
-                # Enable 順序：先 start()（失敗→乾淨回傳，config 不變），再 persist。
-                # persist 失敗→ rollback stop()（best-effort）避免 listener ON / config false。
-                try:
-                    lan_port = lan_listener.start()
-                except Exception as e:                    # noqa: BLE001
-                    logger.error("server_mode 啟用失敗: %s", e)
-                    return {"success": False, "error": "無法啟動 LAN 伺服器"}
-                try:
-                    mutate_config(lambda cfg: cfg.setdefault("general", {}).update({"server_mode": True}))
-                except Exception as e:                    # noqa: BLE001
-                    # Rollback：listener 已啟動但 config 寫入失敗 → 停止 listener 保持一致
-                    logger.error("server_mode persist 失敗，rollback stop(): %s", e)
+            with _server_mode_toggle_lock:
+                if request.value is True:
+                    # Enable 順序：先 start()（失敗→乾淨回傳，config 不變），再 persist。
+                    # persist 失敗→ rollback stop()（best-effort）避免 listener ON / config false。
                     try:
-                        lan_listener.stop()
-                    except Exception:                     # noqa: BLE001,S110 — rollback best-effort
-                        pass
-                    return {"success": False, "error": "無法儲存伺服器模式設定"}
-                from web.lan_listener import get_lan_ip
-                lan_ip = get_lan_ip()
-                return {"success": True, "lan_port": lan_port, "lan_ip": lan_ip}
-            else:
-                # Disable 順序：先 persist false，再 stop()。
-                # 原因：middleware lan_access_gate 讀 load_config().get("server_mode")，
-                # persist false 後 gate 立即阻擋新 LAN 連線（defense-in-depth），
-                # 即使 stop() 尚未完成也已安全。若 persist 失敗 → config 仍 true，
-                # listener 仍跑，兩者一致（不需 rollback）。
-                try:
-                    mutate_config(lambda cfg: cfg.setdefault("general", {}).update({"server_mode": False}))
-                except Exception as e:                    # noqa: BLE001
-                    logger.error("server_mode disable persist 失敗: %s", e)
-                    return {"success": False, "error": "無法儲存伺服器模式設定"}
-                lan_listener.stop()
-                return {"success": True, "lan_port": None}
+                        lan_port = lan_listener.start()
+                    except Exception as e:                    # noqa: BLE001
+                        logger.error("server_mode 啟用失敗: %s", e)
+                        return {"success": False, "error": "無法啟動 LAN 伺服器"}
+                    try:
+                        mutate_config(lambda cfg: cfg.setdefault("general", {}).update({"server_mode": True}))
+                    except Exception as e:                    # noqa: BLE001
+                        # Rollback：listener 已啟動但 config 寫入失敗 → 停止 listener 保持一致
+                        logger.error("server_mode persist 失敗，rollback stop(): %s", e)
+                        try:
+                            lan_listener.stop()
+                        except Exception:                     # noqa: BLE001,S110 — rollback best-effort
+                            pass
+                        return {"success": False, "error": "無法儲存伺服器模式設定"}
+                    from web.lan_listener import get_lan_ip
+                    lan_ip = get_lan_ip()
+                    return {"success": True, "lan_port": lan_port, "lan_ip": lan_ip}
+                else:
+                    # Disable 順序：先 persist false，再 stop()。
+                    # 原因：middleware lan_access_gate 讀 load_config().get("server_mode")，
+                    # persist false 後 gate 立即阻擋新 LAN 連線（defense-in-depth），
+                    # 即使 stop() 尚未完成也已安全。若 persist 失敗 → config 仍 true，
+                    # listener 仍跑，兩者一致（不需 rollback）。
+                    try:
+                        mutate_config(lambda cfg: cfg.setdefault("general", {}).update({"server_mode": False}))
+                    except Exception as e:                    # noqa: BLE001
+                        logger.error("server_mode disable persist 失敗: %s", e)
+                        return {"success": False, "error": "無法儲存伺服器模式設定"}
+                    lan_listener.stop()
+                    return {"success": True, "lan_port": None}
 
         # locale 驗證在 mutate 前（保留既有順序：驗證 → 寫入 → translate reset）
         if field == "locale" and request.value not in ("zh-TW", "zh-CN", "ja", "en"):

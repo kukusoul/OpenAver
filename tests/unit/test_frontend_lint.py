@@ -12794,8 +12794,14 @@ class TestServerModeToggleGuard:
             "settings.html 缺少 settings.server_info.listener_down（listener 未啟動的專屬訊息）"
         assert 'x-if="!serverUrl() && lanIp"' in html, \
             "listener_down 分支須 gate 在 '!serverUrl() && lanIp'（lanIp 在但無 port）"
-        assert 'x-if="!serverUrl() && !lanIp"' in html, \
-            "no_lan_ip 分支須 gate 在 '!serverUrl() && !lanIp'（真的取不到 IP）"
+        # Codex P2：抓不到 IP 但 port 已知 → 顯示帶 port 的訊息（用戶才湊得出 IP:port）；
+        # 連 port 都沒有才用純 no_lan_ip。兩支須各自 lanPort-gated。
+        assert "settings.server_info.no_lan_ip_with_port" in html, \
+            "settings.html 缺少 no_lan_ip_with_port（IP 抓不到但 lanPort 已知時顯示 port）"
+        assert 'x-if="!serverUrl() && !lanIp && lanPort"' in html, \
+            "no_lan_ip_with_port 分支須 gate 在 '!serverUrl() && !lanIp && lanPort'"
+        assert 'x-if="!serverUrl() && !lanIp && !lanPort"' in html, \
+            "no_lan_ip 分支須 gate 在 '!serverUrl() && !lanIp && !lanPort'（連 port 都沒有）"
 
     # ── JS guards ──────────────────────────────────────────────────────────────
 

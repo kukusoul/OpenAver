@@ -79,8 +79,12 @@
             <template x-if="!serverUrl() && lanIp">
                 <div class="settings-server-no-ip" x-text="window.t('settings.server_info.listener_down')"></div>
             </template>
-            <!-- 連 lanIp 都沒有 → 真的是區網 IP 偵測失敗 -->
-            <template x-if="!serverUrl() && !lanIp">
+            <!-- IP 抓不到但 listener 已開（lanPort 已知）→ 顯示 port，否則用戶湊不出 IP:port -->
+            <template x-if="!serverUrl() && !lanIp && lanPort">
+                <div class="settings-server-no-ip" x-text="window.t('settings.server_info.no_lan_ip_with_port', { port: lanPort })"></div>
+            </template>
+            <!-- 連 lanIp、lanPort 都沒有 → 真的是區網 IP 偵測失敗（也無 port） -->
+            <template x-if="!serverUrl() && !lanIp && !lanPort">
                 <div class="settings-server-no-ip" x-text="window.t('settings.server_info.no_lan_ip')"></div>
             </template>
         </div>
