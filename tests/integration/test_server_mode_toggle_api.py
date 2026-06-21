@@ -232,3 +232,91 @@ class TestServerModeToggleAPI:
         assert saved.get("general", {}).get("server_mode") is False, (
             "config server_mode 應維持 false（初始值，persist 失敗時不可改）"
         )
+
+    # ── Loopback-only guard（feature/80 TASK-80b）─────────────────────────────
+
+    def test_remote_cannot_enable_server_mode(self, mock_config_path, monkeypatch):
+        """遠端 IP 的 PUT server_mode true → {success:false}，start 不被呼叫，config 不寫 true。
+
+        遠端客人不得開啟 server_mode；LAN 伺服器是否開放是主機的決定。
+        loopback-only guard 必須在 listener/config 操作前 early-return。
+
+        注意：lan_access_gate middleware 讀 config.server_mode 決定放行；測試中先把
+        config 設 true（模擬 server_mode 已開）讓 middleware 放行，再驗 router 層
+        loopback guard 拒絕此遠端 IP 切換 server_mode。
+        """
+        import core.config as _cc
+        # 讓 middleware 放行遠端 IP（模擬 server_mode 已開）
+        _cc.mutate_config(lambda cfg: cfg.setdefault("general", {}).update({"server_mode": True}))
+
+        start_called = []
+
+        def _spy_start(*a, **k):
+            start_called.append(True)
+            return 49200
+
+        monkeypatch.setattr("web.lan_listener.lan_listener.start", _spy_start)
+
+        remote_client = TestClient(app, client=("192.168.1.50", 12345))
+        resp = remote_client.put("/api/config/general/server_mode", json={"value": True})
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["success"] is False, "遠端 IP 應被拒絕（success=False）"
+        assert data["reason"] == "remote_forbidden", "前端據此顯示 remote_only 專屬訊息"
+        assert "error" in data
+        assert not start_called, "lan_listener.start 不應被呼叫（guard 在 start 之前 early-return）"
+
+        saved = json.loads(mock_config_path.read_text())
+        # server_mode 仍為 true（我們設的初始值），remote 沒有修改它
+        assert saved.get("general", {}).get("server_mode") is True, (
+            "config server_mode 應維持初始 true（router guard 拒絕，不寫入任何新值）"
+        )
+
+    def test_remote_cannot_disable_server_mode(self, mock_config_path, monkeypatch):
+        """遠端 IP 的 PUT server_mode false → {success:false}，stop 不被呼叫。
+
+        遠端客人不得關閉 server_mode；防止遠端自鎖把自己踢出。
+        middleware 放行條件同上：先設 server_mode=true 讓請求到達 router。
+        """
+        import core.config as _cc
+        _cc.mutate_config(lambda cfg: cfg.setdefault("general", {}).update({"server_mode": True}))
+
+        stop_called = []
+
+        def _spy_stop(*a, **k):
+            stop_called.append(True)
+
+        monkeypatch.setattr("web.lan_listener.lan_listener.stop", _spy_stop)
+
+        remote_client = TestClient(app, client=("192.168.1.50", 12345))
+        resp = remote_client.put("/api/config/general/server_mode", json={"value": False})
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["success"] is False, "遠端 IP 應被拒絕（success=False）"
+        assert data["reason"] == "remote_forbidden", "前端據此顯示 remote_only 專屬訊息"
+        assert "error" in data
+        assert not stop_called, "lan_listener.stop 不應被呼叫（guard 在 stop 之前 early-return）"
+
+    def test_loopback_passes_guard(self, mock_config_path, monkeypatch):
+        """loopback（127.0.0.1）PUT server_mode false → guard 通過，進入正常 disable 流程。
+
+        確認 loopback 守衛白名單正常放行（stop 被呼叫）。
+        loopback 自帶 middleware 短路（不讀 config），所以不需要預先設 server_mode。
+        """
+        stop_called = []
+
+        def _spy_stop(*a, **k):
+            stop_called.append(True)
+
+        monkeypatch.setattr("web.lan_listener.lan_listener.stop", _spy_stop)
+
+        loopback_client = TestClient(app, client=("127.0.0.1", 50000))
+        resp = loopback_client.put("/api/config/general/server_mode", json={"value": False})
+
+        assert resp.status_code == 200
+        data = resp.json()
+        # loopback 通過 guard，進入 disable 分支（stop 被呼叫 → success=True）
+        assert data["success"] is True, "loopback 應通過 guard（success=True）"
+        assert stop_called, "loopback disable：lan_listener.stop 應被呼叫"

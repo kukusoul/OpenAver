@@ -12862,6 +12862,31 @@ class TestServerModeToggleGuard:
         assert "config.general?.server_mode ?? false" in js, \
             "state-config.js loadConfig() 缺少 'config.general?.server_mode ?? false'"
 
+    def test_state_config_set_server_mode_failure_direction_aware(self):
+        """setServerMode() 失敗分支使用方向感知 toast（val ? toggle_failed : disable_failed）。
+
+        移除三元表達式或合併成同一 key：
+          - enable 失敗顯示「無法啟動」✓，disable 失敗仍顯「無法啟動」✗（語意錯誤）。
+        兩個 key 都必須存在，且須以 `val ?` ternary 選擇（mutation-sensitive）。
+        """
+        js = self._js()
+        assert "settings.server_info.disable_failed" in js, (
+            "state-config.js setServerMode() 失敗分支缺少 'settings.server_info.disable_failed'（80b：方向感知 toast）"
+        )
+        assert "settings.server_info.toggle_failed" in js, (
+            "state-config.js setServerMode() 失敗分支應保留 'settings.server_info.toggle_failed'（enable 失敗路徑）"
+        )
+        # Ternary pattern: val ? 'toggle_failed' : 'disable_failed'（或反序帶 ! 亦合法，
+        # 但實作固定 val ? toggle_failed : disable_failed，故字串比對足以 mutation-catch）
+        assert "val ? 'settings.server_info.toggle_failed' : 'settings.server_info.disable_failed'" in js, (
+            "state-config.js setServerMode() 失敗分支須以 ternary 按 val 選擇 key（80b：方向感知）"
+        )
+        # 遠端被拒（loopback 守衛）須給專屬 remote_only 訊息，而非通用「請稍後再試」
+        assert "remote_forbidden" in js and "settings.server_info.remote_only" in js, (
+            "state-config.js setServerMode() 失敗分支須對 reason==='remote_forbidden' 顯示 "
+            "'settings.server_info.remote_only'（遠端切換給專屬訊息，非『請稍後再試』）"
+        )
+
     def test_state_config_set_server_mode_sends_boolean(self):
         """setServerMode() body: JSON.stringify({ value: !!val })，確保送 boolean 不送 string。
         T1 嚴格 bool gate，送字串會 400。"""

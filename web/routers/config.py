@@ -16,7 +16,7 @@
 - POST   /api/proxy/test                — 測試 Proxy 連線（透過 DMM 驗證）
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, StrictBool, StrictStr
 import asyncio
 import httpx
@@ -134,7 +134,7 @@ class GeneralFieldRequest(BaseModel):
 
 
 @router.put("/config/general/{field}")
-def update_general_field(field: str, request: GeneralFieldRequest) -> dict:
+def update_general_field(field: str, request: GeneralFieldRequest, raw_request: Request) -> dict:
     """更新 general 區塊單一欄位（輕量端點，供 UI toggle 即時同步）
 
     註：保持同步 def —— body 內 mutate_config 走檔案 I/O，依 async-offload 守衛
@@ -149,6 +149,20 @@ def update_general_field(field: str, request: GeneralFieldRequest) -> dict:
         # middleware `bool(server_mode)` 誤判為開啟對外。非 bool 字串 → 400。
         if field == "server_mode" and not isinstance(request.value, bool):
             raise HTTPException(status_code=400, detail="server_mode 必須為布林值")
+
+        # server_mode 是主機決定，遠端連入的客人不得切換（spec「遠端自鎖不防護」的更乾淨版本）。
+        # 僅允許 loopback 來源切換；fail-closed：client None → 視為非 loopback → 拒絕。
+        # 不信任 X-Forwarded-For，純用 TCP 對端 raw_request.client.host。
+        if field == "server_mode":
+            _client = raw_request.client
+            _client_host = _client.host if _client else None
+            if _client_host not in ("127.0.0.1", "::1"):
+                logger.warning(
+                    "拒絕非本機切換 server_mode（來源 %s）：僅主機可切換", _client_host
+                )
+                # reason 供前端對應專屬 i18n 訊息（remote_only），而非通用「請稍後再試」
+                return {"success": False, "reason": "remote_forbidden",
+                        "error": "server_mode 僅能在主機本機切換"}
 
         # server_mode 專屬分支：start/stop LAN listener，確保 runtime ≠ persisted 不分離
         if field == "server_mode":

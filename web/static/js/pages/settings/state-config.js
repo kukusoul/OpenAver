@@ -409,11 +409,15 @@ export function stateConfig() {
                     this.lanIp = result.lan_ip ?? null;
                 } else {
                     console.warn('[serverMode] setServerMode failed:', result.error);
-                    this.showToast(window.t('settings.server_info.toggle_failed'), 'error');
+                    // 遠端被拒（loopback 守衛）給專屬訊息，不用「請稍後再試」（重試無用）
+                    const failKey = result.reason === 'remote_forbidden'
+                        ? 'settings.server_info.remote_only'
+                        : (val ? 'settings.server_info.toggle_failed' : 'settings.server_info.disable_failed');
+                    this.showToast(window.t(failKey), 'error');
                 }
             } catch (e) {
                 console.warn('[serverMode] setServerMode error:', e);
-                this.showToast(window.t('settings.server_info.toggle_failed'), 'error');
+                this.showToast(window.t(val ? 'settings.server_info.toggle_failed' : 'settings.server_info.disable_failed'), 'error');
             }
         },
 

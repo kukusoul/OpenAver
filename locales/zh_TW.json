@@ -285,6 +285,8 @@
       "no_lan_ip": "無法自動取得本機區網 IP，請於系統網路設定查看本機 IP 後手動連線。",
       "listener_down": "LAN 伺服器未啟動，請切回單機後重新開啟伺服器模式。",
       "toggle_failed": "無法啟動 LAN 伺服器，請稍後再試。",
+      "disable_failed": "無法關閉 LAN 伺服器，請稍後再試。",
+      "remote_only": "伺服器模式只能在執行 OpenAver 的主機電腦上切換。",
       "autostart_failed": "重新啟動後無法自動開啟 LAN 伺服器模式，請至設定重新開啟。"
     },
     "section": {
