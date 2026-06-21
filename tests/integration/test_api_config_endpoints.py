@@ -158,3 +158,78 @@ class TestLocaleChangeResetsTranslateService:
         assert resp.status_code == 200
         assert resp.json()["success"] is False
         assert len(reset_called) == 0, "失敗的 locale 設定不應呼叫 reset"
+
+
+class TestServerModeEndpoint:
+    """PUT /api/config/general/server_mode 端點測試（TASK-80a-T1）"""
+
+    @pytest.fixture
+    def mock_config_path(self, tmp_path, monkeypatch):
+        """Mock CONFIG_PATH，初始化含 general 的 config"""
+        config_path = tmp_path / "config.json"
+        default_path = tmp_path / "config.default.json"
+
+        config_data = {
+            "general": {"locale": "zh-TW", "theme": "light", "sidebar_collapsed": False,
+                        "tutorial_completed": False, "font_size": "md", "default_page": "search"},
+        }
+        config_path.write_text(json.dumps(config_data))
+        default_path.write_text(json.dumps(config_data))
+
+        monkeypatch.setattr("core.config.CONFIG_PATH", config_path)
+        monkeypatch.setattr("core.config.CONFIG_DEFAULT_PATH", default_path)
+        monkeypatch.setattr("web.routers.config._reset_translate_service", lambda: None)
+
+        return config_path
+
+    def test_server_mode_true_returns_200_success(self, client, mock_config_path):
+        """PUT server_mode {value: true} → 200 {"success": True}"""
+        resp = client.put("/api/config/general/server_mode", json={"value": True})
+
+        assert resp.status_code == 200
+        assert resp.json()["success"] is True
+
+    def test_server_mode_true_persisted(self, client, mock_config_path):
+        """PUT server_mode {value: true} → config.json 寫入 general.server_mode=True"""
+        client.put("/api/config/general/server_mode", json={"value": True})
+
+        saved = json.loads(mock_config_path.read_text())
+        assert saved.get("general", {}).get("server_mode") is True
+
+    def test_server_mode_reload_yields_true(self, client, mock_config_path, monkeypatch):
+        """PUT server_mode true → 持久化後重讀 load_config() 仍為 True（AC-A8）"""
+        import core.config as cc
+        client.put("/api/config/general/server_mode", json={"value": True})
+
+        reloaded = cc.load_config()
+        assert reloaded.get("general", {}).get("server_mode") is True
+
+    def test_server_mode_string_true_returns_400(self, client, mock_config_path):
+        """PUT server_mode {value: "true"} (字串) → HTTP 400（gate 擋字串）"""
+        resp = client.put("/api/config/general/server_mode", json={"value": "true"})
+
+        assert resp.status_code == 400
+
+    def test_server_mode_string_false_returns_400_not_stored(self, client, mock_config_path):
+        """安全性關鍵：字串 "false" 是 truthy，必須 400 且不得寫入 config
+        （否則 middleware bool("false")=True 會誤開對外）。"""
+        resp = client.put("/api/config/general/server_mode", json={"value": "false"})
+
+        assert resp.status_code == 400
+        saved = json.loads(mock_config_path.read_text())
+        assert "server_mode" not in saved.get("general", {})
+
+    def test_server_mode_int_one_rejected(self, client, mock_config_path):
+        """PUT server_mode {value: 1} (int) → 被拒（StrictBool|StrictStr schema 層擋整數 → 422）"""
+        resp = client.put("/api/config/general/server_mode", json={"value": 1})
+
+        assert resp.status_code == 422
+        saved = json.loads(mock_config_path.read_text())
+        assert "server_mode" not in saved.get("general", {})
+
+    def test_theme_string_still_200_regression(self, client, mock_config_path):
+        """PUT theme {value: "dark"} 字串路徑不受影響 → 仍 200 success（不回歸）"""
+        resp = client.put("/api/config/general/theme", json={"value": "dark"})
+
+        assert resp.status_code == 200
+        assert resp.json()["success"] is True

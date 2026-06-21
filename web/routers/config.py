@@ -17,7 +17,7 @@
 """
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, StrictBool, StrictStr
 import asyncio
 import httpx
 
@@ -109,16 +109,30 @@ def reset_tutorial() -> dict:
 
 
 class GeneralFieldRequest(BaseModel):
-    value: str | bool
+    # StrictBool | StrictStr：strict union 不做型別強制 —— JSON true/false → bool，
+    # 字串 → str，數字（如 1）兩者皆不接受 → Pydantic 422。藉此讓 server_mode 的整數
+    # 輸入在 schema 層即被擋（避免 `1` 被 lax 模式悄悄轉成 True）。既有 str/bool 欄位
+    # （theme/locale/font_size/sidebar_collapsed）值型別本就符合，無回歸。
+    value: StrictBool | StrictStr
 
 
 @router.put("/config/general/{field}")
 def update_general_field(field: str, request: GeneralFieldRequest) -> dict:
-    """更新 general 區塊單一欄位（輕量端點，供 UI toggle 即時同步）"""
-    allowed = {"sidebar_collapsed", "theme", "font_size", "locale"}
+    """更新 general 區塊單一欄位（輕量端點，供 UI toggle 即時同步）
+
+    註：保持同步 def —— body 內 mutate_config 走檔案 I/O，依 async-offload 守衛
+    （feature/71）須在 Starlette threadpool 執行，不可改 async def 卡 event loop。
+    """
+    allowed = {"sidebar_collapsed", "theme", "font_size", "locale", "server_mode"}
     if field not in allowed:
         return {"success": False, "error": f"不允許更新欄位: {field}"}
     try:
+        # server_mode 嚴格 bool 驗正（TASK-80a-T1）：StrictBool|StrictStr 已擋整數，
+        # 此處再擋字串 —— 關鍵安全性：字串 "false" 是 truthy，若存進 config 會讓
+        # middleware `bool(server_mode)` 誤判為開啟對外。非 bool 字串 → 400。
+        if field == "server_mode" and not isinstance(request.value, bool):
+            raise HTTPException(status_code=400, detail="server_mode 必須為布林值")
+
         # locale 驗證在 mutate 前（保留既有順序：驗證 → 寫入 → translate reset）
         if field == "locale" and request.value not in ("zh-TW", "zh-CN", "ja", "en"):
             logger.warning("嘗試設定不支援的語系: %s", request.value)
@@ -131,6 +145,8 @@ def update_general_field(field: str, request: GeneralFieldRequest) -> dict:
         if field == "locale":
             _reset_translate_service()
         return {"success": True}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("更新設定欄位失敗: %s", e)
         return {"success": False, "error": "更新設定欄位失敗"}
