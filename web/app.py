@@ -5,6 +5,12 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 import re
 
+# issue #66：全域保險，涵蓋 /static 以外的裸 FileResponse 也用 WHATWG canonical MIME。
+import mimetypes
+mimetypes.add_type("text/javascript", ".js")
+mimetypes.add_type("text/javascript", ".mjs")
+mimetypes.add_type("text/css", ".css")
+
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, RedirectResponse
