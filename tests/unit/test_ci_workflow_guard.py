@@ -134,3 +134,48 @@ def test_requirements_test_has_no_mypy():
     lines = [ln.split("#")[0].strip().lower() for ln in txt.splitlines()]
     offenders = [ln for ln in lines if ln.startswith("mypy") or ln.startswith("types-requests")]
     assert not offenders, f"requirements-test.txt 不應有 mypy/types-requests 依賴（已刪）：{offenders}"
+
+
+# ============================================================
+# build.py EXCLUDE_PACKAGES 契約：測試/開發工具不得進用戶 ZIP
+# 緣起：mypy（orphan，殘留在 dev venv 但不在任一 requirements 檔）被 build.py 的
+# pip-freeze 打包 → +11MB（含 18MB mypyc .pyd）。build.py 改為 EXCLUDE 自動 derive
+# requirements-test.txt + 顯式排除 mypy orphan。本守衛防回退。
+# ============================================================
+
+def _direct_pkgs(req_path: Path) -> set:
+    """抽 requirements 檔的直列套件名（跳 `-r`/註解/空行；去版本/extras、標準化）。"""
+    names = set()
+    for line in req_path.read_text(encoding="utf-8").splitlines():
+        s = line.split("#", 1)[0].strip()
+        if not s or s.startswith("-"):
+            continue
+        name = re.split(r"[=<>!~\[]", s, maxsplit=1)[0].strip().lower().replace("_", "-")
+        if name:
+            names.add(name)
+    return names
+
+
+def test_build_excludes_mypy_orphan():
+    """mypy 殘留必須在 build.py EXCLUDE（orphan，requirements 檔抓不到）——防 +11MB 回歸。"""
+    import build
+    for pkg in ("mypy", "mypyc", "mypy-extensions"):
+        assert pkg in build.EXCLUDE_PACKAGES, \
+            f"build.py EXCLUDE_PACKAGES 缺 {pkg!r}（mypy orphan 會被 freeze 打包進 ZIP，曾 +11MB）"
+
+
+def test_build_excludes_all_test_only_packages():
+    """requirements-test.txt 的純測試套件（pytest*/ruff/playwright/PyYAML…）一律須被排除。
+    自動 derive 防 denylist 漂移：日後新增測試套件忘了同步 EXCLUDE 即 RED。"""
+    import build
+    test_only = _direct_pkgs(_REQUIREMENTS)
+    missing = sorted(p for p in test_only if p not in build.EXCLUDE_PACKAGES)
+    assert not missing, f"build.py EXCLUDE 未涵蓋測試套件（會被打進用戶 ZIP）：{missing}"
+
+
+def test_build_does_not_exclude_runtime():
+    """runtime 依賴（requirements.txt）絕不可被排除，否則 build 缺套件、用戶端壞掉。"""
+    import build
+    runtime = _direct_pkgs(_REQUIREMENTS_RUNTIME)
+    wrongly = sorted(p for p in runtime if p in build.EXCLUDE_PACKAGES)
+    assert not wrongly, f"build.py EXCLUDE 誤排除 runtime 依賴（會做出缺套件的 ZIP）：{wrongly}"

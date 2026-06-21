@@ -12,6 +12,7 @@ OpenAver Windows 打包腳本
     4. 打包成 ZIP
 """
 import sys
+import re
 import shutil
 import zipfile
 import urllib.request
@@ -54,28 +55,49 @@ PACKAGES = [
     "httpx",  # Required for FastAPI TestClient and async HTTP
 ]
 
-# 打包時排除的套件（測試/開發工具，不影響運行）
-EXCLUDE_PACKAGES = {
-    # 測試工具
-    'pytest', 'pytest-asyncio', 'pytest-mock', 'pytest-cov',
-    'pytest-playwright',
-    'coverage', 'pluggy', 'iniconfig',
-    'playwright',
+def _test_only_packages() -> set:
+    """從 requirements-test.txt 抽出『純測試/開發』套件名（跳 `-r` / 註解 / 空行）。
 
-    # 類型檢查 stub（mypy 已於 feature/78 移除；以下為防禦性 denylist，
-    # 萬一 stub 進 venv 不打包進 ZIP）
+    requirements-test.txt 用 `-r requirements.txt` 繼承 runtime，其餘直列項即「runtime
+    之外額外裝」的測試/開發工具（pytest* / ruff / playwright / PyYAML…）——絕不該進
+    用戶 ZIP。從此檔自動 derive，避免日後新增測試套件忘了同步 EXCLUDE（denylist 漂移）。
+    """
+    names = set()
+    req = PROJECT_ROOT / "requirements-test.txt"
+    if req.exists():
+        for line in req.read_text(encoding="utf-8").splitlines():
+            s = line.split("#", 1)[0].strip()
+            if not s or s.startswith("-"):  # 跳 `-r requirements.txt` / 註解 / 空行
+                continue
+            # 取套件名（去版本/extras）並標準化（pip 視 - 與 _ 等價、大小寫不敏感）
+            name = re.split(r"[=<>!~\[]", s, maxsplit=1)[0].strip().lower().replace("_", "-")
+            if name:
+                names.add(name)
+    return names
+
+
+# 打包時排除的套件（測試/開發工具，不影響運行）。
+# = requirements-test.txt 的純測試套件（自動 derive）∪ 其 transitive ∪ orphan/開發工具。
+EXCLUDE_PACKAGES = {
+    # 測試工具 transitive（不直接列於 requirements-test.txt，需手動補）
+    'coverage', 'pluggy', 'iniconfig',
+
+    # ⚠️ mypy 殘留：feature/78 從 requirements/mypy.ini 移除「設定」，但套件本體常仍
+    # 物理留在 dev venv（pip freeze 抓得到）→ build.py 若 freeze venv 會把 mypy 含其
+    # 18MB mypyc 編譯 .pyd 打進 ZIP（曾 +11MB）。mypy 不在任一 requirements 檔（orphan），
+    # 故 _test_only_packages() 抓不到，須在此顯式排除（+ 其編譯/相依產物）。
+    'mypy', 'mypyc', 'mypy-extensions',
     'types-beautifulsoup4', 'types-html5lib',
 
-    # 開發工具
+    # 開發/打包工具
     'pip', 'setuptools', 'wheel', 'twine', 'build',
-    'ruff',
 
     # 文檔工具
     'docutils', 'pygments', 'readme-renderer',
 
     # 未使用
     'langdetect',
-}
+} | _test_only_packages()  # pytest* / ruff / pytest-playwright / PyYAML… 自動納入
 
 
 # ============ 工具函數 ============
