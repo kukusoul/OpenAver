@@ -89,6 +89,14 @@ EXCLUDE_PACKAGES = {
     'mypy', 'mypyc', 'mypy-extensions',
     'types-beautifulsoup4', 'types-html5lib',
 
+    # ⚠️ playwright transitive：pytest-playwright（在 requirements-test.txt）的直接依賴是
+    # playwright（36MB wheel，解壓 102MB）和 pyee。_test_only_packages() 只抓直列套件名
+    # 「pytest-playwright」，抓不到其 transitive 的 playwright 本體（wheel 命名 playwright-*
+    # 而非 pytest-playwright-*）→ build.py 解壓 wheel cache 時 playwright 被含入（曾 +32MB）。
+    # greenlet 也是 playwright 的 transitive，但體積極小（<1MB）；本次只止血 playwright 主體
+    # （+pyee），系統性清 transitive 屬 T2 allowlist 範圍，故不在此 denylist 追加（避免 whack-a-mole）。
+    'playwright', 'pyee',
+
     # 開發/打包工具
     'pip', 'setuptools', 'wheel', 'twine', 'build',
 

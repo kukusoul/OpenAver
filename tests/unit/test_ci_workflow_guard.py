@@ -164,6 +164,23 @@ def test_build_excludes_mypy_orphan():
             f"build.py EXCLUDE_PACKAGES 缺 {pkg!r}（mypy orphan 會被 freeze 打包進 ZIP，曾 +11MB）"
 
 
+def test_build_excludes_playwright_transitive():
+    """playwright（pytest-playwright 的 transitive dep）必須在 EXCLUDE——防 +32MB 回歸。
+
+    pytest-playwright 在 requirements-test.txt，_test_only_packages() 只抓直列名
+    「pytest-playwright」，但 wheel cache 裡的 playwright 本體 wheel 命名為 playwright-*
+    （不含 pytest- 前綴），build.py 解壓時無法靠 pytest-playwright 的 EXCLUDE entry 擋住
+    → playwright（36MB wheel / 102MB 解壓）被含入 ZIP（曾使 ZIP 從 56MB 膨脹至 81MB）。
+    必須在 EXCLUDE 顯式列出其 transitive：playwright + pyee。
+    """
+    import build
+    for pkg in ("playwright", "pyee"):
+        assert pkg in build.EXCLUDE_PACKAGES, (
+            f"build.py EXCLUDE_PACKAGES 缺 {pkg!r}（pytest-playwright 的 transitive dep，"
+            f"會被 wheel-cache 掃描帶入 ZIP；playwright 曾 +32MB）"
+        )
+
+
 def test_build_excludes_all_test_only_packages():
     """requirements-test.txt 的純測試套件（pytest*/ruff/playwright/PyYAML…）一律須被排除。
     自動 derive 防 denylist 漂移：日後新增測試套件忘了同步 EXCLUDE 即 RED。"""
