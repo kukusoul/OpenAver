@@ -1278,7 +1278,7 @@
  *   且刻意保持 (0,2,1) 不升到 (0,3,1) 以免在 ≤480∩similar-open 與 similar-open img (0,3,1) 撞同權。
  * similar-open 交互：.lightbox-content.similar-open .lightbox-cover img (0,3,1) 勝本 img 規則 (0,2,1)
  *   → ≤480px ∩ similar-open 時手機相似主片維持 40vh（本 task 不接管相似模式，刻意）。 */
-@media (max-width: 480px) {
+@media (max-width: 899px) {
     /* (b) 容器塌到圖的盒（Codex P2：僅 .has-cover；無封面保留基準 min-height 防塌成 0 高） */
     .lightbox-cover.has-cover:has(.lb-full) {
         min-height: 0;

@@ -2,6 +2,8 @@
  * SearchState - Grid Mode Mixin
  * 包含：Grid 模式切換、Lightbox 控制
  */
+import { POSTER_CROP_MAX_W } from '@/shared/breakpoints.js';
+
 export function searchStateGridMode() {
     return {
     // ===== Display Mode Toggle =====
@@ -91,7 +93,7 @@ export function searchStateGridMode() {
         // ★ C17 step 1: 在 state 變更前捕獲 fromRect（僅 grid → lightbox 首次開啟）
         var fromRect = null;
         var coverSrc = null;
-        var posterCrop = false;   // T9-port: ≤480px search 影片卡 poster-crop 旗標（對齊 showcase state-lightbox.js）
+        var posterCrop = false;   // T9-port / US-10: ≤899px search 影片卡 poster-crop 旗標（對齊 showcase state-lightbox.js）
         if (!this.lightboxOpen && this.displayMode === 'grid') {
             var grid = document.querySelector('.search-grid');
             var card = grid ? grid.querySelector('[data-slot="' + index + '"]') : null;
@@ -99,9 +101,10 @@ export function searchStateGridMode() {
             if (img && img.complete && img.getBoundingClientRect().width > 0) {
                 fromRect = img.getBoundingClientRect();
                 coverSrc = img.src;
-                // T9-port：≤480px search 影片卡縮圖走 poster-crop，通知 ghost 對齊裁切 + 落地溶接。
+                // T9-port / US-10：≤899px search 影片卡縮圖走 poster-crop，通知 ghost 對齊裁切 + 落地溶接。
                 // search 無 showFavoriteActresses；openLightbox 路徑的 card 皆為影片卡（hero 走 openActressLightbox）。
-                posterCrop = window.innerWidth <= 480 && !card.classList.contains('hero-card');
+                // 門檻 POSTER_CROP_MAX_W 對齊 CSS poster-grid / 燈箱貼合斷點（守衛鎖死）。
+                posterCrop = window.innerWidth <= POSTER_CROP_MAX_W && !card.classList.contains('hero-card');
             }
         }
 

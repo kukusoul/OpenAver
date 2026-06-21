@@ -12139,7 +12139,8 @@ class TestUS5PosterCropGhostCrossfade:
         js = STATE_LIGHTBOX_JS.read_text(encoding="utf-8")
         # 計算條件三要素
         assert "posterCrop" in js, "state-lightbox.js 應計算 posterCrop"
-        assert "window.innerWidth <= 480" in js, "posterCrop 應 gate ≤480px"
+        # T11（US-10）：門檻由 ≤480 擴到 ≤899（共用常數 POSTER_CROP_MAX_W，對齊守衛 TestPosterCropThresholdAlignment）。
+        assert "window.innerWidth <= POSTER_CROP_MAX_W" in js, "posterCrop 應 gate ≤POSTER_CROP_MAX_W"
         assert "showFavoriteActresses" in js, "posterCrop 應排除女優模式"
         assert "hero-card" in js, "posterCrop 應排除 hero 卡（女優入口）"
         # 傳入 playGridToLightbox 的 options
@@ -12188,11 +12189,12 @@ class TestUS5VideoCoverFitMobile:
         return SHOWCASE_CSS.read_text(encoding="utf-8")
 
     def _t8_block(self) -> str:
-        """抓含 .lightbox-cover:has(.lb-full) 的那個 @media (max-width: 480px) block。"""
+        """抓含 .lightbox-cover:has(.lb-full) 的那個 @media (max-width: 899px) block。
+        T11（US-10）：燈箱封面貼合斷點由 ≤480 擴到 ≤899（對齊 poster-crop 門檻）。"""
         css = self._css()
-        blocks = re.findall(r'@media \(max-width: 480px\) \{(.*?)\n\}', css, re.DOTALL)
+        blocks = re.findall(r'@media \(max-width: 899px\) \{(.*?)\n\}', css, re.DOTALL)
         target = [b for b in blocks if ".lightbox-cover:has(.lb-full)" in b]
-        assert target, "showcase.css 找不到含 .lightbox-cover:has(.lb-full) 的 ≤480px block（T8 缺失）"
+        assert target, "showcase.css 找不到含 .lightbox-cover:has(.lb-full) 的 ≤899px block（T8/T11 缺失）"
         return target[0]
 
     def test_video_cover_fit_media_block_exists(self):
@@ -12395,10 +12397,11 @@ class TestUS9SearchGridMobileFix:
         護欄：block 內不得出現未 gate .has-cover 的裸 .search-container .lightbox-cover img（波及女優）。
         三問：拿掉容器 min-height:0 → 紅；拿掉 img has-cover gate → 紅（bare 出現）。
         """
+        # T11（US-10）：燈箱封面貼合斷點由 ≤480 擴到 ≤899（對齊 poster-crop 門檻）。
         css = self._search_css()
-        blocks = re.findall(r'@media \(max-width: 480px\) \{(.*?)\n\}', css, re.DOTALL)
+        blocks = re.findall(r'@media \(max-width: 899px\) \{(.*?)\n\}', css, re.DOTALL)
         target = [b for b in blocks if ".search-container .lightbox-cover" in b]
-        assert target, "search.css 找不到含 .search-container .lightbox-cover 的 ≤480px block（T9-T8 cover-fit 缺失）"
+        assert target, "search.css 找不到含 .search-container .lightbox-cover 的 ≤899px block（T9-T8/T11 cover-fit 缺失）"
         block = target[0]
 
         # 容器：.search-container .lightbox-cover.has-cover { min-height: 0; min-width: 0 }
@@ -12447,7 +12450,8 @@ class TestUS9SearchGridMobileFix:
         """
         js = GRID_MODE_JS.read_text(encoding="utf-8")
         assert "posterCrop" in js, "grid-mode.js 應計算 posterCrop"
-        assert "window.innerWidth <= 480" in js, "posterCrop 應 gate ≤480px"
+        # T11（US-10）：門檻由 ≤480 擴到 ≤899（共用常數 POSTER_CROP_MAX_W，對齊守衛 TestPosterCropThresholdAlignment）。
+        assert "window.innerWidth <= POSTER_CROP_MAX_W" in js, "posterCrop 應 gate ≤POSTER_CROP_MAX_W"
         assert "hero-card" in js, "posterCrop 應排除 hero 卡（防禦性 guard）"
         assert "posterCrop: posterCrop" in js, (
             "grid-mode.js 應把 posterCrop 傳入 playGridToLightbox options"
@@ -13490,3 +13494,190 @@ class TestPosterCropExtended:
             joined = "\n".join(bodies)
             assert re.search(rf"\.{grid}\b[^}}]*repeat\(\s*3\s*,\s*1fr\s*\)", joined, re.DOTALL), \
                 f"{name} 900–1099 段 .{grid} 不再是 repeat(3, 1fr)（≥900 橫式被波及）"
+
+
+# ==================== TASK-81a-T11: posterCrop JS↔CSS 門檻對齊（US-10 / CD-10）====================
+# 鎖死「posterCrop ghost-fly 門檻 == 燈箱封面貼合斷點 == CSS poster grid 斷點 == 899」跨 4+2 檔。
+# 任一處未來漂移（只改一邊）即紅。比照 v0.10.2「JS bail 門檻對齊 CSS」防漂移前例。
+T11_BREAKPOINTS_JS    = PROJECT_ROOT / "web" / "static" / "js" / "shared" / "breakpoints.js"
+T11_STATE_LIGHTBOX_JS = PROJECT_ROOT / "web" / "static" / "js" / "pages" / "showcase" / "state-lightbox.js"
+T11_GRID_MODE_JS      = PROJECT_ROOT / "web" / "static" / "js" / "pages" / "search" / "state" / "grid-mode.js"
+T11_SHOWCASE_CSS      = PROJECT_ROOT / "web" / "static" / "css" / "pages" / "showcase.css"
+T11_SEARCH_CSS        = PROJECT_ROOT / "web" / "static" / "css" / "pages" / "search.css"
+
+
+class TestPosterCropThresholdAlignment:
+    """US-10 / CD-10：posterCrop 門檻（JS）與燈箱封面貼合 / poster grid 斷點（CSS）對齊 899。"""
+
+    POSTER_CROP_CONST = "POSTER_CROP_MAX_W"
+
+    # ---- helpers ----
+    def _const_value(self) -> int:
+        """從 shared/breakpoints.js 抽 POSTER_CROP_MAX_W 常數值。"""
+        content = T11_BREAKPOINTS_JS.read_text(encoding="utf-8")
+        m = re.search(
+            rf"export\s+const\s+{self.POSTER_CROP_CONST}\s*=\s*(\d+)", content
+        )
+        assert m, f"breakpoints.js 缺少 `export const {self.POSTER_CROP_CONST} = <int>`"
+        return int(m.group(1))
+
+    def _js_poster_crop_threshold(self, path: Path, label: str) -> int:
+        """抽某 JS 檔的 posterCrop 門檻值。
+
+        共用常數方案：斷言檔案 import 了 POSTER_CROP_MAX_W 並用於 innerWidth 比較，
+        門檻值即常數值（單一真理來源在 breakpoints.js）。
+        """
+        content = path.read_text(encoding="utf-8")
+        # 1. import 共用常數（物理同源）
+        assert re.search(
+            rf"import\s*\{{[^}}]*\b{self.POSTER_CROP_CONST}\b[^}}]*\}}\s*from\s*"
+            r"['\"]@/shared/breakpoints\.js['\"]",
+            content,
+        ), f"{label} 必須 import {{ {self.POSTER_CROP_CONST} }} from '@/shared/breakpoints.js'"
+        # 2. 用於 innerWidth 門檻比較
+        assert re.search(
+            rf"window\.innerWidth\s*<=\s*{self.POSTER_CROP_CONST}\b", content
+        ), f"{label} 必須以 `window.innerWidth <= {self.POSTER_CROP_CONST}` 作 posterCrop 門檻"
+        # 3. 舊的 480 字面量門檻已消失（防只改一半）
+        assert not re.search(
+            r"window\.innerWidth\s*<=\s*480\b", content
+        ), f"{label} 仍殘留 `window.innerWidth <= 480`（posterCrop 門檻未擴）"
+        return self._const_value()
+
+    def _css_media_max_width_for_selector(
+        self, css: str, selector_substr: str, name: str
+    ) -> int:
+        """找含 selector_substr 的 @media 區塊，回傳其 max-width 值。"""
+        for m in re.finditer(r"@media\s*\(([^)]*max-width[^)]*)\)\s*\{", css):
+            start = m.end()
+            depth = 1
+            i = start
+            while i < len(css) and depth > 0:
+                if css[i] == "{":
+                    depth += 1
+                elif css[i] == "}":
+                    depth -= 1
+                i += 1
+            body = css[start : i - 1]
+            if selector_substr in body:
+                mw = re.search(r"max-width:\s*(\d+)px", m.group(1))
+                assert mw, f"{name} 的 @media 條件抽不到 max-width: {m.group(1)!r}"
+                return int(mw.group(1))
+        raise AssertionError(f"{name} 找不到含 selector {selector_substr!r} 的 @media block")
+
+    def _poster_grid_max_width(self, css: str, grid_class: str, name: str) -> int:
+        """T10 poster-crop grid 斷點：回傳「481–899 4 欄直式右裁 poster」@media 的 max-width。
+
+        grid_class（.showcase-grid / .search-grid）在多個 @media 出現（≤480、481–899、
+        1100–1499 桌面等都可能是 repeat(4)）。poster-crop 斷點唯一特徵 = 下界 481px：
+        鎖 `(min-width: 481px) and (max-width: Npx)` 且 grid 為 repeat(4) 的那塊，回傳 N。
+        """
+        for m in re.finditer(r"@media\s*([^{]*?)\s*\{", css):
+            cond = m.group(1)
+            mn = re.search(r"min-width:\s*481px", cond)
+            mw = re.search(r"max-width:\s*(\d+)px", cond)
+            if not (mn and mw):
+                continue
+            start = m.end()
+            depth, i = 1, start
+            while i < len(css) and depth > 0:
+                if css[i] == "{":
+                    depth += 1
+                elif css[i] == "}":
+                    depth -= 1
+                i += 1
+            body = css[start : i - 1]
+            if re.search(
+                rf"\.{re.escape(grid_class)}\b[^{{}}]*\{{[^}}]*repeat\(\s*4\b", body, re.DOTALL
+            ):
+                return int(mw.group(1))
+        raise AssertionError(
+            f"{name} 找不到 (min-width:481px)+(max-width)+.{grid_class} repeat(4) poster grid @media block"
+        )
+
+    # ---- 常數定義 ----
+    def test_breakpoint_const_is_899(self):
+        """shared/breakpoints.js 匯出 POSTER_CROP_MAX_W = 899。"""
+        assert self._const_value() == 899, "POSTER_CROP_MAX_W 不為 899"
+
+    # ---- JS 門檻 ----
+    def test_showcase_js_threshold_899(self):
+        """state-lightbox.js posterCrop 門檻 == 899（import 共用常數 + innerWidth 比較 + 無 480 殘留）。"""
+        assert self._js_poster_crop_threshold(
+            T11_STATE_LIGHTBOX_JS, "state-lightbox.js"
+        ) == 899
+
+    def test_search_js_threshold_899(self):
+        """grid-mode.js（search）posterCrop 門檻 == 899（同上）。"""
+        assert self._js_poster_crop_threshold(
+            T11_GRID_MODE_JS, "grid-mode.js"
+        ) == 899
+
+    def test_parity_both_js_thresholds_equal(self):
+        """CD-11：兩頁 JS 門檻值彼此相等（防只改一頁）。"""
+        sc = self._js_poster_crop_threshold(T11_STATE_LIGHTBOX_JS, "state-lightbox.js")
+        se = self._js_poster_crop_threshold(T11_GRID_MODE_JS, "grid-mode.js")
+        assert sc == se, f"兩頁 posterCrop 門檻不一致：showcase={sc} search={se}"
+
+    # ---- CSS 燈箱封面貼合 ----
+    def test_showcase_lightbox_fit_covers_899(self):
+        """showcase.css 燈箱封面貼合（.lightbox-cover:has(.lb-full)）@media == max-width: 899px。"""
+        css = T11_SHOWCASE_CSS.read_text(encoding="utf-8")
+        mw = self._css_media_max_width_for_selector(
+            css, ".lightbox-cover:has(.lb-full)", "showcase.css 燈箱貼合"
+        )
+        assert mw == 899, f"showcase.css 燈箱貼合 @media max-width={mw}px，應為 899"
+
+    def test_search_lightbox_fit_covers_899(self):
+        """search.css 燈箱封面貼合（.search-container .lightbox-cover.has-cover）@media == max-width: 899px。"""
+        css = T11_SEARCH_CSS.read_text(encoding="utf-8")
+        mw = self._css_media_max_width_for_selector(
+            css, ".search-container .lightbox-cover.has-cover", "search.css 燈箱貼合"
+        )
+        assert mw == 899, f"search.css 燈箱貼合 @media max-width={mw}px，應為 899"
+
+    # ---- T10 poster grid 斷點（參考；三位一體比對）----
+    def test_showcase_poster_grid_breakpoint_899(self):
+        """showcase.css poster-crop grid 斷點（.showcase-grid 4 欄）== max-width: 899px（T10）。"""
+        css = T11_SHOWCASE_CSS.read_text(encoding="utf-8")
+        mw = self._poster_grid_max_width(css, "showcase-grid", "showcase.css")
+        assert mw == 899, f"showcase.css poster grid @media max-width={mw}px，應為 899"
+
+    def test_search_poster_grid_breakpoint_899(self):
+        """search.css poster-crop grid 斷點（.search-grid 4 欄）== max-width: 899px（T10）。"""
+        css = T11_SEARCH_CSS.read_text(encoding="utf-8")
+        mw = self._poster_grid_max_width(css, "search-grid", "search.css")
+        assert mw == 899, f"search.css poster grid @media max-width={mw}px，應為 899"
+
+    # ---- 核心：跨 6 值單一對齊斷言 ----
+    def test_all_thresholds_aligned_899(self):
+        """核心對齊守衛：2 JS 門檻 + 2 CSS 燈箱貼合 + 2 CSS poster grid 全部相等且 == 899。
+
+        鎖「posterCrop 門檻 == 燈箱貼合斷點 == poster grid 斷點 == 899」三位一體；
+        未來改任一值不同步即整段紅。
+        """
+        showcase_css = T11_SHOWCASE_CSS.read_text(encoding="utf-8")
+        search_css = T11_SEARCH_CSS.read_text(encoding="utf-8")
+        values = {
+            "js:showcase": self._js_poster_crop_threshold(
+                T11_STATE_LIGHTBOX_JS, "state-lightbox.js"
+            ),
+            "js:search": self._js_poster_crop_threshold(
+                T11_GRID_MODE_JS, "grid-mode.js"
+            ),
+            "css:showcase-lightbox-fit": self._css_media_max_width_for_selector(
+                showcase_css, ".lightbox-cover:has(.lb-full)", "showcase.css 燈箱貼合"
+            ),
+            "css:search-lightbox-fit": self._css_media_max_width_for_selector(
+                search_css, ".search-container .lightbox-cover.has-cover", "search.css 燈箱貼合"
+            ),
+            "css:showcase-poster-grid": self._poster_grid_max_width(
+                showcase_css, "showcase-grid", "showcase.css"
+            ),
+            "css:search-poster-grid": self._poster_grid_max_width(
+                search_css, "search-grid", "search.css"
+            ),
+        }
+        assert all(v == 899 for v in values.values()), (
+            f"posterCrop 門檻 ↔ 燈箱貼合 ↔ poster grid 斷點未全對齊 899：{values}"
+        )

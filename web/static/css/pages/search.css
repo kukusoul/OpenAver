@@ -792,7 +792,7 @@
      gate has-cover 後女優模式（has-cover=false）/無封面/404 皆不命中 → 乾淨排除女優燈箱、不塌。
    specificity（皆自勝、不靠源序）：容器 .search-container .lightbox-cover.has-cover (0,3,0) 勝基準 (0,1,0)；
      img .search-container .lightbox-cover.has-cover img (0,3,1) 勝基準 .lightbox-cover img (0,1,1)。 */
-@media (max-width: 480px) {
+@media (max-width: 899px) {
     /* (b) 容器：有封面才塌到圖盒 */
     .search-container .lightbox-cover.has-cover {
         min-height: 0;
