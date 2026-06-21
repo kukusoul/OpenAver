@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Windows：啟動即顯示系統匣圖示；關閉主視窗時可選擇退出、最小化到系統匣或取消，並可記住選擇。系統匣選單可重新開啟視窗、切換關閉行為或完整退出 OpenAver。
+- Windows：啟動即顯示系統匣圖示；關閉主視窗時以原生單選提示選擇退出、最小化到系統匣或取消，並可選擇不再顯示。系統匣選單與提示會跟隨介面語系，支援單擊或雙擊重新開啟視窗、切換關閉行為及完整退出 OpenAver。
 
 ## [0.10.7] - 2026-06-21
 

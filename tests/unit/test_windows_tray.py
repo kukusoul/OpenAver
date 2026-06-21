@@ -11,11 +11,17 @@ from windows.tray import (
     CMD_CLOSE_ASK,
     CMD_CLOSE_EXIT,
     CMD_CLOSE_TRAY,
+    CMD_CONFIRM,
     CMD_OPEN,
     CMD_QUIT,
+    IDCANCEL,
+    NIF_SHOWTIP,
+    TRAY_OPEN_EVENTS,
     CloseDecision,
     DesktopLifecycle,
+    _OpenEventDebouncer,
     _map_dialog_result,
+    load_desktop_texts,
 )
 
 
@@ -114,9 +120,51 @@ def test_quit_cleanup_is_idempotent(desktop):
 
 
 def test_dialog_result_mapping():
-    assert _map_dialog_result(CMD_CLOSE_TRAY, True) == CloseDecision(CLOSE_TRAY, True)
-    assert _map_dialog_result(CMD_CLOSE_EXIT, False) == CloseDecision(CLOSE_EXIT, False)
-    assert _map_dialog_result(2, True) == CloseDecision(CLOSE_CANCEL, False)
+    assert _map_dialog_result(CMD_CONFIRM, CMD_CLOSE_TRAY, True) == CloseDecision(CLOSE_TRAY, True)
+    assert _map_dialog_result(CMD_CONFIRM, CMD_CLOSE_EXIT, False) == CloseDecision(CLOSE_EXIT, False)
+    assert _map_dialog_result(IDCANCEL, CMD_CLOSE_TRAY, True) == CloseDecision(CLOSE_CANCEL, False)
+    assert _map_dialog_result(CMD_CONFIRM, 9999, True) == CloseDecision(CLOSE_CANCEL, False)
+
+
+@pytest.mark.parametrize("locale", ["zh-TW", "zh-CN", "ja", "en"])
+def test_desktop_texts_are_complete_for_every_supported_locale(monkeypatch, locale):
+    monkeypatch.setattr("windows.tray.load_config", lambda: {"general": {"locale": locale}})
+
+    texts = load_desktop_texts()
+
+    assert texts.locale == locale
+    for name, value in vars(texts).items():
+        if name != "locale":
+            assert value
+            assert not value.startswith("[desktop.")
+
+
+def test_desktop_texts_follow_runtime_locale_change(monkeypatch):
+    current = {"locale": "zh-TW"}
+    monkeypatch.setattr(
+        "windows.tray.load_config",
+        lambda: {"general": {"locale": current["locale"]}},
+    )
+
+    assert load_desktop_texts().minimize_to_tray == "最小化到系統匣"
+    current["locale"] = "zh-CN"
+    assert load_desktop_texts().minimize_to_tray == "最小化到系统托盘"
+
+
+def test_open_event_debouncer_collapses_single_double_click_burst():
+    now = [10.0]
+    debouncer = _OpenEventDebouncer(interval=0.5, clock=lambda: now[0])
+
+    assert debouncer.accept() is True
+    now[0] += 0.1
+    assert debouncer.accept() is False
+    now[0] += 0.5
+    assert debouncer.accept() is True
+
+
+def test_tray_contract_supports_hover_single_and_double_click():
+    assert NIF_SHOWTIP == 0x0080
+    assert {0x0202, 0x0203, 0x0400}.issubset(TRAY_OPEN_EVENTS)
 
 
 def test_unavailable_tray_never_hides_window(desktop, monkeypatch):
@@ -129,7 +177,7 @@ def test_unavailable_tray_never_hides_window(desktop, monkeypatch):
 
     assert lifecycle.on_window_closing() is False
     window.hide.assert_not_called()
-    unavailable.assert_called_once_with()
+    unavailable.assert_called_once_with(window)
 
 
 def test_native_tray_contract_restores_after_explorer_restart():
@@ -137,6 +185,18 @@ def test_native_tray_contract_restores_after_explorer_restart():
     assert 'RegisterWindowMessageW("TaskbarCreated")' in source
     assert "if message == wm_taskbar_created" in source
     assert "add_icon()" in source
+    assert "NIF_MESSAGE | NIF_ICON | NIF_TIP | NIF_SHOWTIP" in source
+    assert 'notify_data.szTip = "OpenAver"' in source
+
+
+def test_task_dialog_common_controls_manifest_is_packaged_with_windows_sources():
+    manifest = Path(__file__).parents[2] / "windows" / "common-controls.manifest"
+    source = manifest.read_text(encoding="utf-8")
+    assert "Microsoft.Windows.Common-Controls" in source
+    assert 'version="6.0.0.0"' in source
+
+    tray_source = (manifest.parent / "tray.py").read_text(encoding="utf-8")
+    assert tray_source.count("_pack_ = 1") >= 2
 
 
 def test_standalone_wires_windows_tray_and_shutdown_backstop():

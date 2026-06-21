@@ -214,7 +214,7 @@ curl http://localhost:<port>/api/capabilities
 支援。Windows 10/11 與 macOS（Apple Silicon M1–M4）皆可。
 
 **Windows 關閉視窗後可以在背景運行嗎？**
-可以。點擊右上角 X 時可選擇退出或最小化到系統匣，並可記住選擇；從右下角 OpenAver 圖示可重新開啟、切換關閉行為或完整退出。
+可以。點擊右上角 X 時可選擇退出或最小化到系統匣，並可選擇不再顯示提示；單擊或雙擊右下角 OpenAver 圖示可重新開啟，右鍵選單可切換關閉行為或完整退出。系統匣與關閉提示會跟隨介面語系。
 
 **OpenAver 支援哪些媒體伺服器（Media Server）？**
 生成標準 NFO + 封面海報（poster / fanart），供 Jellyfin、Emby、Kodi 直接讀取。
