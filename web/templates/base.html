@@ -492,8 +492,8 @@
             </span>
         </div>
         <div class="navbar-end">
-            {% if page in ['showcase', 'search'] %}
-            <!-- 81-T2: mobile 搜尋 icon（僅 showcase/search）→ toggle toolbar -->
+            {% if page == 'showcase' %}
+            <!-- 81-T2: mobile 搜尋 icon（僅 showcase）→ toggle toolbar；search 頁 Spotlight 中央輸入維持原樣（owner 2026-06-22 拍板，spec §3.1 末句優先） -->
             <button type="button"
                     class="navbar-search-btn lg:hidden"
                     @click="$store.ui.toolbarOpen = !$store.ui.toolbarOpen">

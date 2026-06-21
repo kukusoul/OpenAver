@@ -12987,8 +12987,9 @@ class TestMobileToolbarToggle:
     純靜態守衛（bs4 + 字串）。斷言：
     - base.html alpine:init 註冊 Alpine.store('ui', { toolbarOpen:false })。
     - navbar 搜尋 button：navbar-search-btn + lg:hidden + bi-search + @click 翻轉 $store.ui.toolbarOpen。
-    - 該 button 被 {% if page in ['showcase','search'] %} Jinja gate。
-    - showcase.toolbar / search.search-bar 綁 :class mobile-toolbar-open ← $store.ui.toolbarOpen（CD-11 兩頁）。
+    - 該 button 被 {% if page == 'showcase' %} Jinja gate（**僅 showcase**；owner 2026-06-22
+      拍板 search 頁 Spotlight 中央輸入維持原樣、不收進 navbar icon）。
+    - showcase.toolbar 綁 :class mobile-toolbar-open ← $store.ui.toolbarOpen；search.search-bar **不**綁。
     動畫/收合/CSS gate 屬 T3/T4，不在此守衛。
     """
 
@@ -13023,20 +13024,20 @@ class TestMobileToolbarToggle:
             f"navbar-search-btn @click 須翻轉 $store.ui.toolbarOpen（實得 {click!r}）"
 
     def test_navbar_search_button_jinja_gated(self):
-        """搜尋 button 被 {% if page in ['showcase', 'search'] %} Jinja gate（僅兩頁渲染）。"""
+        """搜尋 button 被 {% if page == 'showcase' %} Jinja gate（僅 showcase 渲染，不含 search）。"""
         html = self._base()
         # 容忍引號/空白變體
         assert re.search(
-            r"\{%\s*if\s+page\s+in\s+\[\s*['\"]showcase['\"]\s*,\s*['\"]search['\"]\s*\]\s*%\}",
+            r"\{%\s*if\s+page\s*==\s*['\"]showcase['\"]\s*%\}",
             html,
-        ), "base.html: navbar 搜尋 button 須被 {% if page in ['showcase', 'search'] %} gate"
+        ), "base.html: navbar 搜尋 button 須被 {% if page == 'showcase' %} gate"
         # button 落在該 gate 與其 endif 之間
         m = re.search(
-            r"\{%\s*if\s+page\s+in\s+\[\s*['\"]showcase['\"]\s*,\s*['\"]search['\"]\s*\]\s*%\}(.*?)\{%\s*endif\s*%\}",
+            r"\{%\s*if\s+page\s*==\s*['\"]showcase['\"]\s*%\}(.*?)\{%\s*endif\s*%\}",
             html, re.DOTALL,
         )
         assert m and "navbar-search-btn" in m.group(1), \
-            "navbar-search-btn 須落在 {% if page in ['showcase','search'] %} … {% endif %} 區段內"
+            "navbar-search-btn 須落在 {% if page == 'showcase' %} … {% endif %} 區段內"
 
     def test_showcase_toolbar_class_binding(self):
         """showcase.html .showcase-toolbar 綁 :class mobile-toolbar-open ← $store.ui.toolbarOpen。"""
@@ -13048,12 +13049,17 @@ class TestMobileToolbarToggle:
         assert "mobile-toolbar-open" in binding and "$store.ui.toolbarOpen" in binding, \
             f".showcase-toolbar :class 須含 mobile-toolbar-open ← $store.ui.toolbarOpen（實得 {binding!r}）"
 
-    def test_search_bar_class_binding(self):
-        """search.html .search-bar 綁同一 :class（CD-11 兩頁 parity）。"""
+    def test_search_bar_not_bound(self):
+        """search.html .search-bar（Spotlight 中央輸入）**不**綁 mobile-toolbar-open。
+
+        owner 2026-06-22 拍板：US-1 navbar 收合只作用 showcase；search 頁的
+        .search-bar 即 Spotlight 中央搜尋輸入（該頁唯一搜尋框），必須永遠可見、
+        維持原樣（spec §3.1 末句優先於 CD-4）。守衛防回退把搜尋框收進 navbar icon。
+        """
         from bs4 import BeautifulSoup
         html = SEARCH_HTML.read_text(encoding="utf-8")
         divs = BeautifulSoup(html, "html.parser").select("div.search-bar")
         assert divs, "search.html missing div.search-bar"
         binding = divs[0].get(":class", "")
-        assert "mobile-toolbar-open" in binding and "$store.ui.toolbarOpen" in binding, \
-            f".search-bar :class 須含 mobile-toolbar-open ← $store.ui.toolbarOpen（實得 {binding!r}）"
+        assert "mobile-toolbar-open" not in binding, \
+            f".search-bar 不可綁 mobile-toolbar-open（search Spotlight 維持原樣，實得 {binding!r}）"

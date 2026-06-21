@@ -263,8 +263,8 @@
         </div>
     </div>
 
-    <!-- 搜尋框 -->
-    <div class="search-bar" :class="{ 'mobile-toolbar-open': $store.ui.toolbarOpen }">
+    <!-- 搜尋框（Spotlight 中央輸入；US-1 navbar 收合不作用於 search 頁，維持永遠可見） -->
+    <div class="search-bar">
         <form id="searchForm" @submit.prevent="doSearch()">
             <div class="spotlight-search">
                 <i class="bi bi-search search-icon-left"></i>
