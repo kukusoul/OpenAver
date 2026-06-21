@@ -100,7 +100,7 @@
                             <i class="bi bi-x-lg"></i>
                         </button>
                         <button class="btn-icon active"
-                                @click="showFavoriteActresses ? onActressSearchChange() : onSearchChange()"
+                                @click="(showFavoriteActresses ? onActressSearchChange() : onSearchChange()); $store.ui.toolbarOpen = false"
                                 title="{{ t('showcase.action.search') }}">
                             <i class="bi bi-arrow-right"></i>
                         </button>

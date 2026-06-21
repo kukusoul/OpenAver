@@ -13172,3 +13172,47 @@ class TestMobileToolbarCss:
         assert "$store.ui.toolbarOpen" in click and "false" in click, \
             f"backdrop @click 須將 $store.ui.toolbarOpen 設 false（實得 {click!r}）"
         assert bd.has_attr("x-cloak"), "backdrop 須有 x-cloak"
+
+
+class TestMobileToolbarAutoCollapse:
+    """feature/81 T4（US-1 / CD-5）：showcase 工具列「送出搜尋」自動收合。
+
+    收合掛在**箭頭送出鈕**的 @click（明確送出手勢），**不**掛 onSearchChange() JS——
+    因搜尋框是 @input.debounce live-filter，寫進 JS 會讓打字途中工具列滑走（破 UX）。
+    箭頭鈕 @click 一處同時覆蓋影片(onSearchChange) / 女優(onActressSearchChange) 兩模式。
+    點外面收合由 T3 backdrop 處理（見 TestMobileToolbarCss.test_backdrop_dom）。
+    """
+
+    def _submit_btn_click(self):
+        """回傳 showcase 箭頭送出鈕的 @click 字串。
+
+        以 title `{{ t('showcase.action.search') }}` 唯一辨識（清除鈕 @click 也含兩個
+        SearchChange 呼叫，不能靠 @click 內容辨識，須靠 title 區分）。
+        """
+        from bs4 import BeautifulSoup
+        html = SHOWCASE_HTML.read_text(encoding="utf-8")
+        for btn in BeautifulSoup(html, "html.parser").select("button"):
+            if btn.get("title", "") == "{{ t('showcase.action.search') }}":
+                return btn.get("@click", "")
+        return None
+
+    def test_submit_button_collapses_toolbar(self):
+        """箭頭送出鈕 @click 同時跑搜尋並 set $store.ui.toolbarOpen = false。"""
+        click = self._submit_btn_click()
+        assert click is not None, \
+            "showcase.html 找不到箭頭送出鈕（title=showcase.action.search）"
+        # 仍須跑搜尋（防 mutation 只留收合、丟掉送出）
+        assert "SearchChange()" in click, \
+            f"箭頭送出鈕 @click 須仍呼叫 (onActress)SearchChange()（實得 {click!r}）"
+        assert re.search(r"\$store\.ui\.toolbarOpen\s*=\s*false", click), \
+            f"箭頭送出鈕 @click 須在送出後 set $store.ui.toolbarOpen = false（實得 {click!r}）"
+
+    def test_live_filter_input_does_not_collapse(self):
+        """@input.debounce live-filter 綁定**不可**含收合（防回退把收合塞進每次 keystroke）。"""
+        from bs4 import BeautifulSoup
+        html = SHOWCASE_HTML.read_text(encoding="utf-8")
+        for inp in BeautifulSoup(html, "html.parser").select("input"):
+            for attr, val in inp.attrs.items():
+                if attr.startswith("@input") and "SearchChange" in (val if isinstance(val, str) else ""):
+                    assert "toolbarOpen" not in val, \
+                        f"@input live-filter 不可含 toolbarOpen 收合（打字途中收合破 UX，實得 {val!r}）"
