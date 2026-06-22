@@ -48,8 +48,14 @@ def test_page_route_renders_200(client, route):
 # mock 慣例鏡像 tests/integration/test_server_mode_gate.py（patch web.app.load_config）。
 
 
-def _fresh_client():
+LOOPBACK_CLIENT = ("127.0.0.1", 12345)
+REMOTE_CLIENT = ("192.168.1.50", 12345)
+
+
+def _fresh_client(client=None):
     from web.app import app
+    if client is not None:
+        return TestClient(app, raise_server_exceptions=True, client=client)
     return TestClient(app, raise_server_exceptions=True)
 
 
@@ -70,13 +76,33 @@ class TestHelpBaseUrlServerAware:
     """help route 的 base_url server-aware 注入（81b-T5）"""
 
     def test_server_mode_on_lan_available_shows_lan_url(self, monkeypatch):
-        """server_mode ON + lan_ip + lan_port → curl 顯示 http://lan_ip:lan_port"""
+        """桌面 loopback 主機 + server_mode ON + lan_ip + lan_port → curl 顯示 http://lan_ip:lan_port
+
+        Codex P2：override 僅對 loopback 桌面主機生效，故此 case 必須用 loopback client。
+        """
         _patch_server_mode(monkeypatch, True)
         monkeypatch.setattr("web.app.get_lan_ip", lambda: "192.168.1.50")
         _patch_lan_port(monkeypatch, 8001)
-        resp = _fresh_client().get("/help")
+        resp = _fresh_client(client=LOOPBACK_CLIENT).get("/help")
         assert resp.status_code == 200
         assert "http://192.168.1.50:8001/api/capabilities" in resp.text
+
+    def test_server_mode_on_remote_device_keeps_request_base_url(self, monkeypatch):
+        """Codex P2：server_mode ON + lan_ip/lan_port 皆有，但 request 由遠端裝置（非 loopback）進入
+        → 保留 request.base_url（其自身抵達位址，這裡由 Host header 決定），不改寫成裸 LAN IP。
+        """
+        _patch_server_mode(monkeypatch, True)
+        monkeypatch.setattr("web.app.get_lan_ip", lambda: "192.168.1.50")
+        _patch_lan_port(monkeypatch, 8001)
+        # server_mode ON，lan_access_gate 對遠端 client 放行（200）。
+        resp = _fresh_client(client=REMOTE_CLIENT).get(
+            "/help", headers={"host": "nas.local:50123"}
+        )
+        assert resp.status_code == 200
+        # 保留請求自身的可分享 base_url（由 Host header 驅動）。
+        assert 'data-capabilities-base="http://nas.local:50123"' in resp.text
+        # 未被改寫成偵測到的裸 LAN IP。
+        assert "192.168.1.50:8001/api/capabilities" not in resp.text
 
     def test_server_mode_off_falls_back_to_loopback(self, monkeypatch):
         """server_mode OFF → lan_ip 自然 None → 退 loopback（testserver），無 192.168.*"""

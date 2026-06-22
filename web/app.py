@@ -348,11 +348,13 @@ async def help_page(request: Request):
     """使用說明頁面"""
     context = get_common_context(request)
     context["page"] = "help"
-    # 81b-T5：server_mode 開且 lan_ip/lan_port 皆有 → 顯示可分享 LAN URL，否則退 loopback
-    lan_ip = context.get("lan_ip")  # L259 已 gate by server_mode（關 → None）
+    # 81b-T5 + Codex P2：僅桌面主機（loopback）覆寫成可分享 LAN URL；
+    # 遠端裝置走自身 request.base_url（已是可分享位址，nas.local / 反向代理皆保留）。
+    lan_ip = context.get("lan_ip")
     from web.lan_listener import lan_listener
     lan_port = lan_listener.lan_port
-    if lan_ip and lan_port:
+    client_host = request.client.host if request.client else None  # 純 TCP 對端，不信任 XFF（同 80a 閘門）
+    if client_host in _LOOPBACK_HOSTS and lan_ip and lan_port:
         context["base_url"] = f"http://{lan_ip}:{lan_port}"
     else:
         context["base_url"] = str(request.base_url).rstrip("/")

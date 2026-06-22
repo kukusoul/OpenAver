@@ -5639,6 +5639,22 @@ class TestHelpPage:
         assert term.has_attr("data-capabilities-base"), \
             ".hero-terminal 缺少 data-capabilities-base 屬性（US-7 server-aware base_url 來源）"
 
+    def test_help_copy_button_has_aria_label(self):
+        """help.html .terminal-copy-btn 為 icon-only（<i class="bi bi-clipboard">）+ a11y 標籤
+        （:aria-label 引用 help.hero.copy_curl，鏡像 settings copy 鈕 T6 守衛）。
+
+        Codex P3：T4 換 bi-clipboard icon 後 copy 鈕失去 accessible name → 補 aria-label。
+        mutation：移除 :aria-label 或改引用別 key → a11y 斷言 RED。"""
+        from bs4 import BeautifulSoup
+        html = (PROJECT_ROOT / 'web/templates/help.html').read_text(encoding='utf-8')
+        btn = BeautifulSoup(html, "html.parser").find(class_="terminal-copy-btn")
+        assert btn is not None, "help.html 缺少 .terminal-copy-btn（curl 複製鈕）"
+        assert btn.find("i", class_="bi-clipboard") is not None, \
+            ".terminal-copy-btn 缺少 <i class=\"bi bi-clipboard\"> icon"
+        aria = btn.get(":aria-label") or btn.get("aria-label")
+        assert aria is not None and "help.hero.copy_curl" in aria, \
+            f"copy 鈕 aria-label 應引用 help.hero.copy_curl，實際: {aria!r}（P3 a11y 標籤）"
+
     def test_help_js_copy_uses_capabilities_base_dataset(self):
         """help.js 複製來源讀 dataset.capabilitiesBase（primary），curl 模板用該 base。
 
