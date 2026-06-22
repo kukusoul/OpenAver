@@ -1319,7 +1319,13 @@
  *   故無封面保留基準 min-height。img 規則不 gate has-cover（無封面時 img 空 src→height:auto=0 無害），
  *   且刻意保持 (0,2,1) 不升到 (0,3,1) 以免在 ≤480∩similar-open 與 similar-open img (0,3,1) 撞同權。
  * similar-open 交互：.lightbox-content.similar-open .lightbox-cover img (0,3,1) 勝本 img 規則 (0,2,1)
- *   → ≤480px ∩ similar-open 時手機相似主片維持 40vh（本 task 不接管相似模式，刻意）。 */
+ *   → ≤480px ∩ similar-open 時手機相似主片維持 40vh（本 task 不接管相似模式，刻意）。
+ *
+ * ⚠️ 83a-T2 勿刪本 block：83a modal-hug（(0,3,1)）帶 :not(.similar-open) gate，similar-open 時不命中；
+ *   而 similar-open 規則只設 height:40vh、沒設 width → mobile similar-open 封面的 width:100% **唯一來源是本 block**。
+ *   刪本 block 會讓 similar-open 封面寬默默掉成 auto（base (0,1,1)）。一般（非 similar-open）lightbox 下本 block
+ *   已被 modal-hug 完全覆蓋、是 inert 的，看似冗餘但 similar-open 仍依賴。正確清理＝83b 重寫 similar-open 時
+ *   先把 width:100% 收進 similar-open 規則再刪本 block（同段 CSS、同 changeset）。詳見 spec-83b.md §5 D1。 */
 @media (max-width: 899px) {
     /* (b) 容器塌到圖的盒（Codex P2：僅 .has-cover；無封面保留基準 min-height 防塌成 0 高） */
     .lightbox-cover.has-cover:has(.lb-full) {
