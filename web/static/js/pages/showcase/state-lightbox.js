@@ -72,6 +72,24 @@ export function stateLightbox() {
 
         // --- helper in return {} ---
 
+        // 83a-T1 M1：比例 hook — 縮圖 base img @load 讀 naturalWidth/naturalHeight，
+        // 在最近 .lightbox-cover 容器設 --lb-cover-ar custom property。
+        // 不寫 inline aspect-ratio；不 removeProperty（換片 / close / similar-open enter/exit 皆不清）。
+        // 破圖/空 src（naturalWidth === 0）→ skip，保留前值撐盒（禁止任何清除路徑）。
+        // 目標掛點：.lightbox-content（縮圖載入即定，原圖未到也不塌、不閃）。
+        _setCoverAspect(e) {
+            var img = e && e.target;
+            if (!img) return;
+            var nw = img.naturalWidth;
+            var nh = img.naturalHeight;
+            if (!nw || !nh) return;  // 破圖/空 src → skip，保留前值
+            var ar = (nw / nh).toFixed(4);
+            var containerEl = img.closest('.lightbox-cover');
+            if (containerEl) {
+                containerEl.style.setProperty('--lb-cover-ar', ar);
+            }
+        },
+
         // 71c-P2: helper — blur-up state reset + same-URL complete-check（DRY；供 _setLightboxIndex 與
         // slip-through 路徑（state-similar.js closeSimilarMode）共用，避免兩處邏輯漂移）。
         // 呼叫時機：currentLightboxVideo 已更新、Alpine reactive patch 尚未跑完（$nextTick 前）。

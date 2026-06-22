@@ -666,17 +666,48 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    /* 給容器最小尺寸 — 無封面時 placeholder SVG 不會讓 lightbox 塌陷成迷你卡片，
-       cover-actions absolute 仍能撐開到 lightbox 應有的氣勢 */
+    /* 無封面時保留 floor — placeholder SVG 不塌陷、cover-actions absolute 仍能撐盒 */
     min-width: min(60vw, 600px);
     min-height: min(58vh, 460px);
 }
 
+/* 83a-T1fix1 M1+M2+M3: has-cover 時 aspect-box modal-hug 模型（全斷點適用）。
+   修正 T1 的 flex-shrink letterbox bug（CDP 實測：cover box 1139×610 AR=1.869≠圖 AR 1.481
+   → img object-fit:contain 只佔 903px → 左右各 118px 暗死白）。
+   修法 A — flex-shrink:0（禁止 cover 被壓縮）：配合 width-formula 確保 cover 高不超 content。
+   修法 B — width-formula 用正確 vreserve（15rem≈240px = metadata≈175px + padding 48px + gap 16px）：
+     width = min(90vw, (90dvh − 15rem) × AR) → cover 高 = width/AR；
+     cover 高 + 15rem = min(90vw/AR, 90dvh) ≤ 90dvh → 不捲動、不依賴 max-height 壓縮。
+   T1 用 flex-grow:1（height-driven）無效因為 content 無 explicit height → cover 塌 0×0。
+   guard：:not(.similar-open) — similar-open 禁區（83b）完全不動。 */
+.lightbox-content:not(.similar-open) .lightbox-cover.has-cover {
+    flex-shrink: 0;
+    min-width: 0;
+    min-height: 0;
+    aspect-ratio: var(--lb-cover-ar, 1.5);
+    width: min(90vw, calc((100vh - 15rem) * var(--lb-cover-ar, 1.5)));
+    width: min(90vw, calc((100dvh - 15rem) * var(--lb-cover-ar, 1.5)));
+    height: auto;
+}
+
+/* 83a-T1 M1: base img 與 .lb-full 皆填滿 aspect-ratio 正確的盒（兩層疊在 has-cover 盒內）。
+   guard：same :not(.similar-open) — similar-open 禁區的 img 保持 40vh 規則不干擾。
+   盒 AR == 圖 AR → 不 letterbox；border-radius 保留視覺細節。
+   無封面的普通 img（破圖/placeholder）維持舊規則（非 has-cover，不命中此選擇器）。 */
+.lightbox-content:not(.similar-open) .lightbox-cover.has-cover img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    border-radius: var(--radius-sm);
+}
+
+/* 83a-T1 M1: 無封面 / 女優分支 base img — 維持舊規則（cover-first，不干擾 has-cover 內 absolute 層疊）。
+   specificity (0,1,1) 低於上方 .has-cover img (0,3,1)，has-cover 時上方規則勝出。 */
 .lightbox-cover img {
-    /* 71c：height 明確（非僅 max-height），讓 400px thumb 放大撐滿 60vh；
-       width:auto + max-width:100% 保持比例且不超容器寬；object-fit:contain 絕不裁切。
-       T4 前原圖靠自然尺寸填滿，T4 後 thumb 自然 400px < 60vh → 用 max-* 無法放大，
-       需 height 明確才能撐高（瀏覽器按 height 限制縮放比例，object-fit:contain 補完）。 */
+    /* 舊規則保留給無封面路徑（placeholder/破圖）與女優照（.lightbox-cover 無 has-cover class）。
+       height:60vh 讓無封面 lightbox 維持既有視覺氣勢；object-fit:contain 不裁切。 */
     height: 60vh;
     width: auto;
     max-width: 100%;
@@ -685,10 +716,10 @@
 }
 
 /* 71-T6 blur-up overlay：原圖（cover_full_url）疊在 base（cover_url 小圖）之上。
-   sizing 鏡像 .lightbox-cover img 使兩層精準對齊；預設 opacity:0、@load 後翻 .lb-full-shown 淡入。
-   pointer-events:none → overlay 永不攔截 cover-actions / sparkle 的點擊。
-   transition 用 fluent token（不寫裸 .3s）；duration-slow=300ms（= plan .3s）、ease-decel 為進場/淡入角色。
-   71c：height/width/object-fit 完全鏡像 base img，確保原圖淡入時尺寸不偏移（兩層像素對齊）。 */
+   83a-T1 M1: has-cover 時 .lb-full 填滿 has-cover 盒（盒 AR == 圖 AR，不 letterbox）；
+   opacity 溶接不變；pointer-events:none 確保不擋 cover-actions / sparkle 點擊。
+   transition 用 fluent token；duration-slow=300ms、ease-decel 為進場/淡入角色。
+   guard：:not(.similar-open) — similar-open 禁區維持 40vh + margin:auto 垂直置中。 */
 .lb-full {
     position: absolute;
     inset: 0;
@@ -703,6 +734,16 @@
     transition: opacity var(--fluent-duration-slow) var(--fluent-ease-decel);
 }
 
+/* 83a-T1 M1: has-cover + not similar-open → lb-full 填滿盒（覆寫舊 60vh 規則）。
+   specificity (0,3,0) 勝 .lb-full (0,1,0)；similar-open ≤960px (0,3,1) 仍勝此規則（禁區維持）。 */
+.lightbox-content:not(.similar-open) .lightbox-cover.has-cover .lb-full {
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    max-width: none;
+}
+
 .lb-full-shown {
     opacity: 1;
 }
@@ -715,9 +756,9 @@
 }
 
 /* Metadata Panel — 緊湊版（匹配原版 gallery） */
+/* 83a-T1 M4: 移除 max-width:600px，改 width:100% 對齊封面寬（modal shrink-to-fit 後即封面寬）。 */
 .lightbox-metadata {
     padding: 0.5rem 0 0 0;
-    max-width: 600px;
     width: 100%;
     border-top: 1px solid var(--stroke-subtle);
 }

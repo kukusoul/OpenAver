@@ -680,6 +680,7 @@
                             <img x-ref="lightboxCoverImg"
                                  :src="currentLightboxVideo?.cover_url"
                                  :alt="currentLightboxVideo?.number"
+                                 @load="_setCoverAspect($event)"
                                  @error="handleCoverError(currentLightboxVideo, $event)">
                             <!-- 71-T6 blur-up: overlay 層=cover_full_url（原圖）。@load 後 opacity 0→1 就地淡入蓋上 base；
                                  用 CSS opacity 切換（非 x-show — display:none 的 img 不載入、@load 永不 fire）；
