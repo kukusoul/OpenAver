@@ -13,6 +13,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 FLUENT_CSS = REPO_ROOT / "web" / "static" / "css" / "components" / "fluent-materials.css"
 BASE_HTML  = REPO_ROOT / "web" / "templates" / "base.html"
 THEME_CSS  = REPO_ROOT / "web" / "static" / "css" / "theme.css"
+RESCRAPE_CSS = REPO_ROOT / "web" / "static" / "css" / "components" / "rescrape-modal.css"
 
 
 def _strip_css_comments(text: str) -> str:
@@ -725,4 +726,77 @@ class TestFluentMaterialsGuards:
         ), (
             "fluent-materials.css: mobile .notification-drawer must set "
             "-webkit-backdrop-filter: none !important (macOS WKWebView pairing)"
+        )
+
+    def test_rescrape_preview_mobile_stack(self):
+        """≤480px .rescrape-preview must stack to a single column (US-12 / AC-22).
+
+        Protects 81c-T7: below 480px the rescrape preview row (cover + metadata
+        side-by-side) cramps both columns at 360px (cover max-width:38vw ~137px
+        leaves metadata <200px → truncated). The mobile @media must flip the
+        preview to flex-direction:column AND widen the cover's max-width off 38vw
+        (structural 100%, scales within the fluid modal box). Breakpoint 480 aligns
+        with T6 + A-group mobile. >480px keeps the row layout untouched.
+        """
+        css = _strip_css_comments(RESCRAPE_CSS.read_text(encoding="utf-8"))
+
+        # Locate the @media (max-width:480px){ … } block (tolerate spacing variants).
+        m = re.search(r"@media\s*\(\s*max-width\s*:\s*480px\s*\)\s*\{", css)
+        assert m is not None, (
+            "rescrape-modal.css: no @media (max-width:480px) block found "
+            "(81c-T7 mobile stack missing)"
+        )
+
+        # Walk brace depth from the opening { to find the media block's end.
+        start = m.end() - 1  # position of '{'
+        depth = 0
+        end = None
+        for i in range(start, len(css)):
+            if css[i] == "{":
+                depth += 1
+            elif css[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    end = i
+                    break
+        assert end is not None, "rescrape-modal.css: unbalanced @media (max-width:480px) block"
+        media_body = css[m.end():end]
+
+        # .rescrape-preview rule with flex-direction: column.
+        pm = re.search(r"\.rescrape-preview\s*\{([^}]*)\}", media_body)
+        assert pm is not None, (
+            "rescrape-modal.css: @media (max-width:480px) must contain a "
+            ".rescrape-preview rule (81c-T7 mobile stack)"
+        )
+        assert re.search(r"flex-direction\s*:\s*column", pm.group(1)), (
+            "rescrape-modal.css: mobile .rescrape-preview must set "
+            "flex-direction: column (AC-22 stack)"
+        )
+
+        # Cover img rule with widened max-width (NOT 38vw).
+        im = re.search(
+            r"\.rescrape-preview\s+\.pv-cover\s+img\s*\{([^}]*)\}", media_body
+        )
+        assert im is not None, (
+            "rescrape-modal.css: @media (max-width:480px) must contain a "
+            ".rescrape-preview .pv-cover img rule (81c-T7 cover widen)"
+        )
+        cover_decls = im.group(1)
+        mw = re.search(r"max-width\s*:\s*([^;]+)", cover_decls)
+        assert mw is not None, (
+            "rescrape-modal.css: mobile cover img must set max-width (widen off 38vw)"
+        )
+        assert "38vw" not in mw.group(1), (
+            "rescrape-modal.css: mobile cover img max-width must be widened off 38vw "
+            "(AC-22 — 38vw is the row-mode cramp culprit)"
+        )
+        assert "100%" in mw.group(1), (
+            "rescrape-modal.css: mobile cover img max-width should be 100% "
+            "(structural value, scales within fluid modal box)"
+        )
+
+        # Token-only: no hardcoded color literals in the mobile cover rule.
+        assert not re.search(r"#[0-9a-fA-F]{3,8}\b", cover_decls), (
+            "rescrape-modal.css: mobile cover img rule must not use a hex color "
+            "(token-only — ui-conventions §6)"
         )
