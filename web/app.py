@@ -348,7 +348,14 @@ async def help_page(request: Request):
     """使用說明頁面"""
     context = get_common_context(request)
     context["page"] = "help"
-    context["base_url"] = str(request.base_url).rstrip("/")
+    # 81b-T5：server_mode 開且 lan_ip/lan_port 皆有 → 顯示可分享 LAN URL，否則退 loopback
+    lan_ip = context.get("lan_ip")  # L259 已 gate by server_mode（關 → None）
+    from web.lan_listener import lan_listener
+    lan_port = lan_listener.lan_port
+    if lan_ip and lan_port:
+        context["base_url"] = f"http://{lan_ip}:{lan_port}"
+    else:
+        context["base_url"] = str(request.base_url).rstrip("/")
     return templates.TemplateResponse(request, "help.html", context)
 
 

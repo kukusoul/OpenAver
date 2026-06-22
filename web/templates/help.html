@@ -65,7 +65,7 @@
             </div>
             <!-- 右欄：AI 整合入口 -->
             <div class="flex-1 lg:pl-6 mt-4 lg:mt-0">
-                <div class="hero-terminal relative">
+                <div class="hero-terminal relative" data-capabilities-base="{{ base_url }}">
                     <span class="terminal-prompt">$</span>
                     curl -s {{ base_url }}/api/capabilities
                     <button class="terminal-copy-btn" @click="copyCurlCommand()">
