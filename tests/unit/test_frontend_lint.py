@@ -12924,18 +12924,19 @@ class TestServerModeToggleGuard:
             "segmented 缺少 @click=\"setServerMode(true)\" button（伺服器態）"
 
     def test_settings_server_info_banner_xshow_xcloak(self):
-        """恰好一個 .settings-server-info 元素，帶 x-show=\"serverMode\" 和 x-cloak（防 FOUC）。
-        移除 x-cloak → Alpine boot 前裸閃；移除 x-show → 橫條恆顯。"""
+        """恰好一個 .settings-server-inline 元素，帶 x-show=\"serverMode\" 和 x-cloak（防 FOUC）。
+        移除 x-cloak → Alpine boot 前裸閃；移除 x-show → 區塊恆顯。
+        81b-T1：原獨立第二排 .settings-server-info 收進 header 同排 .settings-server-inline。"""
         from bs4 import BeautifulSoup
         soup = BeautifulSoup(self._html(), "html.parser")
-        banners = soup.find_all(class_="settings-server-info")
+        banners = soup.find_all(class_="settings-server-inline")
         assert len(banners) == 1, \
-            f"settings.html .settings-server-info 應恰好 1 個，實際 {len(banners)} 個"
+            f"settings.html .settings-server-inline 應恰好 1 個，實際 {len(banners)} 個"
         banner = banners[0]
         assert banner.get("x-show") == "serverMode", \
-            f".settings-server-info x-show 應為 'serverMode'，實際: {banner.get('x-show')!r}"
+            f".settings-server-inline x-show 應為 'serverMode'，實際: {banner.get('x-show')!r}"
         assert banner.has_attr("x-cloak"), \
-            ".settings-server-info 缺少 x-cloak（Alpine boot 前會 FOUC）"
+            ".settings-server-inline 缺少 x-cloak（Alpine boot 前會 FOUC）"
 
     def test_settings_server_info_warning_key(self):
         """橫條內含 settings.server_info.warning i18n key 引用（警語行）。
