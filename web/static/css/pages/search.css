@@ -786,6 +786,27 @@
     }
 }
 
+/* 83a-T3: search 頁燈箱封面 modal-hug（aspect-box 模型，對齊 showcase T1/T1fix1）。
+   search 無 similar-open → selector 不需 :not(.similar-open)；
+   scope 靠 .search-container（不波及 showcase 頁）。 */
+.search-container .lightbox-cover.has-cover {
+    flex-shrink: 0;
+    min-width: 0;
+    min-height: 0;
+    aspect-ratio: var(--lb-cover-ar, 1.5);
+    width: min(90vw, calc((90vh - 15rem) * var(--lb-cover-ar, 1.5)));
+    width: min(90vw, calc((90dvh - 15rem) * var(--lb-cover-ar, 1.5)));
+    height: auto;
+}
+
+.search-container .lightbox-cover.has-cover img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
 /* T9-port：≤480px search 影片燈箱封面貼合原圖比例（消 letterbox 死白）。
    判別子 .search-container 精準限 search 頁——showcase 頁根為 .showcase-container，零波及。
    容器 + img 皆 gate .has-cover（決策 ①）：search 無 similar-open、無「保低 specificity」顧慮；

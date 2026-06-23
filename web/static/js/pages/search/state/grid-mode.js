@@ -201,6 +201,20 @@ export function searchStateGridMode() {
         }, 250);
     },
 
+    // 83a-T3: lightbox 封面比例 hook — img @load 讀 naturalW/H 寫 --lb-cover-ar
+    _setCoverAspect(e) {
+        var img = e && e.target;
+        if (!img) return;
+        var nw = img.naturalWidth;
+        var nh = img.naturalHeight;
+        if (!nw || !nh) return;
+        var ar = (nw / nh).toFixed(4);
+        var containerEl = img.closest('.lightbox-cover');
+        if (containerEl) {
+            containerEl.style.setProperty('--lb-cover-ar', ar);
+        }
+    },
+
     /**
      * 開啟 Actress Lightbox（Hero Card 專用）
      */

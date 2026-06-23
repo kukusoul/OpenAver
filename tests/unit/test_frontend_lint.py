@@ -5412,8 +5412,9 @@ class TestSearchCssHardcoded:
         # T9-port 在 L718 後插入 blocks：840→902；T9 Codex-P2 fix 補註解 +4 行：902→906。
         # T11：在 L753 後插入 hero 規則（~14 行）：906→920。
         # T10（US-10）：poster-crop / coarse block 註解 +4 行（481–899 擴斷點）：920→924。
+        # 83a-T3：在 L789 插入 modal-hug block（~21 行）：924→945。
         90: "drop-shadow rgba 0.3 — §2 例外（drop-shadow 跟封面去背形狀，非矩形 box-shadow 無法用 --fluent-shadow-* token）",
-        924: "var(--bg-card, rgba(0, 0, 0, 0.05)) fallback — defensive fallback，非硬編碼違規",
+        945: "var(--bg-card, rgba(0, 0, 0, 0.05)) fallback — defensive fallback，非硬編碼違規",
     }
 
     SIX_PX_ALLOWLIST = {
@@ -14495,4 +14496,129 @@ class TestLightboxModalHugContract:
         )
         assert "setProperty('--lb-cover-ar'" in js, (
             "state-lightbox.js 缺少 setProperty('--lb-cover-ar') 呼叫"
+        )
+
+
+class TestSearchLightboxModalHugContract:
+    """83a-T3: 固化 search 頁 lightbox modal-hug 契約（7 條純加法守衛）
+
+    #S1 search.css .search-container .lightbox-cover.has-cover 含 aspect-ratio:var(--lb-cover-ar)
+    #S2 search.css .search-container .lightbox-cover.has-cover 含 flex-shrink:0
+    #S3 search.css .search-container .lightbox-cover.has-cover 含 min-width:0 AND min-height:0
+    #S4 search.css .search-container .lightbox-cover.has-cover 含 90dvh（且不含 100dvh/100vh）
+    #S5 search.css .search-container .lightbox-cover.has-cover img 含 position:absolute + width/height:100%
+    #S6 search.html lightbox img 含 @load="_setCoverAspect($event)"
+    #S7 grid-mode.js 含 _setCoverAspect + closest('.lightbox-cover') + setProperty('--lb-cover-ar')
+    """
+
+    GRID_MODE_JS = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "pages" / "search" / "state" / "grid-mode.js"
+    SEARCH_HTML = Path(__file__).parent.parent.parent / "web" / "templates" / "search.html"
+
+    def _css(self):
+        return SEARCH_CSS.read_text(encoding="utf-8")
+
+    def _js(self):
+        return self.GRID_MODE_JS.read_text(encoding="utf-8")
+
+    def _html(self):
+        return self.SEARCH_HTML.read_text(encoding="utf-8")
+
+    def _has_cover_block(self, css):
+        """擷取 .search-container .lightbox-cover.has-cover { ... } 塊內容"""
+        m = re.search(
+            r'\.search-container\s+\.lightbox-cover\.has-cover\s*\{([^}]*)\}',
+            css, re.DOTALL
+        )
+        return m.group(1) if m else None
+
+    def _has_cover_img_block(self, css):
+        m = re.search(
+            r'\.search-container\s+\.lightbox-cover\.has-cover\s+img\s*\{([^}]*)\}',
+            css, re.DOTALL
+        )
+        return m.group(1) if m else None
+
+    def test_s1_has_cover_aspect_ratio(self):
+        """#S1 .search-container .lightbox-cover.has-cover 含 aspect-ratio:var(--lb-cover-ar)"""
+        block = self._has_cover_block(self._css())
+        assert block is not None, (
+            "search.css 找不到 .search-container .lightbox-cover.has-cover 規則"
+        )
+        assert re.search(r'aspect-ratio\s*:\s*var\(--lb-cover-ar', block), (
+            ".search-container .lightbox-cover.has-cover 缺少 aspect-ratio: var(--lb-cover-ar)（modal-hug 核心）"
+        )
+
+    def test_s2_has_cover_flex_shrink_zero(self):
+        """#S2 .search-container .lightbox-cover.has-cover 含 flex-shrink:0"""
+        block = self._has_cover_block(self._css())
+        assert block is not None, (
+            "search.css 找不到 .search-container .lightbox-cover.has-cover 規則"
+        )
+        assert re.search(r'flex-shrink\s*:\s*0', block), (
+            ".search-container .lightbox-cover.has-cover 缺少 flex-shrink:0"
+        )
+
+    def test_s3_has_cover_floor_zeroed(self):
+        """#S3 .search-container .lightbox-cover.has-cover 含 min-width:0 AND min-height:0"""
+        block = self._has_cover_block(self._css())
+        assert block is not None, (
+            "search.css 找不到 .search-container .lightbox-cover.has-cover 規則"
+        )
+        assert re.search(r'min-width\s*:\s*0', block), (
+            ".search-container .lightbox-cover.has-cover 缺少 min-width:0"
+        )
+        assert re.search(r'min-height\s*:\s*0', block), (
+            ".search-container .lightbox-cover.has-cover 缺少 min-height:0"
+        )
+
+    def test_s4_has_cover_width_formula_uses_90dvh(self):
+        """#S4 width formula 含 90dvh 且不含 100dvh/100vh"""
+        block = self._has_cover_block(self._css())
+        assert block is not None, (
+            "search.css 找不到 .search-container .lightbox-cover.has-cover 規則"
+        )
+        assert '90dvh' in block, (
+            ".search-container .lightbox-cover.has-cover width formula 缺少 90dvh"
+        )
+        assert '100dvh' not in block, (
+            ".search-container .lightbox-cover.has-cover 含 100dvh，應為 90dvh"
+        )
+        assert '100vh' not in block, (
+            ".search-container .lightbox-cover.has-cover 含 100vh，應為 90vh/90dvh"
+        )
+
+    def test_s5_has_cover_img_fills_box(self):
+        """#S5 .search-container .lightbox-cover.has-cover img 含 position:absolute + width/height:100%"""
+        block = self._has_cover_img_block(self._css())
+        assert block is not None, (
+            "search.css 找不到 .search-container .lightbox-cover.has-cover img 規則"
+        )
+        assert re.search(r'position\s*:\s*absolute', block), (
+            ".search-container .lightbox-cover.has-cover img 缺少 position:absolute"
+        )
+        assert re.search(r'width\s*:\s*100%', block), (
+            ".search-container .lightbox-cover.has-cover img 缺少 width:100%"
+        )
+        assert re.search(r'height\s*:\s*100%', block), (
+            ".search-container .lightbox-cover.has-cover img 缺少 height:100%"
+        )
+
+    def test_s6_search_html_load_handler(self):
+        """#S6 search.html lightbox img 含 @load="_setCoverAspect($event)" """
+        html = self._html()
+        assert '@load="_setCoverAspect($event)"' in html, (
+            "search.html lightbox img 缺少 @load=\"_setCoverAspect($event)\"（83a-T3 移植守衛）"
+        )
+
+    def test_s7_grid_mode_js_set_cover_aspect(self):
+        """#S7 grid-mode.js 含 _setCoverAspect + closest('.lightbox-cover') + setProperty('--lb-cover-ar')"""
+        js = self._js()
+        assert '_setCoverAspect' in js, (
+            "grid-mode.js 缺少 _setCoverAspect 函式（83a-T3 移植守衛）"
+        )
+        assert "closest('.lightbox-cover')" in js, (
+            "grid-mode.js 缺少 closest('.lightbox-cover') 呼叫"
+        )
+        assert "setProperty('--lb-cover-ar'" in js, (
+            "grid-mode.js 缺少 setProperty('--lb-cover-ar') 呼叫"
         )
