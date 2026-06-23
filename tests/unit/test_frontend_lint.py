@@ -2169,10 +2169,12 @@ class TestShowcaseLightboxSentinel:
         assert 'cancelDeleteVideo()' in block, 'delete modal 缺 cancelDeleteVideo() 取消 handler'
 
     def test_t7_xtrap_releases_on_delete_modal(self):
-        """燈箱 x-trap 行必須含 deleteVideoModalOpen（modal 開時釋放 trap 給 modal）。"""
+        """燈箱 x-trap 行必須含 deleteVideoModalOpen（modal 開時釋放 trap 給 modal）。
+        錨定 lightbox 已知條件字串（非 re.search 第一個 match），防面板 x-trap 混淆。
+        """
         html = self._html()
-        m = re.search(r'x-trap\.inert="([^"]*)"', html)
-        assert m, 'showcase.html 缺 x-trap.inert 行'
+        m = re.search(r'x-trap\.inert="([^"]*deleteVideoModalOpen[^"]*)"', html)
+        assert m, 'showcase.html 缺含 deleteVideoModalOpen 的 x-trap.inert 行'
         expr = m.group(1)
         assert 'deleteVideoModalOpen' in expr, \
             f'x-trap.inert 未含 deleteVideoModalOpen（delete modal 開時 trap 未釋放）: {expr!r}'
@@ -12076,32 +12078,6 @@ class TestSimilarSlotGsapGuard:
             "constellation-host.js must contain 'width: 107' (reduced-motion + reset slot value)"
 
 
-class TestSimilarMobileDOMOrderGuard:
-    """75a-T4: showcase.html DOM 順序 — lightbox-similar-mobile 在 lightbox-metadata 之前。
-
-    使用 re.search 取 class attr 出現位置，避免誤中 HTML comment。
-    """
-
-    def _html(self):
-        return T4_SHOWCASE_HTML.read_text(encoding="utf-8")
-
-    def test_similar_mobile_before_metadata(self):
-        """lightbox-similar-mobile div 在主 lightbox-metadata div 之前。
-
-        showcase.html 有兩個 lightbox-metadata：actress-lightbox-meta（上方）和主 metadata（下方）。
-        守衛目標是主 lightbox-metadata（不含 actress 子 class），故用 exact class= match。
-        """
-        html = self._html()
-        m_mobile = re.search(r'class="lightbox-similar-mobile"', html)
-        # Match the standalone lightbox-metadata (not actress-lightbox-meta)
-        m_meta = re.search(r'class="lightbox-metadata"(?!\s)', html)
-        assert m_mobile, "showcase.html: lightbox-similar-mobile class attr not found"
-        assert m_meta, "showcase.html: class=\"lightbox-metadata\" (main, non-actress) not found"
-        assert m_mobile.start() < m_meta.start(), (
-            "showcase.html: lightbox-similar-mobile must appear before main lightbox-metadata in DOM"
-        )
-
-
 class TestSimilarJSThresholdGuard:
     """75a-T4: state-similar.js openSimilarMode 手機門檻 960px 守衛。
 
@@ -12157,56 +12133,25 @@ class TestSimilarJSThresholdGuard:
 class TestSimilarCssSafetyAndGridGuard:
     """75a-T4: showcase.css 安全規則 + 手機網格守衛。
 
-    涵蓋：
-    - @media (min-width: 960px) 包含 .lightbox-similar-mobile（安全網，不用 768px）
-    - .similar-mobile-card img block 含 var(--poster-crop-ratio)，不含 4/5
-    - .similar-slot block 含 width: 107px，不含 width: 120px
-    - .similar-mobile-grid block 含 repeat(4
-    - @media (max-width: 960px) 含 .lightbox-content.similar-open .lightbox-cover 縮高規則
+    83b-T2：舊 .lightbox-similar-mobile / .similar-mobile-grid / .similar-mobile-card 相關守衛已退役；
+    remaining：@media (min-width: 960px) .similar-mobile-panel safety-net + .similar-slot 守衛。
     """
 
     def _css(self):
         return T4_SHOWCASE_CSS.read_text(encoding="utf-8")
 
     def test_safety_rule_min_960_hides_mobile(self):
-        """@media (min-width: 960px) 安全網存在且包含 .lightbox-similar-mobile"""
+        """@media (min-width: 960px) 安全網存在且包含 .similar-mobile-panel（桌面 display:none）"""
         css = self._css()
-        match = re.search(r'@media\s*\(\s*min-width\s*:\s*960px\s*\)', css)
-        assert match, "showcase.css: @media (min-width: 960px) not found"
-        # Verify lightbox-similar-mobile is within or near this media block
-        after = css[match.start():]
-        assert "lightbox-similar-mobile" in after[:500], \
-            "@media (min-width: 960px) block must contain .lightbox-similar-mobile rule"
-
-    def test_safety_rule_not_768(self):
-        """安全網媒體查詢用 960px 而非 768px"""
-        css = self._css()
-        # The safety rule specifically for lightbox-similar-mobile hides it at 960px
-        # Confirm there's a min-width: 960px block (not just 768px) for the mobile section
-        idx_960 = css.find("min-width: 960px")
-        assert idx_960 != -1, "showcase.css: min-width: 960px not found (safety rule)"
-        # Confirm lightbox-similar-mobile appears after min-width: 960px
-        idx_mobile = css.find("lightbox-similar-mobile", idx_960)
-        assert idx_mobile != -1, \
-            "showcase.css: lightbox-similar-mobile not found after min-width: 960px"
-
-    def test_similar_mobile_card_img_has_poster_crop_ratio(self):
-        """.similar-mobile-card img block 含 var(--poster-crop-ratio)"""
-        css = self._css()
-        match = re.search(r'\.similar-mobile-card\s+img\s*\{([^}]+)\}', css)
-        assert match, "showcase.css: .similar-mobile-card img rule not found"
-        block = match.group(1)
-        assert "var(--poster-crop-ratio)" in block, \
-            ".similar-mobile-card img must contain var(--poster-crop-ratio)"
-
-    def test_similar_mobile_card_img_no_hardcoded_4_5(self):
-        """.similar-mobile-card img block 不含 4/5 硬編碼比例"""
-        css = self._css()
-        match = re.search(r'\.similar-mobile-card\s+img\s*\{([^}]+)\}', css)
-        assert match, "showcase.css: .similar-mobile-card img rule not found"
-        block = match.group(1)
-        assert "4/5" not in block, \
-            ".similar-mobile-card img must not contain hardcoded 4/5 (use var(--poster-crop-ratio))"
+        found = False
+        for m in re.finditer(r'@media\s*\(\s*min-width\s*:\s*960px\s*\)', css):
+            after = css[m.start():]
+            if "similar-mobile-panel" in after[:500]:
+                found = True
+                break
+        assert found, (
+            "showcase.css: @media (min-width: 960px) block must contain .similar-mobile-panel rule"
+        )
 
     def test_similar_slot_width_107(self):
         """.similar-slot rule block 含 width: 107px"""
@@ -12225,63 +12170,6 @@ class TestSimilarCssSafetyAndGridGuard:
         block = match.group(1)
         assert "width: 120px" not in block, \
             ".similar-slot block must not contain width: 120px (should be 107px)"
-
-    def test_similar_mobile_grid_repeat_4(self):
-        """.similar-mobile-grid block 含 repeat(4"""
-        css = self._css()
-        match = re.search(r'\.similar-mobile-grid\s*\{([^}]+)\}', css)
-        assert match, "showcase.css: .similar-mobile-grid selector not found"
-        block = match.group(1)
-        assert "repeat(4" in block, \
-            ".similar-mobile-grid must contain repeat(4, 1fr) grid-template-columns"
-
-    def test_similar_open_cover_height_override(self):
-        """@media (max-width: 960px) 含 similar-open 封面縮高規則（min(38vh + height: 40vh）"""
-        css = self._css()
-        # Find the max-width: 960px media block containing similar-open
-        match = re.search(r'@media\s*\(\s*max-width\s*:\s*960px\s*\)', css)
-        assert match, "showcase.css: @media (max-width: 960px) not found"
-        after = css[match.start():]
-        assert "similar-open" in after[:500], \
-            "@media (max-width: 960px) must contain .similar-open cover rule"
-        assert "min(38vh" in after[:500], \
-            "@media (max-width: 960px) similar-open must contain min(38vh cover override"
-        assert "height: 40vh" in after[:500], \
-            "@media (max-width: 960px) similar-open must contain height: 40vh override"
-
-    def test_similar_open_lb_full_outranks_t8(self):
-        """similar-open .lb-full selector 須用 compound 中間形式 .lightbox-cover .lb-full，
-        使 specificity 達 (0,4,0)，勝 T8 ≤480 的 .lightbox-cover:has(.lb-full) .lb-full (0,3,0)。
-        否則 source order 讓 T8 的 height:auto 在 ≤480px ∩ similar-open 覆寫 overlay → overlay 與
-        base 40vh 脫鉤/溢出。
-
-        mutation test：將 .lightbox-cover 中間節點移除（還原為裸 .lightbox-content.similar-open .lb-full）
-        → 此測試應轉紅（RED）。
-        """
-        css = self._css()
-        # Strip CSS comments so comment-only occurrences don't fool the assertions
-        css_no_comments = re.sub(r'/\*.*?\*/', '', css, flags=re.DOTALL)
-
-        # MUST: compound form with .lightbox-cover intermediate present
-        assert '.lightbox-content.similar-open .lightbox-cover .lb-full' in css_no_comments, (
-            "showcase.css: similar-open .lb-full selector must use compound form "
-            "'.lightbox-content.similar-open .lightbox-cover .lb-full' (specificity (0,4,0)) "
-            "to outrank T8's .lightbox-cover:has(.lb-full) .lb-full (0,3,0). "
-            "Without the .lightbox-cover intermediate, source order lets T8 height:auto win in "
-            "≤480px ∩ similar-open → overlay desyncs from base 40vh."
-        )
-
-        # MUST NOT: bare form without .lightbox-cover intermediate (would tie T8 at (0,3,0) and lose by source order)
-        # Match patterns like: ".lightbox-content.similar-open .lb-full {" or ",\n    .lightbox-content.similar-open .lb-full {"
-        bare_pattern = re.search(
-            r'\.lightbox-content\.similar-open\s+\.lb-full\s*[{,]',
-            css_no_comments
-        )
-        assert bare_pattern is None, (
-            "showcase.css: bare '.lightbox-content.similar-open .lb-full' selector found — "
-            "this ties T8 at (0,3,0) and loses by source order in ≤480px ∩ similar-open. "
-            "Use '.lightbox-content.similar-open .lightbox-cover .lb-full' (0,4,0) instead."
-        )
 
 
 # ============================================================================
@@ -12625,73 +12513,15 @@ class TestUS5PosterCropGhostCrossfade:
 class TestUS5VideoCoverFitMobile:
     """TASK-75b-T8：≤480px 影片燈箱封面以原圖比例呈現、消上下 letterbox 死白。
 
-    make-or-break（live 實證）：須同改 (a) img/.lb-full 尺寸法 + (b) 容器 min-*，
-    只改 img 空白會留在容器。scope :has(.lb-full) 只中影片、不波及女優 cover。
-    三問：刪容器 min-height:0 → 紅（make-or-break）；刪 img height:auto → 紅；
-    把 :has(.lb-full) 改裸 .lightbox-cover（會波及女優）→ scope 守衛紅。
+    83b-T2：T8 block（@media (max-width:899px) .lightbox-cover:has(.lb-full)）已移除；
+    相關守衛（test_video_cover_fit_media_block_exists / test_container_min_zeroed_gated_on_has_cover /
+    test_img_height_auto_width_full / test_scoped_to_has_lb_full_not_actress / test_similar_open_40vh_untouched）
+    全數退役（確認 RED 後刪除）。僅保留 has-cover HTML 旗標守衛。
     """
 
-    def _css(self):
-        return SHOWCASE_CSS.read_text(encoding="utf-8")
-
-    def _t8_block(self) -> str:
-        """抓含 .lightbox-cover:has(.lb-full) 的那個 @media (max-width: 899px) block。
-        T11（US-10）：燈箱封面貼合斷點由 ≤480 擴到 ≤899（對齊 poster-crop 門檻）。"""
-        css = self._css()
-        blocks = re.findall(r'@media \(max-width: 899px\) \{(.*?)\n\}', css, re.DOTALL)
-        target = [b for b in blocks if ".lightbox-cover:has(.lb-full)" in b]
-        assert target, "showcase.css 找不到含 .lightbox-cover:has(.lb-full) 的 ≤899px block（T8/T11 缺失）"
-        return target[0]
-
-    def test_video_cover_fit_media_block_exists(self):
-        block = self._t8_block()
-        assert ".lightbox-cover:has(.lb-full)" in block, "T8 block 應 scope 到 :has(.lb-full)"
-
-    def test_container_min_zeroed_gated_on_has_cover(self):
-        """make-or-break：容器 min-height/min-width 必須歸零（否則空白只是重新分配）。
-        Codex P2：容器 min-height:0 必須 gate 在 .has-cover——無封面影片若塌成 0 高、補封面入口會壞，
-        故 selector 必為 .lightbox-cover.has-cover:has(.lb-full)（非裸 :has(.lb-full)）。
-        三問：拿掉 .has-cover gate → 紅（無封面會塌）；拿掉 min-height:0 → 紅（留白未消）。
-        """
-        block = self._t8_block()
-        m = re.search(r'\.lightbox-cover\.has-cover:has\(\.lb-full\) \{([^}]*)\}', block)
-        assert m, "T8 容器規則須為 .lightbox-cover.has-cover:has(.lb-full)（Codex P2：min-height:0 須 gate has-cover）"
-        body = m.group(1)
-        assert "min-height: 0" in body, (
-            "容器須 min-height: 0（否則 min(58vh,460px) 主導、img 置中留白未消）—— make-or-break"
-        )
-        assert "min-width: 0" in body, "容器須 min-width: 0"
-
-    def test_img_height_auto_width_full(self):
-        """img + .lb-full 須 height:auto + width:100%（覆寫 60vh），且規則涵蓋 .lb-full。"""
-        block = self._t8_block()
-        m = re.search(
-            r'\.lightbox-cover:has\(\.lb-full\) img,\s*\.lightbox-cover:has\(\.lb-full\) \.lb-full \{([^}]*)\}',
-            block,
-        )
-        assert m, "T8 block 內找不到涵蓋 img + .lb-full 的尺寸規則"
-        body = m.group(1)
-        assert "height: auto" in body, "img/.lb-full 須 height: auto（覆寫 60vh）"
-        assert "width: 100%" in body, "img/.lb-full 須 width: 100%"
-
-    def test_scoped_to_has_lb_full_not_actress(self):
-        """scope 護欄：T8 block 不得出現裸 .lightbox-cover img 的 height:auto（會波及女優 cover）。"""
-        block = self._t8_block()
-        # 裸 .lightbox-cover img {（無 :has）出現在 block 內即危險
-        bare = re.search(r'(?<!\)) \.lightbox-cover img \{', block)
-        assert not bare, (
-            "T8 block 不得含裸 .lightbox-cover img 規則（無 :has(.lb-full)）—— 會波及女優燈箱封面"
-        )
-
-    def test_similar_open_40vh_untouched(self):
-        """回歸護欄：手機相似模式 similar-open 40vh / 38vh 規則仍在（未被 T8 波及）。"""
-        css = self._css()
-        assert "min(38vh, 290px)" in css, "similar-open 容器 min-height 規則應保留"
-        assert "height: 40vh" in css, "similar-open img/lb-full 40vh 規則應保留"
-
     def test_video_lightbox_cover_has_cover_class(self):
-        """Codex P2：影片燈箱 .lightbox-cover 須帶 has-cover 旗標（綁 cover_url），
-        供 T8 容器 min-height:0 只在有封面時生效。三問：拿掉旗標 → 紅（CSS gate 失效）。
+        """Codex P2：影片燈箱 .lightbox-cover 須帶 has-cover 旗標（綁 cover_url）。
+        三問：拿掉旗標 → 紅（CSS .lightbox-content .lightbox-cover.has-cover img 規則失效）。
         """
         html = SHOWCASE_HTML.read_text(encoding="utf-8")
         assert "'has-cover': !!currentLightboxVideo?.cover_url" in html, (
@@ -12905,16 +12735,22 @@ class TestUS9SearchGridMobileFix:
 
     # --- showcase 回歸護欄 ---
 
-    def test_showcase_t8_untouched(self):
-        """回歸護欄：T9 不動 showcase.css——showcase T8 block 仍在。
-        三問：T9 誤刪 showcase T8 container 規則 → 紅。
+    def test_showcase_modal_hug_untouched(self):
+        """回歸護欄：T9 不動 showcase.css——83b-T2 後 modal-hug 規則（.lightbox-content .lightbox-cover.has-cover img）仍在。
+        83b-T2：T8 block 已被 83b-T2 移除；modal-hug（gate 已移除）接管 width:100%。
+        三問：T9 誤刪 modal-hug img 規則 → 紅。
         """
         css = _SHOWCASE_CSS_T9.read_text(encoding="utf-8")
-        assert ".lightbox-cover.has-cover:has(.lb-full)" in css, (
-            "showcase.css T8 container 規則 .lightbox-cover.has-cover:has(.lb-full) 應保留（T9 不動 showcase.css）"
+        css_no_comments = re.sub(r'/\*.*?\*/', '', css, flags=re.DOTALL)
+        m = re.search(
+            r'\.lightbox-content\s+\.lightbox-cover\.has-cover\s+img\s*\{([^}]+)\}',
+            css_no_comments,
         )
-        assert "min-height: 0" in css, (
-            "showcase.css T8 min-height: 0 應保留（T9 回歸護欄）"
+        assert m, (
+            "showcase.css modal-hug img 規則應保留（83b-T2 接管 T8 的 width:100%，T9 不動 showcase.css）"
+        )
+        assert "width: 100%" in m.group(1), (
+            "showcase.css .lightbox-content .lightbox-cover.has-cover img block 缺 width: 100%（modal-hug 接管，T9 回歸護欄）"
         )
 
 
@@ -13209,52 +13045,6 @@ class TestMobileSimilarDrillFallbackGuard:
             f"當前函式體：\n{body[:400]}"
         )
 
-    def test_on_similar_mobile_card_click_has_videos_lookup(self):
-        """onSimilarMobileCardClick 函式體必須含 _videos 查找（tier 2 fallback）。
-        tier 2：被 filter 排除但仍在庫內的片用 _videos.findIndex 撈回完整 metadata。
-        """
-        js = self._similar_js()
-        body = self._extract_function_body(js, r'onSimilarMobileCardClick\s*\(')
-        assert body is not None, \
-            "state-similar.js 找不到 onSimilarMobileCardClick 函式宣告"
-        # 收緊：鎖 `_videos.findIndex` code-form，避免被註解中的 '_videos' vacuously 滿足
-        assert re.search(r'_videos\s*\.\s*findIndex', body), (
-            "onSimilarMobileCardClick 函式體未含 '_videos.findIndex' 查找。\n"
-            "tier 2 fallback（filter-subset 片）缺失，完整 metadata 撈不回，\n"
-            "被 filter 排除的片點擊後只能降級到 tier 3 snapshot 而非完整物件。\n"
-            f"當前函式體：\n{body[:400]}"
-        )
-
-    def test_on_similar_mobile_card_click_sets_similar_exit_video(self):
-        """onSimilarMobileCardClick 函式體必須含 similarExitVideo 指派（standalone 旗標）。
-        tier 2/3 fallback 路徑必須設置 similarExitVideo，確保 prev/next 禁用、close 不 fly-back。
-        """
-        js = self._similar_js()
-        body = self._extract_function_body(js, r'onSimilarMobileCardClick\s*\(')
-        assert body is not None, \
-            "state-similar.js 找不到 onSimilarMobileCardClick 函式宣告"
-        # 收緊：鎖 `similarExitVideo =` 賦值形，避免被註解中的字串 vacuously 滿足
-        assert re.search(r'similarExitVideo\s*=', body), (
-            "onSimilarMobileCardClick 函式體未含 'similarExitVideo =' 指派。\n"
-            "tier 2/3 standalone 旗標缺失：close 會飛回舊卡、prev/next 從舊 index 起跳（Codex P2a）。\n"
-            f"當前函式體：\n{body[:400]}"
-        )
-
-    def test_on_similar_mobile_card_click_calls_refresh_lb_full_blur_up(self):
-        """onSimilarMobileCardClick 函式體必須含 _refreshLbFullBlurUp 呼叫。
-        tier 2/3 路徑繞過 _setLightboxIndex，需手動觸發 blur-up reset + same-URL complete-check，
-        否則 overlay opacity:0 可能卡死。
-        """
-        js = self._similar_js()
-        body = self._extract_function_body(js, r'onSimilarMobileCardClick\s*\(')
-        assert body is not None, \
-            "state-similar.js 找不到 onSimilarMobileCardClick 函式宣告"
-        assert '_refreshLbFullBlurUp' in body, (
-            "onSimilarMobileCardClick 函式體未含 '_refreshLbFullBlurUp' 呼叫。\n"
-            "tier 2/3 slip-through 路徑缺 blur-up reset，.lb-full overlay opacity:0 可能卡死。\n"
-            f"當前函式體：\n{body[:400]}"
-        )
-
     def test_close_similar_mode_fallback_has_videos_tier(self):
         """closeSimilarMode 退場 fallback 必須與 onSimilarMobileCardClick 同採三層策略：
         _filteredVideos miss 後先查 _videos.findIndex（命中保完整 metadata + path），
@@ -13273,6 +13063,39 @@ class TestMobileSimilarDrillFallbackGuard:
         assert '_similarLastDrilledItem' in body, (
             "closeSimilarMode fallback 未保留 '_similarLastDrilledItem' snapshot（孤兒列 fallback）。\n"
             "_videos 也 miss（孤兒列 / demo）時需 snapshot 兜底，不可移除。"
+        )
+
+    def test_mobile_silent_switch_three_tier(self):
+        """_mobileSilentSwitch 函式體必須採 3-tier silent-switch（恢復退役的 onSimilarMobileCardClick 守衛之 contract）：
+        tier1 _silentSwitchLightboxByNumber（_filteredVideos 命中 → _setLightboxIndex）、
+        tier2 _videos.findIndex（庫內 standalone，setSimilarExitVideo）、
+        tier3 snapshot（_mobileLastDrilledItem 孤兒列 fallback）、
+        且 tier2/3 收尾呼叫 _refreshLbFullBlurUp（blur-up reset，否則 overlay opacity:0 卡死）。
+        """
+        js = self._similar_js()
+        # 錨定方法宣告（行首縮排 + 名稱，非 this._mobileSilentSwitch( 呼叫處）
+        body = self._extract_function_body(js, r'\n\s*_mobileSilentSwitch\s*\(')
+        assert body is not None, \
+            "state-similar.js 找不到 _mobileSilentSwitch 函式宣告"
+        # tier 1: _filteredVideos 命中走 _silentSwitchLightboxByNumber
+        assert '_silentSwitchLightboxByNumber' in body, (
+            "_mobileSilentSwitch 缺 tier1 '_silentSwitchLightboxByNumber'（_filteredVideos 命中路徑）。"
+        )
+        # tier 2: _videos.findIndex 撈庫內被 filter 排除片的完整 metadata
+        assert re.search(r'_videos\s*\.\s*findIndex', body), (
+            "_mobileSilentSwitch 缺 tier2 '_videos.findIndex'（庫內 standalone metadata 撈回）。"
+        )
+        # tier 2/3 設 similarExitVideo standalone 旗標
+        assert re.search(r'similarExitVideo\s*=', body), (
+            "_mobileSilentSwitch 缺 'similarExitVideo =' 指派（tier2/3 standalone 旗標，close 不 fly-back / prev-next 禁用）。"
+        )
+        # tier 3: snapshot 兜底（孤兒列 / demo）
+        assert '_mobileLastDrilledItem' in body, (
+            "_mobileSilentSwitch 缺 '_mobileLastDrilledItem' snapshot（tier3 孤兒列 fallback）。"
+        )
+        # tier 2/3 收尾：blur-up reset
+        assert '_refreshLbFullBlurUp' in body, (
+            "_mobileSilentSwitch 缺 '_refreshLbFullBlurUp' 呼叫（tier2/3 blur-up reset，否則 overlay opacity:0 卡死）。"
         )
 
 
@@ -14171,12 +13994,20 @@ class TestPosterCropThresholdAlignment:
 
     # ---- CSS 燈箱封面貼合 ----
     def test_showcase_lightbox_fit_covers_899(self):
-        """showcase.css 燈箱封面貼合（.lightbox-cover:has(.lb-full)）@media == max-width: 899px。"""
+        """showcase.css 燈箱封面貼合：83b-T2 後由 modal-hug 規則（.lightbox-content .lightbox-cover.has-cover img）
+        無條件提供 width:100%（不再依賴 @media max-width:899px T8 block）。
+        守衛改為確認 modal-hug img 規則存在且含 width:100%。
+        """
         css = T11_SHOWCASE_CSS.read_text(encoding="utf-8")
-        mw = self._css_media_max_width_for_selector(
-            css, ".lightbox-cover:has(.lb-full)", "showcase.css 燈箱貼合"
+        # 83b-T2 移除 T8 block，modal-hug 接管（無 @media gate）
+        assert ".lightbox-content .lightbox-cover.has-cover img" in css, (
+            "showcase.css modal-hug img 規則缺失（83b-T2 後應由此規則提供 width:100%）"
         )
-        assert mw == 899, f"showcase.css 燈箱貼合 @media max-width={mw}px，應為 899"
+        # 確認 img 規則內含 width:100%（strip comments 後查）
+        css_no_comments = re.sub(r'/\*.*?\*/', '', css, flags=re.DOTALL)
+        m = re.search(r'\.lightbox-content\s+\.lightbox-cover\.has-cover\s+img\s*\{([^}]+)\}', css_no_comments)
+        assert m, "showcase.css modal-hug img block 找不到"
+        assert "width: 100%" in m.group(1), "modal-hug img block 缺 width: 100%"
 
     def test_search_lightbox_fit_covers_899(self):
         """search.css 燈箱封面貼合（.search-container .lightbox-cover.has-cover）@media == max-width: 899px。"""
@@ -14201,10 +14032,11 @@ class TestPosterCropThresholdAlignment:
 
     # ---- 核心：跨 6 值單一對齊斷言 ----
     def test_all_thresholds_aligned_899(self):
-        """核心對齊守衛：2 JS 門檻 + 2 CSS 燈箱貼合 + 2 CSS poster grid 全部相等且 == 899。
+        """核心對齊守衛：2 JS 門檻 + search CSS 燈箱貼合 + 2 CSS poster grid 全部相等且 == 899。
 
-        鎖「posterCrop 門檻 == 燈箱貼合斷點 == poster grid 斷點 == 899」三位一體；
-        未來改任一值不同步即整段紅。
+        83b-T2：showcase.css T8 block（@media max-width:899px .lightbox-cover:has(.lb-full)）已移除；
+        showcase 燈箱貼合改由 modal-hug 無條件提供。核心對齊守衛去掉 showcase-lightbox-fit 維度，
+        保留其他 5 值（2 JS + 1 search CSS lightbox-fit + 2 poster grid）。
         """
         showcase_css = T11_SHOWCASE_CSS.read_text(encoding="utf-8")
         search_css = T11_SEARCH_CSS.read_text(encoding="utf-8")
@@ -14214,9 +14046,6 @@ class TestPosterCropThresholdAlignment:
             ),
             "js:search": self._js_poster_crop_threshold(
                 T11_GRID_MODE_JS, "grid-mode.js"
-            ),
-            "css:showcase-lightbox-fit": self._css_media_max_width_for_selector(
-                showcase_css, ".lightbox-cover:has(.lb-full)", "showcase.css 燈箱貼合"
             ),
             "css:search-lightbox-fit": self._css_media_max_width_for_selector(
                 search_css, ".search-container .lightbox-cover.has-cover", "search.css 燈箱貼合"
@@ -14375,6 +14204,7 @@ class TestSettingsCloseActionSelect:
 class TestLightboxModalHugContract:
     """83a-T2: 固化 T1/T1fix1 modal-hug 契約（8 條純加法守衛）
 
+    83b-T2：:not(.similar-open) gate 已移除，選擇器改為無條件形式。
     #1 has-cover 含 aspect-ratio:var(--lb-cover-ar)
     #2 has-cover 含 flex-shrink:0（防 T1 letterbox 主因回歸）
     #3 has-cover 含 min-width:0 AND min-height:0
@@ -14394,23 +14224,25 @@ class TestLightboxModalHugContract:
         return SHOWCASE_LIGHTBOX_JS.read_text(encoding="utf-8")
 
     def _has_cover_block(self, css):
-        """擷取 .lightbox-content:not(.similar-open) .lightbox-cover.has-cover { ... } 塊內容"""
+        """擷取 .lightbox-content .lightbox-cover.has-cover { ... } 塊內容
+        （83b-T2 後：:not(.similar-open) gate 移除）
+        """
         m = re.search(
-            r'\.lightbox-content:not\(\.similar-open\)\s+\.lightbox-cover\.has-cover\s*\{([^}]*)\}',
+            r'\.lightbox-content\s+\.lightbox-cover\.has-cover\s*\{([^}]*)\}',
             css, re.DOTALL
         )
         return m.group(1) if m else None
 
     def _has_cover_img_block(self, css):
         m = re.search(
-            r'\.lightbox-content:not\(\.similar-open\)\s+\.lightbox-cover\.has-cover\s+img\s*\{([^}]*)\}',
+            r'\.lightbox-content\s+\.lightbox-cover\.has-cover\s+img\s*\{([^}]*)\}',
             css, re.DOTALL
         )
         return m.group(1) if m else None
 
     def _has_cover_lb_full_block(self, css):
         m = re.search(
-            r'\.lightbox-content:not\(\.similar-open\)\s+\.lightbox-cover\.has-cover\s+\.lb-full\s*\{([^}]*)\}',
+            r'\.lightbox-content\s+\.lightbox-cover\.has-cover\s+\.lb-full\s*\{([^}]*)\}',
             css, re.DOTALL
         )
         return m.group(1) if m else None
@@ -14423,7 +14255,7 @@ class TestLightboxModalHugContract:
         """modal-hug 主規則含 aspect-ratio:var(--lb-cover-ar)（無此行盒不跟圖比例）"""
         block = self._has_cover_block(self._css())
         assert block is not None, (
-            "showcase.css 找不到 .lightbox-content:not(.similar-open) .lightbox-cover.has-cover 規則"
+            "showcase.css 找不到 .lightbox-content .lightbox-cover.has-cover 規則（83b-T2 後 gate 已移除）"
         )
         assert re.search(r'aspect-ratio\s*:\s*var\(--lb-cover-ar', block), (
             ".lightbox-cover.has-cover 缺少 aspect-ratio: var(--lb-cover-ar)（modal-hug 核心）"
@@ -14433,7 +14265,7 @@ class TestLightboxModalHugContract:
         """.lightbox-cover.has-cover 含 flex-shrink:0（T1 letterbox 主 bug 的修正守衛）"""
         block = self._has_cover_block(self._css())
         assert block is not None, (
-            "showcase.css 找不到 .lightbox-content:not(.similar-open) .lightbox-cover.has-cover 規則"
+            "showcase.css 找不到 .lightbox-content .lightbox-cover.has-cover 規則（83b-T2 後 gate 已移除）"
         )
         assert re.search(r'flex-shrink\s*:\s*0', block), (
             ".lightbox-cover.has-cover 缺少 flex-shrink:0（此為 T1 letterbox 主 bug 的修正守衛）"
@@ -14443,7 +14275,7 @@ class TestLightboxModalHugContract:
         """.lightbox-cover.has-cover 含 min-width:0 且 min-height:0（floor 歸零讓 AR 完整掌控尺寸）"""
         block = self._has_cover_block(self._css())
         assert block is not None, (
-            "showcase.css 找不到 .lightbox-content:not(.similar-open) .lightbox-cover.has-cover 規則"
+            "showcase.css 找不到 .lightbox-content .lightbox-cover.has-cover 規則（83b-T2 後 gate 已移除）"
         )
         assert re.search(r'min-width\s*:\s*0', block), ".lightbox-cover.has-cover 缺少 min-width:0"
         assert re.search(r'min-height\s*:\s*0', block), ".lightbox-cover.has-cover 缺少 min-height:0"
@@ -14452,7 +14284,7 @@ class TestLightboxModalHugContract:
         """width formula 含 90dvh 且整塊不含 100dvh/100vh（T1fix1 FHD 捲動修正）"""
         block = self._has_cover_block(self._css())
         assert block is not None, (
-            "showcase.css 找不到 .lightbox-content:not(.similar-open) .lightbox-cover.has-cover 規則"
+            "showcase.css 找不到 .lightbox-content .lightbox-cover.has-cover 規則（83b-T2 後 gate 已移除）"
         )
         assert '90dvh' in block, (
             ".lightbox-cover.has-cover width formula 缺少 90dvh（T1fix1 FHD 捲動修正）"
@@ -14468,7 +14300,7 @@ class TestLightboxModalHugContract:
         """.has-cover img 填滿盒（position:absolute + width/height:100%）"""
         block = self._has_cover_img_block(self._css())
         assert block is not None, (
-            "showcase.css 找不到 .lightbox-content:not(.similar-open) .lightbox-cover.has-cover img 規則"
+            "showcase.css 找不到 .lightbox-content .lightbox-cover.has-cover img 規則（83b-T2 後 gate 已移除）"
         )
         assert re.search(r'position\s*:\s*absolute', block), ".has-cover img 缺少 position:absolute"
         assert re.search(r'width\s*:\s*100%', block), ".has-cover img 缺少 width:100%"
@@ -14478,7 +14310,7 @@ class TestLightboxModalHugContract:
         """.has-cover .lb-full 填滿盒（width/height:100% + margin:0）"""
         block = self._has_cover_lb_full_block(self._css())
         assert block is not None, (
-            "showcase.css 找不到 .lightbox-content:not(.similar-open) .lightbox-cover.has-cover .lb-full 規則"
+            "showcase.css 找不到 .lightbox-content .lightbox-cover.has-cover .lb-full 規則（83b-T2 後 gate 已移除）"
         )
         assert re.search(r'width\s*:\s*100%', block), ".has-cover .lb-full 缺少 width:100%"
         assert re.search(r'height\s*:\s*100%', block), ".has-cover .lb-full 缺少 height:100%"
@@ -14784,4 +14616,329 @@ class TestSearchDetailCoverFixContract:
         assert re.search(r'overflow\s*:\s*visible', block), (
             "≤1024px .search-container .av-card-full-cover 缺少 overflow:visible"
             "（Bug A mobile：max-height:50vh+overflow:hidden 截 sample-strip 會回歸）"
+        )
+
+
+# ============================================================================
+# TASK-83b-T2: Mobile Similar Panel Contract Guards（13 條）
+# 鎖住 T1 建立的行動相似面板合約：CSS default-hidden、safety-net、scrim、burst-card、
+# JS drill-lock、no-desktop-close、picker-params、matchMedia、keydown intercept。
+# ============================================================================
+
+_T2_SHOWCASE_HTML = Path(__file__).parent.parent.parent / "web" / "templates" / "showcase.html"
+_T2_SHOWCASE_CSS = Path(__file__).parent.parent.parent / "web" / "static" / "css" / "pages" / "showcase.css"
+_T2_SIMILAR_JS = (
+    Path(__file__).parent.parent.parent
+    / "web" / "static" / "js" / "pages" / "showcase" / "state-similar.js"
+)
+_T2_LIGHTBOX_JS = (
+    Path(__file__).parent.parent.parent
+    / "web" / "static" / "js" / "pages" / "showcase" / "state-lightbox.js"
+)
+_T2_BASE_JS = (
+    Path(__file__).parent.parent.parent
+    / "web" / "static" / "js" / "pages" / "showcase" / "state-base.js"
+)
+_T2_BURST_PICKER_JS = (
+    Path(__file__).parent.parent.parent
+    / "web" / "static" / "js" / "shared" / "burst-picker.js"
+)
+
+
+class TestMobileSimilarPanelContractGuard:
+    """TASK-83b-T2: 行動相似面板（.similar-mobile-panel）13 條合約守衛。
+
+    鎖住 T1 建立的 CSS / HTML / JS 合約，防回歸。
+    每條 guard 均 mutation-detectable：刪除對應實作即 RED。
+    """
+
+    @staticmethod
+    def _html():
+        return _T2_SHOWCASE_HTML.read_text(encoding="utf-8")
+
+    @staticmethod
+    def _css():
+        return _T2_SHOWCASE_CSS.read_text(encoding="utf-8")
+
+    @staticmethod
+    def _similar_js():
+        return _T2_SIMILAR_JS.read_text(encoding="utf-8")
+
+    @staticmethod
+    def _lightbox_js():
+        return _T2_LIGHTBOX_JS.read_text(encoding="utf-8")
+
+    @staticmethod
+    def _base_js():
+        return _T2_BASE_JS.read_text(encoding="utf-8")
+
+    @staticmethod
+    def _extract_function_body(js, func_pattern):
+        """大括號平衡法擷取函式體。"""
+        m = re.search(func_pattern, js)
+        if not m:
+            return None
+        start = m.start()
+        body_start = js.index('{', start)
+        depth = 0
+        for i, ch in enumerate(js[body_start:], body_start):
+            if ch == '{':
+                depth += 1
+            elif ch == '}':
+                depth -= 1
+                if depth == 0:
+                    return js[body_start:i + 1]
+        return None
+
+    # ── 1. CSS default-hidden + .show visible ──────────────────────────────
+
+    def test_mobile_panel_default_hidden(self):
+        """.similar-mobile-panel 存在於 HTML；CSS 含 default-hidden（opacity:0/visibility:hidden/
+        pointer-events:none）+ .show block（opacity:1/visibility:visible/pointer-events:auto）。"""
+        html = self._html()
+        assert 'class="similar-mobile-panel"' in html, \
+            "showcase.html 缺 .similar-mobile-panel div"
+        css = self._css()
+        # default-hidden block（strip CSS comment 後查，commented-out 行也應 RED）
+        m_panel = re.search(r'\.similar-mobile-panel\s*\{([^}]+)\}', css, re.DOTALL)
+        assert m_panel, "showcase.css 缺 .similar-mobile-panel default-hidden block"
+        block = re.sub(r'/\*.*?\*/', '', m_panel.group(1), flags=re.DOTALL)
+        assert "opacity: 0" in block, \
+            ".similar-mobile-panel block 缺 opacity: 0（FOUC 防護）"
+        assert "visibility: hidden" in block, \
+            ".similar-mobile-panel block 缺 visibility: hidden"
+        assert "pointer-events: none" in block, \
+            ".similar-mobile-panel block 缺 pointer-events: none"
+        # .show block
+        m_show = re.search(r'\.similar-mobile-panel\.show\s*\{([^}]+)\}', css, re.DOTALL)
+        assert m_show, "showcase.css 缺 .similar-mobile-panel.show block"
+        show_block = re.sub(r'/\*.*?\*/', '', m_show.group(1), flags=re.DOTALL)
+        assert "opacity: 1" in show_block, \
+            ".similar-mobile-panel.show 缺 opacity: 1"
+        assert "visibility: visible" in show_block, \
+            ".similar-mobile-panel.show 缺 visibility: visible"
+        assert "pointer-events: auto" in show_block, \
+            ".similar-mobile-panel.show 缺 pointer-events: auto"
+
+    # ── 2. Desktop safety net ───────────────────────────────────────────────
+
+    def test_mobile_panel_desktop_safety_net(self):
+        """showcase.css @media (min-width:960px) 內含 similar-mobile-panel + display:none（桌面安全網）。"""
+        css = self._css()
+        # 找含 similar-mobile-panel 的那個 @media (min-width:960px) block（可能有多個同斷點）
+        found = False
+        for m in re.finditer(r'@media\s*\(\s*min-width\s*:\s*960px\s*\)', css):
+            window = css[m.start():m.start() + 500]
+            if "similar-mobile-panel" in window and "display: none" in window:
+                found = True
+                break
+        assert found, (
+            "showcase.css 缺含 similar-mobile-panel + display:none 的 @media (min-width: 960px) block"
+            "（桌面安全網缺失，面板在桌面可能顯示）"
+        )
+
+    # ── 3. HTML x-trap ─────────────────────────────────────────────────────
+
+    def test_mobile_panel_has_x_trap(self):
+        """showcase.html .similar-mobile-panel block 含 x-trap.inert=\"similarModeMobileOpen\"。"""
+        html = self._html()
+        # 找 .similar-mobile-panel div 開始的 block
+        m = re.search(r'class="similar-mobile-panel"[^>]*>(.*?)</div>', html, re.DOTALL)
+        # 寬鬆：直接全文搜尋（similar-mobile-panel 唯一，不會誤中）
+        idx_panel = html.find('class="similar-mobile-panel"')
+        assert idx_panel != -1, "showcase.html 缺 similar-mobile-panel"
+        # x-trap 必須在 panel div 開啟標籤附近（同一 tag attribute）
+        panel_tag_end = html.index('>', idx_panel)
+        panel_opening_tag = html[idx_panel:panel_tag_end + 1]
+        assert 'x-trap.inert="similarModeMobileOpen"' in panel_opening_tag, \
+            "similar-mobile-panel div 開啟標籤缺 x-trap.inert=\"similarModeMobileOpen\""
+
+    # ── 4. Lightbox trap yields to mobile panel ─────────────────────────────
+
+    def test_mobile_panel_lightbox_trap_yields(self):
+        """showcase.html lightbox x-trap.inert 含 similarModeMobileOpen 條件（!similarModeMobileOpen）。
+        面板開時 trap 釋放給面板（防焦點被困在 lightbox）。
+        """
+        html = self._html()
+        # 錨定含 deleteVideoModalOpen 的那條（lightbox x-trap，T2 rewrite 後的錨點）
+        m = re.search(r'x-trap\.inert="([^"]*deleteVideoModalOpen[^"]*)"', html)
+        assert m, "showcase.html 缺含 deleteVideoModalOpen 的 x-trap.inert 行（lightbox trap）"
+        expr = m.group(1)
+        assert "similarModeMobileOpen" in expr, \
+            f"lightbox x-trap.inert 未含 similarModeMobileOpen: {expr!r}"
+        assert "!similarModeMobileOpen" in expr, \
+            f"lightbox x-trap.inert 缺 !similarModeMobileOpen（面板開時 trap 未釋放）: {expr!r}"
+
+    # ── 5. Burst card CSS ───────────────────────────────────────────────────
+
+    def test_mobile_burst_card_class_exists(self):
+        """.similar-mobile-burst-card block 存在；含 opacity:0、position:relative、transition:none。"""
+        css = self._css()
+        m = re.search(r'\.similar-mobile-burst-card\s*\{([^}]+)\}', css, re.DOTALL)
+        assert m, "showcase.css 缺 .similar-mobile-burst-card block（T1 burst card CSS 未被誤刪）"
+        block = re.sub(r'/\*.*?\*/', '', m.group(1), flags=re.DOTALL)
+        assert "opacity: 0" in block, \
+            ".similar-mobile-burst-card 缺 opacity: 0（GSAP-only，防 1-frame paint glitch）"
+        assert "position: relative" in block, \
+            ".similar-mobile-burst-card 缺 position: relative"
+        assert "transition: none" in block, \
+            ".similar-mobile-burst-card 缺 transition: none（GSAP-only）"
+
+    def test_mobile_burst_card_img_poster_crop(self):
+        """.similar-mobile-burst-card img block 含 aspect-ratio:var(--poster-crop-ratio)（單一真理、禁硬編碼）
+        + object-position:right center（右半裁切）。
+        恢復退役的 test_similar_mobile_card_img_has_poster_crop_ratio / _no_hardcoded_4_5 之 contract。
+        """
+        css = self._css()
+        m = re.search(r'\.similar-mobile-burst-card\s+img\s*\{([^}]+)\}', css, re.DOTALL)
+        assert m, "showcase.css 缺 .similar-mobile-burst-card img block"
+        block = re.sub(r'/\*.*?\*/', '', m.group(1), flags=re.DOTALL)
+        assert "aspect-ratio: var(--poster-crop-ratio)" in block, (
+            ".similar-mobile-burst-card img 缺 aspect-ratio: var(--poster-crop-ratio)（單一真理，禁硬編碼比例）"
+        )
+        assert "4/5" not in block, \
+            ".similar-mobile-burst-card img 不得含硬編碼 4/5（應用 var(--poster-crop-ratio)）"
+        assert "object-position: right center" in block, (
+            ".similar-mobile-burst-card img 缺 object-position: right center（右半裁切）"
+        )
+
+    # ── 6. Scrim blur token ─────────────────────────────────────────────────
+
+    def test_mobile_panel_scrim_blur_token(self):
+        """.similar-mobile-scrim 含 var(--fluent-blur)（不硬編碼 px）且含 -webkit-backdrop-filter。"""
+        css = self._css()
+        m = re.search(r'\.similar-mobile-scrim\s*\{([^}]+)\}', css, re.DOTALL)
+        assert m, "showcase.css 缺 .similar-mobile-scrim block"
+        block = m.group(1)
+        assert "var(--fluent-blur)" in block, \
+            ".similar-mobile-scrim backdrop-filter 必須用 var(--fluent-blur)（禁硬編碼 px）"
+        assert "-webkit-backdrop-filter" in block, \
+            ".similar-mobile-scrim 缺 -webkit-backdrop-filter（Safari fallback）"
+
+    # ── 7. Drill lock before await ──────────────────────────────────────────
+
+    def test_mobile_drill_lock_before_await(self):
+        """onMobileDrillClick 函式體在首個 await keyword 之前有 similarModeAnimating = true（lock-before-await）。"""
+        js = self._similar_js()
+        body = self._extract_function_body(js, r'async\s+onMobileDrillClick\s*\(')
+        assert body is not None, \
+            "state-similar.js 找不到 onMobileDrillClick 函式宣告"
+        # 去掉 // 單行 comment 和 /* */ 多行 comment，避免 "lock-before-await" 誤中
+        body_no_comments = re.sub(r'//[^\n]*', '', body)
+        body_no_comments = re.sub(r'/\*.*?\*/', '', body_no_comments, flags=re.DOTALL)
+        # 找首個 await 作為 JS 關鍵字（空白/符號前置，非 -await 形式）
+        m_await = re.search(r'(?<![A-Za-z0-9_$-])\bawait\b', body_no_comments)
+        assert m_await is not None, "onMobileDrillClick 函式體找不到 await keyword（非 async 路徑？）"
+        pre_await = body_no_comments[:m_await.start()]
+        assert "similarModeAnimating = true" in pre_await, (
+            "onMobileDrillClick 在首個 await keyword 之前缺 similarModeAnimating = true（lock-before-await 缺失，"
+            "連點空窗導致並發進入）"
+        )
+
+    # ── 8. closeMobilePanel does NOT call closeSimilarMode ──────────────────
+
+    def test_mobile_panel_no_call_desktop_closeSimilarMode(self):
+        """state-similar.js closeMobilePanel 函式體不含 closeSimilarMode() 呼叫（CD-4 / R3 防凍結）。
+        注：去掉 comment 後檢查（comment 中提及 closeSimilarMode 做對比說明是合法的）。
+        """
+        js = self._similar_js()
+        body = self._extract_function_body(js, r'closeMobilePanel\s*\(\s*\)\s*\{')
+        assert body is not None, \
+            "state-similar.js 找不到 closeMobilePanel 函式宣告"
+        # 去掉 comment，避免說明性文字（如 mirror closeSimilarMode）誤觸
+        body_no_comments = re.sub(r'//[^\n]*', '', body)
+        body_no_comments = re.sub(r'/\*.*?\*/', '', body_no_comments, flags=re.DOTALL)
+        assert "closeSimilarMode" not in body_no_comments, (
+            "closeMobilePanel 函式體含 closeSimilarMode() 呼叫（非 comment）！"
+            "CD-4/R3：桌面 close 在 similarCards={} 時 await playExit 永不 resolve → 凍結"
+        )
+
+    # ── 9. Burst card count = 6 ─────────────────────────────────────────────
+
+    def test_mobile_burst_card_count_6(self):
+        """state-similar.js _openMobilePanel 函式體含 slice(0, 6)（CD-6 固定 6 張）。"""
+        js = self._similar_js()
+        body = self._extract_function_body(js, r'async\s+_openMobilePanel\s*\(')
+        assert body is not None, \
+            "state-similar.js 找不到 _openMobilePanel 函式宣告"
+        assert "slice(0, 6)" in body, (
+            "_openMobilePanel 函式體缺 slice(0, 6)（CD-6：行動面板固定 6 張，不多不少）"
+        )
+
+    # ── 10. Uses own picker params ───────────────────────────────────────────
+
+    def test_mobile_uses_own_picker_params(self):
+        """state-similar.js 含 _MOBILE_PICKER_PARAMS local const 定義；
+        且程式碼（非 comment）中不含裸 _PICKER_PARAMS 字串（不直接引用 state-lightbox 的 private const）。
+        """
+        js = self._similar_js()
+        assert "_MOBILE_PICKER_PARAMS" in js, \
+            "state-similar.js 缺 _MOBILE_PICKER_PARAMS（行動面板專屬 picker params 未定義）"
+        # const 定義（不只是字串使用）
+        assert re.search(r'const\s+_MOBILE_PICKER_PARAMS', js), \
+            "state-similar.js 缺 const _MOBILE_PICKER_PARAMS 定義"
+        # 去掉 comment，再去掉 _MOBILE_PICKER_PARAMS，剩下若有 _PICKER_PARAMS 即裸引用
+        js_no_comments = re.sub(r'//[^\n]*', '', js)
+        js_no_comments = re.sub(r'/\*.*?\*/', '', js_no_comments, flags=re.DOTALL)
+        js_stripped = js_no_comments.replace("_MOBILE_PICKER_PARAMS", "")
+        assert "_PICKER_PARAMS" not in js_stripped, (
+            "state-similar.js 程式碼（非 comment）含裸 _PICKER_PARAMS 引用（state-lightbox private const，"
+            "直接引用在 stateSimilar 作用域會 ReferenceError）"
+        )
+
+    # ── 11. matchMedia 960 reset ─────────────────────────────────────────────
+
+    def test_mobile_panel_matchmedia_960(self):
+        """state-base.js 含 matchMedia + 960 + similarModeMobileOpen + closeMobilePanel（D12 reset）。"""
+        js = self._base_js()
+        assert "matchMedia" in js, "state-base.js 缺 matchMedia（D12 breakpoint reset 未實作）"
+        assert "960" in js, "state-base.js 缺 960（matchMedia 960px breakpoint）"
+        assert "similarModeMobileOpen" in js, \
+            "state-base.js 缺 similarModeMobileOpen（D12 reset 條件缺失）"
+        assert "closeMobilePanel" in js, \
+            "state-base.js 缺 closeMobilePanel 呼叫（D12 reset 動作缺失）"
+
+    # ── 12. burst-picker back.out exists, no 1.7 pinned ─────────────────────
+
+    def test_burst_picker_back_out_exists_no_1_7_pinned(self):
+        """burst-picker.js 含 back.out；且 guard 自身不 pin 具體 1.7 值（CD-11：doc/code drift）。"""
+        js = _T2_BURST_PICKER_JS.read_text(encoding="utf-8")
+        assert "back.out" in js, \
+            "burst-picker.js 缺 back.out（爆射 overshoot ease 未使用）"
+        # guard 自身不 assert 1.7（CD-11：不把 1.7 寫進守衛，避免文件/code drift）
+        # 只守 back.out 存在；具體值由 arcOvershoot param 決定，不硬鎖
+        # 反向：確保 burst-picker.js 仍用動態 arcOvershoot（非硬編碼 1.7 字串）
+        assert "arcOvershoot" in js, \
+            "burst-picker.js 缺 arcOvershoot param（back.out 值應來自 param，非硬編碼）"
+
+    # ── 13. Keydown intercept ────────────────────────────────────────────────
+
+    def test_mobile_panel_keydown_intercept(self):
+        """state-lightbox.js handleKeydown 函式體含 similarModeMobileOpen 條件分支 + closeMobilePanel。
+        且 similarModeMobileOpen guard block 不含 closeLightbox / prevLightboxVideo / nextLightboxVideo
+        （CD-7/D10：Esc 不關 lightbox，箭頭不切片）。
+        """
+        js = self._lightbox_js()
+        body = self._extract_function_body(js, r'handleKeydown\s*\(')
+        assert body is not None, \
+            "state-lightbox.js 找不到 handleKeydown 函式宣告"
+        assert "similarModeMobileOpen" in body, \
+            "handleKeydown 函式體缺 similarModeMobileOpen 條件（面板開時未攔截鍵盤）"
+        assert "closeMobilePanel" in body, \
+            "handleKeydown 函式體缺 closeMobilePanel 呼叫（Esc 未關行動面板）"
+        # 找 similarModeMobileOpen guard block，確認 block 不含 closeLightbox/prev/next
+        m = re.search(
+            r'if\s*\(\s*this\.similarModeMobileOpen\s*\)\s*\{([^}]*(?:\{[^}]*\}[^}]*)*)\}',
+            body, re.DOTALL
+        )
+        assert m, "handleKeydown 缺 if (this.similarModeMobileOpen) { ... } block"
+        guard_block = m.group(1)
+        assert "closeLightbox" not in guard_block, (
+            "handleKeydown similarModeMobileOpen block 含 closeLightbox()（Esc 不得關 lightbox，CD-7）"
+        )
+        assert "prevLightboxVideo" not in guard_block, (
+            "handleKeydown similarModeMobileOpen block 含 prevLightboxVideo（箭頭不得切片，D10）"
+        )
+        assert "nextLightboxVideo" not in guard_block, (
+            "handleKeydown similarModeMobileOpen block 含 nextLightboxVideo（箭頭不得切片，D10）"
         )
