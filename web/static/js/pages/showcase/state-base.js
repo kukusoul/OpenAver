@@ -273,6 +273,22 @@ export function stateBase() {
             }
             window.addEventListener('scroll', _scrollHandler, { passive: true })
             this._scrollHideHandler = _scrollHandler
+
+            // T2: 有效搜尋時 header icon 切換為 X
+            this.$watch('search', val => {
+                Alpine.store('ui').showcaseHasSearch = (val !== '' || this.actressSearch !== '')
+            })
+            this.$watch('actressSearch', val => {
+                Alpine.store('ui').showcaseHasSearch = (this.search !== '' || val !== '')
+            })
+        },
+
+        clearSearch() {
+            this.search = ''
+            this.actressSearch = ''
+            this.onSearchChange()
+            this.onActressSearchChange()
+            Alpine.store('ui').toolbarOpen = false
         },
 
         // --- 狀態恢復 (M2c) ---

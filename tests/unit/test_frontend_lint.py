@@ -13429,19 +13429,21 @@ class TestMobileToolbarToggle:
         return BASE_HTML_T76.read_text(encoding="utf-8")
 
     def test_store_registered_in_alpine_init(self):
-        """base.html 在 alpine:init 監聽內註冊 Alpine.store('ui', { toolbarOpen: false })。"""
+        """base.html 在 alpine:init 監聽內註冊 Alpine.store('ui', { toolbarOpen: false, showcaseHasSearch: false })。"""
         html = self._base()
         assert "alpine:init" in html, "base.html missing alpine:init listener"
         assert "Alpine.store('ui'" in html, "base.html missing Alpine.store('ui') registration"
         assert "toolbarOpen" in html, "base.html missing toolbarOpen store field"
+        # T2: showcaseHasSearch 欄位必須在同一 store 定義內
+        assert "showcaseHasSearch" in html, "base.html missing showcaseHasSearch store field"
         # 註冊字串與 alpine:init 監聽同段（store 註冊掛在 alpine:init callback 內）
         assert re.search(
             r"alpine:init['\"]\s*,\s*\(\)\s*=>\s*\{\s*Alpine\.store\(\s*['\"]ui['\"]\s*,\s*\{\s*toolbarOpen:\s*false",
             html,
-        ), "base.html: Alpine.store('ui', { toolbarOpen: false }) 須在 alpine:init callback 內註冊"
+        ), "base.html: Alpine.store('ui', { toolbarOpen: false ... }) 須在 alpine:init callback 內註冊"
 
     def test_navbar_search_button(self):
-        """navbar 搜尋 button：navbar-search-btn + lg:hidden + bi-search + @click 翻轉 $store.ui.toolbarOpen。"""
+        """navbar 搜尋 button：navbar-search-btn + lg:hidden + bi-search + @click 條件分支（T2）。"""
         from bs4 import BeautifulSoup
         html = self._base()
         btns = BeautifulSoup(html, "html.parser").select("button.navbar-search-btn")
@@ -13449,11 +13451,17 @@ class TestMobileToolbarToggle:
         btn = btns[0]
         classes = btn.get("class", [])
         assert "lg:hidden" in classes, "navbar-search-btn 須有 lg:hidden（≤1023px gate）"
-        icons = btn.select("i.bi.bi-search")
-        assert icons, "navbar-search-btn 內須有 <i class='bi bi-search'>"
+        # T2: icon 改為 Alpine 動態 :class 綁定，BS4 CSS selector 無法匹配；改用字串檢查
+        btn_html = str(btn)
+        assert "bi-search" in btn_html, "navbar-search-btn 內須包含 bi-search（靜態 class 或動態 :class 均可）"
         click = btn.get("@click", "")
+        # T2: @click 改為條件分支 — showcaseHasSearch 判斷 + dispatch + toolbarOpen 仍在 else 分支
+        assert "$store.ui.showcaseHasSearch" in click, \
+            f"navbar-search-btn @click 須包含 $store.ui.showcaseHasSearch 條件（實得 {click!r}）"
+        assert "showcase:clear-search" in click, \
+            f"navbar-search-btn @click 須 dispatch showcase:clear-search（實得 {click!r}）"
         assert "$store.ui.toolbarOpen" in click, \
-            f"navbar-search-btn @click 須翻轉 $store.ui.toolbarOpen（實得 {click!r}）"
+            f"navbar-search-btn @click 須包含 $store.ui.toolbarOpen（else 分支保留舊行為，實得 {click!r}）"
 
     def test_navbar_search_button_jinja_gated(self):
         """搜尋 button 被 {% if page == 'showcase' %} Jinja gate（僅 showcase 渲染，不含 search）。"""

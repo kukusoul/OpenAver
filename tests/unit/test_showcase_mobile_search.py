@@ -43,3 +43,50 @@ class TestShowcaseScrollCollapse:
         content = self._read_state_base()
         assert "removeEventListener" in content
         assert "_scrollHideHandler" in content
+
+
+class TestShowcaseHeaderSearchIcon:
+    """T2: Showcase header 行動搜尋 icon 在有搜尋時顯示 X"""
+
+    def _read_base_html(self):
+        return Path("web/templates/base.html").read_text()
+
+    def _read_showcase_html(self):
+        return Path("web/templates/showcase.html").read_text()
+
+    def _read_state_base(self):
+        return Path("web/static/js/pages/showcase/state-base.js").read_text()
+
+    def _read_state_lightbox(self):
+        return Path("web/static/js/pages/showcase/state-lightbox.js").read_text()
+
+    def test_store_has_showcase_has_search(self):
+        """$store.ui 必須包含 showcaseHasSearch 欄位"""
+        content = self._read_base_html()
+        assert "showcaseHasSearch" in content
+
+    def test_button_dispatches_clear_search(self):
+        """navbar button 在有搜尋時必須 dispatch showcase:clear-search"""
+        content = self._read_base_html()
+        assert "showcase:clear-search" in content
+
+    def test_showcase_has_window_listener(self):
+        """showcase.html 必須有 @showcase:clear-search.window listener"""
+        content = self._read_showcase_html()
+        assert "showcase:clear-search" in content
+
+    def test_search_from_metadata_sets_this_search(self):
+        """searchFromMetadata 必須仍設 this.search（防止重構靜默斷開 showcaseHasSearch 路徑）"""
+        content = self._read_state_lightbox()
+        assert "this.search = " in content
+
+    def test_watch_search_updates_showcase_has_search(self):
+        """state-base.js 必須有 $watch('search') 更新 showcaseHasSearch（mutation guard）"""
+        content = self._read_state_base()
+        assert "$watch('search'" in content or '$watch("search"' in content
+        assert "showcaseHasSearch" in content
+
+    def test_watch_actress_search_updates_showcase_has_search(self):
+        """state-base.js 必須有 $watch('actressSearch') 更新 showcaseHasSearch（mutation guard）"""
+        content = self._read_state_base()
+        assert "$watch('actressSearch'" in content or '$watch("actressSearch"' in content
