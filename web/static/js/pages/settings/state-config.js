@@ -403,6 +403,7 @@ export function stateConfig() {
         },
 
         requestServerModeChange(val) {
+            if (this.serverMode === val) return;  // 同模式不觸發確認
             this.serverModeConfirmValue = val;
             this.serverModeConfirmOpen = true;
         },

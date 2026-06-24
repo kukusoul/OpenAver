@@ -18,7 +18,9 @@ class TestServerModeConfirm:
         return Path("locales/zh_TW.json").read_text()
 
     def test_button_click_uses_request_server_mode_change(self):
-        """settings.html 按鈕必須改用 requestServerModeChange（不再直接 setServerMode）"""
+        """settings.html 按鈕必須改用 requestServerModeChange（不再直接 setServerMode）
+        [transient-guard] setServerMode 直呼叫遷移至 requestServerModeChange，milestone 前刪除負向 assert。
+        """
         content = self._read_settings_html()
         assert "requestServerModeChange(false)" in content
         assert "requestServerModeChange(true)" in content
