@@ -490,5 +490,5 @@ async def trigger_update():
             )
     except Exception as e:
         logger.error("trigger-update 啟動外部終端失敗: %s", e)
-        raise HTTPException(status_code=500, detail="trigger_failed")
+        raise HTTPException(status_code=500, detail="trigger_failed") from e
     return {"success": True}
