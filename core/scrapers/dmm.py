@@ -394,7 +394,7 @@ class DMMScraper(BaseScraper):
             ofje00709   → OFJE-709
             abp01234    → ABP-1234
         """
-        m = re.match(r'^(\d*)([a-z]+)(\d+)$', content_id.lower())
+        m = re.match(r'^(?:h_\d+)?(\d*)([a-z]+)(\d+)$', content_id.lower())
         if m:
             alpha = m.group(2).upper()
             num = m.group(3)
@@ -481,7 +481,7 @@ class DMMScraper(BaseScraper):
                 for a in item.get('actresses', [])
             ]
 
-            release_date = item.get('makerReleasedAt', '')
+            release_date = item.get('makerReleasedAt') or ''
             if release_date and 'T' in release_date:
                 release_date = release_date.split('T')[0]
 
@@ -502,7 +502,7 @@ class DMMScraper(BaseScraper):
             series = (item.get('series') or {}).get('name', '')
 
             video = Video(
-                number=item.get('makerContentId', ''),
+                number=item.get('makerContentId') or self._content_id_to_number(content_id),
                 title=item.get('title', ''),
                 actresses=actresses,
                 date=release_date,

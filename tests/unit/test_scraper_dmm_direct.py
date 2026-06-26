@@ -240,6 +240,62 @@ class TestDMMScraperIntegration:
         assert video.actresses[0].name == "Nana Miho"
         assert video.maker == "S1 NO.1 STYLE"
 
+    def test_dmm_detail_allows_missing_release_date(self, dmm_scraper):
+        """DMM 部分舊片 makerReleasedAt=null，仍應回傳結果而非被 date 驗證丟棄。"""
+        detail_response = {
+            "data": {
+                "ppvContent": {
+                    "id": "h_208top001",
+                    "title": "AYUNA 麻美あゆな",
+                    "description": "テスト",
+                    "packageImage": {"largeUrl": "https://pics.dmm.co.jp/top001pl.jpg"},
+                    "makerReleasedAt": None,
+                    "duration": 7140,
+                    "actresses": [{"name": "麻美あゆな"}],
+                    "directors": [],
+                    "series": None,
+                    "maker": {"name": "NEXT GROUP"},
+                    "makerContentId": "TOP-001",
+                }
+            }
+        }
+
+        with patch.object(dmm_scraper._session, 'post', return_value=_make_mock_resp(status_code=200, json_data=detail_response)), \
+             patch.object(dmm_scraper, '_fetch_tags_from_html', return_value=[]):
+            video = dmm_scraper._fetch_by_id("h_208top001")
+
+        assert video is not None
+        assert video.number == "TOP-001"
+        assert video.date == ""
+
+    def test_dmm_detail_falls_back_when_maker_content_id_missing(self, dmm_scraper):
+        """DMM 部分舊片 makerContentId=null，應由 content_id 反推番號。"""
+        detail_response = {
+            "data": {
+                "ppvContent": {
+                    "id": "61ih90",
+                    "title": "爆乳パパイヤ 結城かのん",
+                    "description": "テスト",
+                    "packageImage": {"largeUrl": "https://pics.dmm.co.jp/61ih00090pl.jpg"},
+                    "makerReleasedAt": None,
+                    "duration": 3600,
+                    "actresses": [{"name": "結城かのん"}],
+                    "directors": [],
+                    "series": None,
+                    "maker": {"name": "宇宙企画"},
+                    "makerContentId": None,
+                }
+            }
+        }
+
+        with patch.object(dmm_scraper._session, 'post', return_value=_make_mock_resp(status_code=200, json_data=detail_response)), \
+             patch.object(dmm_scraper, '_fetch_tags_from_html', return_value=[]):
+            video = dmm_scraper._fetch_by_id("61ih90")
+
+        assert video is not None
+        assert video.number == "IH-90"
+        assert video.date == ""
+
     def test_dmm_cache_isolation(self, dmm_scraper, tmp_path):
         """搜尋成功後 cache 寫入 tmp_path，不污染 project root"""
         detail_resp = _make_mock_resp(status_code=200, json_data=DMM_DETAIL_RESPONSE)
