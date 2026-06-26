@@ -240,6 +240,100 @@ class TestDMMScraperIntegration:
         assert video.actresses[0].name == "Nana Miho"
         assert video.maker == "S1 NO.1 STYLE"
 
+    def test_dmm_search_content_id_prefers_hyphenated_exact_query(self, dmm_scraper):
+        """BZ-01 需優先用含 hyphen 查詢，避免 BZ01 命中 PBZ 系列。"""
+        search_resp = _make_mock_resp(status_code=200, json_data={
+            "data": {
+                "legacySearchPPV": {
+                    "result": {"contents": [{"id": "61bz01"}]}
+                }
+            }
+        })
+
+        with patch.object(dmm_scraper._session, 'post', return_value=search_resp) as mock_post:
+            content_id = dmm_scraper._search_content_id("BZ-01")
+
+        assert content_id == "61bz01"
+        payload = mock_post.call_args.kwargs['json']
+        assert payload['variables']['queryWord'] == "BZ-01"
+
+    def test_dmm_search_content_id_rejects_substring_prefix_match(self, dmm_scraper):
+        """BZ-01 不應因 content_id 內含 bz 而誤選 PBZ-016。"""
+        empty_resp = _make_mock_resp(status_code=200, json_data={
+            "data": {
+                "legacySearchPPV": {
+                    "result": {"contents": []}
+                }
+            }
+        })
+        broad_resp = _make_mock_resp(status_code=200, json_data={
+            "data": {
+                "legacySearchPPV": {
+                    "result": {"contents": [{"id": "33pbz016"}]}
+                }
+            }
+        })
+
+        with patch.object(dmm_scraper._session, 'post', side_effect=[empty_resp, broad_resp]):
+            content_id = dmm_scraper._search_content_id("BZ-01")
+
+        assert content_id is None
+
+    def test_dmm_search_content_id_derives_target_from_same_prefix_sibling(self, dmm_scraper):
+        """BZ-01 搜尋只回 BZ-016 sibling 時，可推導 DMM content_id=61bz01。"""
+        empty_resp = _make_mock_resp(status_code=200, json_data={
+            "data": {
+                "legacySearchPPV": {
+                    "result": {"contents": []}
+                }
+            }
+        })
+        sibling_resp = _make_mock_resp(status_code=200, json_data={
+            "data": {
+                "legacySearchPPV": {
+                    "result": {"contents": [{"id": "61bz016"}]}
+                }
+            }
+        })
+
+        with patch.object(dmm_scraper._session, 'post', side_effect=[empty_resp, sibling_resp]):
+            content_id = dmm_scraper._search_content_id("BZ-01")
+
+        assert content_id == "61bz01"
+
+    def test_dmm_result_number_preserves_requested_leading_zero(self, dmm_scraper):
+        """DMM 回 BZ-1 時，精確搜尋結果應保留請求番號 BZ-01。"""
+        video = DMM_DETAIL_RESPONSE["data"]["ppvContent"].copy()
+        video.update({
+            "id": "61bz01",
+            "title": "エロ乳 とってもボインざんすの巻",
+            "makerReleasedAt": None,
+            "makerContentId": "BZ-1",
+        })
+        detail_response = {"data": {"ppvContent": video}}
+
+        with patch.object(dmm_scraper, '_convert_with_hints', return_value='61bz01'), \
+             patch.object(dmm_scraper._session, 'post', return_value=_make_mock_resp(status_code=200, json_data=detail_response)), \
+             patch.object(dmm_scraper, '_fetch_tags_from_html', return_value=[]):
+            result = dmm_scraper.search("BZ-01")
+
+        assert result is not None
+        assert result.number == "BZ-01"
+
+    def test_dmm_result_number_rejects_different_prefix(self, dmm_scraper):
+        """舊快取若把 BZ-01 指到 PBZ-016，不可視為同一番號。"""
+        video = DMM_DETAIL_RESPONSE["data"]["ppvContent"].copy()
+        video.update({"makerContentId": "PBZ-016"})
+        detail_response = {"data": {"ppvContent": video}}
+
+        with patch.object(dmm_scraper, '_convert_with_hints', return_value='33pbz016'), \
+             patch.object(dmm_scraper, '_search_content_id', return_value=None), \
+             patch.object(dmm_scraper._session, 'post', return_value=_make_mock_resp(status_code=200, json_data=detail_response)), \
+             patch.object(dmm_scraper, '_fetch_tags_from_html', return_value=[]):
+            result = dmm_scraper.search("BZ-01")
+
+        assert result is None
+
     def test_dmm_detail_allows_missing_release_date(self, dmm_scraper):
         """DMM 部分舊片 makerReleasedAt=null，仍應回傳結果而非被 date 驗證丟棄。"""
         detail_response = {

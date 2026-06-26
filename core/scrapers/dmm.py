@@ -380,6 +380,20 @@ class DMMScraper(BaseScraper):
             # 儲存學習到的映射
             self._save_prefix_hint(prefix, dmm_prefix)
 
+    def _normalize_result_number(self, requested: str, video: Video) -> Optional[Video]:
+        """確認 DMM 回傳的是目標番號，並保留使用者輸入的前導零格式。"""
+        req_prefix, req_num = self._parse_number(requested)
+        found_prefix, found_num = self._parse_number(video.number)
+        if not (
+            req_prefix
+            and req_prefix == found_prefix
+            and req_num
+            and found_num
+            and int(req_num) == int(found_num)
+        ):
+            return None
+        return video.model_copy(update={'number': requested})
+
     def _content_id_to_number(self, content_id: str) -> str:
         """
         從 content_id 推導標準番號格式。
@@ -409,42 +423,65 @@ class DMMScraper(BaseScraper):
         """
         用搜索 API 查找正確的 content_id（MDCX 方法）
         """
-        query_word = number.upper().replace('-', '')
-        prefix, _ = self._parse_number(number)
+        number_upper = number.upper()
+        query_words = [number_upper]
+        compact_query = number_upper.replace('-', '')
+        if compact_query != number_upper:
+            query_words.append(compact_query)
 
-        if not prefix:
+        prefix, num = self._parse_number(number)
+
+        if not prefix or not num:
             return None
 
         try:
-            payload = {
-                'query': self.SEARCH_QUERY,
-                'variables': {
-                    'limit': 5,
-                    'sort': 'RELEASE_DATE',
-                    'queryWord': query_word
+            target_num = int(num)
+            sibling_dmm_prefixes = []
+
+            for query_word in query_words:
+                payload = {
+                    'query': self.SEARCH_QUERY,
+                    'variables': {
+                        'limit': 10,
+                        'sort': 'RELEASE_DATE',
+                        'queryWord': query_word
+                    }
                 }
-            }
-            resp = self._session.post(self.API_URL, json=payload, timeout=10)
+                resp = self._session.post(self.API_URL, json=payload, timeout=10)
 
-            if resp.status_code != 200:
-                return None
+                if resp.status_code != 200:
+                    continue
 
-            data = resp.json()
-            if not data.get('data') or not data['data'].get('legacySearchPPV'):
-                return None
+                data = resp.json()
+                if not data.get('data') or not data['data'].get('legacySearchPPV'):
+                    continue
 
-            contents = data['data']['legacySearchPPV']['result']['contents']
-            if not contents:
-                return None
+                contents = data['data']['legacySearchPPV']['result']['contents']
+                if not contents:
+                    continue
 
-            # 找包含番號前綴的結果
-            for content in contents:
-                cid = content['id']
-                if prefix in cid.lower():
-                    return cid
+                # 嚴格比對反推番號，避免 BZ-01 被 PBZ-016 之類 substring 誤收。
+                for content in contents:
+                    cid = content['id']
+                    candidate_prefix, candidate_num = self._parse_number(
+                        self._content_id_to_number(cid)
+                    )
+                    if (
+                        candidate_prefix == prefix
+                        and candidate_num
+                        and int(candidate_num) == target_num
+                    ):
+                        return cid
+                    if candidate_prefix == prefix and candidate_num:
+                        idx = cid.lower().find(prefix)
+                        dmm_prefix = cid[:idx] if idx > 0 else ""
+                        if dmm_prefix and dmm_prefix not in sibling_dmm_prefixes:
+                            sibling_dmm_prefixes.append(dmm_prefix)
 
-            # 沒找到匹配的，返回第一個
-            return contents[0]['id']
+            for dmm_prefix in sibling_dmm_prefixes:
+                return f"{dmm_prefix}{prefix}{num}"
+
+            return None
 
         except Exception:
             return None
@@ -557,6 +594,8 @@ class DMMScraper(BaseScraper):
             cached_cid = cache[number_upper]
             result = self._fetch_by_id(cached_cid)
             if result:
+                result = self._normalize_result_number(number, result)
+            if result:
                 rate_limit(self.config.delay)
                 return result
 
@@ -564,6 +603,8 @@ class DMMScraper(BaseScraper):
         converted_cid = self._convert_with_hints(number)
         if converted_cid:
             result = self._fetch_by_id(converted_cid)
+            if result:
+                result = self._normalize_result_number(number, result)
             if result:
                 self._save_cache(number, converted_cid)
                 rate_limit(self.config.delay)
@@ -573,6 +614,8 @@ class DMMScraper(BaseScraper):
         discovered_cid = self._search_content_id(number)
         if discovered_cid:
             result = self._fetch_by_id(discovered_cid)
+            if result:
+                result = self._normalize_result_number(number, result)
             if result:
                 self._save_cache(number, discovered_cid)
                 self._learn_prefix(number, discovered_cid)  # 學習新前綴
