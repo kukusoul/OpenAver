@@ -334,6 +334,64 @@ class TestDMMScraperIntegration:
 
         assert result is None
 
+    def test_dmm_search_falls_back_to_mono_dvd_page(self, dmm_scraper):
+        """MXGS-791 類 DVD/mono 商品不在 PPV API 時，fallback 解析 mono 頁。"""
+        null_detail_resp = _make_mock_resp(status_code=200, json_data={"data": {"ppvContent": None}})
+        empty_search_resp = _make_mock_resp(status_code=200, json_data={
+            "data": {
+                "legacySearchPPV": {
+                    "result": {"contents": []}
+                }
+            }
+        })
+        prefix_search_resp = _make_mock_resp(status_code=200, json_data={
+            "data": {
+                "legacySearchPPV": {
+                    "result": {"contents": [{"id": "ipmxgs01432"}, {"id": "h_068mxgs01432"}]}
+                }
+            }
+        })
+        mono_html = """
+        <html><head>
+          <title>テスト mono タイトル - アダルトDVD通販 - FANZA</title>
+          <meta property="og:image" content="https://pics.dmm.co.jp/mono/movie/adult/mxgs791/mxgs791pl.jpg">
+        </head><body>
+          <h1>テスト mono タイトル</h1>
+          <table>
+            <tr><td class="nw">出演者：</td><td><a>女優A</a><a>女優B</a></td></tr>
+            <tr><td class="nw">発売日：</td><td>2015/01/01</td></tr>
+            <tr><td class="nw">収録時間：</td><td>120分</td></tr>
+            <tr><td class="nw">メーカー：</td><td>マキシング</td></tr>
+            <tr><td class="nw">レーベル：</td><td>MAXING</td></tr>
+            <tr><td class="nw">シリーズ：</td><td>テストシリーズ</td></tr>
+            <tr><td class="nw">ジャンル：</td><td><a>単体作品</a><a>巨乳</a></td></tr>
+          </table>
+        </body></html>
+        """.encode()
+        not_found_resp = _make_mock_resp(status_code=404, content=b"not found")
+        not_found_resp.url = "https://www.dmm.co.jp/mono/dvd/-/detail/=/cid=mxgs791/"
+        mono_resp = _make_mock_resp(status_code=200, content=mono_html)
+        mono_resp.url = "https://www.dmm.co.jp/mono/dvd/-/detail/=/cid=h_068mxgs791/"
+
+        with patch.object(dmm_scraper._session, 'post', side_effect=[
+            null_detail_resp,
+            empty_search_resp,
+            empty_search_resp,
+            prefix_search_resp,
+        ]), \
+             patch.object(dmm_scraper._session, 'get', side_effect=[not_found_resp, not_found_resp, mono_resp]) as mock_get:
+            result = dmm_scraper.search("MXGS-791")
+
+        assert result is not None
+        assert result.number == "MXGS-791"
+        assert result.title == "テスト mono タイトル"
+        assert [a.name for a in result.actresses] == ["女優A", "女優B"]
+        assert result.date == "2015-01-01"
+        assert result.duration == 120
+        assert result.maker == "マキシング"
+        assert result.tags == ["単体作品", "巨乳"]
+        assert mock_get.call_args_list[-1].args[0].endswith('/cid=h_068mxgs791/')
+
     def test_dmm_detail_allows_missing_release_date(self, dmm_scraper):
         """DMM 部分舊片 makerReleasedAt=null，仍應回傳結果而非被 date 驗證丟棄。"""
         detail_response = {
