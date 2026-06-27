@@ -53,6 +53,7 @@ class DMMScraper(BaseScraper):
                 description
                 packageImage { largeUrl }
                 makerReleasedAt
+                deliveryStartDate
                 duration
                 actresses { name }
                 directors { name }
@@ -518,7 +519,7 @@ class DMMScraper(BaseScraper):
                 for a in item.get('actresses', [])
             ]
 
-            release_date = item.get('makerReleasedAt') or ''
+            release_date = item.get('makerReleasedAt') or item.get('deliveryStartDate') or ''
             if release_date and 'T' in release_date:
                 release_date = release_date.split('T')[0]
 

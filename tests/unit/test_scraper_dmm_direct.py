@@ -420,6 +420,35 @@ class TestDMMScraperIntegration:
         assert video.number == "TOP-001"
         assert video.date == ""
 
+    def test_dmm_detail_uses_delivery_start_date_when_release_date_missing(self, dmm_scraper):
+        """KA-1897 類 PPV 作品 makerReleasedAt=null 時，使用 deliveryStartDate。"""
+        detail_response = {
+            "data": {
+                "ppvContent": {
+                    "id": "53ka1897",
+                    "title": "FOREVER【坂本リナ】",
+                    "description": "テスト",
+                    "packageImage": {"largeUrl": "https://pics.dmm.co.jp/53ka01897pl.jpg"},
+                    "makerReleasedAt": None,
+                    "deliveryStartDate": "2004-07-17T01:00:01Z",
+                    "duration": 5400,
+                    "actresses": [{"name": "坂本リナ"}],
+                    "directors": [],
+                    "series": {"name": "FOREVER"},
+                    "maker": {"name": "アリスJAPAN"},
+                    "makerContentId": None,
+                }
+            }
+        }
+
+        with patch.object(dmm_scraper._session, 'post', return_value=_make_mock_resp(status_code=200, json_data=detail_response)), \
+             patch.object(dmm_scraper, '_fetch_tags_from_html', return_value=[]):
+            video = dmm_scraper._fetch_by_id("53ka1897")
+
+        assert video is not None
+        assert video.number == "KA-1897"
+        assert video.date == "2004-07-17"
+
     def test_dmm_detail_falls_back_when_maker_content_id_missing(self, dmm_scraper):
         """DMM 部分舊片 makerContentId=null，應由 content_id 反推番號。"""
         detail_response = {
