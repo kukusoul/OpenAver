@@ -9000,18 +9000,71 @@ class TestRescrapeVersionStateGuard:
             "search+javlib 可能仍走早 return advancedSearch 路徑"
         )
 
-    # ── (B) switch-source 取 candidates[0] ──
+    # ── (B) switch-source 多版本切換器（T7） ──
 
     def test_switch_source_takes_candidates_first(self):
-        """CD-86-6: switch-source 收到 candidates 時取 [0]（非 [1]，非整個陣列）。"""
+        """T7（語意反轉）: switch-source 多版本（candidates.length > 1）進 rescrapeStep='preview'，
+        不再直接取 candidates[0] 靜默替換；candidates[0] 僅作單版本 fallback。
+        element-bound: switch-source + candidates.length > 1 後 900 字元內必有 rescrapeStep='preview'
+        （900 < showcase block 距離，mutation A 移除後 next occurrence 在 4000+ 字元外 → RED）。
+        """
         src = self._rescrape()
-        # element-bound：在 switch-source if-block 附近找 candidates[0]
         m = re.search(
-            r"rescrapeEntryPoint\s*===\s*['\"]switch-source['\"].*?candidates\s*\[\s*0\s*\]",
+            r"rescrapeEntryPoint\s*===\s*['\"]switch-source['\"]"
+            r".*?data\.candidates\s*&&\s*data\.candidates\.length\s*>\s*1",
             src, re.DOTALL,
         )
         assert m, (
-            "CD-86-6 違規：switch-source 分支未見 candidates[0] 取用"
+            "T7 違規：switch-source 分支缺 candidates.length > 1 多版本分叉"
+        )
+        # element-bound 900-char window（switch-source multiversion block ~773 chars）
+        window = src[m.end():m.end() + 900]
+        assert re.search(r"rescrapeStep\s*=\s*['\"]preview['\"]", window), (
+            "T7 違規：switch-source candidates.length > 1 分叉（900 字元窗口內）缺 rescrapeStep='preview'——"
+            "多版本應進 preview 切換器，不直接取 candidates[0] 靜默替換"
+        )
+
+    def test_switch_source_multiversion_enters_preview(self):
+        """T7: switch-source 分支 candidates.length > 1 → rescrapeStep = 'preview'。
+        element-bound: 先找 switch-source if-block 起點，再在 900 字元窗口內斷言 rescrapeStep='preview'。
+        （防 DOTALL 跨 block 假綠；showcase block 的 rescrapeStep 距離 4000+ 字元外）
+        """
+        src = self._rescrape()
+        m = re.search(
+            r"rescrapeEntryPoint\s*===\s*['\"]switch-source['\"]"
+            r".*?if\s*\(\s*data\.candidates\s*&&\s*data\.candidates\.length\s*>\s*1\s*\)",
+            src, re.DOTALL,
+        )
+        assert m, (
+            "T7 違規：switch-source if-block 缺 candidates.length > 1 多版本分叉"
+        )
+        # 900-char window covers multiversion block body but stops before showcase block
+        window = src[m.end():m.end() + 900]
+        assert re.search(r"rescrapeStep\s*=\s*['\"]preview['\"]", window), (
+            "T7 違規：switch-source candidates.length > 1 if-block body（900 字元內）缺 rescrapeStep='preview'"
+        )
+
+    def test_switch_source_confirm_branch_present(self):
+        """T7: rescrapeConfirm 必須有 switch-source 分支，body 含 t.arr[t.idx] in-place 替換，
+        不含 _commitSearchResults（in-place 替換語意，非搜尋結果提交）。
+        element-bound: 鎖定 rescrapeConfirm 的 switch-source 分支起點後 800 字元。
+        """
+        src = self._rescrape()
+        m = re.search(
+            r"rescrapeConfirm\s*\(\s*\).*?rescrapeEntryPoint\s*===\s*['\"]switch-source['\"]",
+            src, re.DOTALL,
+        )
+        assert m, (
+            "T7 違規：rescrapeConfirm 中未見 rescrapeEntryPoint === 'switch-source' 分支"
+        )
+        # m.end() 是 switch-source 條件字串結尾，從此往後 800 字元是分支 body
+        block = src[m.end():m.end() + 800]
+        assert re.search(r"t\.arr\s*\[\s*t\.idx\s*\]", block), (
+            "T7 違規：rescrapeConfirm switch-source 分支缺 t.arr[t.idx] in-place 替換"
+        )
+        assert "_commitSearchResults" not in block, (
+            "T7 違規：rescrapeConfirm switch-source 分支不得呼叫 _commitSearchResults"
+            "（in-place 替換語意，非搜尋結果提交）"
         )
 
     # ── (B) confirm: detail_url 取值 .url ──
@@ -11567,6 +11620,39 @@ class TestRescrapeVersionSwitcherGuard:
         indicator_block = extract_block(".rescrape-ver-indicator", css)
         assert "var(--color-warning)" in indicator_block, (
             "86-T6 違規：.rescrape-ver-indicator 的 color 未使用 var(--color-warning)（N/M 指示應為琥珀色）"
+        )
+
+    # ── T7: switch-source confirm-row ──
+
+    def test_switch_source_modal_confirm_row(self):
+        """T7: _rescrape_modal.html 必須有 rescrapeEntryPoint === 'switch-source' confirm-row，
+        含 bi-check-lg icon，且不含 overwrite_warning（只替換結果列 slot，不寫檔）。
+        element-bound: 在 switch-source confirm-row block 內驗 icon + 排除 overwrite_warning。
+        """
+        import re as _re
+        html = self._html()
+        m = _re.search(
+            r'<div[^>]*rescrape-confirm-row[^>]*rescrapeEntryPoint\s*===\s*[\'"]switch-source[\'"][^>]*>(.*?)</div>',
+            html,
+            _re.DOTALL,
+        )
+        assert m, (
+            "T7 違規：_rescrape_modal.html 缺 rescrapeEntryPoint === 'switch-source' confirm-row"
+        )
+        block = m.group(0)
+        assert "bi-check-lg" in block, (
+            "T7 違規：switch-source confirm-row 缺 bi-check-lg icon"
+        )
+        assert "overwrite_warning" not in block, (
+            "T7 違規：switch-source confirm-row 不得含 overwrite_warning（非寫檔操作）"
+        )
+
+    def test_i18n_adopt_switch_source_key_exists(self):
+        """T7: showcase.rescrape.adopt_switch_source key 必須存在於 zh_TW.json。"""
+        data = self._locale()
+        rescrape = data.get("showcase", {}).get("rescrape", {})
+        assert "adopt_switch_source" in rescrape, (
+            "T7 違規：locales/zh_TW.json 缺 showcase.rescrape.adopt_switch_source key"
         )
 
 

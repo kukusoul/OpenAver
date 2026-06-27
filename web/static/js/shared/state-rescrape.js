@@ -216,6 +216,22 @@ export function rescrapeState() {
                 // （替換後當前卡顯示的番號 = 下次 tap 查 switchStateMap 的 key；用編輯後實際抓回的番號才對得上）。
                 if (this.rescrapeEntryPoint === 'switch-source') {
                     if (data && data.success) {
+                        // T7: 多版本 → 進 preview + 切換器（不靜默取 [0]）
+                        if (data.candidates && data.candidates.length > 1) {
+                            const previewSourceId = sourceId === 'auto' ? (data._source || data.source || sourceId) : sourceId;
+                            const _previewSrc = this.rescrapeSources.find(x => x.id === previewSourceId);
+                            this.rescrapeCandidates = data.candidates;
+                            this.rescrapeVersionIdx = 0;
+                            this.rescrapePreview = {
+                                ...data.candidates[0],
+                                sourceName: this._resolveSourceName(previewSourceId),
+                                sourceCensored: _previewSrc?.is_censored ?? true,
+                            };
+                            this._rescrapeCommitSource = sourceId;
+                            this.rescrapeStep = 'preview';   // 不關窗
+                            return;
+                        }
+                        // 單版本 → 現有靜默 in-place 替換（race/stale 檢查保留）
                         // ── race 防覆蓋錯卡：await 回來判 slot 是否還在原位（強化 1：含 liveArr 顯式 identity 比對）──
                         const t = this._switchTarget;
                         const liveArr = (t && t.listMode === 'file' && this.fileList[t.fileIndex])
@@ -227,7 +243,8 @@ export function rescrapeState() {
                             || t.idx < 0 || t.idx >= t.arr.length
                             || (t.arr[t.idx] && t.arr[t.idx].number !== t.number);  // 番號比對：防同位置已被別筆佔據
                         if (!stale) {
-                            // CD-86-6：switch-source 收到 candidates → 取 [0] 最新版本
+                            // T7：單版本 fallback——多版本（length>1）已於上方提前 return 進 preview，
+                            // 此處只處理單版本（candidates 無或 length===1）→ 取唯一筆替換。
                             const variant = (() => {
                                 if (data.candidates && data.candidates.length > 0) {
                                     const { success: _s, ...c } = { success: true, ...data.candidates[0] };
@@ -350,6 +367,26 @@ export function rescrapeState() {
                     const { success: _s, sourceName: _sn, sourceCensored: _sc, ...adopted } = this.rescrapePreview;
                     this._commitSearchResults?.({ data: [adopted], mode: 'exact', has_more: false, actress_profile: null });
                     this.closeRescrape();
+                    return;
+                }
+                // T7: switch-source 入口採用選定版本做 in-place 替換（不打 enrich-single，不 _commitSearchResults）
+                if (this.rescrapeEntryPoint === 'switch-source') {
+                    if (!this.rescrapePreview) { return; }
+                    const t = this._switchTarget;
+                    // 採用當下重驗 stale（鏡射 rescrapeWithSource :220-228）
+                    const liveArr = (t && t.listMode === 'file' && this.fileList[t.fileIndex])
+                        ? this.fileList[t.fileIndex].searchResults : this.searchResults;
+                    const stale = !t || liveArr !== t.arr || !Array.isArray(t.arr)
+                        || t.idx < 0 || t.idx >= t.arr.length
+                        || (t.arr[t.idx] && t.arr[t.idx].number !== t.number);
+                    if (!stale) {
+                        const { success: _s, sourceName: _sn, sourceCensored: _sc, ...variant } = this.rescrapePreview;
+                        t.arr[t.idx] = variant;                          // in-place 替換選定版本
+                        this._resetCoverState?.();
+                        this.saveState?.();
+                        window.SearchUI?.seedSwitchState?.(variant.number || t.number, this._rescrapeCommitSource, variant);
+                    }
+                    this.closeRescrape();                                 // stale 靜默丟棄；非 stale 已替換。一律關窗
                     return;
                 }
                 // lightbox（現況）：需既有檔

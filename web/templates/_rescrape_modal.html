@@ -206,6 +206,11 @@
         <button type="button" class="rescrape-confirm-btn confirm" @click="rescrapeConfirm()"
                 :aria-label="t('showcase.rescrape.adopt_version')"><i class="bi bi-check-lg" aria-hidden="true"></i></button>
       </div>
+      {# switch-source 入口：替換此版本單鈕（無不可逆警語；只替換結果列 slot 非寫檔）#}
+      <div class="rescrape-confirm-row" x-show="rescrapeEntryPoint === 'switch-source'">
+        <button type="button" class="rescrape-confirm-btn confirm" @click="rescrapeConfirm()"
+                :aria-label="t('showcase.rescrape.adopt_switch_source')"><i class="bi bi-check-lg" aria-hidden="true"></i></button>
+      </div>
     </div>
 
   </div>
