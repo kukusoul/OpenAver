@@ -431,3 +431,53 @@ class TestUnknownSource:
             result = search_jav("SONE-205", source="javguru")
 
         assert result is None
+
+
+# ============================================================
+# TestFuzzyGuard — CD-65-4 always-on 與 partial 能力約束護欄
+# （T4，CD-85-7：fuzzy chain always-on / partial javbus 寫死）
+# ============================================================
+
+class TestFuzzyGuard:
+    """fuzzy chain 永遠含 javbus（always-on，CD-65-4），
+    partial 固定走 javbus（能力約束），兩者不受 enabled_sids 影響。
+
+    這些測試守既有行為——現在就 GREEN，T1a cascade 改動後也必須 GREEN。
+    Patch target 一律指使用端 core.scraper.*（gotchas-backend.md §Mock Patch Target）。
+    """
+
+    def test_fuzzy_chain_always_on_even_if_javbus_disabled(self):
+        """javbus 停用（get_enabled_source_ids→[]）→ fuzzy chain 仍含 javbus（always-on, CD-65-4）
+
+        突變有效性：把 _fuzzy_search_chain L674 改為 get_enabled_source_ids() →
+        chain=[]，get_ids_from_search 不被呼叫 → assert_called() RED。
+        """
+        from core.scraper import search_actress
+
+        with patch('core.scraper.get_enabled_source_ids', return_value=[]), \
+             patch('core.scraper.get_all_source_ids_ordered', return_value=['javbus', 'dmm']), \
+             patch.object(JavBusScraper, 'get_ids_from_search', return_value=['SONE-205']) as mock_jb, \
+             patch('core.scraper.search_jav', return_value={'number': 'SONE-205', 'title': 'Test', 'source': 'javbus'}):
+            results = search_actress("テスト", limit=1, proxy_url='')
+
+        # javbus must be called even though get_enabled_source_ids returned []
+        mock_jb.assert_called()
+        assert len(results) >= 1
+
+    def test_partial_search_always_uses_javbus(self):
+        """partial（MIDV-01）固定走 javbus（能力約束），不受 enabled_sids 影響。
+
+        突變有效性：把 search_partial L397 改為 search_jav(num, enabled_sids[0]) →
+        enabled=[] → IndexError 或 call_count=0 → 斷言 RED；
+        或改為 'dmm' → source 斷言 RED。
+        """
+        from core.scraper import search_partial
+
+        with patch('core.scraper.get_enabled_source_ids', return_value=[]), \
+             patch('core.scraper.expand_partial_number', return_value=['MIDV-010', 'MIDV-011']), \
+             patch('core.scraper.search_jav', return_value=None) as mock_search_jav:
+            search_partial('MIDV-01')
+
+        # search_jav must have been called with source='javbus' (hardcoded, not from enabled list)
+        assert mock_search_jav.call_count >= 1, "search_partial must call search_jav (hardcoded javbus)"
+        mock_search_jav.assert_any_call('MIDV-010', 'javbus')
