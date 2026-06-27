@@ -360,6 +360,25 @@ def search_jav_single_source(number: str, source: str, proxy_url: str = '') -> O
     return search_jav(number, source=source, proxy_url=proxy_url)
 
 
+def search_javlib_versions(number: str) -> List[Dict[str, Any]]:
+    """javlibrary 同番號全版本列舉 → list[dict]（各版本 to_legacy_dict()）。
+
+    CF 例外（CfChallengeRequired / CfTransportUnavailable）propagate 給呼叫端。
+    """
+    scraper = JavLibraryScraper()
+    videos = scraper.search_all_versions(number)
+    return [v.to_legacy_dict() for v in videos]
+
+
+def fetch_javlib_by_detail_url(detail_url: str, number: str) -> Optional[Video]:
+    """javlibrary 直抓單一 detail URL → Video（confirm 用）。
+
+    CF 例外 propagate 給呼叫端。
+    """
+    scraper = JavLibraryScraper()
+    return scraper.fetch_by_detail_url(detail_url, number)
+
+
 def search_partial(partial: str,
                    status_callback: Optional[Callable[[str, str], None]] = None,
                    result_callback: Optional[Callable[[int, Any], None]] = None,

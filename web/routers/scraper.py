@@ -20,7 +20,10 @@ from core.db_inflow import try_inflow_upsert
 from core.enricher import enrich_single, fetch_samples_only, resolve_nfo_cover_paths
 from core.organizer import organize_file
 from core.path_utils import to_file_uri, uri_to_fs_path, coerce_to_file_uri
-from core.scraper import search_jav, search_jav_single_source, strip_internal_nfo_keys
+from core.scraper import (
+    search_jav, search_jav_single_source, strip_internal_nfo_keys,
+    search_javlib_versions, fetch_javlib_by_detail_url,
+)
 from core.source_config import validate_source_id
 from core.cf_transport import get_cf_transport, CfChallengeRequired, CfTransportUnavailable
 from core.scrapers.javlibrary import JAVLIBRARY_ORIGIN
@@ -154,6 +157,7 @@ class EnrichRequest(BaseModel):
     overwrite_existing: bool = False
     source: Optional[str] = None
     javbus_lang: Optional[str] = None
+    detail_url: Optional[str] = None
 
 
 class BatchEnrichItem(BaseModel):
@@ -193,7 +197,14 @@ def rescrape_preview_endpoint(request: RescrapePreviewRequest) -> dict:
     proxy_url = search_cfg.get("proxy_url", "")
 
     try:
-        if request.source == "auto":
+        if request.source == 'javlibrary':
+            versions = search_javlib_versions(request.number)  # Cf* 例外由外層 except 接
+            if not versions:
+                return {"success": False}
+            if len(versions) == 1:
+                return {"success": True, **strip_internal_nfo_keys(versions[0])}
+            return {"success": True, "candidates": [strip_internal_nfo_keys(v) for v in versions]}
+        elif request.source == "auto":
             result = search_jav(
                 request.number,
                 source="auto",
@@ -261,6 +272,24 @@ def enrich_single_endpoint(request: EnrichRequest) -> dict:
             )
 
     try:
+        scraper_data = None
+        if request.source == 'javlibrary' and request.detail_url:
+            try:
+                video = fetch_javlib_by_detail_url(request.detail_url, request.number)
+            except CfChallengeRequired:
+                t = get_cf_transport()
+                if t:
+                    try:
+                        t.begin_solve(JAVLIBRARY_ORIGIN, 'javlibrary')
+                    except Exception:
+                        logger.exception("enrich_single: begin_solve 失敗，回 cf_unavailable")
+                        return {"success": False, "cf_unavailable": True}
+                return {"success": False, "cf_needed": True}
+            except CfTransportUnavailable:
+                return {"success": False, "cf_unavailable": True}
+            if video is None:
+                return {"success": False, "error": "javlibrary 無法取得指定版本資料"}
+            scraper_data = video.to_legacy_dict()
         result = enrich_single(
             file_path=request.file_path,
             number=request.number,
@@ -273,6 +302,7 @@ def enrich_single_endpoint(request: EnrichRequest) -> dict:
             proxy_url=proxy_url,
             source=request.source,
             javbus_lang=request.javbus_lang,
+            scraper_data=scraper_data,
         )
         # feature/71 T8: 換封面成功 → 失效舊縮圖（下次 lazy/prewarm 重生，CD-9 / spec 2.A.7）。
         # request.file_path 已是 DB 的 file:/// URI（前端送 currentLightboxVideo.path /
