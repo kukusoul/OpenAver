@@ -268,6 +268,9 @@ export function rescrapeState() {
                     if (this.rescrapeEntryPoint === 'search') {
                         // search 入口單版本：採用進結果關窗（不打 enrich-single）
                         // 對齊 switch-source：strip success，不讓控制旗標流入 result row
+                        // CD-86-P2：同步 searchQuery / currentQuery（對齊非 javlib 路徑 :167 + advancedSearch :38）
+                        this.searchQuery = this.rescrapeNumber.trim();
+                        this.currentQuery = this.rescrapeNumber.trim();
                         const { success: _s, ...row } = data;
                         this._commitSearchResults?.({ data: [row], mode: 'exact', has_more: false, actress_profile: null });
                         this.closeRescrape();
@@ -347,6 +350,9 @@ export function rescrapeState() {
                 if (this.rescrapeEntryPoint === 'search') {
                     // CD-86-9/14：採用選定版本進搜尋結果，不打 enrich-single，不顯示不可逆警告
                     if (!this.rescrapePreview) { return; }
+                    // CD-86-P2：同步 searchQuery / currentQuery（對齊非 javlib 路徑 :167 + advancedSearch :38）
+                    this.searchQuery = this.rescrapeNumber.trim();
+                    this.currentQuery = this.rescrapeNumber.trim();
                     // strip preview-only extras（success/sourceName/sourceCensored）不讓其流入 result row
                     const { success: _s, sourceName: _sn, sourceCensored: _sc, ...adopted } = this.rescrapePreview;
                     this._commitSearchResults?.({ data: [adopted], mode: 'exact', has_more: false, actress_profile: null });

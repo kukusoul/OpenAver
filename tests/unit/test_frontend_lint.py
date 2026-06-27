@@ -9065,6 +9065,64 @@ class TestRescrapeVersionStateGuard:
         )
         assert m, "rescrapeBackToPick 必須 reset rescrapeCandidates（lifecycle 對稱）"
 
+    # ── CD-86-P2: javlib search 採用路徑同步 currentQuery ──
+
+    def test_javlib_single_version_search_syncs_current_query(self):
+        """CD-86-P2: rescrapeWithSource search+javlib 單版本採用路徑，在 _commitSearchResults 前
+        必須同步 currentQuery（對齊非 javlib 路徑：advancedSearch 設 currentQuery、:167 設 searchQuery）。
+
+        element-bound：在 rescrapeWithSource 的 search 單版本分支（data.success）找
+        currentQuery 賦值，確認在同一 if(search) block 的 _commitSearchResults 呼叫之前。
+        mutation 驗證：移除補的同步 → RED。
+        """
+        src = self._rescrape()
+        # 鎖定 rescrapeWithSource 函式體中：
+        # rescrapeEntryPoint==='search' 的單版本分支（data.success block）
+        # 在 _commitSearchResults 呼叫之前必須出現 this.currentQuery = this.rescrapeNumber.trim()
+        # element-bound：先找 data.success 分支的 search 入口 context，再確認 currentQuery 賦值
+        m_ctx = re.search(
+            r"rescrapeWithSource\b.*?data\s*&&\s*data\.success.*?"
+            r"rescrapeEntryPoint\s*===\s*['\"]search['\"]"
+            r"(.*?)_commitSearchResults",
+            src, re.DOTALL,
+        )
+        assert m_ctx, (
+            "CD-86-P2 違規（rescrapeWithSource 單版本）：未在 data.success search 分支的 "
+            "_commitSearchResults 前找到 currentQuery 同步——"
+            "搜尋框 / compose 判斷 / session restore 會殘留舊 query"
+        )
+        block = m_ctx.group(1)
+        assert re.search(r"\bthis\.currentQuery\s*=", block), (
+            "CD-86-P2 違規（rescrapeWithSource 單版本）：_commitSearchResults 前缺少 "
+            "this.currentQuery = ... 賦值（對齊 advancedSearch :38 的同步語意）"
+        )
+
+    def test_javlib_confirm_search_syncs_current_query(self):
+        """CD-86-P2: rescrapeConfirm search 採用路徑，在 _commitSearchResults 前
+        必須同步 currentQuery（對齊非 javlib 路徑，防 session restore 回舊 query）。
+
+        element-bound：在 rescrapeConfirm 的 search 分支找 currentQuery 賦值，
+        確認在同一 if(search) block 的 _commitSearchResults 呼叫之前。
+        mutation 驗證：移除補的同步 → RED。
+        """
+        src = self._rescrape()
+        # 鎖定 rescrapeConfirm 函式體中 search 分支，_commitSearchResults 呼叫前的 currentQuery 賦值
+        m_ctx = re.search(
+            r"rescrapeConfirm\b.*?"
+            r"rescrapeEntryPoint\s*===\s*['\"]search['\"]"
+            r"(.*?)_commitSearchResults",
+            src, re.DOTALL,
+        )
+        assert m_ctx, (
+            "CD-86-P2 違規（rescrapeConfirm）：未在 search 分支 _commitSearchResults 前 "
+            "找到 currentQuery 同步——多版本 confirm 採用後 session restore 殘留舊 query"
+        )
+        block = m_ctx.group(1)
+        assert re.search(r"\bthis\.currentQuery\s*=", block), (
+            "CD-86-P2 違規（rescrapeConfirm）：_commitSearchResults 前缺少 "
+            "this.currentQuery = ... 賦值（對齊 advancedSearch :38 的同步語意）"
+        )
+
 
 class TestRescrapeEntryGuard:
     """62b-1 → 74b US4：守衛 Showcase 進階重刮入口接線 contract。
