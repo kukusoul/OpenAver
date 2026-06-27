@@ -11963,9 +11963,11 @@ class TestSearchAutoSourcePill:
         )
 
     def test_can_reopen_source_pick_defined_in_search_flow_js(self):
-        """search-flow.js 定義 canReopenSourcePick()，且包含 exact + pageState + searchQuery 三條件。
+        """search-flow.js 定義 canReopenSourcePick()，且包含 listMode + exact + pageState + searchQuery 四條件。
 
-        mutation：移除 method 或刪任一條件 → 此斷言紅。
+        listMode==='search' gate（CD-86-P2 副作用修正）：file/batch mode 也進 result+exact，但 searchQuery
+        切檔不同步，頂部再入口會帶舊番號 → 限定 search workflow。
+        mutation：移除 method 或刪任一條件（含 listMode）→ 此斷言紅。
         """
         js_path = (
             SEARCH_HTML.parent.parent
@@ -11975,6 +11977,9 @@ class TestSearchAutoSourcePill:
         m = re.search(r"canReopenSourcePick\s*\(\s*\)\s*\{(.*?)\n    \},", js, re.DOTALL)
         assert m, "search-flow.js 找不到 canReopenSourcePick() method 定義"
         body = m.group(1)
+        assert "listMode" in body and "'search'" in body, (
+            f"canReopenSourcePick body 缺 listMode === 'search' 條件；body: {body!r}"
+        )
         assert "pageState" in body and "'result'" in body, (
             f"canReopenSourcePick body 缺 pageState === 'result' 條件；body: {body!r}"
         )
