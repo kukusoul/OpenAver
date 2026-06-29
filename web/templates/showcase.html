@@ -338,6 +338,7 @@
                           <i class="bi bi-image"></i>
                           <span x-text="t('common.no_image')"></span>
                         </div>
+                        <div class="media-count-badge" x-show="(video.media_count || 1) > 1" x-text="(video.media_count || 1) + ' ' + t('showcase.unit.videos')"></div>
                         <div class="av-card-preview-overlay">
                             <button class="btn-glass-circle"
                                     @click.stop="playVideo(video.path)"
@@ -784,6 +785,9 @@
                                 <span x-show="currentLightboxVideo?.maker">
                                     &nbsp;·&nbsp;<a href="#" class="lb-link" @click.prevent="searchFromMetadata(currentLightboxVideo?.maker)" x-text="currentLightboxVideo?.maker"></a>
                                 </span>
+                                <span x-show="(currentLightboxVideo?.media_count || 1) > 1">
+                                    &nbsp;·&nbsp;<span x-text="(currentLightboxVideo?.media_count || 1) + ' ' + t('showcase.unit.videos')"></span>
+                                </span>
                                 <span x-show="currentLightboxVideo?.director">
                                     &nbsp;·&nbsp;<b>{{ t('showcase.label.director') }}：</b>
                                     <a href="#" class="lb-link"
@@ -820,6 +824,16 @@
                                         :aria-label="t('showcase.video.delete')">
                                     <i class="bi bi-trash"></i>
                                 </button>
+                            </div>
+                            <div class="lb-media-files" x-show="(currentLightboxVideo?.media_files || []).length > 1">
+                                <template x-for="item in (currentLightboxVideo?.media_files || [])" :key="item.path">
+                                    <button type="button"
+                                            class="lb-media-file-btn"
+                                            @click.stop="playVideo(item.path)"
+                                            :title="item.name"
+                                            x-text="item.name">
+                                    </button>
+                                </template>
                             </div>
                             <!-- Row 5: Tags (with +N chips, T4) -->
                             <div class="lb-tags" x-show="currentLightboxVideo?.tags">

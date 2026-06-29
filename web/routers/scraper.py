@@ -302,7 +302,8 @@ def fetch_samples_endpoint(req: FetchSamplesRequest) -> dict:
     folder_uri_prefix = to_file_uri(os.path.dirname(uri_to_fs_path(req.file_path))) + "/"
     repo = VideoRepository()
     count = repo.count_videos_in_folder(folder_uri_prefix)
-    if count > 1:
+    video = repo.get_by_path(req.file_path)
+    if count > 1 and not (video and video.nfo_path):
         return {"success": False, "error": "multi_video_folder", "count": count, "extrafanart_written": 0}
 
     try:

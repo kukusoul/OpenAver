@@ -839,6 +839,32 @@
     align-items: center;          /* 讓行末 muted icon 鈕（垃圾桶）與 metadata 文字垂直置中 */
 }
 
+.lightbox-metadata .lb-media-files {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin-bottom: 0.5rem;
+}
+
+.lightbox-metadata .lb-media-file-btn {
+    max-width: 100%;
+    padding: 0.2rem 0.55rem;
+    border: 1px solid var(--stroke-subtle);
+    border-radius: var(--radius-pill);
+    background: var(--surface-2);
+    color: var(--text-secondary);
+    font-size: 0.6875rem;
+    cursor: pointer;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.lightbox-metadata .lb-media-file-btn:hover {
+    background: var(--surface-3);
+    color: var(--text-primary);
+}
+
 /* 分隔符由 HTML 中各 span 內部開頭的 " · " 控制，隨 x-show 一起顯示/隱藏 */
 
 /* Tags — pill flex wrap */
@@ -2476,6 +2502,21 @@ body.sidebar-collapsed .showcase-footer {
 .av-card-preview-overlay {
     opacity: 1;
     pointer-events: auto;
+}
+
+.media-count-badge {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    z-index: 2;
+    padding: 0.15rem 0.45rem;
+    border: 1px solid var(--stroke-subtle);
+    border-radius: var(--radius-pill);
+    background: var(--surface-2);
+    color: var(--text-primary);
+    font-size: 0.6875rem;
+    line-height: 1.2;
+    pointer-events: none;
 }
 
 /* ==================== Phase 44a T4: Actress Lightbox ==================== */
