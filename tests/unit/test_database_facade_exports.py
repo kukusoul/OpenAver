@@ -9,6 +9,8 @@ This guard is intentionally added BEFORE the split (87a-T1): it passes on the
 current single-file core/database.py and turns RED the moment the split-out
 facade omits any re-export.
 """
+from pathlib import Path
+
 import pytest
 
 import core.database as db
@@ -44,4 +46,22 @@ def test_facade_exports_public_name(name):
     assert hasattr(db, name), (
         f"core.database is missing '{name}' — "
         f"check core/database/__init__.py __all__ and its import list"
+    )
+
+
+def test_default_db_path_resolves_to_repo_root_output():
+    """get_db_path() must resolve to <repo-root>/output/openaver.db.
+
+    Regression guard for the 87a split: get_db_path lives in the deeper
+    core/database/connection.py, so its Path(__file__).parent chain must walk
+    up one extra level. A byte-exact copy from the old monolith silently
+    pointed the default DB at core/output/ — empty DB / apparent data loss for
+    every no-arg caller. The rest of the suite never catches this because it
+    always uses tmp_path / explicit db_path / patched get_db_path.
+    """
+    # this test file is tests/unit/<f>.py → parents[2] is the repo root
+    repo_root = Path(__file__).resolve().parents[2]
+    expected = repo_root / "output" / "openaver.db"
+    assert db.get_db_path().resolve() == expected.resolve(), (
+        f"get_db_path() = {db.get_db_path()}, expected {expected}"
     )
