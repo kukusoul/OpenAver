@@ -800,3 +800,370 @@ class TestUpsertDb:
 
         v = repo.get_by_path(self.SOURCE_URI)
         assert v.sample_images == []
+
+
+# ---------------------------------------------------------------------------
+# T-4 tests: _emit helper + produce_source orchestrator
+# ---------------------------------------------------------------------------
+
+def _fake_to_file_uri(p, m=None):  # path-contract-ok
+    """Fake to_file_uri for mocking in tests. path-contract-ok: this IS the mock target."""
+    return "file:///" + p.lstrip("/")  # path-contract-ok
+
+
+def _make_source(readonly=True, output_path="/output/dest", path="/src/videos"):
+    """Return a MagicMock with source attributes."""
+    src = MagicMock()
+    src.readonly = readonly
+    src.output_path = output_path
+    src.path = path
+    return src
+
+
+def _make_config(scraper_cfg=None, gallery_cfg=None):
+    return {
+        "gallery": gallery_cfg or {},
+        "scraper": scraper_cfg or {},
+    }
+
+
+def _make_file_info(path="/src/videos/ABC-123.mp4", size=1_000_000, mtime=1.0):
+    return {"path": path, "size": size, "mtime": mtime, "nfo_mtime": 0.0}
+
+
+class TestEmit:
+    """Tests for _emit helper."""
+
+    def test_appends_outcome_to_result(self):
+        from core.readonly_producer import ProduceResult, _emit
+
+        result = ProduceResult(source_path="/src", output_path="/out")
+        _emit(None, result, "file:///src/a.mp4", "skipped")
+
+        assert len(result.outcomes) == 1
+        o = result.outcomes[0]
+        assert o.source_uri == "file:///src/a.mp4"
+        assert o.status == "skipped"
+        assert o.movie_dir == ""
+        assert o.number == ""
+        assert o.error == ""
+
+    def test_calls_on_progress_with_outcome(self):
+        from core.readonly_producer import ProduceResult, _emit
+
+        result = ProduceResult(source_path="/src", output_path="/out")
+        received = []
+        _emit(received.append, result, "file:///src/a.mp4", "created", "/out/Movie", "ABC-123")
+
+        assert len(received) == 1
+        assert received[0] is result.outcomes[0]
+        assert received[0].movie_dir == "/out/Movie"
+        assert received[0].number == "ABC-123"
+
+    def test_no_on_progress_is_noop(self):
+        from core.readonly_producer import ProduceResult, _emit
+
+        result = ProduceResult(source_path="/src", output_path="/out")
+        # Must not raise
+        _emit(None, result, "file:///src/a.mp4", "failed", error="boom")
+        assert result.outcomes[0].error == "boom"
+
+
+class TestProduceSourceGuards:
+    """Guard tests for produce_source (CD-88b-6 / Acceptance #11)."""
+
+    def test_not_readonly_returns_aborted(self):
+        """source.readonly=False → aborted_reason='not_readonly', counters all 0."""
+        from core.readonly_producer import produce_source
+
+        source = _make_source(readonly=False)
+        repo = MagicMock()
+        config = _make_config()
+
+        with patch("core.readonly_producer._list_source_videos") as mock_list:
+            result = produce_source(source, config, repo)
+
+        assert result.aborted_reason == "not_readonly"
+        assert result.created == 0
+        assert result.skipped == 0
+        assert result.failed == 0
+        assert result.no_scrape == 0
+        mock_list.assert_not_called()
+
+    def test_empty_output_path_returns_aborted(self):
+        """source.output_path='' → aborted_reason='no_output_path', search_jav not called."""
+        from core.readonly_producer import produce_source
+
+        source = _make_source(output_path="")
+        repo = MagicMock()
+        config = _make_config()
+
+        with patch("core.readonly_producer._list_source_videos") as mock_list, \
+             patch("core.readonly_producer.search_jav") as mock_search:
+            result = produce_source(source, config, repo)
+
+        assert result.aborted_reason == "no_output_path"
+        mock_list.assert_not_called()        # early return blocked all downstream work
+        mock_search.assert_not_called()
+
+    def test_whitespace_output_path_returns_aborted(self):
+        """source.output_path='   ' → aborted_reason='no_output_path'."""
+        from core.readonly_producer import produce_source
+
+        source = _make_source(output_path="   ")
+        repo = MagicMock()
+        config = _make_config()
+
+        with patch("core.readonly_producer._list_source_videos") as mock_list, \
+             patch("core.readonly_producer.search_jav") as mock_search:
+            result = produce_source(source, config, repo)
+
+        assert result.aborted_reason == "no_output_path"
+        mock_list.assert_not_called()
+        mock_search.assert_not_called()
+
+    def test_none_output_path_returns_aborted(self):
+        """source.output_path=None → aborted_reason='no_output_path'."""
+        from core.readonly_producer import produce_source
+
+        source = _make_source(output_path=None)
+        repo = MagicMock()
+        config = _make_config()
+
+        with patch("core.readonly_producer._list_source_videos") as mock_list, \
+             patch("core.readonly_producer.search_jav") as mock_search:
+            result = produce_source(source, config, repo)
+
+        assert result.aborted_reason == "no_output_path"
+        mock_list.assert_not_called()
+        mock_search.assert_not_called()
+
+
+class TestProduceSourceNoneNumberGuard:
+    """extract_number returns None → no_scrape++, search_jav NOT called (Codex P2b)."""
+
+    def test_none_number_no_search_jav(self):
+        from core.readonly_producer import produce_source
+
+        source = _make_source()
+        repo = MagicMock()
+        config = _make_config()
+        files = [_make_file_info(path="/src/videos/nonnumber.mp4")]
+
+        with patch("core.readonly_producer._list_source_videos", return_value=files), \
+             patch("core.readonly_producer._build_cover_index", return_value={}), \
+             patch("core.readonly_producer._build_owners", return_value={}), \
+             patch("core.readonly_producer._should_skip", return_value=False), \
+             patch("core.readonly_producer.normalize_path", return_value="/output/dest"), \
+             patch("core.readonly_producer.to_file_uri", side_effect=_fake_to_file_uri), \
+             patch("core.readonly_producer.extract_number", return_value=None) as mock_extract, \
+             patch("core.readonly_producer.search_jav") as mock_search:
+            result = produce_source(source, config, repo)
+
+        assert result.no_scrape == 1
+        assert result.created == 0
+        mock_extract.assert_called_once()
+        mock_search.assert_not_called()
+
+    def test_none_number_emits_no_scrape_outcome(self):
+        from core.readonly_producer import produce_source
+
+        source = _make_source()
+        repo = MagicMock()
+        config = _make_config()
+        files = [_make_file_info(path="/src/videos/nonnumber.mp4")]
+
+        with patch("core.readonly_producer._list_source_videos", return_value=files), \
+             patch("core.readonly_producer._build_cover_index", return_value={}), \
+             patch("core.readonly_producer._build_owners", return_value={}), \
+             patch("core.readonly_producer._should_skip", return_value=False), \
+             patch("core.readonly_producer.normalize_path", return_value="/output/dest"), \
+             patch("core.readonly_producer.to_file_uri", side_effect=_fake_to_file_uri), \
+             patch("core.readonly_producer.extract_number", return_value=None):
+            result = produce_source(source, config, repo)
+
+        assert len(result.outcomes) == 1
+        assert result.outcomes[0].status == "no_scrape"
+
+
+class TestProduceSourceMixedStats:
+    """5-file run: 2 skipped, 1 None-number, 1 search_jav→None, 1 success → check all counters."""
+
+    FILES = [
+        _make_file_info(path="/src/SKIP-001.mp4"),    # → skipped (cover exists)
+        _make_file_info(path="/src/SKIP-002.mp4"),    # → skipped (cover exists)
+        _make_file_info(path="/src/nonnumber.mp4"),   # → no_scrape (extract_number=None)
+        _make_file_info(path="/src/NOSCRAPE-001.mp4"),  # → no_scrape (search_jav=None)
+        _make_file_info(path="/src/SUCCESS-001.mp4"),   # → created
+    ]
+
+    def _run(self):
+        from core.readonly_producer import produce_source
+
+        source = _make_source()
+        repo = MagicMock()
+        config = _make_config()
+
+        def fake_should_skip(src_uri, output_uri, cover_index):
+            return "SKIP-001" in src_uri or "SKIP-002" in src_uri
+
+        def fake_extract_number(basename):
+            if "nonnumber" in basename:
+                return None
+            return basename.replace(".mp4", "").upper()
+
+        def fake_search_jav(number, source="auto", proxy_url=""):
+            if "NOSCRAPE" in number:
+                return None
+            return {"number": number, "title": "T", "cover": "", "actors": [], "tags": [],
+                    "date": "", "maker": "", "director": "", "series": "", "label": "",
+                    "sample_images": [], "duration": 0, "url": ""}
+
+        mock_movie_dir = MagicMock()
+        mock_movie_dir.__str__ = lambda self: "/output/dest/SUCCESS-001"
+
+        with patch("core.readonly_producer._list_source_videos", return_value=self.FILES), \
+             patch("core.readonly_producer._build_cover_index", return_value={}), \
+             patch("core.readonly_producer._build_owners", return_value={}), \
+             patch("core.readonly_producer._should_skip", side_effect=fake_should_skip), \
+             patch("core.readonly_producer.normalize_path", return_value="/output/dest"), \
+             patch("core.readonly_producer.to_file_uri", side_effect=_fake_to_file_uri), \
+             patch("core.readonly_producer.extract_number", side_effect=fake_extract_number), \
+             patch("core.readonly_producer.search_jav", side_effect=fake_search_jav), \
+             patch("core.readonly_producer._format_data", return_value={"number": "X", "title": "T", "actors": [], "maker": "", "date": "", "suffix": ""}), \
+             patch("core.readonly_producer._movie_dir", return_value=mock_movie_dir), \
+             patch("core.readonly_producer._write_movie_assets", return_value={"cover_fs": "/output/dest/SUCCESS-001/cover.jpg", "sample_fs": []}), \
+             patch("core.readonly_producer._upsert_db"):
+            return produce_source(source, config, repo)
+
+    def test_counters(self):
+        result = self._run()
+        assert result.skipped == 2
+        assert result.no_scrape == 2
+        assert result.created == 1
+        assert result.failed == 0
+
+    def test_outcome_count(self):
+        result = self._run()
+        assert len(result.outcomes) == 5
+
+    def test_outcome_statuses(self):
+        result = self._run()
+        statuses = [o.status for o in result.outcomes]
+        assert statuses.count("skipped") == 2
+        assert statuses.count("no_scrape") == 2
+        assert statuses.count("created") == 1
+
+
+class TestProduceSourceOnProgress:
+    """on_progress callback called once per processed file."""
+
+    def test_on_progress_called_per_file(self):
+        from core.readonly_producer import produce_source
+
+        source = _make_source()
+        repo = MagicMock()
+        config = _make_config()
+        files = [
+            _make_file_info(path="/src/A.mp4"),
+            _make_file_info(path="/src/B.mp4"),
+            _make_file_info(path="/src/C.mp4"),
+        ]
+        received = []
+
+        with patch("core.readonly_producer._list_source_videos", return_value=files), \
+             patch("core.readonly_producer._build_cover_index", return_value={}), \
+             patch("core.readonly_producer._build_owners", return_value={}), \
+             patch("core.readonly_producer._should_skip", return_value=False), \
+             patch("core.readonly_producer.normalize_path", return_value="/output/dest"), \
+             patch("core.readonly_producer.to_file_uri", side_effect=_fake_to_file_uri), \
+             patch("core.readonly_producer.extract_number", return_value=None):
+            produce_source(source, config, repo, on_progress=received.append)
+
+        # 3 files, all become no_scrape (extract_number=None)
+        assert len(received) == 3
+        assert all(o.status == "no_scrape" for o in received)
+
+
+class TestProduceSourceShouldAbort:
+    """should_abort returning True on 3rd file → loop stops, len(outcomes)==2."""
+
+    def test_abort_stops_loop(self):
+        from core.readonly_producer import produce_source
+
+        source = _make_source()
+        repo = MagicMock()
+        config = _make_config()
+        files = [
+            _make_file_info(path="/src/A.mp4"),
+            _make_file_info(path="/src/B.mp4"),
+            _make_file_info(path="/src/C.mp4"),
+            _make_file_info(path="/src/D.mp4"),
+        ]
+        call_count = [0]
+
+        def abort_on_third():
+            call_count[0] += 1
+            return call_count[0] >= 3  # abort on 3rd call (before 3rd file)
+
+        with patch("core.readonly_producer._list_source_videos", return_value=files), \
+             patch("core.readonly_producer._build_cover_index", return_value={}), \
+             patch("core.readonly_producer._build_owners", return_value={}), \
+             patch("core.readonly_producer._should_skip", return_value=False), \
+             patch("core.readonly_producer.normalize_path", return_value="/output/dest"), \
+             patch("core.readonly_producer.to_file_uri", side_effect=_fake_to_file_uri), \
+             patch("core.readonly_producer.extract_number", return_value=None):
+            result = produce_source(source, config, repo, should_abort=abort_on_third)
+
+        assert len(result.outcomes) == 2
+
+
+class TestProduceSourceExceptionDoesNotAbort:
+    """Single-file exception doesn't abort loop: 2nd file raises, 3rd still processed."""
+
+    def test_exception_on_second_file_third_still_processed(self):
+        from core.readonly_producer import produce_source
+
+        source = _make_source()
+        repo = MagicMock()
+        config = _make_config()
+        files = [
+            _make_file_info(path="/src/A-001.mp4"),
+            _make_file_info(path="/src/B-002.mp4"),  # will raise
+            _make_file_info(path="/src/C-003.mp4"),
+        ]
+
+        meta = {"number": "X", "title": "T", "cover": "", "actors": [], "tags": [],
+                "date": "", "maker": "", "director": "", "series": "", "label": "",
+                "sample_images": [], "duration": 0, "url": ""}
+        fd = {"number": "X", "title": "T", "actors": [], "maker": "", "date": "", "suffix": ""}
+
+        call_count = [0]
+
+        def fake_write(movie_dir, meta_arg, fd_arg, src_path, cfg):
+            call_count[0] += 1
+            if call_count[0] == 2:
+                raise OSError("disk full")
+            return {"cover_fs": "", "sample_fs": []}
+
+        mock_movie_dir = MagicMock()
+        mock_movie_dir.__str__ = lambda self: "/output/dest/X"
+
+        with patch("core.readonly_producer._list_source_videos", return_value=files), \
+             patch("core.readonly_producer._build_cover_index", return_value={}), \
+             patch("core.readonly_producer._build_owners", return_value={}), \
+             patch("core.readonly_producer._should_skip", return_value=False), \
+             patch("core.readonly_producer.normalize_path", return_value="/output/dest"), \
+             patch("core.readonly_producer.to_file_uri", side_effect=_fake_to_file_uri), \
+             patch("core.readonly_producer.extract_number", return_value="MOCK-001"), \
+             patch("core.readonly_producer.search_jav", return_value=meta), \
+             patch("core.readonly_producer._format_data", return_value=fd), \
+             patch("core.readonly_producer._movie_dir", return_value=mock_movie_dir), \
+             patch("core.readonly_producer._write_movie_assets", side_effect=fake_write), \
+             patch("core.readonly_producer._upsert_db"):
+            result = produce_source(source, config, repo)
+
+        assert result.failed == 1
+        assert result.created == 2  # files 1 and 3 succeed
+        statuses = [o.status for o in result.outcomes]
+        assert statuses == ["created", "failed", "created"]

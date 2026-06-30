@@ -31,7 +31,8 @@ from core.organizer import (
     truncate_to_chars,
 )
 from core.path_utils import is_path_under_dir, normalize_path, to_file_uri, uri_to_fs_path
-from core.scraper import normalize_number
+from core.scraper import extract_number, normalize_number, search_jav
+from core.video_extensions import DEFAULT_VIDEO_EXTENSIONS
 
 logger = get_logger(__name__)
 
@@ -366,3 +367,87 @@ def _upsert_db(
         nfo_mtime=0.0,
     )
     repo.upsert(v)
+
+
+# ---------------------------------------------------------------------------
+# T-4: _emit helper + produce_source orchestrator (plan §7)
+# ---------------------------------------------------------------------------
+
+def _emit(on_progress, result, source_uri, status, movie_dir="", number="", error=""):
+    """Append a ProduceOutcome to result.outcomes and fire on_progress callback."""
+    outcome = ProduceOutcome(
+        source_uri=source_uri,
+        status=status,
+        movie_dir=movie_dir,
+        number=number,
+        error=error,
+    )
+    result.outcomes.append(outcome)
+    if on_progress is not None:
+        on_progress(outcome)
+
+
+def produce_source(source, config, repo, *, proxy_url="", on_progress=None, should_abort=None) -> ProduceResult:
+    """Orchestrate per-source readonly generation: guard → list → skip → scrape → write → upsert.
+
+    Pure service layer. NO FastAPI, NO SSE, NO router. (CD-88b-8, §1.1)
+    Caller (88c) injects on_progress/should_abort for SSE streaming.
+    """
+    result = ProduceResult(source_path=source.path, output_path=source.output_path or "")
+
+    # G8/D7 guards (CD-88b-6 / Acceptance #11)
+    if not source.readonly:
+        result.aborted_reason = "not_readonly"
+        return result
+    if not (source.output_path or "").strip():
+        result.aborted_reason = "no_output_path"
+        return result
+
+    gallery = config.get("gallery", {})
+    scraper_cfg = config.get("scraper", {})
+    path_mappings = gallery.get("path_mappings", {})
+
+    output_root = normalize_path(source.output_path)
+    output_uri = to_file_uri(output_root, path_mappings)
+
+    cover_index = _build_cover_index(repo, output_uri)
+    owners = _build_owners(cover_index)
+
+    files = _list_source_videos(source.path, set(DEFAULT_VIDEO_EXTENSIONS), _min_size_bytes(gallery))
+
+    for fi in files:
+        if should_abort is not None and should_abort():
+            break
+
+        src_uri = to_file_uri(fi["path"], path_mappings)
+
+        if _should_skip(src_uri, output_uri, cover_index):
+            result.skipped += 1
+            _emit(on_progress, result, src_uri, "skipped")
+            continue
+
+        number = extract_number(os.path.basename(fi["path"]))  # Optional[str]
+        if not number:  # None guard (Codex P2b): search_jav(None) crashes
+            result.no_scrape += 1
+            _emit(on_progress, result, src_uri, "no_scrape")
+            continue
+
+        meta = search_jav(number, source="auto", proxy_url=proxy_url)
+        if not meta:
+            result.no_scrape += 1
+            _emit(on_progress, result, src_uri, "no_scrape")
+            continue
+
+        try:
+            fd = _format_data(meta, fi["path"], scraper_cfg)
+            movie_dir = _movie_dir(output_root, fd, src_uri, scraper_cfg, owners)
+            assets = _write_movie_assets(str(movie_dir), meta, fd, fi["path"], scraper_cfg)
+            _upsert_db(repo, src_uri, fi, meta, assets, path_mappings)
+            result.created += 1
+            _emit(on_progress, result, src_uri, "created", str(movie_dir), number)
+        except Exception as e:
+            result.failed += 1
+            logger.warning("[readonly_producer] 生成失敗 %s: %s", src_uri, e)
+            _emit(on_progress, result, src_uri, "failed", number=number, error=str(e))
+
+    return result
