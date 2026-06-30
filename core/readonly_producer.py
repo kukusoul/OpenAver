@@ -15,18 +15,22 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from core.database import Video
 from core.gallery_scanner import fast_scan_directory
 from core.logger import get_logger
 from core.organizer import (
     _detect_suffixes,
     _detect_vr_cluster,
     _strip_num_prefixes,
+    download_image,
     format_string,
+    generate_jellyfin_images,
+    generate_nfo,
     sanitize_filename,
     truncate_title,
     truncate_to_chars,
 )
-from core.path_utils import is_path_under_dir, normalize_path, uri_to_fs_path
+from core.path_utils import is_path_under_dir, normalize_path, to_file_uri, uri_to_fs_path
 from core.scraper import normalize_number
 
 logger = get_logger(__name__)
@@ -264,3 +268,101 @@ def _movie_dir(
 
     owners[str(candidate)] = source_uri
     return candidate
+
+
+# ---------------------------------------------------------------------------
+# T-3: write off-flavor assets + DB upsert (plan §5.2 / §6)
+# ---------------------------------------------------------------------------
+
+def _write_movie_assets(
+    movie_dir: str,
+    meta: dict,
+    format_data: dict,
+    source_fs_path: str,
+    config: dict,
+) -> dict:
+    """Write nfo + cover + -poster/-fanart + extrafanart to movie_dir.
+
+    Returns {'cover_fs': str, 'sample_fs': list[str]}.
+    cover_fs is '' when cover download fails or meta['cover'] is empty.
+    """
+    os.makedirs(movie_dir, exist_ok=True)
+    base = _build_basename(format_data, source_fs_path, config)
+    base_stem = str(Path(movie_dir) / base)
+
+    # 1) Cover: download from remote URL (C6 — always re-scrape, never read source image)
+    cover_fs = base_stem + '.jpg'
+    has_cover = bool(meta.get('cover')) and download_image(meta['cover'], cover_fs)
+
+    # 2) poster/fanart (off mode also produces these — Acceptance #6)
+    imgs = generate_jellyfin_images(cover_fs, base_stem) if has_cover else {}
+    has_poster = imgs.get('poster', False)
+    has_fanart = imgs.get('fanart', False)
+
+    # 3) extrafanart — gated only on config key; per-movie dir already exists (no create_folder)
+    sample_fs: list = []
+    if config.get('download_sample_images'):
+        ef_dir = Path(movie_dir) / 'extrafanart'
+        os.makedirs(ef_dir, exist_ok=True)
+        for i, url in enumerate(meta.get('sample_images', []), 1):
+            dest = str(ef_dir / f'fanart{i}.jpg')
+            if download_image(url, dest):
+                sample_fs.append(dest)
+
+    # 4) NFO — title/fields use full meta (not truncated format_data)
+    nfo_fs = base_stem + '.nfo'
+    generate_nfo(
+        number=meta['number'],
+        title=meta['title'],
+        actors=meta.get('actors', []),
+        tags=meta.get('tags', []),
+        date=meta.get('date', ''),
+        maker=meta.get('maker', ''),
+        url=meta.get('url', ''),
+        output_path=nfo_fs,
+        has_poster=has_poster,
+        has_fanart=has_fanart,
+        director=meta.get('director', ''),
+        duration=meta.get('duration'),
+        series=meta.get('series', ''),
+        label=meta.get('label', ''),
+        summary=meta.get('_summary', ''),
+        rating=meta.get('_rating'),
+        external_manager=config.get('external_manager', 'off'),
+    )
+    return {'cover_fs': cover_fs if has_cover else '', 'sample_fs': sample_fs}
+
+
+def _upsert_db(
+    repo,
+    source_uri: str,
+    file_info: dict,
+    meta: dict,
+    assets: dict,
+    path_mappings: dict,
+) -> None:
+    """Manually construct Video and upsert to repo (CD-88b-7).
+
+    path = source_uri (streaming key).
+    cover_path / sample_images = local output URIs (via to_file_uri).
+    user_tags intentionally omitted → upsert preserves existing DB value.
+    """
+    v = Video(
+        path=source_uri,
+        number=meta['number'],
+        title=meta['title'],
+        actresses=meta.get('actors', []),
+        maker=meta.get('maker', ''),
+        director=meta.get('director', ''),
+        series=meta.get('series') or None,
+        label=meta.get('label', ''),
+        tags=meta.get('tags', []),
+        sample_images=[to_file_uri(p, path_mappings) for p in assets['sample_fs']],
+        duration=meta.get('duration'),
+        size_bytes=file_info['size'],
+        cover_path=to_file_uri(assets['cover_fs'], path_mappings) if assets['cover_fs'] else '',
+        release_date=meta.get('date', ''),
+        mtime=file_info['mtime'],
+        nfo_mtime=0.0,
+    )
+    repo.upsert(v)
