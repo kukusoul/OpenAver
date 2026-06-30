@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.2] - 2026-06-30
+
+本版主軸：**core/database.py 模組化拆分**（feature/87，spec-87）——把 2,152 行的單一 `core/database.py` 重構成 `core/database/` 套件，降低 AI 輔助編輯時的長 context 出錯率。**零行為變更、零使用者可見影響、零 API/schema/SQL 變動**。分兩階段：87a 純機械搬移、87b 消除兩個鏡像 repo 的重複碼。對外 `from core.database import X` 路徑字面不變（永久 facade）。
+
+### Internal
+- **87a 套件化 + 永久 facade**：`core/database.py` 拆成 `core/database/` 套件，依領域分 `connection` / `video` / `alias` / `tag_alias` / `actress` / `migrate` 六個子模組，`__init__.py` 作為永久 re-export facade（含私有 `_migrate_old_aliases`）。19 個 production 檔與 34 個 test 檔的 import 路徑零改動；唯一 test 調整是 4 個 `get_db_path` monkeypatch target 字串機械式對齊（拆檔後子模組各持 binding 副本所致）。新增 facade export 守衛測試。
+- **87b 消除 alias/tag_alias 鏡像重複碼**：`AliasRepository` 與 `TagAliasRepository` 原為逐位元鏡像（差異僅三軸：表名、SQL alias token、record 類），抽出私有共用基類 `_AliasRepositoryBase[T]`（Generic），12 個共用 method 上移、body 逐字保留僅套 `self._table` / `self._sql_alias` / `self._record_cls` 參數化。`sync_from_favorite` 維持 `AliasRepository` 獨有；CD-58-3「uniqueness 只查本表、不跨查」語意由表名參數化結構性保證。淨刪 549 行重複碼。
+- 新增跨 repo 行為等價性護欄測試（參數化並列比對兩 repo 的 CRUD/resolve/uniqueness），作為 dedup 安全網。
+
+### 測試
+- 全套 pytest **4848 passed, 2 skipped**（unit + integration，排除 smoke / e2e；較 0.11.1 的 4799 +49：facade export 守衛 +1、跨 repo 等價性 +32、87a 過程零淨增、87b 淨變化 0）+ `ruff check .` 綠 + `npm run lint`（eslint + stylelint）綠。
+- 來源金絲雀：**8 源全 PASS**（pre-merge live）。
+- 等價性網以 mutation 實證：故意拼錯任一條 json_each 查詢即令對應 repo 測試紅燈，且跨 repo 網能定位到出錯的那個 repo。
+
 ## [0.11.1] - 2026-06-28
 
 本版主軸：**JavLibrary 同番號多版本手動切換**（feature/86，spec-86）——AV 番號會被不同片商跨年代重複使用（如 `MIDV-013`：舊片 vs MOODYZ 新片），預設都抓到先收錄的舊片。本版讓你在 JavLibrary 看封面手動挑版本。範圍刻意極小：僅 JavLibrary、僅手動入口、桌面 standalone 限定（需 CF transport），不進批次、不揭露 AI。
