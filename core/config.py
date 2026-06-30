@@ -556,6 +556,13 @@ def iter_gallery_sources(gallery_config) -> List[DirectoryConfig]:
     元素: str / dict / DirectoryConfig 皆可 —— 永久容忍裸 str（舊 config、測試 fixture）。
     回傳: List[DirectoryConfig]，呼叫端永遠拿到帶 .path/.readonly/.output_path 的物件。
     未知型別元素（如 42、None）跳過，不阻斷、不拋例外。
+
+    安全性：丟棄沒有「可用非空字串 path」的元素（缺 path / path=null / path=""
+    / path 非字串）。空 path 會被 to_file_uri('') 變成 'file:///'，而 file:/// 是
+    任意 file URI 的前綴 —— 會讓 image/video proxy allowlist、showcase 篩選、
+    settings-link 比對全部命中任意路徑（CWE-allowlist bypass）。故在這個讀取路徑
+    chokepoint 直接 skip。readonly / output_path 欄位型別不對（如 null）則容忍降級，
+    不讓單一髒元素拋 ValidationError 連坐所有 consumer。
     """
     if gallery_config is None:
         return []
@@ -567,14 +574,25 @@ def iter_gallery_sources(gallery_config) -> List[DirectoryConfig]:
     out: List[DirectoryConfig] = []
     for d in raw or []:
         if isinstance(d, DirectoryConfig):
-            out.append(d)
+            if d.path:
+                out.append(d)
         elif isinstance(d, str):
-            out.append(DirectoryConfig(path=d))
+            if d:
+                out.append(DirectoryConfig(path=d))
         elif isinstance(d, dict):
+            path = d.get('path')
+            if not isinstance(path, str) or not path:
+                continue  # 缺 path / null / 空 / 非字串 → skip（避免 file:/// allowlist 全命中）
+            readonly = d.get('readonly', False)
+            if not isinstance(readonly, bool):
+                readonly = False  # null / 型別錯誤 → 降級 False
+            output_path = d.get('output_path', '')
+            if not isinstance(output_path, str):
+                output_path = ''  # null / 型別錯誤 → 降級 ''
             out.append(DirectoryConfig(
-                path=d.get('path', ''),
-                readonly=d.get('readonly', False),
-                output_path=d.get('output_path', ''),
+                path=path,
+                readonly=readonly,
+                output_path=output_path,
             ))
         # 其他型別跳過（不阻斷）
     return out

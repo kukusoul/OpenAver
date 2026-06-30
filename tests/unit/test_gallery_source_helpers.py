@@ -220,3 +220,85 @@ class TestDirectoryConfigModel:
         dc = DirectoryConfig(path="/p", readonly=False, output_path="/out")
         assert dc.readonly is False
         assert dc.output_path == "/out"
+
+
+# ---------------------------------------------------------------------------
+# Robustness / security hardening (P1 + P2 findings)
+# ---------------------------------------------------------------------------
+
+class TestRobustness:
+    """Verify that iter_gallery_sources DROPS entries without a usable non-empty string path
+    and coerces null/wrong-type optional fields instead of crashing.
+
+    P1: empty/missing path must not yield '' which becomes file:/// (universal allowlist bypass).
+    P2: path=null must not raise ValidationError (dict key present with None value).
+    """
+
+    def test_dict_missing_path_key_skipped(self):
+        """Dict entry with no 'path' key is dropped entirely."""
+        dirs = [{"readonly": True}, {"path": "/valid"}]
+        result = iter_gallery_sources({"directories": dirs})
+        assert len(result) == 1
+        assert result[0].path == "/valid"
+
+    def test_dict_path_none_skipped_no_exception(self):
+        """{'path': None} must be silently skipped — not raise ValidationError (P2)."""
+        result = iter_gallery_sources({"directories": [{"path": None}]})
+        assert result == []
+
+    def test_dict_path_empty_string_skipped(self):
+        """{'path': ''} must be silently skipped (P1: empty path → file:/// bypass)."""
+        result = iter_gallery_sources({"directories": [{"path": ""}]})
+        assert result == []
+
+    def test_str_empty_string_skipped(self):
+        """Bare empty string element must be silently skipped."""
+        result = iter_gallery_sources({"directories": [""]})
+        assert result == []
+
+    def test_dict_readonly_none_coerced_to_false(self):
+        """readonly=null must NOT crash; coerced to False."""
+        result = iter_gallery_sources({"directories": [{"path": "/x", "readonly": None}]})
+        assert len(result) == 1
+        assert result[0].readonly is False
+
+    def test_dict_output_path_none_coerced_to_empty(self):
+        """output_path=null must NOT crash; coerced to ''."""
+        result = iter_gallery_sources({"directories": [{"path": "/x", "output_path": None}]})
+        assert len(result) == 1
+        assert result[0].output_path == ""
+
+    def test_dict_readonly_wrong_type_coerced_to_false(self):
+        """readonly with wrong type (str) is coerced to False, not passed to Pydantic."""
+        result = iter_gallery_sources({"directories": [{"path": "/x", "readonly": "true"}]})
+        assert len(result) == 1
+        assert result[0].readonly is False
+
+    def test_mixed_bad_and_good_entries_only_good_emitted(self):
+        """Mix of bad entries (missing/null/empty path) plus valid ones — only valid survive."""
+        dirs = [
+            {"readonly": True},           # missing path
+            {"path": None},               # null path
+            {"path": ""},                 # empty path
+            "",                            # bare empty string
+            {"path": "/good1"},
+            "/good2",
+        ]
+        result = iter_gallery_sources({"directories": dirs})
+        assert len(result) == 2
+        assert result[0].path == "/good1"
+        assert result[1].path == "/good2"
+
+    def test_get_gallery_source_paths_never_yields_empty_or_none(self):
+        """get_gallery_source_paths must never include '' or None in its output."""
+        dirs = [
+            {"path": None},
+            {"path": ""},
+            "",
+            {"readonly": False},
+            {"path": "/ok"},
+        ]
+        paths = get_gallery_source_paths({"directories": dirs})
+        assert "" not in paths
+        assert None not in paths
+        assert paths == ["/ok"]
