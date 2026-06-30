@@ -7,6 +7,8 @@ import inspect
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 
 # ---------------------------------------------------------------------------
 # Guard test: producer must not contain forbidden names (DoD / CD-88b-1)
@@ -580,6 +582,7 @@ class TestWriteMovieAssets:
 
         def fake_nfo(**kwargs):
             recorded_paths.append(kwargs.get('output_path', ''))
+            return True   # generate_nfo returns bool; True = write ok
 
         with patch('core.readonly_producer.download_image', side_effect=fake_download), \
              patch('core.readonly_producer.generate_jellyfin_images', side_effect=fake_jellyfin), \
@@ -692,6 +695,7 @@ class TestWriteMovieAssets:
 
         def capture_nfo(**kwargs):
             captured.update(kwargs)
+            return True   # generate_nfo returns bool; True = write ok
 
         with patch('core.readonly_producer.download_image', return_value=True), \
              patch('core.readonly_producer.generate_jellyfin_images',
@@ -704,6 +708,23 @@ class TestWriteMovieAssets:
         assert captured['external_manager'] == 'jellyfin'
         assert captured['has_poster'] is True
         assert captured['has_fanart'] is True
+
+    def test_nfo_write_failure_raises(self, tmp_path):
+        """generate_nfo returns False (write failed) → _write_movie_assets raises.
+
+        NFO is a required off-complete output; a swallowed False must not be treated
+        as success (else produce_source counts created + upserts a movie with no NFO).
+        """
+        from core.readonly_producer import _write_movie_assets
+
+        movie_dir = str(tmp_path / 'output' / 'TEST-001')
+        fd = _t3_format_data()
+        with patch('core.readonly_producer.download_image', return_value=True), \
+             patch('core.readonly_producer.generate_jellyfin_images',
+                   return_value={'poster': True, 'fanart': True}), \
+             patch('core.readonly_producer.generate_nfo', return_value=False):
+            with pytest.raises(RuntimeError):
+                _write_movie_assets(movie_dir, _T3_META, fd, '/src/TEST-001.mp4', _T3_BASE_CONFIG)
 
 
 class TestUpsertDb:
@@ -1167,3 +1188,51 @@ class TestProduceSourceExceptionDoesNotAbort:
         assert result.created == 2  # files 1 and 3 succeed
         statuses = [o.status for o in result.outcomes]
         assert statuses == ["created", "failed", "created"]
+
+
+class TestProduceSourceFailureContract:
+    """Required-asset failure → failed (not created), no upsert, fixed error message (P1/P2)."""
+
+    def _run_with_write_failure(self, exc):
+        from core.readonly_producer import produce_source
+
+        source = _make_source()
+        repo = MagicMock()
+        config = _make_config()
+        files = [_make_file_info(path="/src/A-001.mp4")]
+        meta = {"number": "X", "title": "T", "cover": "u", "actors": [], "tags": [],
+                "date": "", "maker": "", "director": "", "series": "", "label": "",
+                "sample_images": [], "duration": 0, "url": ""}
+        fd = {"number": "X", "title": "T", "actors": [], "maker": "", "date": "", "suffix": ""}
+        mock_movie_dir = MagicMock()
+        mock_movie_dir.__str__ = lambda self: "/output/dest/X"
+        upsert_mock = MagicMock()
+
+        with patch("core.readonly_producer._list_source_videos", return_value=files), \
+             patch("core.readonly_producer._build_cover_index", return_value={}), \
+             patch("core.readonly_producer._build_owners", return_value={}), \
+             patch("core.readonly_producer._should_skip", return_value=False), \
+             patch("core.readonly_producer.normalize_path", return_value="/output/dest"), \
+             patch("core.readonly_producer.to_file_uri", side_effect=_fake_to_file_uri), \
+             patch("core.readonly_producer.extract_number", return_value="MOCK-001"), \
+             patch("core.readonly_producer.search_jav", return_value=meta), \
+             patch("core.readonly_producer._format_data", return_value=fd), \
+             patch("core.readonly_producer._movie_dir", return_value=mock_movie_dir), \
+             patch("core.readonly_producer._write_movie_assets", side_effect=exc), \
+             patch("core.readonly_producer._upsert_db", upsert_mock):
+            result = produce_source(source, config, repo)
+        return result, upsert_mock
+
+    def test_required_asset_failure_counts_failed_and_skips_upsert(self):
+        # NFO/required-asset write failure surfaces as RuntimeError from _write_movie_assets.
+        result, upsert_mock = self._run_with_write_failure(RuntimeError("NFO write failed: /x"))
+        assert result.failed == 1
+        assert result.created == 0
+        upsert_mock.assert_not_called()                 # never claim generated when NFO missing
+        assert result.outcomes[0].status == "failed"
+
+    def test_failed_outcome_error_is_fixed_message(self):
+        # Raw exception text (paths/errno) must NOT reach the SSE-bound error field.
+        result, _ = self._run_with_write_failure(OSError("[Errno 28] No space left on device: '/output/x'"))
+        assert result.outcomes[0].error == "生成失敗"
+        assert "Errno" not in result.outcomes[0].error

@@ -310,9 +310,15 @@ def _write_movie_assets(
             if download_image(url, dest):
                 sample_fs.append(dest)
 
-    # 4) NFO — title/fields use full meta (not truncated format_data)
+    # 4) NFO — title/fields use full meta (not truncated format_data).
+    # NFO is a REQUIRED off-complete output: a write failure must NOT be silently
+    # treated as success (generate_nfo swallows its own I/O error and returns False).
+    # Raise so produce_source counts the item as failed and skips _upsert_db — DB never
+    # claims a movie was generated when the NFO is missing ("每片成功生成後寫一筆").
+    # Cover/poster/fanart stay best-effort: a missing cover is acceptable per C6
+    # (cold title with no image) and self-heals on the next incremental run.
     nfo_fs = base_stem + '.nfo'
-    generate_nfo(
+    nfo_ok = generate_nfo(
         number=meta['number'],
         title=meta['title'],
         actors=meta.get('actors', []),
@@ -331,6 +337,8 @@ def _write_movie_assets(
         rating=meta.get('_rating'),
         external_manager=config.get('external_manager', 'off'),
     )
+    if not nfo_ok:
+        raise RuntimeError(f"NFO write failed: {nfo_fs}")
     return {'cover_fs': cover_fs if has_cover else '', 'sample_fs': sample_fs}
 
 
@@ -445,9 +453,12 @@ def produce_source(source, config, repo, *, proxy_url="", on_progress=None, shou
             _upsert_db(repo, src_uri, fi, meta, assets, path_mappings)
             result.created += 1
             _emit(on_progress, result, src_uri, "created", str(movie_dir), number)
-        except Exception as e:
+        except Exception:
             result.failed += 1
-            logger.warning("[readonly_producer] 生成失敗 %s: %s", src_uri, e)
-            _emit(on_progress, result, src_uri, "failed", number=number, error=str(e))
+            # Full detail + traceback to the log (error level, diagnosable);
+            # ProduceOutcome.error is the 88c SSE-bound field — use a fixed message
+            # (repo error policy) so raw exception text (paths, errno) never leaks.
+            logger.exception("[readonly_producer] 生成失敗: %s", src_uri)
+            _emit(on_progress, result, src_uri, "failed", number=number, error="生成失敗")
 
     return result
