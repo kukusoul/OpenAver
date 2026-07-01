@@ -727,7 +727,10 @@ export function stateScan() {
             }
 
             // 自動儲存設定
-            if (this.configDirty) {
+            // configDirty：設定表單改動；isFolderDirty：資料夾清單改動（含 readonly 切換、
+            // output_path 編輯）。後者不會設 configDirty，若不納入 gate，readonly/輸出路徑的
+            // 編輯不會存檔，generate 會用舊的持久化設定 → readonly 路徑永遠不執行（PR#91 ①）。
+            if (this.configDirty || this.isFolderDirty) {
                 await this.saveConfig();
             }
 
@@ -779,12 +782,17 @@ export function stateScan() {
                             this.nfoUpdateVisible = false;
                         }
 
-                        // 88c-P2: 唯讀來源整源失敗（source_errors）時完成 toast 走 warn，
-                        // 不可純 success（後端完成通知已同步納入 source_errors）。
+                        // 88c-P2: 唯讀來源整源失敗（source_errors）或個別影片失敗（failed）時
+                        // 完成 toast 走 warn，不可純 success（後端完成通知已同步納入兩者）。
+                        // no_scrape 是「線上查無 metadata」的正常情況，不計為失敗（PR#91 ②）。
                         const srcErrors = (data.readonly_stats && data.readonly_stats.source_errors) || 0;
-                        if (srcErrors > 0) {
+                        const failedCount = (data.readonly_stats && data.readonly_stats.failed) || 0;
+                        if (srcErrors > 0 || failedCount > 0) {
+                            const parts = [];
+                            if (srcErrors > 0) parts.push(`${srcErrors} 個唯讀來源失敗`);
+                            if (failedCount > 0) parts.push(`${failedCount} 部失敗`);
                             this.showToast(
-                                `完成 ${data.video_count} 部，但 ${srcErrors} 個唯讀來源失敗，詳細見日誌`,
+                                `完成 ${data.video_count} 部，但 ${parts.join('、')}，詳細見日誌`,
                                 'warn'
                             );
                         } else {

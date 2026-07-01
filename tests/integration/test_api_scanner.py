@@ -1441,3 +1441,43 @@ class TestGenerateReadonlyBridge:
         assert final.args[0] == "warn", f"完成通知應為 warn，實得 {final.args[0]}"
         assert final.args[1] == "notif.scanner_done_with_errors"
         assert "來源失敗" in final.kwargs.get("message", "")
+
+    # 11. PR#91 ②：個別影片失敗（readonly failed>0, source_errors=0）→ 完成通知走 warn
+    def test_per_video_failure_completion_notif_is_warn(
+        self, client, tmp_path, monkeypatch, mocker, parse_sse_events
+    ):
+        """produce_source 未拋錯（source_errors=0）但回傳 failed>0（例如 NFO 寫入失敗）
+        → 完成通知仍須 warn/scanner_done_with_errors，不可純 success（PR#91 ②）。
+        no fix → failed-only 的完成通知會報 success，本測試 RED。"""
+        from core.readonly_producer import ProduceResult
+        cfg = self._readonly_config(tmp_path, [(True, str(tmp_path / "out0"))])
+        monkeypatch.setattr("web.routers.scanner.load_config", lambda: cfg)
+        mocker.patch(
+            "web.routers.scanner.produce_source",
+            return_value=ProduceResult(
+                source_path=str(tmp_path / "src0"),
+                output_path=str(tmp_path / "out0"),
+                created=1, failed=2,
+            ),
+        )
+        mock_notif = mocker.patch("web.routers.scanner._emit_notif")
+
+        resp = client.get("/api/gallery/generate")
+        assert resp.status_code == 200
+        events = parse_sse_events(resp.text)
+
+        # readonly_stats 帶 failed=2、source_errors=0
+        done = [e for e in events if e.get("type") == "done"][-1]
+        assert done["readonly_stats"]["failed"] == 2
+        assert done["readonly_stats"]["source_errors"] == 0
+
+        completion_calls = [
+            c for c in mock_notif.call_args_list
+            if c.kwargs.get("task_type") == "scanner_generate"
+            and c.args and c.args[1] != "notif.scanner_started"
+        ]
+        assert completion_calls, "未發出完成通知"
+        final = completion_calls[-1]
+        assert final.args[0] == "warn", f"完成通知應為 warn，實得 {final.args[0]}"
+        assert final.args[1] == "notif.scanner_done_with_errors"
+        assert "2 部失敗" in final.kwargs.get("message", "")

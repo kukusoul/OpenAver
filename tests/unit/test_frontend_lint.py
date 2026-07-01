@@ -2908,9 +2908,21 @@ class TestReadonlySourceErrorToastGuard:
         # 完成 toast 區塊須有依 source_errors 分流的 warn 分支
         idx = js.find("const srcErrors")
         assert idx != -1, "scanner/state-scan.js 缺 srcErrors 分流變數"
-        window = js[idx:idx + 500]
+        window = js[idx:idx + 800]
         assert "'warn'" in window or '"warn"' in window, \
             "scanner/state-scan.js source_errors 分支缺 warn toast"
+
+    def test_done_toast_consults_per_video_failed(self):
+        """PR#91 ②：完成 toast 也須 consult 個別影片失敗數（readonly_stats.failed），
+        failed>0 時走 warn 而非純 success。"""
+        js = SCANNER_SCAN_JS.read_text(encoding="utf-8")
+        idx = js.find("const srcErrors")
+        assert idx != -1, "scanner/state-scan.js 缺 srcErrors 分流變數"
+        window = js[idx:idx + 800]
+        assert ".failed" in window, \
+            "scanner/state-scan.js 完成 toast 未 consult readonly_stats.failed"
+        assert "'warn'" in window or '"warn"' in window, \
+            "scanner/state-scan.js failed 分支缺 warn toast"
 
 
 class TestSearchFileJsSubtitleHelper:

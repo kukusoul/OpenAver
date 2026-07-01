@@ -592,13 +592,18 @@ def generate_avlist() -> Generator[str, None, None]:
         # scan_error_count（一般掃描逐檔失敗）與 readonly source_errors（唯讀來源
         # 迴圈前整源拋錯）皆須讓完成通知走 warn，不可純 success（Codex P2：來源級
         # 失敗原本只增 source_errors，完成通知沒納入 → 仍報成功，誤導）。
+        # 個別影片失敗（readonly failed，例如 NFO 寫入失敗）同樣須讓完成通知走
+        # warn（PR#91 ②）。no_scrape 是「線上查無 metadata」的正常情況，不計入。
         _source_errors = readonly_summary["source_errors"]
-        if scan_error_count > 0 or _source_errors > 0:
+        _readonly_failed = readonly_summary["failed"]
+        if scan_error_count > 0 or _source_errors > 0 or _readonly_failed > 0:
             _err_parts = []
             if scan_error_count > 0:
                 _err_parts.append(f"{scan_error_count} 部失敗")
             if _source_errors > 0:
                 _err_parts.append(f"{_source_errors} 個來源失敗")
+            if _readonly_failed > 0:
+                _err_parts.append(f"{_readonly_failed} 部失敗")
             _emit_notif(
                 "warn", "notif.scanner_done_with_errors",
                 message=f"完成 {len(all_videos)} 部，" + "、".join(_err_parts),
