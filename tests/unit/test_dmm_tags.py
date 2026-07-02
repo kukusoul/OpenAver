@@ -224,8 +224,8 @@ class TestDMMTags:
         assert result == ["https://a.jpg", "https://b.jpg"]
         assert dmm_module._sample_images_supported is True
 
-    def test_sample_images_probe_high_res_url(self, dmm_scraper, monkeypatch):
-        """sampleImages URL 轉換為高解析度版本（-N.jpg → jp-N.jpg）"""
+    def test_sample_images_probe_preserves_returned_url(self, dmm_scraper, monkeypatch):
+        """sampleImages URL 使用 GraphQL 回傳值，不猜測 jp-N.jpg。"""
         import core.scrapers.dmm as dmm_module
         monkeypatch.setattr(dmm_module, '_sample_images_supported', None)
 
@@ -239,8 +239,8 @@ class TestDMMTags:
             result = dmm_scraper._probe_sample_images("ipzz00698")
 
         assert result == [
-            "https://pics.dmm.co.jp/digital/video/ipzz00698/ipzz00698jp-1.jpg",
-            "https://pics.dmm.co.jp/digital/video/ipzz00698/ipzz00698jp-10.jpg",
+            "https://pics.dmm.co.jp/digital/video/ipzz00698/ipzz00698-1.jpg",
+            "https://pics.dmm.co.jp/digital/video/ipzz00698/ipzz00698-10.jpg",
         ]
 
     def test_sample_images_probe_non_jpg_preserved(self, dmm_scraper, monkeypatch):
@@ -258,8 +258,8 @@ class TestDMMTags:
 
         assert result == ["https://example.com/sample.png"]
 
-    def test_sample_images_probe_already_high_res_idempotent(self, dmm_scraper, monkeypatch):
-        """已是高解析度 jp-N.jpg → 不重複轉換（冪等性）"""
+    def test_sample_images_probe_jp_url_preserved(self, dmm_scraper, monkeypatch):
+        """GraphQL 若回 jp-N.jpg，維持原樣。"""
         import core.scrapers.dmm as dmm_module
         monkeypatch.setattr(dmm_module, '_sample_images_supported', None)
 
@@ -271,7 +271,6 @@ class TestDMMTags:
         with patch.object(dmm_scraper._session, 'post', return_value=success_resp):
             result = dmm_scraper._probe_sample_images("ipzz00698")
 
-        # Should NOT become ipzz00698jpjp-1.jpg
         assert result == ["https://pics.dmm.co.jp/digital/video/ipzz00698/ipzz00698jp-1.jpg"]
 
     def test_sample_images_probe_cache_false_skip(self, dmm_scraper, monkeypatch):

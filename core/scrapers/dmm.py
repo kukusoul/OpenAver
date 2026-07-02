@@ -230,7 +230,7 @@ class DMMScraper(BaseScraper):
 
             _sample_images_supported = True
             raw_samples = item.get('sampleImages') or []
-            return [re.sub(r'(?<!jp)-(\d+)\.jpg$', r'jp-\1.jpg', s['imageUrl']) for s in raw_samples if s.get('imageUrl')]
+            return [s['imageUrl'] for s in raw_samples if s.get('imageUrl')]
 
         except Exception:
             return []
@@ -393,7 +393,9 @@ class DMMScraper(BaseScraper):
             and int(req_num) == int(found_num)
         ):
             return None
-        return video.model_copy(update={'number': requested})
+        if len(req_num) <= 3:
+            return video.model_copy(update={'number': requested})
+        return video
 
     def _content_id_to_number(self, content_id: str) -> str:
         """
@@ -602,6 +604,26 @@ class DMMScraper(BaseScraper):
         except Exception:
             pass
 
+        try:
+            search_url = f"https://www.dmm.co.jp/mono/dvd/-/search/=/searchstr={number.upper()}/"
+            resp = self._session.get(
+                search_url,
+                timeout=self.config.timeout,
+                cookies={"age_check_done": "1"},
+            )
+            if resp.status_code == 200 and 'not-available-in-your-region' not in resp.url:
+                from lxml import etree
+
+                html = etree.fromstring(resp.content, etree.HTMLParser(encoding='utf-8'))
+                for href in html.xpath('//a[contains(@href,"/mono/dvd/-/detail/=/cid=")]/@href'):
+                    match = re.search(r'/cid=([^/?]+)/', href)
+                    if match:
+                        content_id = match.group(1)
+                        if content_id not in content_ids:
+                            content_ids.append(content_id)
+        except Exception:
+            pass
+
         for content_id in content_ids:
             url = f"https://www.dmm.co.jp/mono/dvd/-/detail/=/cid={content_id}/"
             try:
@@ -648,6 +670,13 @@ class DMMScraper(BaseScraper):
                     )
                     if tag.strip()
                 ]
+                sample_images = [
+                    url if url.startswith('http') else f"https:{url}"
+                    for url in html.xpath(
+                        '//ul[@id="sample-image-block"]//a[@name="sample-image"]//img/@data-lazy'
+                    )
+                    if url
+                ]
 
                 return Video(
                     number=number,
@@ -662,6 +691,7 @@ class DMMScraper(BaseScraper):
                     duration=int(duration_match.group(0)) if duration_match else None,
                     label=text_after('レーベル'),
                     series=text_after('シリーズ'),
+                    sample_images=sample_images,
                 )
             except Exception:
                 continue

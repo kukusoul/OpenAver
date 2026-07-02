@@ -320,6 +320,25 @@ class TestDMMScraperIntegration:
         assert result is not None
         assert result.number == "BZ-01"
 
+    def test_dmm_result_number_uses_canonical_for_padded_content_id_input(self, dmm_scraper):
+        """ebvr00104 類 content_id 輸入不應覆蓋 DMM canonical 番號 EBVR-104。"""
+        video = DMM_DETAIL_RESPONSE["data"]["ppvContent"].copy()
+        video.update({
+            "id": "ebvr00104",
+            "title": "【VR】テスト",
+            "makerReleasedAt": "2024-11-30T15:00:00Z",
+            "makerContentId": "EBVR-104",
+        })
+        detail_response = {"data": {"ppvContent": video}}
+
+        with patch.object(dmm_scraper, '_convert_with_hints', return_value='ebvr00104'), \
+             patch.object(dmm_scraper._session, 'post', return_value=_make_mock_resp(status_code=200, json_data=detail_response)), \
+             patch.object(dmm_scraper, '_fetch_tags_from_html', return_value=[]):
+            result = dmm_scraper.search("ebvr00104")
+
+        assert result is not None
+        assert result.number == "EBVR-104"
+
     def test_dmm_result_number_rejects_different_prefix(self, dmm_scraper):
         """舊快取若把 BZ-01 指到 PBZ-016，不可視為同一番號。"""
         video = DMM_DETAIL_RESPONSE["data"]["ppvContent"].copy()
@@ -370,6 +389,8 @@ class TestDMMScraperIntegration:
         """.encode()
         not_found_resp = _make_mock_resp(status_code=404, content=b"not found")
         not_found_resp.url = "https://www.dmm.co.jp/mono/dvd/-/detail/=/cid=mxgs791/"
+        empty_mono_search_resp = _make_mock_resp(status_code=200, content=b"<html></html>")
+        empty_mono_search_resp.url = "https://www.dmm.co.jp/mono/dvd/-/search/=/searchstr=MXGS-791/"
         mono_resp = _make_mock_resp(status_code=200, content=mono_html)
         mono_resp.url = "https://www.dmm.co.jp/mono/dvd/-/detail/=/cid=h_068mxgs791/"
 
@@ -379,7 +400,12 @@ class TestDMMScraperIntegration:
             empty_search_resp,
             prefix_search_resp,
         ]), \
-             patch.object(dmm_scraper._session, 'get', side_effect=[not_found_resp, not_found_resp, mono_resp]) as mock_get:
+             patch.object(dmm_scraper._session, 'get', side_effect=[
+                 empty_mono_search_resp,
+                 not_found_resp,
+                 not_found_resp,
+                 mono_resp,
+             ]) as mock_get:
             result = dmm_scraper.search("MXGS-791")
 
         assert result is not None
@@ -390,7 +416,76 @@ class TestDMMScraperIntegration:
         assert result.duration == 120
         assert result.maker == "マキシング"
         assert result.tags == ["単体作品", "巨乳"]
-        assert mock_get.call_args_list[-1].args[0].endswith('/cid=h_068mxgs791/')
+        assert any(call.args[0].endswith('/cid=h_068mxgs791/') for call in mock_get.call_args_list)
+
+    def test_dmm_search_falls_back_to_mono_search_result(self, dmm_scraper):
+        """ABW-256 類 prefix 不在 PPV API 時，從 mono search detail link 取得 cid。"""
+        null_detail_resp = _make_mock_resp(status_code=200, json_data={"data": {"ppvContent": None}})
+        empty_search_resp = _make_mock_resp(status_code=200, json_data={
+            "data": {
+                "legacySearchPPV": {
+                    "result": {"contents": []}
+                }
+            }
+        })
+        mono_search_html = '''
+        <html><body>
+          <a href="https://www.dmm.co.jp/mono/dvd/-/detail/=/cid=118abw256/">
+            <span class="txt">夢の快楽射精 誘惑メンズエステ</span>
+          </a>
+        </body></html>
+        '''.encode()
+        mono_detail_html = """
+        <html><head>
+          <title>夢の快楽射精 誘惑メンズエステ - アダルトDVD通販 - FANZA</title>
+        </head><body>
+          <h1>夢の快楽射精 誘惑メンズエステ</h1>
+          <table>
+            <tr><td class="nw">出演者：</td><td><a>河合あすな</a></td></tr>
+            <tr><td class="nw">発売日：</td><td>2018/01/01</td></tr>
+            <tr><td class="nw">収録時間：</td><td>120分</td></tr>
+            <tr><td class="nw">メーカー：</td><td>プレステージ</td></tr>
+            <tr><td class="nw">ジャンル：</td><td><a>エステ</a></td></tr>
+          </table>
+          <ul id="sample-image-block">
+            <li><a name="package-image"><img data-lazy="https://pics.dmm.co.jp/mono/movie/adult/118abw256/118abw256ps.jpg"></a></li>
+            <li><a name="sample-image"><img data-lazy="https://pics.dmm.co.jp/digital/video/118abw256/118abw256-1.jpg"></a></li>
+            <li><a name="sample-image"><img data-lazy="//pics.dmm.co.jp/digital/video/118abw256/118abw256-2.jpg"></a></li>
+          </ul>
+        </body></html>
+        """.encode()
+        not_found_resp = _make_mock_resp(status_code=404, content=b"not found")
+        not_found_resp.url = "https://www.dmm.co.jp/mono/dvd/-/detail/=/cid=abw256/"
+        mono_search_resp = _make_mock_resp(status_code=200, content=mono_search_html)
+        mono_search_resp.url = "https://www.dmm.co.jp/mono/dvd/-/search/=/searchstr=ABW-256/"
+        mono_detail_resp = _make_mock_resp(status_code=200, content=mono_detail_html)
+        mono_detail_resp.url = "https://www.dmm.co.jp/mono/dvd/-/detail/=/cid=118abw256/"
+
+        with patch.object(dmm_scraper._session, 'post', side_effect=[
+            null_detail_resp,
+            empty_search_resp,
+            empty_search_resp,
+            empty_search_resp,
+        ]), \
+             patch.object(dmm_scraper._session, 'get', side_effect=[
+                 mono_search_resp,
+                 not_found_resp,
+                 not_found_resp,
+                 mono_detail_resp,
+             ]) as mock_get:
+            result = dmm_scraper.search("ABW-256")
+
+        assert result is not None
+        assert result.number == "ABW-256"
+        assert result.title == "夢の快楽射精 誘惑メンズエステ"
+        assert result.date == "2018-01-01"
+        assert [a.name for a in result.actresses] == ["河合あすな"]
+        assert result.tags == ["エステ"]
+        assert result.sample_images == [
+            "https://pics.dmm.co.jp/digital/video/118abw256/118abw256-1.jpg",
+            "https://pics.dmm.co.jp/digital/video/118abw256/118abw256-2.jpg",
+        ]
+        assert mock_get.call_args_list[-1].args[0].endswith('/cid=118abw256/')
 
     def test_dmm_detail_allows_missing_release_date(self, dmm_scraper):
         """DMM 部分舊片 makerReleasedAt=null，仍應回傳結果而非被 date 驗證丟棄。"""
