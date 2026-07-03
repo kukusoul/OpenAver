@@ -482,8 +482,8 @@ class TestDMMScraperIntegration:
         assert [a.name for a in result.actresses] == ["河合あすな"]
         assert result.tags == ["エステ"]
         assert result.sample_images == [
-            "https://pics.dmm.co.jp/digital/video/118abw256/118abw256-1.jpg",
-            "https://pics.dmm.co.jp/digital/video/118abw256/118abw256-2.jpg",
+            "https://pics.dmm.co.jp/digital/video/118abw256/118abw256jp-1.jpg",
+            "https://pics.dmm.co.jp/digital/video/118abw256/118abw256jp-2.jpg",
         ]
         assert mock_get.call_args_list[-1].args[0].endswith('/cid=118abw256/')
 

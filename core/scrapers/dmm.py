@@ -101,7 +101,7 @@ class DMMScraper(BaseScraper):
     SAMPLE_IMAGES_PROBE_QUERY = """
         query ProbeSampleImages($id: ID!) {
             ppvContent(id: $id) {
-                sampleImages { imageUrl }
+                sampleImages { imageUrl largeImageUrl }
             }
         }
     """
@@ -230,7 +230,7 @@ class DMMScraper(BaseScraper):
 
             _sample_images_supported = True
             raw_samples = item.get('sampleImages') or []
-            return [s['imageUrl'] for s in raw_samples if s.get('imageUrl')]
+            return [s.get('largeImageUrl') or s['imageUrl'] for s in raw_samples if s.get('imageUrl')]
 
         except Exception:
             return []
@@ -671,7 +671,11 @@ class DMMScraper(BaseScraper):
                     if tag.strip()
                 ]
                 sample_images = [
-                    url if url.startswith('http') else f"https:{url}"
+                    re.sub(
+                        r'(?<!jp)-(\d+)\.jpg$',
+                        r'jp-\1.jpg',
+                        url if url.startswith('http') else f"https:{url}",
+                    )
                     for url in html.xpath(
                         '//ul[@id="sample-image-block"]//a[@name="sample-image"]//img/@data-lazy'
                     )
