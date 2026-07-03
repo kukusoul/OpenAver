@@ -319,6 +319,13 @@ class TestFillMissingScraperNotFound:
 
         assert result.success is False
         assert "SONE-205" in result.error or "找不到" in result.error
+        # 89b-T2: not-found branch marks scrape_attempted_at (same as refresh_full).
+        mock_repo.update_scrape_attempted_at.assert_called_once()
+        call_args = mock_repo.update_scrape_attempted_at.call_args[0]
+        assert call_args[0] == to_file_uri(FS_PATH)
+        assert call_args[1] > 0
+        # not-found path must not create/upsert any new row (only mark attempted).
+        mock_repo.upsert.assert_not_called()
 
 
 # ── 9. db_to_sidecar: DB 完整，不打 scraper ──────────────────────────────────
@@ -443,8 +450,15 @@ class TestRefreshFullScraperFail:
         """邊界條件 13: refresh_full + scraper 失敗 → error"""
         with (
             patch("os.path.exists", return_value=True),
+            # 89b-T2: must mock VideoRepository — refresh_full not-found now calls
+            # repo.update_scrape_attempted_at(); without this mock it would hit the
+            # real project output/openaver.db (see TASK-89b-T2 現況分析 §3).
+            patch("core.enricher.VideoRepository") as mock_repo_cls,
             patch("core.enricher.search_jav", return_value=None),
         ):
+            mock_repo = MagicMock()
+            mock_repo_cls.return_value = mock_repo
+
             from core.enricher import enrich_single
             result = enrich_single(
                 file_path=FS_PATH,
@@ -454,6 +468,14 @@ class TestRefreshFullScraperFail:
 
         assert result.success is False
         assert "SONE-205" in result.error or "找不到" in result.error
+        # 89b-T2: not-found branch marks scrape_attempted_at via to_file_uri(fs_path) inline
+        # (NOT the later-assigned `path_uri` var — that would NameError before this branch).
+        mock_repo.update_scrape_attempted_at.assert_called_once()
+        call_args = mock_repo.update_scrape_attempted_at.call_args[0]
+        assert call_args[0] == to_file_uri(FS_PATH)
+        assert call_args[1] > 0
+        # not-found path must not create/upsert any new row (only mark attempted).
+        mock_repo.upsert.assert_not_called()
 
 
 # ── 14. write_nfo=False ───────────────────────────────────────────────────────
@@ -884,6 +906,27 @@ class TestDbUpsertPathIsFileUri:
         path = captured[0].path
         assert path.startswith("file:///")
         assert "file:///file:///" not in path
+
+
+# ── 26b. 89b-T2: _db_upsert 寫入 scrape_attempted_at ─────────────────────────
+
+class TestDbUpsertScrapeAttemptedAt:
+    """89b-T2: _db_upsert 成功路徑 Video 帶 scrape_attempted_at > 0（供 T3/T4 消費）"""
+
+    def test_scrape_attempted_at_set(self):
+        from core.enricher import _db_upsert
+
+        captured = []
+        mock_repo = MagicMock()
+        mock_repo.upsert.side_effect = lambda v: captured.append(v)
+        mock_repo.get_by_numbers.return_value = {}
+        mock_repo.get_by_path.return_value = None
+
+        meta = {"title": "T", "actresses": [], "maker": "S", "tags": [], "release_date": ""}
+        _db_upsert(mock_repo, "SONE-205", "/video/SONE-205.mp4", meta)
+
+        assert len(captured) == 1
+        assert captured[0].scrape_attempted_at > 0
 
 
 # ── 27. F1: _db_upsert cover_path 處理 ────────────────────────────

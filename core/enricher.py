@@ -4,6 +4,7 @@ enricher.py - 舊片原地補完（NFO / 封面 / 劇照），絕對不搬移、
 
 import os
 import shutil
+import time
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
@@ -372,6 +373,7 @@ def enrich_single(  # ranker-invalidate-ok: (only updates nfo_mtime, not a corpu
             scraper_data = search_jav(number, proxy_url=proxy_url,
                                       source=source or 'auto', javbus_lang=javbus_lang)
         if not scraper_data:
+            repo.update_scrape_attempted_at(to_file_uri(fs_path), time.time())
             _empty.error = f"找不到 {number} 的資料"
             return _empty
         meta = _scraper_to_meta(scraper_data)
@@ -407,6 +409,7 @@ def enrich_single(  # ranker-invalidate-ok: (only updates nfo_mtime, not a corpu
                 scraper_data = search_jav(number, proxy_url=proxy_url,
                                           source=source or 'auto', javbus_lang=javbus_lang)
             if not scraper_data:
+                repo.update_scrape_attempted_at(to_file_uri(fs_path), time.time())
                 _empty.error = f"找不到 {number} 的資料"
                 return _empty
             supplement = _scraper_to_meta(scraper_data)
@@ -580,6 +583,7 @@ def _db_upsert(
             release_date=meta.get("release_date", ""),
             nfo_mtime=nfo_mtime,
             output_dir=preserved_output_dir,
+            scrape_attempted_at=time.time(),
         )
         repo.upsert(video)
     except Exception as e:

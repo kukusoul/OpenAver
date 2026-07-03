@@ -13,6 +13,7 @@ from __future__ import annotations
 import glob
 import hashlib
 import os
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -563,6 +564,7 @@ def _upsert_db(
         release_date=meta.get('date', ''),
         mtime=file_info['mtime'],
         nfo_mtime=0.0,
+        scrape_attempted_at=time.time(),
     )
     repo.upsert(v)
 
@@ -636,6 +638,8 @@ def produce_source(source, config, repo, *, proxy_url="", on_progress=None, shou
 
         meta = search_jav(number, source="auto", proxy_url=proxy_url)
         if not meta:
+            repo.insert_if_ignore(Video(path=src_uri, number=number, title=os.path.basename(fi["path"])))
+            repo.update_scrape_attempted_at(src_uri, time.time())
             result.no_scrape += 1
             _emit(on_progress, result, src_uri, "no_scrape")
             continue

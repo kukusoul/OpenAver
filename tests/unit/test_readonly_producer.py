@@ -4,6 +4,7 @@ All filesystem / DB access is mocked — zero real I/O unless explicitly noted
 (T-3 DB tests use the temp_db fixture for a real SQLite write path).
 """
 import inspect
+import time
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -1379,6 +1380,18 @@ class TestUpsertDb:
         v = repo.get_by_path(self.SOURCE_URI)
         assert v.sample_images == []
 
+    def test_scrape_attempted_at_set(self, temp_db):
+        """89b-T2: _upsert_db writes scrape_attempted_at > 0 (success path marks 'attempted')."""
+        from core.readonly_producer import _upsert_db
+
+        assets = {'cover_fs': '', 'sample_fs': []}
+        repo = self._repo(temp_db)
+
+        _upsert_db(repo, self.SOURCE_URI, _T3_FILE_INFO, _T3_META, assets, None, self.OUTPUT_DIR_URI)
+
+        v = repo.get_by_path(self.SOURCE_URI)
+        assert v.scrape_attempted_at > 0
+
 
 # ---------------------------------------------------------------------------
 # T-4 tests: _emit helper + produce_source orchestrator
@@ -1726,6 +1739,10 @@ class TestProduceSourceNoneNumberGuard:
         assert result.created == 0
         mock_extract.assert_called_once()
         mock_search.assert_not_called()
+        # 89b-T2 regression lock: no-number branch must NOT write to DB at all.
+        repo.insert_if_ignore.assert_not_called()
+        repo.update_scrape_attempted_at.assert_not_called()
+        repo.upsert.assert_not_called()
 
     def test_none_number_emits_no_scrape_outcome(self):
         from core.readonly_producer import produce_source
@@ -1745,6 +1762,98 @@ class TestProduceSourceNoneNumberGuard:
 
         assert len(result.outcomes) == 1
         assert result.outcomes[0].status == "no_scrape"
+
+
+class TestProduceSourceNotFoundAttempted:
+    """89b-T2: produce_source NOT-FOUND branch (search_jav→None, :637-641) writes a
+    minimal placeholder row (insert_if_ignore) + marks scrape_attempted_at
+    (update_scrape_attempted_at). Fixes Codex Finding-1 (showcase card '未知標題')."""
+
+    def _run(self, repo, files=None):
+        from core.readonly_producer import produce_source
+
+        source = _make_source()
+        config = _make_config()
+        files = files if files is not None else [_make_file_info(path="/src/videos/NOTFOUND-001.mp4")]
+
+        with patch("core.readonly_producer._list_source_videos", return_value=files), \
+             patch("core.readonly_producer._build_cover_index", return_value={}), \
+             patch("core.readonly_producer._should_skip", return_value=False), \
+             patch("core.readonly_producer.normalize_path", return_value="/output/dest"), \
+             patch("core.readonly_producer.to_file_uri", side_effect=_fake_to_file_uri), \
+             patch("core.readonly_producer.extract_number", return_value="NOTFOUND-001"), \
+             patch("core.readonly_producer.search_jav", return_value=None):
+            return produce_source(source, config, repo)
+
+    def test_creates_minimal_row_and_marks_attempted(self):
+        from core.database import Video
+
+        repo = MagicMock()
+        repo.insert_if_ignore.return_value = True
+
+        result = self._run(repo)
+
+        assert result.no_scrape == 1
+
+        repo.insert_if_ignore.assert_called_once()
+        inserted = repo.insert_if_ignore.call_args[0][0]
+        assert isinstance(inserted, Video)
+        assert inserted.path == "file:///src/videos/NOTFOUND-001.mp4"
+        assert inserted.number == "NOTFOUND-001"
+        assert inserted.title == "NOTFOUND-001.mp4"  # basename, WITH extension
+        # minimal row: no cover/folder-related fields populated
+        assert inserted.cover_path == ''
+        assert inserted.output_dir == ''
+        assert inserted.sample_images == []
+
+        repo.update_scrape_attempted_at.assert_called_once()
+        call_args = repo.update_scrape_attempted_at.call_args[0]
+        assert call_args[0] == "file:///src/videos/NOTFOUND-001.mp4"
+        assert call_args[1] > 0
+
+    def test_idempotent_second_notfound_no_duplicate_row(self):
+        """Two NOT-FOUND runs on the same file: insert_if_ignore is called each time
+        (2nd call returns False per repo contract, i.e. no duplicate row), but
+        update_scrape_attempted_at is unconditionally called every time."""
+        repo = MagicMock()
+        repo.insert_if_ignore.side_effect = [True, False]
+
+        self._run(repo)
+        self._run(repo)
+
+        assert repo.insert_if_ignore.call_count == 2
+        assert repo.update_scrape_attempted_at.call_count == 2
+
+
+class TestProduceSourceNotFoundThenSuccessTitleOverwrite:
+    """89b-T2 Finding-1 regression lock: NOT-FOUND placeholder title (basename) must
+    be overwritten by title from a later successful scrape (upsert has no CASE-WHEN
+    guard on title — generic overwrite). Uses a real temp DB (not MagicMock) so the
+    ON CONFLICT(path) DO UPDATE semantics are actually exercised."""
+
+    SOURCE_URI = 'file:///src/TEST-001.mp4'
+
+    def test_placeholder_title_overwritten_by_real_title(self, temp_db):
+        from core.database import Video, VideoRepository
+        from core.readonly_producer import _upsert_db
+
+        repo = VideoRepository(temp_db)
+
+        # Step 1: NOT-FOUND creates the placeholder row.
+        created = repo.insert_if_ignore(Video(path=self.SOURCE_URI, number="TEST-001", title="TEST-001.mp4"))
+        repo.update_scrape_attempted_at(self.SOURCE_URI, time.time())
+        assert created is True
+
+        v1 = repo.get_by_path(self.SOURCE_URI)
+        assert v1.title == "TEST-001.mp4"
+
+        # Step 2: a later successful scrape upserts the real title over the same path.
+        assets = {'cover_fs': '', 'sample_fs': []}
+        _upsert_db(repo, self.SOURCE_URI, _T3_FILE_INFO, _T3_META, assets, None, 'file:///output/TEST-001')
+
+        v2 = repo.get_by_path(self.SOURCE_URI)
+        assert v2.title == _T3_META['title']
+        assert v2.title != "TEST-001.mp4"
 
 
 class TestProduceSourceMixedStats:
