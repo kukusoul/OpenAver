@@ -16030,10 +16030,15 @@ class TestDirReadonlyUIGuard:
             'scanner.html 缺 x-model="dir.output_path" — 輸出夾 input 未加'
 
     def test_scanner_html_output_row_xshow(self):
-        """scanner.html 含 x-show="dir.readonly"（條件顯示輸出夾列，非 x-if）"""
+        """scanner.html 含 x-show="dir.readonly && ..."（條件顯示輸出夾列，非 x-if）
+
+        TASK-89a-T2 (CD-89a-7): 輸出夾欄位現在同時依 `dir.readonly` 與全域
+        `external_manager` 白名單顯隱（見 TestOutputPathVisibilityGuard），此測試
+        只鎖住「用 x-show 而非 x-if、且條件含 dir.readonly」這個較粗的不變量。
+        """
         html = self._scanner_html()
-        assert 'x-show="dir.readonly"' in html, \
-            'scanner.html 缺 x-show="dir.readonly" — 應用 x-show 而非 x-if 控制輸出夾列'
+        assert 'x-show="dir.readonly &&' in html, \
+            'scanner.html 缺 x-show="dir.readonly && ..." — 應用 x-show 而非 x-if 控制輸出夾列'
 
     def test_state_scan_push_has_readonly(self):
         """state-scan.js 的 directories.push 包含 readonly 屬性（物件形態）"""
@@ -16049,3 +16054,33 @@ class TestDirReadonlyUIGuard:
         src = self._state_scan()
         assert 'output_path' in src, \
             "state-scan.js 缺 output_path 屬性 — push 物件應含 {path, readonly, output_path}"
+
+
+class TestOutputPathVisibilityGuard:
+    """TASK-89a-T2 (CD-89a-7): per-source 輸出夾欄位（`.folder-item-output`）依全域
+    `external_manager` 白名單顯隱 —— off 模式使用者無需（也看不到）自己設定輸出夾，
+    jellyfin/emby/kodi 才需要手動指定 NAS 路徑。
+
+    比照 `TestJellyfinCheckManualGuard.test_trigger_row_xshow_uses_jellyfin_image_visible`
+    的 BeautifulSoup 解析 pattern（fail-closed 正向白名單，非 `!== 'off'` fail-open）。
+    """
+
+    _ROOT = Path(__file__).parent.parent.parent
+
+    def _scanner_html(self):
+        return (self._ROOT / "web" / "templates" / "scanner.html").read_text(encoding="utf-8")
+
+    def test_folder_item_output_xshow_gated_by_external_manager_whitelist(self):
+        from bs4 import BeautifulSoup
+        html = self._scanner_html()
+        soup = BeautifulSoup(html, "html.parser")
+        div = soup.find("div", class_="folder-item-output")
+        assert div is not None, "scanner.html 找不到 .folder-item-output element"
+        xshow = div.get("x-show", "")
+        assert "dir.readonly" in xshow, \
+            f".folder-item-output x-show 應保留既有 dir.readonly 條件，實際: {xshow!r}"
+        assert "['jellyfin', 'emby', 'kodi'].includes(config?.scraper?.external_manager)" in xshow, \
+            f".folder-item-output x-show 應加上正向白名單 gate（fail-closed），實際: {xshow!r}"
+        # forbidden：fail-open 寫法（undefined !== 'off' 為 true → off 未載入前也會顯示）
+        assert "!== 'off'" not in xshow, \
+            f".folder-item-output x-show 不可用 fail-open 的 !== 'off'，實際: {xshow!r}"

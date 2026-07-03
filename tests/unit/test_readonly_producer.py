@@ -873,6 +873,105 @@ def _make_file_info(path="/src/videos/ABC-123.mp4", size=1_000_000, mtime=1.0):
     return {"path": path, "size": size, "mtime": mtime, "nfo_mtime": 0.0}
 
 
+class TestResolveOutputRoot:
+    """TASK-89a-T2 (CD-89a-7): resolve_output_root(source, config) truth table.
+
+    off (or unknown) → fixed App-managed folder under get_db_path().parent/"lib".
+    jellyfin/emby/kodi → source.output_path verbatim (may be empty).
+    """
+
+    def test_off_with_empty_output_path_returns_fixed_root(self):
+        from core.database import get_db_path
+        from core.readonly_producer import resolve_output_root
+
+        source = _make_source(output_path="", path="/src/movies")
+        config = _make_config()  # scraper_cfg={} → fallback 'off'
+
+        result = resolve_output_root(source, config)
+
+        assert result
+        assert result.startswith(str(get_db_path().parent / "lib"))
+
+    def test_off_with_nonempty_output_path_still_returns_fixed_root(self):
+        """off mode ignores source.output_path even if the user typed one (UI hides
+        this field in off mode, but the backend must not trust a stale value)."""
+        from core.database import get_db_path
+        from core.readonly_producer import resolve_output_root
+
+        source = _make_source(output_path="/user/typed/path", path="/src/movies")
+        config = _make_config(scraper_cfg={"external_manager": "off"})
+
+        result = resolve_output_root(source, config)
+
+        assert "/user/typed/path" not in result
+        assert result.startswith(str(get_db_path().parent / "lib"))
+
+    @pytest.mark.parametrize("mode", ["jellyfin", "emby", "kodi"])
+    def test_media_server_modes_return_output_path_verbatim(self, mode):
+        from core.readonly_producer import resolve_output_root
+
+        source = _make_source(output_path="/nas/media", path="/src/movies")
+        config = _make_config(scraper_cfg={"external_manager": mode})
+
+        assert resolve_output_root(source, config) == "/nas/media"
+
+    @pytest.mark.parametrize("mode", ["jellyfin", "emby", "kodi"])
+    def test_media_server_modes_with_empty_output_path_return_empty(self, mode):
+        """Media-server flavours still require the user to configure output_path —
+        resolve_output_root passes the empty value through unchanged (call sites
+        keep their existing empty-string guards, CD-89a-7)."""
+        from core.readonly_producer import resolve_output_root
+
+        source = _make_source(output_path="", path="/src/movies")
+        config = _make_config(scraper_cfg={"external_manager": mode})
+
+        assert resolve_output_root(source, config) == ""
+
+    def test_two_sources_same_basename_do_not_collide(self):
+        """B1: two off-mode sources whose folder basename would clash (same leaf
+        directory name, different parent path) must resolve to different roots."""
+        from core.readonly_producer import resolve_output_root
+
+        config = _make_config()  # off
+        source_a = _make_source(path="/mnt/driveA/MyDrive")
+        source_b = _make_source(path="/mnt/driveB/MyDrive")
+
+        result_a = resolve_output_root(source_a, config)
+        result_b = resolve_output_root(source_b, config)
+
+        assert result_a != result_b
+
+    def test_same_source_resolves_to_same_root_across_calls(self):
+        """Stability lock (DoD): calling resolve_output_root twice for the same
+        source/config must yield the identical path (no hidden per-call state)."""
+        from core.readonly_producer import resolve_output_root
+
+        config = _make_config()  # off
+        source = _make_source(path="/mnt/driveA/MyDrive")
+
+        first = resolve_output_root(source, config)
+        second = resolve_output_root(source, config)
+
+        assert first == second
+
+    def test_off_fallback_for_empty_basename_after_sanitize(self):
+        """A source path whose basename is empty (e.g. a filesystem root, where
+        Path(...).name == '') must not produce an empty-string folder name — falls
+        back to src-<shortcode>."""
+        from core.database import get_db_path
+        from core.readonly_producer import resolve_output_root
+
+        config = _make_config()  # off
+        source = _make_source(path="/")
+
+        result = resolve_output_root(source, config)
+
+        lib_root = Path(get_db_path().parent, "lib")
+        name = Path(result).relative_to(lib_root)
+        assert str(name).startswith("src-")
+        assert str(name) != "src-"  # a real shortcode must be appended
+
+
 class TestEmit:
     """Tests for _emit helper."""
 
@@ -933,12 +1032,20 @@ class TestProduceSourceGuards:
         mock_list.assert_not_called()
 
     def test_empty_output_path_returns_aborted(self):
-        """source.output_path='' → aborted_reason='no_output_path', search_jav not called."""
+        """media-server mode + source.output_path='' → aborted_reason='no_output_path',
+        search_jav not called.
+
+        TASK-89a-T2 (CD-89a-7): this guard is now flavour-dependent — off mode gets a
+        structural fixed root and never aborts on empty output_path (see
+        TestProduceSourceOffModeNeverAborts below), so this abort-path regression
+        test must pin a media-server flavour to keep exercising the "still required"
+        branch.
+        """
         from core.readonly_producer import produce_source
 
         source = _make_source(output_path="")
         repo = MagicMock()
-        config = _make_config()
+        config = _make_config(scraper_cfg={"external_manager": "jellyfin"})
 
         with patch("core.readonly_producer._list_source_videos") as mock_list, \
              patch("core.readonly_producer.search_jav") as mock_search:
@@ -949,12 +1056,12 @@ class TestProduceSourceGuards:
         mock_search.assert_not_called()
 
     def test_whitespace_output_path_returns_aborted(self):
-        """source.output_path='   ' → aborted_reason='no_output_path'."""
+        """media-server mode + source.output_path='   ' → aborted_reason='no_output_path'."""
         from core.readonly_producer import produce_source
 
         source = _make_source(output_path="   ")
         repo = MagicMock()
-        config = _make_config()
+        config = _make_config(scraper_cfg={"external_manager": "jellyfin"})
 
         with patch("core.readonly_producer._list_source_videos") as mock_list, \
              patch("core.readonly_producer.search_jav") as mock_search:
@@ -965,12 +1072,12 @@ class TestProduceSourceGuards:
         mock_search.assert_not_called()
 
     def test_none_output_path_returns_aborted(self):
-        """source.output_path=None → aborted_reason='no_output_path'."""
+        """media-server mode + source.output_path=None → aborted_reason='no_output_path'."""
         from core.readonly_producer import produce_source
 
         source = _make_source(output_path=None)
         repo = MagicMock()
-        config = _make_config()
+        config = _make_config(scraper_cfg={"external_manager": "jellyfin"})
 
         with patch("core.readonly_producer._list_source_videos") as mock_list, \
              patch("core.readonly_producer.search_jav") as mock_search:
@@ -979,6 +1086,44 @@ class TestProduceSourceGuards:
         assert result.aborted_reason == "no_output_path"
         mock_list.assert_not_called()
         mock_search.assert_not_called()
+
+
+class TestProduceSourceOffModeNeverAborts:
+    """TASK-89a-T2 (CD-89a-7): off flavour resolves to a structural fixed root, so
+    produce_source must NEVER abort with no_output_path in off mode — this is the
+    symmetric counterpart of TestProduceSourceGuards' three media-server abort tests
+    (off + empty/whitespace/None source.output_path all behave identically because
+    resolve_output_root ignores source.output_path entirely in off mode)."""
+
+    @pytest.mark.parametrize("output_path", ["", "   ", None])
+    def test_off_mode_empty_output_path_does_not_abort(self, output_path):
+        from core.readonly_producer import produce_source
+
+        source = _make_source(output_path=output_path)
+        repo = MagicMock()
+        config = _make_config()  # scraper_cfg={} → external_manager fallback 'off'
+
+        with patch("core.readonly_producer._list_source_videos", return_value=[]) as mock_list, \
+             patch("core.readonly_producer._build_cover_index", return_value={}), \
+             patch("core.readonly_producer._build_owners", return_value={}):
+            result = produce_source(source, config, repo)
+
+        assert result.aborted_reason != "no_output_path"
+        mock_list.assert_called_once()  # guard passed through to the listing step
+
+    @pytest.mark.parametrize("output_path", ["", "   ", None])
+    def test_off_mode_effective_output_is_under_lib_root(self, output_path):
+        """Sanity check: the resolved root that unblocked the guard is the off fixed
+        folder, not a leaked None/whitespace value."""
+        from core.database import get_db_path
+        from core.readonly_producer import resolve_output_root
+
+        source = _make_source(output_path=output_path)
+        config = _make_config()
+
+        effective = resolve_output_root(source, config)
+        lib_root = str(get_db_path().parent / "lib")
+        assert effective.startswith(lib_root)
 
 
 class TestProduceSourceVideoExtensions:

@@ -27,7 +27,7 @@ from core.path_utils import to_file_uri, uri_to_fs_path
 _BASELINE_VIDEO_COLUMNS = {
     "id", "path", "number", "title", "original_title", "actresses", "maker",
     "director", "series", "label", "tags", "sample_images", "user_tags",
-    "duration", "size_bytes", "cover_path", "release_date", "mtime", "nfo_mtime",
+    "duration", "size_bytes", "cover_path", "output_dir", "release_date", "mtime", "nfo_mtime",
     "created_at", "updated_at",
 }
 
@@ -142,10 +142,26 @@ def _make_config(sources: list[dict], html_out: Path, download_samples: bool = F
 
 
 def _wire(monkeypatch, config: dict, db_path: Path):
-    """Patch load_config + get_db_path in the scanner router; install producer mocks."""
+    """Patch load_config + get_db_path (router AND readonly_producer) + install producer mocks.
+
+    TASK-89a-T2 (CD-89a-7): off-flavor sources no longer write under the
+    per-source `output_path` — `resolve_output_root` computes a fixed App-managed
+    root via `get_db_path().parent / "lib" / <name>`, calling `core.database.get_db_path`
+    through its `core.readonly_producer` import landing point (NOT the router's).
+    Both landing points must be patched to the same tmp db_path so the whole run
+    stays confined to tmp_path (never touching the real repo's output/ dir).
+    """
     monkeypatch.setattr("web.routers.scanner.load_config", lambda: config)
     monkeypatch.setattr("web.routers.scanner.get_db_path", lambda: db_path)
+    monkeypatch.setattr("core.readonly_producer.get_db_path", lambda: db_path)
     _install_producer_mocks(monkeypatch)
+
+
+def _off_root(src_path: Path, db_path: Path) -> Path:
+    """Compute the fixed off-flavor output root for a source (mirrors resolve_output_root's
+    off branch) — used by assertions since off mode ignores DirectoryConfig.output_path."""
+    from core.readonly_producer import _derive_source_name
+    return db_path.parent / "lib" / _derive_source_name(str(src_path))
 
 
 def _snapshot(root: Path) -> dict:
@@ -188,16 +204,20 @@ class TestOffFlavorHappyPath:
     def _setup(self, tmp_path, monkeypatch, download_samples=True):
         numbers = ["ABC-001", "ABC-002", "ABC-003", "ABC-004", "ABC-005"]
         src = _make_source_dir(tmp_path / "src", "movies", numbers)
-        output = tmp_path / "output"
-        output.mkdir()
+        # TASK-89a-T2 (CD-89a-7): off mode IGNORES this — kept only to prove the
+        # backend never trusts a stale/manually-typed output_path in off mode
+        # (see the "decoy" assertion in test_per_movie_assets_and_no_strm).
+        decoy_output_path = tmp_path / "decoy-output-path-must-be-ignored"
+        decoy_output_path.mkdir()
         html_out = tmp_path / "htmlout"
         db_path = tmp_path / "test.db"
         config = _make_config(
-            [{"path": str(src), "output_path": str(output), "readonly": True}],
+            [{"path": str(src), "output_path": str(decoy_output_path), "readonly": True}],
             html_out,
             download_samples=download_samples,
         )
         _wire(monkeypatch, config, db_path)
+        output = _off_root(src, db_path)  # the ACTUAL fixed off-flavor root
         return numbers, src, output, db_path
 
     def test_per_movie_assets_and_no_strm(self, tmp_path, monkeypatch, client, parse_sse_events):
@@ -217,9 +237,12 @@ class TestOffFlavorHappyPath:
 
         # Acceptance #5: off-flavor produces NO .strm anywhere under output.
         assert ".strm" not in _all_extensions(output)
+        # CD-89a-7: the manually-configured (decoy) output_path must be untouched —
+        # off mode ignores source.output_path entirely.
+        assert list(Path(tmp_path / "decoy-output-path-must-be-ignored").iterdir()) == []
 
     def test_db_path_cover_sample_pointers(self, tmp_path, monkeypatch, client, parse_sse_events):
-        """#6: DB path == source URI; cover_path/sample_images under output_path."""
+        """#6: DB path == source URI; cover_path/sample_images under the fixed off-flavor root."""
         numbers, src, output, db_path = self._setup(tmp_path, monkeypatch)
         _run_generate(client, parse_sse_events)
 
@@ -301,17 +324,18 @@ def test_samples_off_no_extrafanart(tmp_path, monkeypatch, client, parse_sse_eve
     """download_sample_images=False → no extrafanart dir, DB sample_images empty."""
     numbers = ["DEF-010", "DEF-011"]
     src = _make_source_dir(tmp_path / "src", "movies", numbers)
-    output = tmp_path / "output"
-    output.mkdir()
     db_path = tmp_path / "test.db"
     config = _make_config(
-        [{"path": str(src), "output_path": str(output), "readonly": True}],
+        # CD-89a-7: off mode ignores output_path — omitted here (UI hides this field
+        # in off mode, so the realistic value is "").
+        [{"path": str(src), "output_path": "", "readonly": True}],
         tmp_path / "htmlout",
         download_samples=False,
     )
     _wire(monkeypatch, config, db_path)
     _run_generate(client, parse_sse_events)
 
+    output = _off_root(src, db_path)
     repo = VideoRepository(str(db_path))
     for num in numbers:
         assert (output / num / f"{num}.nfo").exists()
@@ -325,35 +349,40 @@ def test_samples_off_no_extrafanart(tmp_path, monkeypatch, client, parse_sse_eve
 # ---------------------------------------------------------------------------
 
 def test_same_number_two_sources_collision(tmp_path, monkeypatch, client, parse_sse_events):
-    """#17: two readonly sources each with ABC-123.mp4 → two non-overwriting leaf dirs."""
+    """#17: two readonly sources each with ABC-123.mp4 → two non-overwriting leaf dirs.
+
+    TASK-89a-T2 (CD-89a-7) note: before this task, off-flavor sources shared a
+    single user-configured `output_path`, so `_movie_dir`'s collision-avoidance
+    hash-suffix was the mechanism that kept the two sources' same-number movies
+    apart (one clean `ABC-123`, one hashed `ABC-123-<hash>`) under one tree.
+    Now each off-flavor source resolves to its OWN distinct fixed root
+    (`resolve_output_root` derives the name from the source's own path — CD-89a-7
+    Option B), so the two sources never share a root at all: each gets a clean
+    `ABC-123` leaf under its own tree, with no hash suffix involved. This test now
+    asserts non-collision at the SOURCE level rather than the leaf-hash level.
+    """
     src_a = _make_source_dir(tmp_path / "srcA", "a", ["ABC-123"])
     src_b = _make_source_dir(tmp_path / "srcB", "b", ["ABC-123"])
-    output = tmp_path / "output"
-    output.mkdir()
     db_path = tmp_path / "test.db"
     config = _make_config(
         [
-            {"path": str(src_a), "output_path": str(output), "readonly": True},
-            {"path": str(src_b), "output_path": str(output), "readonly": True},
+            {"path": str(src_a), "output_path": "", "readonly": True},
+            {"path": str(src_b), "output_path": "", "readonly": True},
         ],
         tmp_path / "htmlout",
     )
     _wire(monkeypatch, config, db_path)
     events = _run_generate(client, parse_sse_events)
 
-    # Two distinct leaf subdirs under output_root, both named ABC-123*
-    leaf_dirs = sorted(p.name for p in output.iterdir() if p.is_dir())
-    abc_dirs = [d for d in leaf_dirs if d.startswith("ABC-123")]
-    assert len(abc_dirs) == 2, f"expected 2 distinct leaf dirs, got {abc_dirs}"
-    assert "ABC-123" in abc_dirs
-    hashed = [d for d in abc_dirs if d != "ABC-123"]
-    assert len(hashed) == 1 and hashed[0].startswith("ABC-123-"), abc_dirs
+    root_a = _off_root(src_a, db_path)
+    root_b = _off_root(src_b, db_path)
+    assert root_a != root_b, "two distinct sources must resolve to distinct off-flavor roots"
 
-    # Each complete + non-overwriting (distinct dirs, each with its own nfo + cover).
-    # Filenames are derived from the number ("{num}" template), not the (hashed) leaf dir.
-    for d in abc_dirs:
-        assert (output / d / "ABC-123.nfo").exists(), f"missing nfo in {d}"
-        assert (output / d / "ABC-123.jpg").exists(), f"missing cover in {d}"
+    # Each source gets its OWN clean (non-hashed) ABC-123 leaf — no cross-source collision.
+    for root in (root_a, root_b):
+        assert (root / "ABC-123").is_dir(), f"missing ABC-123 leaf dir under {root}"
+        assert (root / "ABC-123" / "ABC-123.nfo").exists(), f"missing nfo under {root}"
+        assert (root / "ABC-123" / "ABC-123.jpg").exists(), f"missing cover under {root}"
 
     stats = _done_event(events)["readonly_stats"]
     assert stats["created"] == 2

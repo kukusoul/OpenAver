@@ -42,7 +42,7 @@ from core.nfo_updater import check_cache_needs_update, update_videos_generator
 from core.database import VideoRepository, Video, init_db, get_db_path, migrate_json_to_sqlite
 from core.organizer import generate_jellyfin_images, HEADERS as _EMBED_HEADERS
 from core.config import load_config, iter_gallery_sources, get_gallery_source_paths
-from core.readonly_producer import produce_source
+from core.readonly_producer import produce_source, resolve_output_root
 from core import thumbnail_cache
 from core.scraper import smart_search
 from core.source_settings import is_uncensored_mode_effective
@@ -111,21 +111,26 @@ def _dir_candidate_forms(raw_dir: str, path_mappings: dict) -> tuple:
     return forms
 
 
-def _image_whitelist_dirs(gallery_config) -> List[str]:
-    """TASK-88c-T1: /api/gallery/image 白名單的候選 raw 目錄清單。
+def _image_whitelist_dirs(config: dict) -> List[str]:
+    """TASK-88c-T1 / TASK-89a-T2: /api/gallery/image 白名單的候選 raw 目錄清單。
 
-    每個來源 emit `src.path`，並在 `src.output_path` 非空時一併 emit
-    （讓唯讀 + off 風味生成到 output_path 底下的封面/劇照能經 image proxy 服務）。
+    每個來源 emit `src.path`，並在 `resolve_output_root(src, config)`（CD-89a-7）
+    非空時一併 emit——off 風味回傳固定 `output/lib/<name>` 根（讓唯讀 + off 風味
+    生成的封面/劇照能經 image proxy 服務，Codex #1 回歸鎖：只改 producer 不改
+    白名單會讓 off 封面 404）；jellyfin/emby/kodi 沿用 `source.output_path` 原值。
 
-    純函式、無 IO。`""` output_path 被過濾——不讓空字串進 `_dir_candidate_forms`
-    （避免 `to_file_uri('') = 'file:///'` 根路徑把整顆磁碟放進白名單，
-    CWE-allowlist bypass）。get_video 不共用此 helper（獨立 call site，spec P1a）。
+    純函式、無 IO（`resolve_output_root` 本身無 IO）。空字串仍被過濾——不讓空
+    字串進 `_dir_candidate_forms`（避免 `to_file_uri('') = 'file:///'` 根路徑
+    把整顆磁碟放進白名單，CWE-allowlist bypass）。get_video 不共用此 helper
+    （獨立 call site，spec P1a）。
     """
+    gallery_config = config.get('gallery', {})
     dirs: List[str] = []
     for src in iter_gallery_sources(gallery_config):
         dirs.append(src.path)
-        if src.output_path:
-            dirs.append(src.output_path)
+        resolved = resolve_output_root(src, config)
+        if resolved:
+            dirs.append(resolved)
     return dirs
 
 
@@ -994,7 +999,7 @@ def get_image(path: str = Query(..., description="圖片路徑")):
     # 複用 _dir_candidate_forms dual-form，不另寫 single-form 比對
     allowed = any(
         is_path_under_dir(request_uri, form)
-        for p in _image_whitelist_dirs(gallery_config)
+        for p in _image_whitelist_dirs(config)
         for form in _dir_candidate_forms(p, path_mappings)
     )
     if not allowed:

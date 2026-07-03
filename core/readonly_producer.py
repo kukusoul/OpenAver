@@ -15,7 +15,8 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from core.database import Video
+from core.config import _STEM_IMAGE_MODES
+from core.database import Video, get_db_path
 from core.gallery_scanner import fast_scan_directory
 from core.logger import get_logger
 from core.organizer import (
@@ -117,6 +118,69 @@ def _should_skip(source_uri: str, output_uri: str, cover_index: dict) -> bool:
     if not is_path_under_dir(cover, output_uri):           # double-guard (cover_index already filtered)
         return False
     return Path(uri_to_fs_path(cover)).exists()            # physical file must exist
+
+
+# ---------------------------------------------------------------------------
+# TASK-89a-T2: output-root resolution (CD-89a-7)
+# ---------------------------------------------------------------------------
+
+def _derive_source_name(source_path: str) -> str:
+    """Derive an App-managed output-folder name for a readonly source (pure, no I/O).
+
+    basename = sanitize_filename(Path(...).name) — folder-name semantics, `.name`
+    not `.stem` (a source folder called "Movies.Archive" must not be truncated to
+    "Movies").
+
+    A deterministic short code (sha1[:6] of the canonicalized source path) is
+    ALWAYS appended (CD-89a-7 — Opus-pinned Option B, 2026-07-03): the folder name
+    depends ONLY on this source's own path, never on sibling sources, so adding or
+    removing an unrelated source can never flip an existing source's effective
+    output root (that flip would orphan every row already written under it — the
+    exact churn 89a exists to eliminate). Two different sources sharing the same
+    basename therefore never collide; the same source resolves to the same name on
+    every call (stability lock).
+
+    Falls back to ``src-<shortcode>`` when sanitize_filename strips the basename to
+    an empty string (e.g. source path is a drive root ``D:\\`` or a UNC share root)
+    so an empty folder name is never produced.
+    """
+    # uri_to_fs_path already normalizes internally (strip URI prefix → unquote →
+    # normalize_path with a try/except fallback) — do NOT re-run normalize_path
+    # again before handing the result to to_file_uri(). Stacking those two calls
+    # is a banned lint idiom (see test_no_normalize_before_to_file_uri) because a
+    # standalone normalize_path() raises ValueError on foreign-platform path
+    # strings (e.g. a Windows path fed to a Linux CI run), which uri_to_fs_path
+    # already guards against via its own try/except.
+    fs_path = uri_to_fs_path(source_path)
+    canonical = to_file_uri(fs_path)
+    shortcode = hashlib.sha1(canonical.encode()).hexdigest()[:6]
+    basename = sanitize_filename(Path(fs_path).name)
+    if not basename:
+        return f"src-{shortcode}"
+    return f"{basename}-{shortcode}"
+
+
+def resolve_output_root(source, config: dict) -> str:
+    """Resolve the effective output root for a readonly source (CD-89a-7).
+
+    Reads the GLOBAL flavour (config['scraper']['external_manager']), not a
+    per-source field (CD-89a-2: flavour is global).
+
+    - off (or any value not in _STEM_IMAGE_MODES) → fixed App-managed folder
+      ``output/lib/<derived-source-name>`` (native FS path string, NOT passed
+      through to_file_uri — callers normalize_path()/to_file_uri() it themselves,
+      matching the existing ``source.output_path`` convention so call sites need
+      minimal changes). Structurally guarantees a non-empty output root so off
+      sources never abort with zero videos produced.
+    - jellyfin/emby/kodi → source.output_path verbatim (may be empty — media-server
+      flavours still require the user to configure it; callers keep their existing
+      empty-string guards unchanged).
+    """
+    external_manager = config.get("scraper", {}).get("external_manager", "off")
+    if external_manager not in _STEM_IMAGE_MODES:
+        name = _derive_source_name(source.path)
+        return str(get_db_path().parent / "lib" / name)
+    return source.output_path
 
 
 # ---------------------------------------------------------------------------
@@ -412,7 +476,11 @@ def produce_source(source, config, repo, *, proxy_url="", on_progress=None, shou
     if not source.readonly:
         result.aborted_reason = "not_readonly"
         return result
-    if not (source.output_path or "").strip():
+
+    # CD-89a-7: off flavour resolves to a fixed App-managed folder (always non-empty);
+    # media-server flavours (jellyfin/emby/kodi) still require source.output_path.
+    effective_output = resolve_output_root(source, config)
+    if not (effective_output or "").strip():
         result.aborted_reason = "no_output_path"
         return result
 
@@ -420,7 +488,7 @@ def produce_source(source, config, repo, *, proxy_url="", on_progress=None, shou
     scraper_cfg = config.get("scraper", {})
     path_mappings = gallery.get("path_mappings", {})
 
-    output_root = normalize_path(source.output_path)
+    output_root = normalize_path(effective_output)
     output_uri = to_file_uri(output_root, path_mappings)
 
     cover_index = _build_cover_index(repo, output_uri)
