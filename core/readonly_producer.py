@@ -10,6 +10,7 @@ Canonical Decisions enforced here:
 
 from __future__ import annotations
 
+import glob
 import hashlib
 import os
 from dataclasses import dataclass, field
@@ -338,6 +339,93 @@ def _resolve_movie_dir(
 
 
 # ---------------------------------------------------------------------------
+# TASK-89a-T4 (Codex #3): stale-asset cleanup — reconstruct the previous run's
+# basename from the DB row, then wipe that movie's own old singleton/extrafanart
+# files before the new ones are written, so re-scraping with a corrected title
+# overwrites in place instead of piling up `<old>.* + <new>.*` side by side.
+# ---------------------------------------------------------------------------
+
+def _build_old_base(existing, source_fs_path: str, config: dict) -> str:
+    """Reconstruct the basename `_write_movie_assets` used on the PREVIOUS run.
+
+    existing is the Video row already read by produce_source (T3, repo.get_by_path).
+    Returns '' (skip cleanup) when there is nothing to clean up:
+      - existing is None (first generation for this source file)
+      - existing.title is empty (defensive; T3/_upsert_db always writes meta['title'])
+      - existing.number is empty (defensive; search_jav/_upsert_db always writes a
+        non-empty number, but _format_data has no .get for 'number' — guard here
+        rather than let a KeyError/empty leaf surface deep in _build_basename)
+
+    Otherwise, maps the OLD DB fields back onto the same meta-dict shape
+    `_format_data` expects (DB → meta key names differ: actresses→actors,
+    release_date→date) and replays `_format_data` + `_build_basename` against the
+    SAME source_fs_path/config used this run — source_fs_path is the same physical
+    source file both times, so suffix/vr_tail/ext are identical across runs and
+    only the meta-driven parts (title/number/actors/maker/date) can differ.
+
+    existing.title is the RAW scraped title as stored by _upsert_db (meta['title'],
+    not the already-truncated format_data['title']) — running it back through
+    _format_data reapplies the same strip/truncate transform that produced the
+    original basename, so old_base equals what was actually written last time.
+    """
+    if existing is None or not existing.title or not existing.number:
+        return ''
+    old_meta = {
+        'number': existing.number,
+        'title': existing.title,
+        'actors': existing.actresses,
+        'maker': existing.maker,
+        'date': existing.release_date,
+    }
+    old_format_data = _format_data(old_meta, source_fs_path, config)
+    return _build_basename(old_format_data, source_fs_path, config)
+
+
+def _clean_stale_assets(movie_dir: str, old_base: str) -> None:
+    """Delete this movie's own previous-run assets, anchored strictly on old_base.
+
+    No-op (including the extrafanart glob) when old_base is '': first generation
+    has nothing to clean, and a new-dir allocation (output root moved) means the
+    old files physically live in a different, now-orphaned dir — cleaning THAT
+    dir is orphan GC (spec-89b.4 non-goal), out of scope here.
+
+    Deliberately narrow: exact filenames for the four singleton assets (extension
+    glob only for poster/fanart, defensive against a future non-.jpg format), and
+    a fixed `fanart*.jpg` glob for extrafanart (sample count can shrink between
+    runs independent of title). Never a bare `*.jpg`/`*.*` glob, never rmtree —
+    both would delete files the user placed in the same directory themselves.
+    Missing files are a no-op (unlink(missing_ok=True)); this must never raise
+    and abort the write that follows it.
+    """
+    if not old_base:
+        return
+    d = Path(movie_dir)
+    # old_base comes from the scraped title and can legally contain glob
+    # metacharacters (sanitize_filename keeps '[' ']' — common in language/sub
+    # tags like "[Chinese Sub]"). Escape before globbing the poster/fanart
+    # extension patterns, else Path.glob treats '[...]' as a char class and
+    # silently misses the file (residual junk survives — a narrow Codex #3
+    # recurrence). The two singletons use literal joins, no escape needed.
+    esc = glob.escape(old_base)
+    targets = [d / f"{old_base}.nfo", d / f"{old_base}.jpg"]
+    targets.extend(d.glob(f"{esc}-poster.*"))
+    targets.extend(d.glob(f"{esc}-fanart.*"))
+    for target in targets:
+        try:
+            Path(target).unlink(missing_ok=True)
+        except OSError:
+            logger.warning("[readonly_producer] stale asset 清除失敗（略過）: %s", target)
+
+    ef_dir = d / 'extrafanart'
+    if ef_dir.is_dir():
+        for f in ef_dir.glob('fanart*.jpg'):
+            try:
+                f.unlink(missing_ok=True)
+            except OSError:
+                logger.warning("[readonly_producer] stale extrafanart 清除失敗（略過）: %s", f)
+
+
+# ---------------------------------------------------------------------------
 # T-3: write off-flavor assets + DB upsert (plan §5.2 / §6)
 # ---------------------------------------------------------------------------
 
@@ -347,13 +435,23 @@ def _write_movie_assets(
     format_data: dict,
     source_fs_path: str,
     config: dict,
+    old_base: str = '',
 ) -> dict:
     """Write nfo + cover + -poster/-fanart + extrafanart to movie_dir.
 
     Returns {'cover_fs': str, 'sample_fs': list[str]}.
     cover_fs is '' when cover download fails or meta['cover'] is empty.
+
+    old_base (TASK-89a-T4, Codex #3): when non-empty, this movie's own stale
+    assets from the PREVIOUS run (different title → different basename) are
+    deleted BEFORE any download/write below. This must run first — even when
+    old_base == the new basename (title unchanged) — so the sequence is always
+    "delete same-name old file → write new file", which degrades to a plain
+    overwrite rather than a delete-after-write race that could clobber what was
+    just written.
     """
     os.makedirs(movie_dir, exist_ok=True)
+    _clean_stale_assets(movie_dir, old_base)
     base = _build_basename(format_data, source_fs_path, config)
     base_stem = str(Path(movie_dir) / base)
 
@@ -528,7 +626,8 @@ def produce_source(source, config, repo, *, proxy_url="", on_progress=None, shou
                 repo, src_uri, existing, output_root, output_uri,
                 fd, scraper_cfg, allocated_this_run, path_mappings,
             )
-            assets = _write_movie_assets(str(movie_dir), meta, fd, fi["path"], scraper_cfg)
+            old_base = _build_old_base(existing, fi["path"], scraper_cfg)  # T4: '' when no prior row/title/number
+            assets = _write_movie_assets(str(movie_dir), meta, fd, fi["path"], scraper_cfg, old_base=old_base)
             _upsert_db(repo, src_uri, fi, meta, assets, path_mappings, output_dir_uri)
             result.created += 1
             _emit(on_progress, result, src_uri, "created", str(movie_dir), number)

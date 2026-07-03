@@ -737,6 +737,333 @@ class TestWriteMovieAssets:
                 _write_movie_assets(movie_dir, _T3_META, fd, '/src/TEST-001.mp4', _T3_BASE_CONFIG)
 
 
+# ---------------------------------------------------------------------------
+# TASK-89a-T4 (Codex #3 / #4): _build_old_base + _clean_stale_assets
+# ---------------------------------------------------------------------------
+
+def _t4_existing(meta):
+    """Build a Video-row-shaped stand-in from a _T3_META-like dict (DB → meta mapping)."""
+    from types import SimpleNamespace
+    return SimpleNamespace(
+        title=meta.get('title', ''),
+        number=meta.get('number', ''),
+        actresses=meta.get('actors', []),
+        maker=meta.get('maker', ''),
+        release_date=meta.get('date', ''),
+    )
+
+
+def _t4_real_download(url, save_path, referer=''):
+    """Real-file download stub for T4 round-trip tests (mirrors e2e mock)."""
+    Path(save_path).parent.mkdir(parents=True, exist_ok=True)
+    Path(save_path).write_bytes(b'FAKE-IMG')
+    return True
+
+
+def _t4_real_jellyfin(cover_fs, base_stem):
+    Path(base_stem + '-poster.jpg').write_bytes(b'FAKE-IMG')
+    Path(base_stem + '-fanart.jpg').write_bytes(b'FAKE-IMG')
+    return {'poster': True, 'fanart': True}
+
+
+def _t4_real_nfo(**kwargs):
+    Path(kwargs['output_path']).write_text('<movie/>', encoding='utf-8')
+    return True
+
+
+def _t4_write(movie_dir, meta, config, old_base='', download_side_effect=None):
+    """Run the real _write_movie_assets (real file writes) with T4's old_base kwarg."""
+    from core.readonly_producer import _format_data, _write_movie_assets
+
+    fd = _format_data(meta, '/src/TEST-001.mp4', config)
+    with patch('core.readonly_producer.download_image',
+               side_effect=download_side_effect or _t4_real_download), \
+         patch('core.readonly_producer.generate_jellyfin_images', side_effect=_t4_real_jellyfin), \
+         patch('core.readonly_producer.generate_nfo', side_effect=_t4_real_nfo):
+        return _write_movie_assets(movie_dir, meta, fd, '/src/TEST-001.mp4', config, old_base=old_base)
+
+
+class TestBuildOldBase:
+    """T4: _build_old_base — DB row (`existing`) → old_meta mapping → old basename."""
+
+    def test_none_existing_returns_empty(self):
+        from core.readonly_producer import _build_old_base
+        assert _build_old_base(None, '/src/TEST-001.mp4', _T3_BASE_CONFIG) == ''
+
+    def test_empty_title_returns_empty(self):
+        existing = _t4_existing(dict(_T3_META, title=''))
+        from core.readonly_producer import _build_old_base
+        assert _build_old_base(existing, '/src/TEST-001.mp4', _T3_BASE_CONFIG) == ''
+
+    def test_empty_number_returns_empty(self):
+        """Defensive guard (Opus note #3): existing.number falsy must not crash / must skip."""
+        existing = _t4_existing(dict(_T3_META, number=''))
+        from core.readonly_producer import _build_old_base
+        assert _build_old_base(existing, '/src/TEST-001.mp4', _T3_BASE_CONFIG) == ''
+
+    def test_normal_existing_matches_manual_pipeline(self):
+        """old_base must equal _format_data + _build_basename run manually against the
+        same mapped fields — proves _build_old_base doesn't silently diverge from
+        the documented mapping (number/title/actors/maker/date)."""
+        from core.readonly_producer import _build_basename, _build_old_base, _format_data
+
+        existing = _t4_existing(dict(_T3_META, title='Old Title'))
+        source_fs_path = '/src/TEST-001.mp4'
+        old_base = _build_old_base(existing, source_fs_path, _T3_BASE_CONFIG)
+
+        expected_meta = {
+            'number': existing.number,
+            'title': existing.title,
+            'actors': existing.actresses,
+            'maker': existing.maker,
+            'date': existing.release_date,
+        }
+        expected_fd = _format_data(expected_meta, source_fs_path, _T3_BASE_CONFIG)
+        expected = _build_basename(expected_fd, source_fs_path, _T3_BASE_CONFIG)
+        assert old_base == expected == 'TEST-001 Old Title'
+
+
+class TestCleanStaleAssets:
+    """T4: _clean_stale_assets — precise, anchored deletion (no bare glob, no rmtree)."""
+
+    def test_empty_old_base_is_noop(self, tmp_path):
+        from core.readonly_producer import _clean_stale_assets
+
+        d = tmp_path / 'movie'
+        d.mkdir()
+        f = d / 'random.jpg'
+        f.write_bytes(b'x')
+        _clean_stale_assets(str(d), '')
+        assert f.exists()
+
+    def test_deletes_singleton_assets_only(self, tmp_path):
+        from core.readonly_producer import _clean_stale_assets
+
+        d = tmp_path / 'movie'
+        d.mkdir()
+        old_base = 'TEST-001 Old'
+        for suffix in ('.nfo', '.jpg', '-poster.jpg', '-fanart.jpg'):
+            (d / f'{old_base}{suffix}').write_bytes(b'x')
+        keep = d / 'random.jpg'
+        keep.write_bytes(b'keep')
+
+        _clean_stale_assets(str(d), old_base)
+
+        for suffix in ('.nfo', '.jpg', '-poster.jpg', '-fanart.jpg'):
+            assert not (d / f'{old_base}{suffix}').exists(), f"{suffix} not cleaned"
+        assert keep.exists(), "user-placed file must not be deleted"
+
+    def test_missing_files_are_noop_no_raise(self, tmp_path):
+        from core.readonly_producer import _clean_stale_assets
+
+        d = tmp_path / 'movie'
+        d.mkdir()
+        _clean_stale_assets(str(d), 'NOTHING-EVER-WRITTEN')  # must not raise
+
+    def test_extrafanart_glob_ignores_non_fanart_files(self, tmp_path):
+        from core.readonly_producer import _clean_stale_assets
+
+        d = tmp_path / 'movie'
+        ef = d / 'extrafanart'
+        ef.mkdir(parents=True)
+        (ef / 'fanart1.jpg').write_bytes(b'x')
+        note = ef / 'my_note.txt'
+        note.write_bytes(b'keep')
+        custom = ef / 'custom.jpg'
+        custom.write_bytes(b'keep')
+
+        _clean_stale_assets(str(d), 'TEST-001 X')
+
+        assert not (ef / 'fanart1.jpg').exists()
+        assert note.exists(), "non fanart*.jpg file in extrafanart must survive"
+        assert custom.exists(), "non fanart*.jpg-named image must survive"
+
+    def test_old_base_with_glob_metachars_is_escaped(self, tmp_path):
+        """old_base from a scraped title may contain '[' ']' (e.g. '[Chinese Sub]').
+        sanitize_filename keeps brackets, so the poster/fanart globs must
+        glob.escape(old_base) or they silently miss the file (narrow Codex #3
+        recurrence — residual poster/fanart junk survives)."""
+        from core.readonly_producer import _clean_stale_assets
+
+        d = tmp_path / 'movie'
+        d.mkdir()
+        old_base = 'STARS-123 [Chinese Sub]'
+        for suffix in ('.nfo', '.jpg', '-poster.jpg', '-fanart.jpg'):
+            (d / f'{old_base}{suffix}').write_bytes(b'x')
+
+        _clean_stale_assets(str(d), old_base)
+
+        for suffix in ('.nfo', '.jpg', '-poster.jpg', '-fanart.jpg'):
+            assert not (d / f'{old_base}{suffix}').exists(), \
+                f"{suffix} with bracketed old_base not cleaned (glob not escaped)"
+
+
+class TestWriteMovieAssetsStaleCleanup:
+    """T4 integration: _write_movie_assets(old_base=...) round-trips against real files.
+
+    Covers DoD: title-drift (Codex #3 lock), extrafanart shrink, no-op-safe
+    (clean-before-write ordering), user-file protection, first-generation no-op,
+    reallocated-new-dir isolation.
+    """
+
+    def _config(self, **overrides):
+        return dict(_T3_BASE_CONFIG, **overrides)
+
+    def test_title_drift_old_series_removed(self, tmp_path):
+        """Codex #3 regression lock: title A → title B leaves ONLY the B series."""
+        movie_dir = str(tmp_path / 'TEST-001')
+        meta_a = dict(_T3_META, title='Title A')
+        meta_b = dict(_T3_META, title='Title B')
+        config = self._config(download_sample_images=True)
+
+        _t4_write(movie_dir, meta_a, config)
+        d = Path(movie_dir)
+        assert (d / 'TEST-001 Title A.nfo').exists()
+
+        from core.readonly_producer import _build_old_base
+        old_base = _build_old_base(_t4_existing(meta_a), '/src/TEST-001.mp4', config)
+        assert old_base == 'TEST-001 Title A'
+
+        _t4_write(movie_dir, meta_b, config, old_base=old_base)
+
+        for suffix in ('.nfo', '.jpg', '-poster.jpg', '-fanart.jpg'):
+            assert not (d / f'TEST-001 Title A{suffix}').exists(), f"stale {suffix} survived"
+            assert (d / f'TEST-001 Title B{suffix}').exists(), f"new {suffix} missing"
+
+    def test_extrafanart_shrink_3_to_2(self, tmp_path):
+        movie_dir = str(tmp_path / 'TEST-001')
+        meta3 = dict(_T3_META, title='Same Title',
+                     sample_images=['http://x/1.jpg', 'http://x/2.jpg', 'http://x/3.jpg'])
+        config = self._config(download_sample_images=True)
+        _t4_write(movie_dir, meta3, config)
+        ef_dir = Path(movie_dir) / 'extrafanart'
+        assert (ef_dir / 'fanart3.jpg').exists()
+
+        from core.readonly_producer import _build_old_base
+        old_base = _build_old_base(_t4_existing(meta3), '/src/TEST-001.mp4', config)
+        meta2 = dict(_T3_META, title='Same Title',
+                     sample_images=['http://x/1.jpg', 'http://x/2.jpg'])
+        _t4_write(movie_dir, meta2, config, old_base=old_base)
+
+        assert not (ef_dir / 'fanart3.jpg').exists(), "shrunk sample must not persist"
+        assert (ef_dir / 'fanart1.jpg').exists()
+        assert (ef_dir / 'fanart2.jpg').exists()
+
+    def test_extrafanart_cleaned_even_when_gate_off_this_run(self, tmp_path):
+        """Card boundary #1: samples ON last run, OFF this run → old fanart*.jpg still cleaned."""
+        movie_dir = str(tmp_path / 'TEST-001')
+        meta = dict(_T3_META, title='Same Title',
+                    sample_images=['http://x/1.jpg', 'http://x/2.jpg'])
+        config_on = self._config(download_sample_images=True)
+        _t4_write(movie_dir, meta, config_on)
+        ef_dir = Path(movie_dir) / 'extrafanart'
+        assert (ef_dir / 'fanart1.jpg').exists()
+        assert (ef_dir / 'fanart2.jpg').exists()
+
+        from core.readonly_producer import _build_old_base
+        old_base = _build_old_base(_t4_existing(meta), '/src/TEST-001.mp4', config_on)
+        config_off = self._config(download_sample_images=False)
+        _t4_write(movie_dir, meta, config_off, old_base=old_base)
+
+        assert not (ef_dir / 'fanart1.jpg').exists()
+        assert not (ef_dir / 'fanart2.jpg').exists()
+
+    def test_title_unchanged_clean_before_write_no_op_safe(self, tmp_path):
+        """old_base == new_base: clean must run BEFORE download so the sequence
+        degrades to a plain overwrite, never a delete-after-write race."""
+        from core.readonly_producer import _build_basename, _build_old_base, _format_data
+
+        movie_dir = str(tmp_path / 'TEST-001')
+        meta = dict(_T3_META, title='Same Title')
+        config = self._config()
+        _t4_write(movie_dir, meta, config)
+
+        old_base = _build_old_base(_t4_existing(meta), '/src/TEST-001.mp4', config)
+        new_fd = _format_data(meta, '/src/TEST-001.mp4', config)
+        new_base = _build_basename(new_fd, '/src/TEST-001.mp4', config)
+        assert old_base == new_base, "sanity: title unchanged → identical basename"
+
+        observed = {'cover_missing_when_download_called': None}
+
+        def recording_download(url, save_path, referer=''):
+            if save_path.endswith('.jpg') and 'extrafanart' not in save_path:
+                observed['cover_missing_when_download_called'] = not Path(save_path).exists()
+            Path(save_path).parent.mkdir(parents=True, exist_ok=True)
+            Path(save_path).write_bytes(b'NEW-COVER')
+            return True
+
+        _t4_write(movie_dir, meta, config, old_base=old_base, download_side_effect=recording_download)
+
+        assert observed['cover_missing_when_download_called'] is True, (
+            "stale same-name cover must be deleted BEFORE download_image runs"
+        )
+        assert (Path(movie_dir) / f'{new_base}.jpg').read_bytes() == b'NEW-COVER'
+
+    def test_user_placed_files_not_deleted(self, tmp_path):
+        movie_dir = str(tmp_path / 'TEST-001')
+        meta_a = dict(_T3_META, title='Title A')
+        config = self._config(download_sample_images=True)
+        _t4_write(movie_dir, meta_a, config)
+
+        d = Path(movie_dir)
+        note = d / 'my-note.txt'
+        note.write_text('user note')
+        random_jpg = d / 'random.jpg'
+        random_jpg.write_bytes(b'USER-IMG')
+        ef_dir = d / 'extrafanart'
+        ef_note = ef_dir / 'my_note.txt'
+        ef_note.write_text('user note 2')
+        ef_custom = ef_dir / 'custom.jpg'
+        ef_custom.write_bytes(b'USER-CUSTOM')
+
+        from core.readonly_producer import _build_old_base
+        old_base = _build_old_base(_t4_existing(meta_a), '/src/TEST-001.mp4', config)
+        meta_b = dict(_T3_META, title='Title B')
+        _t4_write(movie_dir, meta_b, config, old_base=old_base)
+
+        assert note.exists()
+        assert random_jpg.exists()
+        assert ef_note.exists()
+        assert ef_custom.exists()
+
+    def test_first_generation_no_existing_row_no_op(self, tmp_path):
+        """existing is None → _build_old_base == '' → no cleanup attempted, write succeeds."""
+        from core.readonly_producer import _build_old_base
+
+        movie_dir = str(tmp_path / 'TEST-001')
+        meta = dict(_T3_META, title='Title A')
+        config = self._config()
+        old_base = _build_old_base(None, '/src/TEST-001.mp4', config)
+        assert old_base == ''
+
+        assets = _t4_write(movie_dir, meta, config, old_base=old_base)
+        assert Path(assets['cover_fs']).exists()
+
+    def test_reallocated_new_dir_isolated_old_dir_untouched(self, tmp_path):
+        """Card boundary #6: output root moved → new empty movie_dir cleans to a
+        no-op (nothing there matches), and the orphaned OLD dir is left untouched
+        (89a does not do cross-dir orphan GC — that's spec-89b.4)."""
+        old_dir = str(tmp_path / 'old_root' / 'TEST-001')
+        new_dir = str(tmp_path / 'new_root' / 'TEST-001')
+        meta_a = dict(_T3_META, title='Title A')
+        meta_b = dict(_T3_META, title='Title B')
+        config = self._config()
+
+        _t4_write(old_dir, meta_a, config)
+        assert (Path(old_dir) / 'TEST-001 Title A.nfo').exists()
+
+        from core.readonly_producer import _build_old_base
+        old_base = _build_old_base(_t4_existing(meta_a), '/src/TEST-001.mp4', config)
+        _t4_write(new_dir, meta_b, config, old_base=old_base)
+
+        # old dir: completely untouched (still has its own Title A series)
+        assert (Path(old_dir) / 'TEST-001 Title A.nfo').exists()
+        assert (Path(old_dir) / 'TEST-001 Title A.jpg').exists()
+        # new dir: only the new title's files, no cross-dir bleed of the old series
+        assert (Path(new_dir) / 'TEST-001 Title B.nfo').exists()
+        assert not (Path(new_dir) / 'TEST-001 Title A.nfo').exists()
+
+
 class TestUpsertDb:
     """T-3: DB field correctness, cover_path local URI, sample_images local URIs."""
 
@@ -1355,7 +1682,7 @@ class TestProduceSourceExceptionDoesNotAbort:
 
         call_count = [0]
 
-        def fake_write(movie_dir, meta_arg, fd_arg, src_path, cfg):
+        def fake_write(movie_dir, meta_arg, fd_arg, src_path, cfg, old_base=''):
             call_count[0] += 1
             if call_count[0] == 2:
                 raise OSError("disk full")

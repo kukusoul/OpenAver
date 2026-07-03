@@ -478,6 +478,156 @@ def test_incremental_idempotent(tmp_path, monkeypatch, client, parse_sse_events)
 
 
 # ---------------------------------------------------------------------------
+# TASK-89a-T4 (T3 carry-forward): real read-store overwrite.
+#
+# test_incremental_idempotent above never actually exercises the read-store /
+# stale-cleanup code path: on its second run all three `_should_skip` conditions
+# hold, so every file is skipped before `_resolve_movie_dir`/`_write_movie_assets`
+# ever run. This test constructs the narrower case the card calls for: delete
+# only the physical cover file (condition 3 fails → NOT skipped) while leaving
+# the DB row / output_dir alone, so the second run walks the real
+# read-and-reuse branch of `_resolve_movie_dir` and lands in
+# `_write_movie_assets`'s stale-asset cleanup (TASK-89a-T4 / Codex #3) for real,
+# against the actual SSE endpoint + a real sqlite DB — not mocked internals.
+# ---------------------------------------------------------------------------
+
+def _fake_search_jav_round1(number, source="auto", proxy_url=""):
+    """Round 1: title A, 3 sample images (for the extrafanart-shrink assertion)."""
+    return {
+        "number": number,
+        "title": f"Title {number}",
+        "actors": ["Actress A", "Actress B"],
+        "cover": f"http://fake.local/{number}/cover.jpg",
+        "sample_images": [
+            f"http://fake.local/{number}/s1.jpg",
+            f"http://fake.local/{number}/s2.jpg",
+            f"http://fake.local/{number}/s3.jpg",
+        ],
+        "tags": ["Tag1", "Tag2"],
+        "date": "2024-01-01",
+        "maker": "FakeMaker",
+    }
+
+
+def _fake_search_jav_round2(number, source="auto", proxy_url=""):
+    """Round 2: DIFFERENT title (maker corrected it), only 2 sample images."""
+    return {
+        "number": number,
+        "title": f"Title-B {number}",
+        "actors": ["Actress A", "Actress B"],
+        "cover": f"http://fake.local/{number}/cover.jpg",
+        "sample_images": [
+            f"http://fake.local/{number}/s1.jpg",
+            f"http://fake.local/{number}/s2.jpg",
+        ],
+        "tags": ["Tag1", "Tag2"],
+        "date": "2024-01-01",
+        "maker": "FakeMaker",
+    }
+
+
+def _expected_basename(meta, source_fs_path, scraper_cfg):
+    """Compute the actual basename the pipeline would produce for `meta` — avoids
+    hand-typing a filename string that could silently drift from real behavior."""
+    from core.readonly_producer import _build_basename, _format_data
+    fd = _format_data(meta, source_fs_path, scraper_cfg)
+    return _build_basename(fd, source_fs_path, scraper_cfg)
+
+
+def test_real_readstore_overwrite_title_drift_and_extrafanart_shrink(
+    tmp_path, monkeypatch, client, parse_sse_events
+):
+    """Delete the cover file (bypass `_should_skip`) → re-scrape with a corrected
+    title + fewer samples → asserts the SECOND run truly walks the read-store
+    branch (same output_dir, not re-allocated) and TASK-89a-T4's stale cleanup
+    (old title-A series + shrunk extrafanart removed, only title-B series left).
+    """
+    numbers = ["JKL-030"]
+    num = numbers[0]
+    # CD-89a-7: off flavour IGNORES source.output_path entirely — it always
+    # resolves to the fixed App-managed `get_db_path().parent/"lib"/<name>` root
+    # (see `_off_root` below / `resolve_output_root`'s off branch). A decoy
+    # output_path is passed only to prove the backend doesn't accidentally use it.
+    src = _make_source_dir(tmp_path / "src", "movies", numbers)
+    decoy_output_path = tmp_path / "decoy-output-path-must-be-ignored"
+    decoy_output_path.mkdir()
+    db_path = tmp_path / "test.db"
+    # filename_format must include {title} — default _make_config uses "{num}"
+    # only, which would make old_base == new_base regardless of title drift.
+    config = _make_config(
+        [{"path": str(src), "output_path": str(decoy_output_path), "readonly": True}],
+        tmp_path / "htmlout",
+        download_samples=True,
+    )
+    config["scraper"]["filename_format"] = "{num} {title}"
+    _wire(monkeypatch, config, db_path)
+    monkeypatch.setattr("core.readonly_producer.search_jav", _fake_search_jav_round1)
+    output = _off_root(src, db_path)  # the ACTUAL fixed off-flavor root
+
+    source_fs_path = str(src / f"{num}.mp4")
+    meta_a = _fake_search_jav_round1(num)
+    meta_b = _fake_search_jav_round2(num)
+    old_base = _expected_basename(meta_a, source_fs_path, config["scraper"])
+    new_base = _expected_basename(meta_b, source_fs_path, config["scraper"])
+    assert old_base != new_base, "sanity: round1/round2 metas must produce different basenames"
+
+    # --- Round 1: normal creation ---
+    events1 = _run_generate(client, parse_sse_events)
+    stats1 = _done_event(events1)["readonly_stats"]
+    assert stats1["created"] == 1
+
+    movie_dir = output / num
+    assert (movie_dir / f"{old_base}.nfo").exists()
+    assert (movie_dir / f"{old_base}.jpg").exists()
+    assert (movie_dir / f"{old_base}-poster.jpg").exists()
+    assert (movie_dir / f"{old_base}-fanart.jpg").exists()
+    assert (movie_dir / "extrafanart" / "fanart3.jpg").exists()
+
+    repo = VideoRepository(str(db_path))
+    src_uri = to_file_uri(source_fs_path, {})
+    row1 = repo.get_by_path(src_uri)
+    assert row1 is not None
+    output_dir_before = row1.output_dir
+    assert row1.title == meta_a["title"]
+
+    # --- Bypass `_should_skip`: delete ONLY the physical cover file (condition 3
+    # fails). DB row / output_dir are left completely untouched. ---
+    (movie_dir / f"{old_base}.jpg").unlink()
+
+    # --- Round 2: search_jav now returns a corrected title + fewer samples ---
+    monkeypatch.setattr("core.readonly_producer.search_jav", _fake_search_jav_round2)
+    events2 = _run_generate(client, parse_sse_events)
+    stats2 = _done_event(events2)["readonly_stats"]
+
+    # Proves the read-store branch (not the skip branch) was actually walked.
+    assert stats2["created"] == 1, "must NOT be skipped — cover file was removed"
+    assert stats2["skipped"] == 0
+
+    row2 = repo.get_by_path(src_uri)
+    assert row2 is not None
+    assert row2.output_dir == output_dir_before, (
+        "read-store reuse: same movie_dir must be reused, not re-allocated"
+    )
+    assert row2.title == meta_b["title"]
+
+    # TASK-89a-T4: old title-A series fully gone, only title-B series remains.
+    assert not (movie_dir / f"{old_base}.nfo").exists(), "stale title-A nfo survived"
+    assert not (movie_dir / f"{old_base}.jpg").exists(), "stale title-A cover survived"
+    assert not (movie_dir / f"{old_base}-poster.jpg").exists(), "stale title-A poster survived"
+    assert not (movie_dir / f"{old_base}-fanart.jpg").exists(), "stale title-A fanart survived"
+    assert (movie_dir / f"{new_base}.nfo").exists()
+    assert (movie_dir / f"{new_base}.jpg").exists()
+    assert (movie_dir / f"{new_base}-poster.jpg").exists()
+    assert (movie_dir / f"{new_base}-fanart.jpg").exists()
+
+    # extrafanart 3→2: shrunk sample must not persist.
+    ef_dir = movie_dir / "extrafanart"
+    assert not (ef_dir / "fanart3.jpg").exists(), "shrunk extrafanart sample survived"
+    assert (ef_dir / "fanart1.jpg").exists()
+    assert (ef_dir / "fanart2.jpg").exists()
+
+
+# ---------------------------------------------------------------------------
 # PR#91 P2-D: DirectoryConfig.path as a file:/// URI (schema「FS 路徑或 URI」).
 # A URI source path must be handled idempotently everywhere it is converted:
 #   - generate_avlist configured_dir_uris (post-loop) → readonly rows must NOT
