@@ -354,6 +354,88 @@ class TestOutputDirProtectionAndOccupancy:
         ) is False
 
 
+class TestScrapeAttemptedAtUpsertProtection:
+    """P2 修正：scrape_attempted_at 缺 empty→preserve 保護，與 output_dir 不對稱。
+    補對稱 CASE-WHEN（採「保留」語意）：incoming=0 時保留 DB 既有值，避免資料夾重掃
+    （Video.from_video_info() 預設 scrape_attempted_at=0.0）洗掉 enricher 標記的 tried 時間戳。"""
+
+    def test_upsert_preserves_scrape_attempted_at_on_zero_incoming(self, temp_db):
+        """upsert 傳 scrape_attempted_at=0（且 DB 已有 >0 既有值）→ 既有值不被覆寫"""
+        repo = VideoRepository(temp_db)
+        path = to_file_uri("/video1.mp4")
+
+        v1 = Video(path=path, title="影片1", scrape_attempted_at=1717171717.0)
+        repo.upsert(v1)
+
+        v2 = Video(path=path, title="影片1-rescan", scrape_attempted_at=0.0)
+        repo.upsert(v2)
+
+        result = repo.get_by_path(path)
+        assert result is not None
+        assert result.scrape_attempted_at == 1717171717.0
+
+    def test_upsert_overwrites_scrape_attempted_at_on_nonzero_incoming(self, temp_db):
+        """upsert 傳 scrape_attempted_at>0 → 正常寫入/覆寫"""
+        repo = VideoRepository(temp_db)
+        path = to_file_uri("/video1.mp4")
+
+        v1 = Video(path=path, title="影片1", scrape_attempted_at=1717171717.0)
+        repo.upsert(v1)
+
+        v2 = Video(path=path, title="影片1", scrape_attempted_at=1717181818.0)
+        repo.upsert(v2)
+
+        result = repo.get_by_path(path)
+        assert result is not None
+        assert result.scrape_attempted_at == 1717181818.0
+
+    def test_upsert_batch_preserves_scrape_attempted_at_on_zero_incoming(self, temp_db):
+        """upsert_batch 傳 scrape_attempted_at=0（且 DB 已有 >0 既有值）→ 既有值不被覆寫
+        （與 upsert 對稱測試，回歸鎖：獨立斷言，不假設 upsert_batch 與 upsert 行為一致）"""
+        repo = VideoRepository(temp_db)
+        path = to_file_uri("/video1.mp4")
+
+        repo.upsert_batch([
+            Video(path=path, title="影片1", scrape_attempted_at=1717171717.0),
+        ])
+
+        repo.upsert_batch([
+            Video(path=path, title="影片1-rescan", scrape_attempted_at=0.0),
+        ])
+
+        result = repo.get_by_path(path)
+        assert result is not None
+        assert result.scrape_attempted_at == 1717171717.0
+
+    def test_upsert_batch_overwrites_scrape_attempted_at_on_nonzero_incoming(self, temp_db):
+        """upsert_batch 傳 scrape_attempted_at>0 → 正常寫入"""
+        repo = VideoRepository(temp_db)
+        path = to_file_uri("/video1.mp4")
+
+        repo.upsert_batch([
+            Video(path=path, title="影片1", scrape_attempted_at=1717171717.0),
+        ])
+        repo.upsert_batch([
+            Video(path=path, title="影片1", scrape_attempted_at=1717181818.0),
+        ])
+
+        result = repo.get_by_path(path)
+        assert result is not None
+        assert result.scrape_attempted_at == 1717181818.0
+
+    def test_upsert_insert_writes_scrape_attempted_at_zero_directly(self, temp_db):
+        """首次 insert（無既有 row）傳 scrape_attempted_at=0 → 直接寫 0（happy path）"""
+        repo = VideoRepository(temp_db)
+        path = to_file_uri("/video1.mp4")
+
+        v = Video(path=path, title="影片1", scrape_attempted_at=0.0)
+        repo.upsert(v)
+
+        result = repo.get_by_path(path)
+        assert result is not None
+        assert result.scrape_attempted_at == 0.0
+
+
 class TestScrapeAttemptedAtRepositoryMethods:
     """TASK-89b-T1: update_scrape_attempted_at / get_attempted_index / insert_if_ignore"""
 

@@ -200,6 +200,11 @@ class VideoRepository:
                     update_parts.append(
                         "output_dir = CASE WHEN excluded.output_dir = '' THEN videos.output_dir ELSE excluded.output_dir END"
                     )
+                elif col == 'scrape_attempted_at':
+                    # scrape_attempted_at = 0 時視同「不更新」，保留 DB 現有值（P2 修正，須與 output_dir 對稱）
+                    update_parts.append(
+                        "scrape_attempted_at = CASE WHEN excluded.scrape_attempted_at = 0 THEN videos.scrape_attempted_at ELSE excluded.scrape_attempted_at END"
+                    )
                 else:
                     update_parts.append(f"{col} = excluded.{col}")
             update_clause = ', '.join(update_parts)
@@ -544,6 +549,11 @@ class VideoRepository:
                         # output_dir = '' 時視同「不更新」，保留 DB 現有值（TASK-89a-T1，須與 upsert() 對稱）
                         update_parts.append(
                             "output_dir = CASE WHEN excluded.output_dir = '' THEN videos.output_dir ELSE excluded.output_dir END"
+                        )
+                    elif col == 'scrape_attempted_at':
+                        # scrape_attempted_at = 0 時視同「不更新」，保留 DB 現有值（P2 修正，須與 upsert() 對稱）
+                        update_parts.append(
+                            "scrape_attempted_at = CASE WHEN excluded.scrape_attempted_at = 0 THEN videos.scrape_attempted_at ELSE excluded.scrape_attempted_at END"
                         )
                     else:
                         update_parts.append(f"{col} = excluded.{col}")
