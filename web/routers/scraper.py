@@ -227,6 +227,7 @@ def enrich_single_endpoint(request: EnrichRequest) -> dict:
     config = load_config()
     search_cfg = config.get("search", {})
     proxy_url = search_cfg.get("proxy_url", "")
+    external_manager = config.get("scraper", {}).get("external_manager", "off")
 
     # CD-62-4 分裂陷阱智慧防呆：refresh_full + overwrite=false 時，若這組設定不會寫出任何
     # sidecar（NFO/cover）卻仍 _db_upsert，就是純分裂。一個 sidecar「會寫」需 write 旗標開 + 檔案缺
@@ -237,11 +238,13 @@ def enrich_single_endpoint(request: EnrichRequest) -> dict:
     # 故不得計入「保證會寫 sidecar」；補劇照請用 /api/scraper/fetch-samples（Codex PR#47 round-2 P2）。
     # 在 try 之前 raise，避免被下方 except Exception 吞成籠統 200。
     if request.mode == "refresh_full" and not request.overwrite_existing:
-        nfo_path, cover_path = resolve_nfo_cover_paths(request.file_path)
+        nfo_path, cover_path = resolve_nfo_cover_paths(
+            request.file_path,
+            "" if external_manager != "off" else request.number,
+        )
         will_write_nfo = request.write_nfo and not os.path.exists(nfo_path)
         will_write_cover = request.write_cover and not os.path.exists(cover_path)
         # 72d-P2A：外部圖寫出機會也是合法的寫出路徑（72b-T6 加入 external_manager 後守衛未同步）
-        external_manager = config.get("scraper", {}).get("external_manager", "off")
         if external_manager != "off":
             stem = os.path.splitext(uri_to_fs_path(request.file_path))[0]
             poster_path = stem + "-poster.jpg"
@@ -268,7 +271,7 @@ def enrich_single_endpoint(request: EnrichRequest) -> dict:
             write_cover=request.write_cover,
             write_extrafanart=request.write_extrafanart,
             overwrite_existing=request.overwrite_existing,
-            external_manager=config.get("scraper", {}).get("external_manager", "off"),
+            external_manager=external_manager,
             proxy_url=proxy_url,
             source=request.source,
             javbus_lang=request.javbus_lang,
@@ -328,6 +331,7 @@ async def batch_enrich_endpoint(request: BatchEnrichRequest):
     config = await asyncio.to_thread(load_config)
     search_cfg = config.get("search", {})
     proxy_url = search_cfg.get("proxy_url", "")
+    external_manager = config.get("scraper", {}).get("external_manager", "off")
 
     # 去重（按 file_path）
     seen_paths: set = set()
@@ -401,7 +405,7 @@ async def batch_enrich_endpoint(request: BatchEnrichRequest):
                             write_cover=request.write_cover,
                             write_extrafanart=request.write_extrafanart,
                             overwrite_existing=request.overwrite_existing,
-                            external_manager=config.get("scraper", {}).get("external_manager", "off"),
+                            external_manager=external_manager,
                             proxy_url=proxy_url,
                             source=es if es != "auto" else None,
                             javbus_lang=el,
