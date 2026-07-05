@@ -1260,3 +1260,42 @@ class TestIsPathUnderDirNFC:
         dir_uri  = to_file_uri(f'/media/{nfc}')
         path_uri = to_file_uri(f'/media2/{nfc}/video.mp4')
         assert is_path_under_dir(path_uri, dir_uri) is False
+
+
+# ============ TestUriToLocalFsPath ============
+
+class TestUriToLocalFsPath:
+    """測試 uri_to_local_fs_path()：file:/// URI → 本機實際可存取 FS 路徑（含 WSL+mapping 反解）"""
+
+    def test_wsl_mapping_hit(self, monkeypatch):
+        """WSL + mapping 命中 → 回本機 local FS 路徑，且不等於裸 uri_to_fs_path"""
+        monkeypatch.setattr(path_utils, 'CURRENT_ENV', 'wsl')
+        mappings = {'/home/user/nas': '//NAS/share'}
+        uri = 'file://///NAS/share/video.mp4'
+        result = path_utils.uri_to_local_fs_path(uri, mappings)
+        assert result == '/home/user/nas/video.mp4'
+        assert result != path_utils.uri_to_fs_path(uri)
+
+    def test_wsl_mapping_miss(self, monkeypatch):
+        """WSL + mapping 未命中 → reverse 回 None → or fs 退回 uri_to_fs_path"""
+        monkeypatch.setattr(path_utils, 'CURRENT_ENV', 'wsl')
+        mappings = {'/home/user/nas': '//NAS/share'}
+        uri = 'file:///D:/other/video.mp4'
+        result = path_utils.uri_to_local_fs_path(uri, mappings)
+        assert result == path_utils.uri_to_fs_path(uri)
+
+    def test_non_wsl_equivalent(self, monkeypatch):
+        """非 WSL（即使傳 mappings）→ reverse 分支不觸發，字面等價於 uri_to_fs_path"""
+        monkeypatch.setattr(path_utils, 'CURRENT_ENV', 'windows')
+        mappings = {'/home/user/nas': '//NAS/share'}
+        uri = 'file://///NAS/share/video.mp4'
+        result = path_utils.uri_to_local_fs_path(uri, mappings)
+        assert result == path_utils.uri_to_fs_path(uri)
+
+    def test_no_mapping_equivalent(self, monkeypatch):
+        """WSL + 空 mappings → 字面等價於 uri_to_fs_path"""
+        monkeypatch.setattr(path_utils, 'CURRENT_ENV', 'wsl')
+        mappings = {}
+        uri = 'file://///NAS/share/video.mp4'
+        result = path_utils.uri_to_local_fs_path(uri, mappings)
+        assert result == path_utils.uri_to_fs_path(uri)

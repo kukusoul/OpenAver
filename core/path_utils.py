@@ -433,6 +433,20 @@ def reverse_path_mapping(fs_path: str, path_mappings: dict) -> Optional[str]:
     return None
 
 
+def uri_to_local_fs_path(uri: str, path_mappings: dict) -> str:
+    """file:/// URI → 本機『實際可存取』FS 路徑（含 WSL+mapping 反解）。
+
+    專供「即將對回傳值做真實磁碟 I/O」的呼叫端使用。
+    非 WSL 或無 mappings → 與 uri_to_fs_path(uri) 字面等價（reverse 分支不觸發）。
+
+    與 coerce_to_file_uri（正向建 URI）方向相反、互補：各自呼叫，不要疊加（D2）。
+    """
+    fs = uri_to_fs_path(uri)
+    if CURRENT_ENV == 'wsl' and path_mappings:
+        fs = reverse_path_mapping(fs, path_mappings) or fs
+    return fs
+
+
 def uri_to_fs_path(uri: str) -> str:
     """file:/// URI → 當前環境檔案系統路徑。
 
