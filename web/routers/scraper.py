@@ -75,6 +75,30 @@ class ScrapeResponse(BaseModel):
     nfo_path: Optional[str] = None
 
 
+def _readonly_source_error(file_path: str) -> Optional[dict]:
+    """唯讀來源 guard：只依 file_path 判斷所屬來源是否唯讀（readonly）。
+
+    是 → 回既有錯誤形狀 plain dict（不搬檔、不刮削、不寫任何 sidecar）；否則回 None。
+    兩端一律用 UNC-tolerant coerce_to_file_uri，不做原生路徑正規化（Codex P2：對 UNC 在
+    WSL/Linux 會拋 ValueError，而 UNC 正是 readonly 主場景）。coerce_to_file_uri 對「已是
+    DB canonical file:/// URI」原樣回、對 FS path 才轉，避免 to_file_uri 雙重包成
+    file:///file:/// 繞過 guard（Codex P1）。helper 自己讀 config（每次呼叫重判，安全側）。
+    """
+    _gallery_config = load_config().get('gallery', {})
+    _path_mappings = _gallery_config.get('path_mappings', {})
+    _file_uri = coerce_to_file_uri(file_path, _path_mappings)
+    for _s in iter_gallery_sources(_gallery_config):
+        if not _s.readonly or not _s.path:
+            continue
+        if is_path_under_dir(_file_uri, coerce_to_file_uri(_s.path, _path_mappings)):
+            return {
+                "success": False,
+                "error": "此來源路徑為唯讀（readonly），無法搬移或重新命名檔案。"
+                         "請改用掃描頁『產生』生成本地媒體庫，或確認你對此路徑有寫入權限。",
+            }
+    return None
+
+
 @router.post("/scrape-single")
 def scrape_single(request: ScrapeRequest) -> dict:
     """
@@ -92,24 +116,10 @@ def scrape_single(request: ScrapeRequest) -> dict:
 
     # U7 readonly guard：只依 file_path 判斷所屬來源是否唯讀（readonly）。
     # 是 → 不搬檔、不刮削、不解析番號，回既有錯誤形狀 plain dict。
-    # 必須在 extract_number / search_jav / organize_file 之前（Codex P1）；
-    # 兩端一律用 UNC-tolerant to_file_uri，不做原生路徑正規化（Codex P2：對 UNC 在
-    # WSL/Linux 會拋 ValueError，而 UNC 正是 readonly 主場景）。
-    _gallery_config = load_config().get('gallery', {})
-    _path_mappings = _gallery_config.get('path_mappings', {})
-    # coerce_to_file_uri：file_path 可能已是 DB canonical file:/// URI（鄰近寫入路徑
-    # 傳的就是 URI），直接 to_file_uri 會雙重包成 file:///file:/// 導致 guard 被繞過
-    # （Codex P1）。coerce 對「已是 URI」原樣回、對 FS path 才轉，兩端對稱處理。
-    _file_uri = coerce_to_file_uri(file_path, _path_mappings)
-    for _s in iter_gallery_sources(_gallery_config):
-        if not _s.readonly or not _s.path:
-            continue
-        if is_path_under_dir(_file_uri, coerce_to_file_uri(_s.path, _path_mappings)):
-            return {
-                "success": False,
-                "error": "此來源路徑為唯讀（readonly），無法搬移或重新命名檔案。"
-                         "請改用掃描頁『產生』生成本地媒體庫，或確認你對此路徑有寫入權限。",
-            }
+    # 必須在 extract_number / search_jav / organize_file 之前（Codex P1）。
+    _err = _readonly_source_error(file_path)
+    if _err:
+        return _err
 
     # 如果沒有提供番號，嘗試從檔名提取
     if not number:
@@ -282,6 +292,12 @@ def enrich_single_endpoint(request: EnrichRequest) -> dict:
     search_cfg = config.get("search", {})
     proxy_url = search_cfg.get("proxy_url", "")
 
+    # 90c-T1 唯讀來源 guard：唯讀來源片不得 enrich 寫檔。須在 refresh_full 預檢
+    # （resolve_nfo_cover_paths / os.path.exists）之前——預檢對唯讀掛載可能拋錯。
+    _err = _readonly_source_error(request.file_path)
+    if _err:
+        return _err
+
     # CD-62-4 分裂陷阱智慧防呆：refresh_full + overwrite=false 時，若這組設定不會寫出任何
     # sidecar（NFO/cover）卻仍 _db_upsert，就是純分裂。一個 sidecar「會寫」需 write 旗標開 + 檔案缺
     # （此分支 overwrite 已為 false，既有檔不覆寫）。兩者皆不會寫 → 擋；任一會寫則放行（quick-enrich
@@ -379,6 +395,11 @@ def fetch_samples_endpoint(req: FetchSamplesRequest) -> dict:
     search_cfg = config.get("search", {})
     proxy_url = search_cfg.get("proxy_url", "")
 
+    # 90c-T1 唯讀來源 guard：唯讀來源片不得補劇照寫檔（early-return，先於 DB/uri work）。
+    _err = _readonly_source_error(req.file_path)
+    if _err:
+        return _err
+
     folder_uri_prefix = to_file_uri(os.path.dirname(uri_to_fs_path(req.file_path))) + "/"
     repo = VideoRepository()
     count = repo.count_videos_in_folder(folder_uri_prefix)
@@ -446,6 +467,15 @@ async def batch_enrich_endpoint(request: BatchEnrichRequest):
 
                 # progress 事件
                 yield f"data: {json.dumps({'type': 'progress', 'current': idx, 'total': total, 'number': item.number})}\n\n"
+
+                # 90c-T1 逐項唯讀 guard：唯讀來源片 yield result-item(success:False) +
+                # failed_count+=1 + continue（不 raise、不逐項 _emit_notif——批次層才發通知）。
+                # 混合批中可寫項照常 enrich，整批不中斷（spec-90 §90b(iii) 驗收 2）。
+                _ro_err = _readonly_source_error(item.file_path)
+                if _ro_err:
+                    failed_count += 1
+                    yield f"data: {json.dumps({'type': 'result-item', 'number': item.number, 'file_path': item.file_path, 'success': False, 'error': _ro_err['error']})}\n\n"
+                    continue
 
                 try:
                     loop = asyncio.get_running_loop()
