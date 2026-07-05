@@ -34,9 +34,9 @@ from core.config import (
 )
 from core.database import VideoRepository, get_db_path, init_db
 from core import thumbnail_cache
-from core.path_utils import coerce_to_file_uri, uri_to_fs_path, reverse_path_mapping, CURRENT_ENV
-from core.generate_state import try_begin_switch, end_switch, is_switch_in_progress
-from core.readonly_source import is_path_readonly
+from core.path_utils import uri_to_fs_path, reverse_path_mapping, CURRENT_ENV
+from core.generate_state import try_begin_switch, end_switch, try_begin_config_save, end_config_save
+from core.readonly_source import is_path_readonly, _canonical_source_prefix
 from core.readonly_producer import _write_strm
 from core.source_config import MAX_ENABLED_SOURCES
 from core.translate_service import LANGUAGE_PROMPTS
@@ -67,42 +67,53 @@ def get_config() -> dict:
 @router.put("/config")
 def update_config(config: AppConfig) -> dict:
     """更新所有設定"""
-    # PR #93 P2：切模式 purge 窗口中拒絕整份設定儲存。否則另一分頁帶「切模式前的舊
-    # directories 快照」的整份存檔會覆寫 gallery.directories，把剛被 purge 的離線來源
-    # 條目寫回 config（DB 卡已刪）→ 殭屍條目、顯示空白。次秒級窗口，前端重試即可。
-    # 只擋整份存檔；update_general_field 只寫單一 general 欄位、不碰 directories → 無此害。
-    if is_switch_in_progress():
-        return {"success": False, "reason": "switch_in_progress",
+    # PR #93 P2-e：整份設定儲存納入 switch 互斥窗口（owner 拍板：互斥鎖）。否則另一分頁帶
+    # 「切模式前的舊 directories 快照」的整份存檔會與 purge 交錯、把剛被 purge 的離線來源
+    # 條目寫回 gallery.directories（DB 卡已刪）→ 殭屍條目。
+    # 上一輪的 is_switch_in_progress() preflight 是 TOCTOU（存檔可在 switch 開始前通過檢查、
+    # 卻在 switch 做完後才落盤）→ 改真互斥：儲存持有 _config_save_active 整段窗口，
+    # try_begin_switch 見此旗標即拒絕；兩者同一 _lock 下原子、不交錯。end_config_save 必於 finally。
+    # 已知殘留（owner 接受）：切換「已完全做完」後才到達的舊快照存檔仍會覆寫（純 lost-update、
+    # 非交錯，任何 mutex 都擋不到），靠切模式破壞性 confirm 的「其他分頁請重整」提示兜底；
+    # 次秒級、可自癒（重 generate 重建卡）、無資料損毀。
+    # 只擋整份存檔；update_general_field 只寫單一 general 欄位、不碰 directories → 不納入。
+    save_token = object()  # 每 request 唯一身份 token（比照 generate 的 _active_tokens）
+    reason = try_begin_config_save(save_token)
+    if reason is not None:
+        return {"success": False, "reason": reason,
                 "error": "設定切換中，請稍後再儲存。"}
-    # Cap 守衛（CD-61-16，endpoint-level；非 model_validator）：
-    # 同時啟用且非 manual_only 的來源數不得超過 MAX_ENABLED_SOURCES。
-    # 防止前端繞過 UI 直接 PUT。manual_only 不計入 cap basis（CD-61-17）。
-    cap_basis = sum(1 for s in config.sources if s.enabled and not s.manual_only)
-    if cap_basis > MAX_ENABLED_SOURCES:
-        raise HTTPException(
-            status_code=400,
-            detail={"error": "cap_exceeded", "max": MAX_ENABLED_SOURCES},
-        )
     try:
-        payload = config.model_dump()
-        # server_mode is toggle-lifecycle state owned exclusively by
-        # PUT /api/config/general/server_mode (which calls lan_listener.start/stop
-        # atomically with the persist). A full-config save must NEVER overwrite the
-        # currently-persisted value — whether the incoming payload omits the field
-        # (Pydantic default → False) or contains a stale/incorrect value.
-        # Read the canonical persisted value inside mutate_config so the
-        # read-preserve-write is atomic under _config_write_lock.
-        def _write_preserving_server_mode(cfg: dict) -> None:
-            current_server_mode = cfg.get("general", {}).get("server_mode", False)
-            payload["general"]["server_mode"] = current_server_mode
-            cfg.update(payload)
+        # Cap 守衛（CD-61-16，endpoint-level；非 model_validator）：
+        # 同時啟用且非 manual_only 的來源數不得超過 MAX_ENABLED_SOURCES。
+        # 防止前端繞過 UI 直接 PUT。manual_only 不計入 cap basis（CD-61-17）。
+        cap_basis = sum(1 for s in config.sources if s.enabled and not s.manual_only)
+        if cap_basis > MAX_ENABLED_SOURCES:
+            raise HTTPException(
+                status_code=400,
+                detail={"error": "cap_exceeded", "max": MAX_ENABLED_SOURCES},
+            )
+        try:
+            payload = config.model_dump()
+            # server_mode is toggle-lifecycle state owned exclusively by
+            # PUT /api/config/general/server_mode (which calls lan_listener.start/stop
+            # atomically with the persist). A full-config save must NEVER overwrite the
+            # currently-persisted value — whether the incoming payload omits the field
+            # (Pydantic default → False) or contains a stale/incorrect value.
+            # Read the canonical persisted value inside mutate_config so the
+            # read-preserve-write is atomic under _config_write_lock.
+            def _write_preserving_server_mode(cfg: dict) -> None:
+                current_server_mode = cfg.get("general", {}).get("server_mode", False)
+                payload["general"]["server_mode"] = current_server_mode
+                cfg.update(payload)
 
-        mutate_config(_write_preserving_server_mode)
-        _reset_translate_service()  # 重置翻譯服務，讓新配置生效
-        return {"success": True, "message": "設定已儲存"}
-    except Exception as e:
-        logger.error("儲存設定失敗: %s", e)
-        return {"success": False, "error": "儲存設定失敗"}
+            mutate_config(_write_preserving_server_mode)
+            _reset_translate_service()  # 重置翻譯服務，讓新配置生效
+            return {"success": True, "message": "設定已儲存"}
+        except Exception as e:
+            logger.error("儲存設定失敗: %s", e)
+            return {"success": False, "error": "儲存設定失敗"}
+    finally:
+        end_config_save(save_token)
 
 
 @router.delete("/config")
@@ -292,15 +303,21 @@ def switch_external_manager(request: SwitchExternalManagerRequest) -> dict:
     #   (a) generate 在飛 → 'generate_in_progress'（原 forward guard，前端顯示「產生進行中」）；
     #   (b) 另一個 switch 已持窗口 → 'switch_in_progress'（PR #93 P2：否則第二個 switch 也進、
     #       第一個 end_switch() 會在第二個窗口中把 _switch_active 清掉 → generate 趁隙補回卡）；
-    #   (c) 否則回 None、佔住 _switch_active 整個 purge 窗口 → 期間新 generate 掛號被
-    #       try_mark_generate_active 拒絕，杜絕反向 race。成功佔住後必 end_switch()（finally 保證）。
+    #   (c) 整份設定儲存持窗口 → 'config_save_in_progress'（PR #93 P2-e：否則 switch 的 purge
+    #       與該儲存的 mutate_config 交錯 → 舊快照存檔把剛 purge 的離線來源條目寫回）；
+    #   (d) 否則回 None、佔住 _switch_active 整個 purge 窗口 → 期間新 generate 掛號被
+    #       try_mark_generate_active 拒絕、新整份儲存被 try_begin_config_save 拒絕，杜絕反向 race。
+    #       成功佔住後必 end_switch()（finally 保證）。
     reason = try_begin_switch()
     if reason is not None:
+        _switch_refuse_msg = {
+            "generate_in_progress": "產生進行中，請稍後再切換模式。",
+            "config_save_in_progress": "設定儲存中，請稍後再切換模式。",
+        }
         return {
             "success": False,
             "reason": reason,
-            "error": "產生進行中，請稍後再切換模式。" if reason == "generate_in_progress"
-            else "另一個切換正在進行中，請稍後再試。",
+            "error": _switch_refuse_msg.get(reason, "另一個切換正在進行中，請稍後再試。"),
         }
     try:
         return _switch_external_manager_locked(request)
@@ -315,14 +332,15 @@ def _switch_external_manager_locked(request: SwitchExternalManagerRequest) -> di
     mappings = gallery.get("path_mappings", {})
     offline_sources = [s for s in iter_gallery_sources(gallery) if s.readonly and s.path]
 
-    # coerce 對「髒來源路徑」會拋 ValueError（mirror readonly_source.readonly_source_prefixes
-    # / showcase _get_configured_dirs）。破壞性端點絕不可因單一髒路徑 500 卡死使用者切換 →
-    # 髒來源 skip（無法比對其卡 → 保守不刪）。同時前綴預算一次，免 deleted_paths 每片重算 coerce。
+    # _canonical_source_prefix 對「髒來源路徑」會拋 ValueError（共用 readonly_source 的同名
+    # helper，杜絕重複實作漂移 + PR #93 P2-f：file:/// URI 型來源也套 path_mappings 對齊 DB
+    # 命名空間，否則 purge miss 該唯讀卡）。破壞性端點絕不可因單一髒路徑 500 卡死使用者切換 →
+    # 髒來源 skip（無法比對其卡 → 保守不刪）。同時前綴預算一次，免 deleted_paths 每片重算。
     def _safe_prefixes(sources) -> list:
         out = []
         for s in sources:
             try:
-                out.append(coerce_to_file_uri(s.path, mappings))
+                out.append(_canonical_source_prefix(s.path, mappings))
             except ValueError:
                 continue
         return out

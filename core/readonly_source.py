@@ -10,7 +10,22 @@ payload 的 `is_readonly_source` 旗標共用同一段比對邏輯（CD-90b-9 Co
 """
 
 from core.config import iter_gallery_sources
-from core.path_utils import coerce_to_file_uri, is_path_under_dir
+from core.path_utils import is_path_under_dir, to_file_uri, uri_to_fs_path
+
+
+def _canonical_source_prefix(path: str, path_mappings) -> str:
+    """把 config 來源路徑 canonical 成與 DB row 同命名空間的 file:/// URI 前綴。
+
+    PR #93 Codex P2-f：不能用 coerce_to_file_uri —— 它對「已是 file:/// URI」的來源
+    原樣回、**不套 path_mappings**；但 producer 存 DB row 的 path 是用掃描 FS 路徑走
+    to_file_uri(..., mappings) → mapped 命名空間（WSL 下 /mnt/nas/ro → //NAS/share/ro）。
+    於是 file:/// URI 型唯讀來源的前綴（unmapped）對不上 DB path（mapped）→ 唯讀 guard /
+    showcase 旗標 / switch purge 全 miss。改走 uri_to_fs_path → to_file_uri(mappings)：
+    - URI 型：strip 回 FS path，再 to_file_uri 帶 mappings → 落 mapped 命名空間（對齊 DB）。
+    - FS-path 型：uri_to_fs_path 近似 pass-through（normalize），等價原 coerce（無回歸）。
+    - 非 WSL / 無 mapping：to_file_uri 的 mapping 分支不觸發，round-trip 回同一 URI 形。
+    """
+    return to_file_uri(uri_to_fs_path(path), path_mappings)
 
 
 def is_path_readonly(file_uri: str, readonly_prefixes, writable_prefixes=None) -> bool:
@@ -36,15 +51,16 @@ def is_path_readonly(file_uri: str, readonly_prefixes, writable_prefixes=None) -
 def readonly_source_prefixes(gallery_config, path_mappings) -> list:
     """枚舉唯讀來源、coerce 成 file:/// URI 前綴集（每 request 算一次）。
 
-    iter_gallery_sources → 過濾 s.readonly and s.path → coerce_to_file_uri(s.path, mappings)；
-    coerce 拋 ValueError 的髒來源 skip（mirror showcase _get_configured_dirs）。
+    iter_gallery_sources → 過濾 s.readonly and s.path → _canonical_source_prefix（P2-f：
+    走 uri_to_fs_path→to_file_uri(mappings)，讓 file:/// URI 型來源也套映射對齊 DB）；
+    拋 ValueError 的髒來源 skip（mirror showcase _get_configured_dirs）。
     """
     prefixes = []
     for source in iter_gallery_sources(gallery_config):
         if not source.readonly or not source.path:
             continue
         try:
-            prefixes.append(coerce_to_file_uri(source.path, path_mappings))
+            prefixes.append(_canonical_source_prefix(source.path, path_mappings))
         except ValueError:
             continue
     return prefixes
@@ -54,15 +70,15 @@ def writable_source_prefixes(gallery_config, path_mappings) -> list:
     """枚舉可寫（非唯讀）來源、coerce 成 file:/// URI 前綴集（每 request 算一次）。
 
     供 is_path_readonly 的 override 語意用（可寫來源巢狀在唯讀夾下時，其片不算唯讀）。
-    鏡射 readonly_source_prefixes，僅 filter 反過來（not source.readonly）；coerce 拋
-    ValueError 的髒來源同樣 skip。
+    鏡射 readonly_source_prefixes，僅 filter 反過來（not source.readonly）；同走
+    _canonical_source_prefix（P2-f）；拋 ValueError 的髒來源同樣 skip。
     """
     prefixes = []
     for source in iter_gallery_sources(gallery_config):
         if source.readonly or not source.path:
             continue
         try:
-            prefixes.append(coerce_to_file_uri(source.path, path_mappings))
+            prefixes.append(_canonical_source_prefix(source.path, path_mappings))
         except ValueError:
             continue
     return prefixes

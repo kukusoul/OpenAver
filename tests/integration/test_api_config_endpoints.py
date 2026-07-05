@@ -58,10 +58,14 @@ class TestConfigAPI:
         # 不會報錯，一樣回傳成功
 
     def test_update_config_refused_during_switch(self, client, mock_config_path, monkeypatch):
-        """PR #93 P2：切模式 purge 窗口中整份設定儲存被擋 → reason switch_in_progress、
-        config 檔零覆寫（防舊 directories 快照把剛 purge 的離線來源條目寫回）。"""
+        """PR #93 P2-e：切模式 purge 窗口中整份設定儲存被擋 → reason switch_in_progress、
+        config 檔零覆寫（防舊 directories 快照把剛 purge 的離線來源條目寫回）。
+        改真互斥後（取代 TOCTOU preflight）：update_config 走 try_begin_config_save，switch
+        持窗口時回 'switch_in_progress'。"""
         mock_config_path.write_text('{"general": {"theme": "dark"}}')
-        monkeypatch.setattr("web.routers.config.is_switch_in_progress", lambda: True)
+        monkeypatch.setattr(
+            "web.routers.config.try_begin_config_save", lambda _token: "switch_in_progress"
+        )
 
         resp = client.put("/api/config", json={})  # {} → AppConfig 全預設，仍先撞 switch guard
 
@@ -71,6 +75,17 @@ class TestConfigAPI:
         assert body["reason"] == "switch_in_progress"
         # config 檔未被覆寫
         assert json.loads(mock_config_path.read_text()) == {"general": {"theme": "dark"}}
+
+    def test_update_config_releases_config_save_window(self, client, mock_config_path):
+        """P2-e：正常儲存後該 request 的 token 必被 finally 釋放（下次 switch 可開始）。"""
+        import core.generate_state as gs
+        mock_config_path.write_text('{"general": {"theme": "dark"}}')
+        gs._config_save_tokens.clear()
+
+        resp = client.put("/api/config", json={})
+        assert resp.status_code == 200
+        assert resp.json()["success"] is True
+        assert not gs._config_save_tokens  # 正常路徑 finally 已釋放（無殘留 token）
 
     def test_tutorial_flow(self, client, mock_config_path):
         """測試 tutorial 相關的一系列流程"""
