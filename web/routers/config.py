@@ -294,15 +294,27 @@ def switch_external_manager(request: SwitchExternalManagerRequest) -> dict:
     gallery = load_config().get("gallery", {})
     mappings = gallery.get("path_mappings", {})
     offline_sources = [s for s in iter_gallery_sources(gallery) if s.readonly and s.path]
+
+    # coerce 對「髒來源路徑」會拋 ValueError（mirror readonly_source.readonly_source_prefixes
+    # / showcase _get_configured_dirs）。破壞性端點絕不可因單一髒路徑 500 卡死使用者切換 →
+    # 髒來源 skip（無法比對其卡 → 保守不刪）。同時前綴預算一次，免 deleted_paths 每片重算 coerce。
+    def _safe_prefixes(sources) -> list:
+        out = []
+        for s in sources:
+            try:
+                out.append(coerce_to_file_uri(s.path, mappings))
+            except ValueError:
+                continue
+        return out
+
+    offline_prefixes = _safe_prefixes(offline_sources)
     # 可寫（非唯讀）來源前綴：巢狀/重疊時由可寫來源「主張」其卡，從刪除集扣除。
     # spec §90b(iv)-1 保證「可寫來源與其 DB 卡不受影響」；可寫夾若巢狀在唯讀夾之下
     # （如唯讀 D:/media + 可寫 D:/media/local），可寫卡同落唯讀前綴，若不扣除會被誤刪
     # （連同 user_tags 永久流失）。破壞性操作保守偏向「不刪」。
-    writable_prefixes = [
-        coerce_to_file_uri(s.path, mappings)
-        for s in iter_gallery_sources(gallery)
-        if s.path and not s.readonly
-    ]
+    writable_prefixes = _safe_prefixes(
+        [s for s in iter_gallery_sources(gallery) if s.path and not s.readonly]
+    )
 
     # Step 2：枚舉待刪 DB 卡（無 `not in current_paths` gate —— 無條件清該離線來源全部卡）
     db_path = get_db_path()
@@ -311,13 +323,8 @@ def switch_external_manager(request: SwitchExternalManagerRequest) -> dict:
     deleted_paths = [
         v.path
         for v in repo.get_all()
-        if any(
-            is_path_under_dir(v.path, coerce_to_file_uri(s.path, mappings))
-            for s in offline_sources
-        )
-        and not any(
-            is_path_under_dir(v.path, wp) for wp in writable_prefixes
-        )
+        if any(is_path_under_dir(v.path, op) for op in offline_prefixes)
+        and not any(is_path_under_dir(v.path, wp) for wp in writable_prefixes)
     ]
 
     # Step 3：DB 刪除（單 DELETE IN + commit，原子；空 list 回 0 安全）+ 縮圖失效

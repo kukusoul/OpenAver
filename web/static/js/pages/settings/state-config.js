@@ -919,7 +919,7 @@ export function stateConfig() {
                     // 有既有 .strm（count>0）才跳 heads-up 確認。off 模式 / 無映射變更 / 無產出片
                     //（count==0）→ 不提示（規則已存，僅未改寫既有 strm）。
                     const strmChanged =
-                        prevStrmMappings !== JSON.stringify(config.scraper.strm_path_mappings || {});
+                        prevStrmMappings !== JSON.stringify(config.scraper?.strm_path_mappings || {});
                     if (strmChanged && ['jellyfin', 'emby', 'kodi'].includes(this.form.externalManager)) {
                         try {
                             const dryResp = await fetch('/api/config/rewrite-strm?dry_run=true', { method: 'POST' });
