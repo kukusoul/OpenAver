@@ -1065,7 +1065,8 @@ def generate_nfo_update() -> Generator[str, None, None]:
         })
 
         # 執行更新
-        for msg in update_videos_generator(cache, paths_to_update):
+        path_mappings = load_config().get('gallery', {}).get('path_mappings', {})
+        for msg in update_videos_generator(cache, paths_to_update, path_mappings):
             yield _sse_event(msg)
 
         yield _sse_event({
