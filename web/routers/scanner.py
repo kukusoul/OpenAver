@@ -44,7 +44,7 @@ from core.database import VideoRepository, Video, init_db, get_db_path, migrate_
 from core.organizer import generate_jellyfin_images, HEADERS as _EMBED_HEADERS
 from core.config import load_config, iter_gallery_sources, get_gallery_source_paths
 from core.readonly_producer import produce_source, resolve_output_root
-from core.generate_state import mark_generate_active, mark_generate_done
+from core.generate_state import try_mark_generate_active, mark_generate_done
 from core import thumbnail_cache
 from core.scraper import smart_search
 from core.source_settings import is_uncensored_mode_effective
@@ -781,9 +781,18 @@ async def generate(request: Request):
     （那是 T3），此處只負責建立 + 正確設置 + 生命週期收尾。
     """
     cancel_event = threading.Event()
-    # Finding 2 guard：以 cancel_event 為唯一 token 登記「產生進行中」，讓設定頁
-    # 切換媒體伺服器模式在 generate 仍跑時被擋（避免 purge 後背景 producer 補回卡）。
-    mark_generate_active(cancel_event)
+    # Finding 2 + PR #93 P1 雙向互斥：以 cancel_event 為唯一 token 登記「產生進行中」，
+    # 讓設定頁切換媒體伺服器模式在 generate 仍跑時被擋。try_mark_generate_active 同時檢查
+    # 反方向——若設定頁正在切換模式（purge 窗口中），回 False → 拒絕開始產生，避免背景
+    # producer 讀到舊唯讀來源、把剛被 purge 的卡 _upsert 補回（切模式後殭屍卡）。
+    if not try_mark_generate_active(cancel_event):
+        async def _refuse_switching():
+            yield f"data: {json.dumps({'type': 'error', 'message': '設定切換中，請稍後再產生列表。'})}\n\n"
+        return StreamingResponse(
+            _refuse_switching(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+        )
 
     async def _watch_disconnect() -> None:
         try:

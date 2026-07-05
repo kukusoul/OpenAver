@@ -87,6 +87,35 @@ class TestIsPathReadonly:
         file_uri = to_file_uri("/tmp/elsewhere/ABC.mp4", {})
         assert is_path_readonly(file_uri, [ro], [wo]) is False
 
+    # --- PR #93 二審 P2-a：反向巢狀（可寫父 + 唯讀子）→ 最具體(唯讀子)勝，仍唯讀 ---
+
+    def test_readonly_nested_under_writable_stays_readonly(self):
+        # 可寫父 D:/media + 唯讀子 D:/media/cloud；片在唯讀子夾 → 唯讀子更具體 → True
+        # （這正是上一輪「任一可寫壓唯讀」修法弄壞的反向 case，最具體前綴勝修回）
+        wo = to_file_uri("/tmp/media", {})
+        ro = to_file_uri("/tmp/media/cloud", {})
+        file_uri = to_file_uri("/tmp/media/cloud/ABC-001.mp4", {})
+        assert is_path_readonly(file_uri, [ro], [wo]) is True
+
+    def test_readonly_nested_deeper_stays_readonly(self):
+        wo = to_file_uri("/tmp/media", {})
+        ro = to_file_uri("/tmp/media/cloud", {})
+        file_uri = to_file_uri("/tmp/media/cloud/sub/deep/ABC.mp4", {})
+        assert is_path_readonly(file_uri, [ro], [wo]) is True
+
+    def test_writable_sibling_under_writable_parent_not_readonly(self):
+        # 可寫父下、非唯讀子夾的片 → 只命中可寫 → False
+        wo = to_file_uri("/tmp/media", {})
+        ro = to_file_uri("/tmp/media/cloud", {})
+        file_uri = to_file_uri("/tmp/media/other/ABC.mp4", {})
+        assert is_path_readonly(file_uri, [ro], [wo]) is False
+
+    def test_equal_length_prefix_tiebreak_favours_writable(self):
+        # 同一路徑同時屬唯讀與可寫兩表（設定自相矛盾）→ 打平偏可寫（保守放行讀取判定）
+        same = to_file_uri("/tmp/media", {})
+        file_uri = to_file_uri("/tmp/media/ABC.mp4", {})
+        assert is_path_readonly(file_uri, [same], [same]) is False
+
 
 class TestWritableSourcePrefixes:
     """writable_source_prefixes：枚舉可寫（非唯讀）來源 → coerce 成前綴集（鏡射 readonly 版）。"""

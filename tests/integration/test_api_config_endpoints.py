@@ -595,14 +595,50 @@ class TestSwitchExternalManagerEndpoint:
         assert paths == ["file:///D:/media/local"]
         assert cfg["scraper"]["external_manager"] == "jellyfin"
 
+    def test_nested_readonly_under_writable_is_deleted(self, client, env):
+        """反向巢狀（PR #93 二審 P2-b）：可寫父之下的唯讀子夾卡必須被刪，不得因落在
+        可寫父前綴而被誤豁免 → 否則 config 條目移除卻留殭屍唯讀卡（破壞性清空沒清乾淨）。
+
+        可寫父 file:///D:/media + 唯讀子 file:///D:/media/cloud。唯讀子夾卡由「最具體
+        來源勝」歸給唯讀子 → 該刪；可寫父其他子路徑的卡保留。
+        """
+        env.write_config([
+            {"path": "file:///D:/media", "readonly": False},
+            {"path": "file:///D:/media/cloud", "readonly": True},
+        ], external_manager="off")
+        env.set_videos([
+            "file:///D:/media/cloud/X/X.strm",    # 唯讀子最具體 → 刪
+            "file:///D:/media/other/Y/Y.strm",    # 僅可寫父 → 保留
+        ])
+
+        resp = client.post("/api/config/switch-external-manager",
+                           json={"external_manager": "jellyfin"})
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["success"] is True
+        # 唯讀子夾卡被刪（不再因可寫父豁免留殭屍）、可寫父其他卡保留
+        assert env.repo.delete_calls == [["file:///D:/media/cloud/X/X.strm"]]
+        assert body["deleted_cards"] == 1
+        assert env.invalidated == ["file:///D:/media/cloud/X/X.strm"]
+
+        # config：唯讀子條目移除、可寫父保留 → 一致（無殭屍）
+        cfg = env.read_config()
+        paths = [d["path"] for d in cfg["gallery"]["directories"]]
+        assert paths == ["file:///D:/media"]
+        assert cfg["scraper"]["external_manager"] == "jellyfin"
+
     def test_refuses_when_generate_in_progress(self, client, env, monkeypatch):
-        """Finding 2：generate 進行中切換 → success:False + reason，零 DB/config 變更。"""
+        """Finding 2：generate 進行中切換 → success:False + reason，零 DB/config 變更。
+
+        PR #93 P1：改用雙向互斥 try_begin_switch（generate 在飛時回 False = 拒絕切換）。
+        """
         env.write_config([
             {"path": "file:///D:/ro_src", "readonly": True},
         ], external_manager="off")
         env.set_videos(["file:///D:/ro_src/B/B.strm"])
-        # 產生進行中
-        monkeypatch.setattr("web.routers.config.is_generate_in_progress", lambda: True)
+        # 產生進行中 → try_begin_switch 回 False（generate token 已登記）
+        monkeypatch.setattr("web.routers.config.try_begin_switch", lambda: False)
 
         resp = client.post("/api/config/switch-external-manager",
                            json={"external_manager": "jellyfin"})

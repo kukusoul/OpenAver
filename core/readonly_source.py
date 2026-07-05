@@ -14,18 +14,23 @@ from core.path_utils import coerce_to_file_uri, is_path_under_dir
 
 
 def is_path_readonly(file_uri: str, readonly_prefixes, writable_prefixes=None) -> bool:
-    """純比對、無 IO：file_uri 落在唯讀前綴下 **且不落任一可寫前綴** → True。
+    """純比對、無 IO：由**最具體（最長匹配前綴）的來源**決定歸屬 → 唯讀勝才 True。
 
-    可寫來源巢狀在唯讀夾之下時（唯讀 D:/media + 可寫 D:/media/local），可寫子夾的片
-    同落唯讀前綴，但它屬可寫來源、不該被標唯讀 / 擋寫入。可寫前綴 override（PR #93
-    Codex P2；語意對齊 switch_external_manager 的 writable_prefixes 扣除）。
+    巢狀 overlap 兩方向都要對（PR #93 Codex P2）：
+    - 唯讀父 D:/media + 可寫子 D:/media/local，片在子夾 → 可寫子更具體 → False（可寫）
+    - 可寫父 D:/media + 唯讀子 D:/media/cloud，片在子夾 → 唯讀子更具體 → True（唯讀）
+    「任一可寫壓任一唯讀」只對第一種、會把第二種（使用者明確標唯讀的子夾）誤判可寫
+    （上一輪修法的反向回歸）。改以命中前綴的字串長度近似巢狀深度：coerce_to_file_uri
+    不替一般路徑加尾斜線，長度差對應深度差。打平（同長度同時屬兩表＝設定自相矛盾）偏可寫。
 
     file_uri / readonly_prefixes / writable_prefixes 皆須為呼叫端已 coerce 的 file:/// URI。
-    writable_prefixes 預設 None → 退回「純唯讀前綴比對」的舊行為（相容既有呼叫）。
+    writable_prefixes 預設 None → 無可寫前綴，退回純唯讀比對（相容既有呼叫）。
     """
-    if not any(is_path_under_dir(file_uri, prefix) for prefix in readonly_prefixes):
+    best_ro = max((len(p) for p in readonly_prefixes if is_path_under_dir(file_uri, p)), default=-1)
+    if best_ro < 0:
         return False
-    return not any(is_path_under_dir(file_uri, wp) for wp in (writable_prefixes or []))
+    best_wr = max((len(p) for p in (writable_prefixes or []) if is_path_under_dir(file_uri, p)), default=-1)
+    return best_ro > best_wr
 
 
 def readonly_source_prefixes(gallery_config, path_mappings) -> list:

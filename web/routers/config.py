@@ -34,8 +34,9 @@ from core.config import (
 )
 from core.database import VideoRepository, get_db_path, init_db
 from core import thumbnail_cache
-from core.path_utils import is_path_under_dir, coerce_to_file_uri, uri_to_fs_path, reverse_path_mapping, CURRENT_ENV
-from core.generate_state import is_generate_in_progress
+from core.path_utils import coerce_to_file_uri, uri_to_fs_path, reverse_path_mapping, CURRENT_ENV
+from core.generate_state import try_begin_switch, end_switch
+from core.readonly_source import is_path_readonly
 from core.readonly_producer import _write_strm
 from core.source_config import MAX_ENABLED_SOURCES
 from core.translate_service import LANGUAGE_PROMPTS
@@ -280,16 +281,26 @@ def switch_external_manager(request: SwitchExternalManagerRequest) -> dict:
     註：保持同步 def —— body 走 DB + config 檔案 I/O，依 async-offload 守衛須在
     Starlette threadpool 執行，不可改 async def 卡 event loop。
     """
-    # Finding 2 guard：產生（generate SSE）進行中就拒絕切換——否則背景 producer
-    # 會在 purge 刪卡後繼續 _upsert_db 補回離線來源卡，破壞「切模式就清乾淨」契約。
-    # 前端據 reason 顯示「產生進行中，請稍後再切換」。零 DB/config 變更即早退。
-    if is_generate_in_progress():
+    # Finding 2 + PR #93 P1 雙向互斥 guard：try_begin_switch 原子地
+    #   (a) 若已有 generate 在飛 → 回 False，拒絕切換（原 forward guard，前端據 reason 顯示
+    #       「產生進行中，請稍後再切換」，零 DB/config 變更即早退）；
+    #   (b) 否則佔住 _switch_active 整個 purge 窗口 → 期間新 generate 掛號被 try_mark_generate_active
+    #       拒絕，杜絕「切模式進行中才開始的 generate 把剛 purge 的卡 _upsert 補回」的反向 race。
+    # 成功佔住後必須 end_switch()（finally 保證，含各失敗 return 路徑）。
+    if not try_begin_switch():
         return {
             "success": False,
             "reason": "generate_in_progress",
             "error": "產生進行中，請稍後再切換模式。",
         }
+    try:
+        return _switch_external_manager_locked(request)
+    finally:
+        end_switch()
 
+
+def _switch_external_manager_locked(request: SwitchExternalManagerRequest) -> dict:
+    """switch_external_manager 的 purge 主體（已持 _switch_active 窗口，見呼叫端）。"""
     # Step 1：讀 config 枚舉 offline_sources（唯讀，config 鎖外）
     gallery = load_config().get("gallery", {})
     mappings = gallery.get("path_mappings", {})
@@ -320,11 +331,14 @@ def switch_external_manager(request: SwitchExternalManagerRequest) -> dict:
     db_path = get_db_path()
     init_db(db_path)
     repo = VideoRepository(db_path)
+    # 最具體來源勝（PR #93 Codex P2-b）：與 showcase/scraper 的 is_readonly_source 判定
+    # 共用同一個 is_path_readonly，不再內聯抄「任一可寫壓任一唯讀」壞規則——否則可寫父
+    # 底下的唯讀子夾卡會被誤豁免不刪、config 條目卻被移除 → 切模式後留殭屍唯讀卡。
+    # v.path 為 DB canonical file:/// URI，前綴集已 coerce，直接比對（比照原內聯）。
     deleted_paths = [
         v.path
         for v in repo.get_all()
-        if any(is_path_under_dir(v.path, op) for op in offline_prefixes)
-        and not any(is_path_under_dir(v.path, wp) for wp in writable_prefixes)
+        if is_path_readonly(v.path, offline_prefixes, writable_prefixes)
     ]
 
     # Step 3：DB 刪除（單 DELETE IN + commit，原子；空 list 回 0 安全）+ 縮圖失效
