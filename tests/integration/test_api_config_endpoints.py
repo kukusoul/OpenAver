@@ -563,6 +563,38 @@ class TestSwitchExternalManagerEndpoint:
         assert dirs[0]["path"] == "file:///D:/writable_src"
         assert cfg["scraper"]["external_manager"] == "jellyfin"
 
+    def test_nested_writable_under_readonly_not_deleted(self, client, env):
+        """可寫來源夾在唯讀來源之下：可寫卡不得被誤刪（spec §90b(iv)-1 保證）。
+
+        唯讀 file:///D:/media 之下巢狀一個可寫 file:///D:/media/local。唯讀卡（僅落
+        唯讀前綴）該刪；可寫卡（同時落唯讀+可寫前綴）由可寫來源主張、零刪除。
+        """
+        env.write_config([
+            {"path": "file:///D:/media", "readonly": True},
+            {"path": "file:///D:/media/local", "readonly": False},
+        ], external_manager="off")
+        env.set_videos([
+            "file:///D:/media/X/X.strm",          # 僅唯讀前綴 → 刪
+            "file:///D:/media/local/Y/Y.strm",    # 同時落可寫前綴 → 保留
+        ])
+
+        resp = client.post("/api/config/switch-external-manager",
+                           json={"external_manager": "jellyfin"})
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["success"] is True
+        # 只刪唯讀-only 卡，可寫巢狀卡零刪除
+        assert env.repo.delete_calls == [["file:///D:/media/X/X.strm"]]
+        assert body["deleted_cards"] == 1
+        assert env.invalidated == ["file:///D:/media/X/X.strm"]
+
+        # config：唯讀條目移除、可寫巢狀條目保留
+        cfg = env.read_config()
+        paths = [d["path"] for d in cfg["gallery"]["directories"]]
+        assert paths == ["file:///D:/media/local"]
+        assert cfg["scraper"]["external_manager"] == "jellyfin"
+
     def test_refuses_when_generate_in_progress(self, client, env, monkeypatch):
         """Finding 2：generate 進行中切換 → success:False + reason，零 DB/config 變更。"""
         env.write_config([
@@ -958,3 +990,23 @@ class TestRewriteStrmEndpoint:
         resp = client.post("/api/config/rewrite-strm?dry_run=true")
 
         assert resp.json() == {"success": True, "count": 0}
+
+    def test_malformed_output_dir_row_skipped_not_abort(self, client, env):
+        """單列 output_dir 壞（uri_to_fs_path/glob 拋錯）→ skip 該列、不整批中止。
+
+        per-row 容錯：一片壞 output_dir 不得害整批 rewrite 變 success:False。
+        """
+        import types
+        env.write_config(external_manager="jellyfin", with_mapping=True)
+        v_good, _, e_good = env.make_movie("ABC-001")
+        # 壞列：output_dir 非字串（truthy 過 filter、uri_to_fs_path 對 int .startswith → AttributeError）
+        v_bad = types.SimpleNamespace(path="file:///D:/x/x.mp4", output_dir=12345)
+        env.set_videos([v_bad, v_good])
+
+        resp = client.post("/api/config/rewrite-strm")
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["success"] is True          # 未整批中止
+        assert body["rewritten"] == 1           # 壞列 skip、好列照改
+        assert e_good["strm"].read_text(encoding="utf-8") == env.expected_mapped("ABC-001")

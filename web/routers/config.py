@@ -294,6 +294,15 @@ def switch_external_manager(request: SwitchExternalManagerRequest) -> dict:
     gallery = load_config().get("gallery", {})
     mappings = gallery.get("path_mappings", {})
     offline_sources = [s for s in iter_gallery_sources(gallery) if s.readonly and s.path]
+    # 可寫（非唯讀）來源前綴：巢狀/重疊時由可寫來源「主張」其卡，從刪除集扣除。
+    # spec §90b(iv)-1 保證「可寫來源與其 DB 卡不受影響」；可寫夾若巢狀在唯讀夾之下
+    # （如唯讀 D:/media + 可寫 D:/media/local），可寫卡同落唯讀前綴，若不扣除會被誤刪
+    # （連同 user_tags 永久流失）。破壞性操作保守偏向「不刪」。
+    writable_prefixes = [
+        coerce_to_file_uri(s.path, mappings)
+        for s in iter_gallery_sources(gallery)
+        if s.path and not s.readonly
+    ]
 
     # Step 2：枚舉待刪 DB 卡（無 `not in current_paths` gate —— 無條件清該離線來源全部卡）
     db_path = get_db_path()
@@ -305,6 +314,9 @@ def switch_external_manager(request: SwitchExternalManagerRequest) -> dict:
         if any(
             is_path_under_dir(v.path, coerce_to_file_uri(s.path, mappings))
             for s in offline_sources
+        )
+        and not any(
+            is_path_under_dir(v.path, wp) for wp in writable_prefixes
         )
     ]
 
@@ -359,7 +371,13 @@ def _collect_strm_targets(repo) -> list:
     for v in repo.get_all():
         if not v.output_dir:
             continue
-        strm = next(Path(uri_to_fs_path(v.output_dir)).glob('*.strm'), None)
+        # per-row 容錯：單列壞 output_dir（uri_to_fs_path/glob 拋錯）只 skip 該列，
+        # 不害整批 rewrite 中止（比照 _write_strm 的 per-movie best-effort 契約）。
+        try:
+            strm = next(Path(uri_to_fs_path(v.output_dir)).glob('*.strm'), None)
+        except Exception as e:  # noqa: BLE001 — best-effort：壞列 skip 不阻斷整批
+            logger.warning("rewrite_strm 略過壞 output_dir 列（%r）: %s", v.output_dir, e)
+            continue
         if strm is None:
             continue
         targets.append((strm, uri_to_fs_path(v.path)))
