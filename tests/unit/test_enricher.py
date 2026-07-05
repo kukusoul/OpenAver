@@ -2063,3 +2063,153 @@ class TestKodiStemNaming:
         assert fanart_text.strip() != "fanart.jpg", (
             "NFO <fanart> 不應是 bare 'fanart.jpg'"
         )
+
+
+# ── TASK-91-T3: 站台 1/2/3 — uri_to_local_fs_path WSL+UNC path_mappings 反解 ──
+
+_WSL_UNC_MAPPINGS = {"/home/user/nas": "//NAS/share"}
+_WSL_UNC_URI = "file://///NAS/share/dir/movie.mp4"
+_WSL_UNC_REVERSED = "/home/user/nas/dir/movie.mp4"
+
+
+class TestEnrichSinglePathMappingReverse:
+    """站台1（enrich_single :358）：fs_path 必須是 path_mappings 反解後的本機路徑，
+    不是裸 uri_to_fs_path 產出的 UNC 字面值（mutation-sensitive）。"""
+
+    def test_wsl_unc_mapping_reverses_fs_path(self, monkeypatch):
+        from core import path_utils
+        monkeypatch.setattr(path_utils, "CURRENT_ENV", "wsl")
+
+        captured = []
+
+        def fake_exists(p):
+            captured.append(p)
+            return False  # 提早以「檔案不存在」return，不需 mock 整條 pipeline
+
+        with patch("os.path.exists", side_effect=fake_exists):
+            from core.enricher import enrich_single
+            result = enrich_single(
+                file_path=_WSL_UNC_URI,
+                number="SONE-205",
+                path_mappings=_WSL_UNC_MAPPINGS,
+            )
+
+        assert result.error == "檔案不存在"
+        assert captured, "os.path.exists 應被呼叫"
+        assert captured[0] == _WSL_UNC_REVERSED, (
+            f"fs_path 應反解為本機路徑 {_WSL_UNC_REVERSED}，實際: {captured[0]!r}"
+        )
+
+    def test_non_file_uri_fallback_passthrough_unchanged(self, monkeypatch):
+        """邊界4：非 file:/// 輸入的 try/except passthrough 不可回歸。"""
+        from core import path_utils
+        monkeypatch.setattr(path_utils, "CURRENT_ENV", "wsl")
+
+        bare_path = "just-a-bare-local-string-not-a-uri"
+        captured = []
+
+        def fake_exists(p):
+            captured.append(p)
+            return False
+
+        with patch("os.path.exists", side_effect=fake_exists):
+            from core.enricher import enrich_single
+            result = enrich_single(
+                file_path=bare_path,
+                number="SONE-205",
+                path_mappings=_WSL_UNC_MAPPINGS,
+            )
+
+        assert result.error == "檔案不存在"
+        assert captured[0] == bare_path, (
+            f"非 URI 輸入應原樣 passthrough，實際: {captured[0]!r}"
+        )
+
+
+class TestFetchSamplesOnlyPathMappingReverse:
+    """站台2（fetch_samples_only :618）：同站台1的反解行為。"""
+
+    def test_wsl_unc_mapping_reverses_fs_path(self, monkeypatch):
+        from core import path_utils
+        monkeypatch.setattr(path_utils, "CURRENT_ENV", "wsl")
+
+        captured = []
+
+        def fake_exists(p):
+            captured.append(p)
+            return False
+
+        with patch("os.path.exists", side_effect=fake_exists):
+            from core.enricher import fetch_samples_only
+            result = fetch_samples_only(
+                file_path=_WSL_UNC_URI,
+                number="SONE-205",
+                path_mappings=_WSL_UNC_MAPPINGS,
+            )
+
+        assert result.error == "檔案不存在"
+        assert captured, "os.path.exists 應被呼叫"
+        assert captured[0] == _WSL_UNC_REVERSED, (
+            f"fs_path 應反解為本機路徑 {_WSL_UNC_REVERSED}，實際: {captured[0]!r}"
+        )
+
+    def test_non_file_uri_fallback_passthrough_unchanged(self, monkeypatch):
+        """邊界4：非 file:/// 輸入的 try/except passthrough 不可回歸。"""
+        from core import path_utils
+        monkeypatch.setattr(path_utils, "CURRENT_ENV", "wsl")
+
+        bare_path = "just-a-bare-local-string-not-a-uri"
+        captured = []
+
+        def fake_exists(p):
+            captured.append(p)
+            return False
+
+        with patch("os.path.exists", side_effect=fake_exists):
+            from core.enricher import fetch_samples_only
+            result = fetch_samples_only(
+                file_path=bare_path,
+                number="SONE-205",
+                path_mappings=_WSL_UNC_MAPPINGS,
+            )
+
+        assert result.error == "檔案不存在"
+        assert captured[0] == bare_path, (
+            f"非 URI 輸入應原樣 passthrough，實際: {captured[0]!r}"
+        )
+
+
+class TestResolveNfoCoverPathsMappingReverse:
+    """站台3（resolve_nfo_cover_paths :667）：純函式，直接測反解後的 nfo/cover 路徑。"""
+
+    def test_wsl_unc_mapping_reverses_paths(self, monkeypatch):
+        from core import path_utils
+        monkeypatch.setattr(path_utils, "CURRENT_ENV", "wsl")
+
+        from core.enricher import resolve_nfo_cover_paths
+        nfo_path, cover_path = resolve_nfo_cover_paths(
+            _WSL_UNC_URI,
+            path_mappings=_WSL_UNC_MAPPINGS,
+        )
+
+        assert nfo_path == "/home/user/nas/dir/movie.nfo", (
+            f"nfo_path 應反解為本機路徑，實際: {nfo_path!r}"
+        )
+        assert cover_path == "/home/user/nas/dir/movie.jpg", (
+            f"cover_path 應反解為本機路徑，實際: {cover_path!r}"
+        )
+
+    def test_non_file_uri_fallback_passthrough_unchanged(self, monkeypatch):
+        """邊界4：非 file:/// 輸入的 try/except passthrough 不可回歸。"""
+        from core import path_utils
+        monkeypatch.setattr(path_utils, "CURRENT_ENV", "wsl")
+
+        bare_path = "just-a-bare-local-string-not-a-uri"
+        from core.enricher import resolve_nfo_cover_paths
+        nfo_path, cover_path = resolve_nfo_cover_paths(
+            bare_path,
+            path_mappings=_WSL_UNC_MAPPINGS,
+        )
+
+        assert nfo_path == bare_path + ".nfo"
+        assert cover_path == bare_path + ".jpg"

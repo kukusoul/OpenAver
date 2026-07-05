@@ -20,7 +20,7 @@ from core.database import VideoRepository
 from core.db_inflow import try_inflow_upsert
 from core.enricher import enrich_single, fetch_samples_only, resolve_nfo_cover_paths
 from core.organizer import organize_file
-from core.path_utils import to_file_uri, uri_to_fs_path, coerce_to_file_uri
+from core.path_utils import to_file_uri, uri_to_fs_path, uri_to_local_fs_path, coerce_to_file_uri
 from core.scraper import (
     search_jav, search_jav_single_source, strip_internal_nfo_keys,
     search_javlib_versions, fetch_javlib_by_detail_url, internal_nfo_carriers,
@@ -297,6 +297,9 @@ def enrich_single_endpoint(request: EnrichRequest) -> dict:
     config = load_config()
     search_cfg = config.get("search", {})
     proxy_url = search_cfg.get("proxy_url", "")
+    # TASK-91-T3：讀取端 path_mappings，供 resolve_nfo_cover_paths / uri_to_local_fs_path /
+    # enrich_single 共用一次算好的同一組值（避免重複 .get() chain）。
+    path_mappings = config.get("gallery", {}).get("path_mappings", {})
 
     # 90c-T1 唯讀來源 guard：唯讀來源片不得 enrich 寫檔。須在 refresh_full 預檢
     # （resolve_nfo_cover_paths / os.path.exists）之前——預檢對唯讀掛載可能拋錯。
@@ -313,13 +316,13 @@ def enrich_single_endpoint(request: EnrichRequest) -> dict:
     # 故不得計入「保證會寫 sidecar」；補劇照請用 /api/scraper/fetch-samples（Codex PR#47 round-2 P2）。
     # 在 try 之前 raise，避免被下方 except Exception 吞成籠統 200。
     if request.mode == "refresh_full" and not request.overwrite_existing:
-        nfo_path, cover_path = resolve_nfo_cover_paths(request.file_path)
+        nfo_path, cover_path = resolve_nfo_cover_paths(request.file_path, path_mappings)
         will_write_nfo = request.write_nfo and not os.path.exists(nfo_path)
         will_write_cover = request.write_cover and not os.path.exists(cover_path)
         # 72d-P2A：外部圖寫出機會也是合法的寫出路徑（72b-T6 加入 external_manager 後守衛未同步）
         external_manager = config.get("scraper", {}).get("external_manager", "off")
         if external_manager != "off":
-            stem = os.path.splitext(uri_to_fs_path(request.file_path))[0]
+            stem = os.path.splitext(uri_to_local_fs_path(request.file_path, path_mappings))[0]
             poster_path = stem + "-poster.jpg"
             fanart_path = stem + "-fanart.jpg"
             # 底圖存在 + 至少一張外部圖缺 → _write_external_images 有寫出機會
@@ -374,6 +377,7 @@ def enrich_single_endpoint(request: EnrichRequest) -> dict:
             source=request.source,
             javbus_lang=request.javbus_lang,
             scraper_data=scraper_data,
+            path_mappings=path_mappings,
         )
         # feature/71 T8: 換封面成功 → 失效舊縮圖（下次 lazy/prewarm 重生，CD-9 / spec 2.A.7）。
         # request.file_path 已是 DB 的 file:/// URI（前端送 currentLightboxVideo.path /
@@ -400,13 +404,16 @@ def fetch_samples_endpoint(req: FetchSamplesRequest) -> dict:
     config = load_config()
     search_cfg = config.get("search", {})
     proxy_url = search_cfg.get("proxy_url", "")
+    # TASK-91-T3：站台5 outer to_file_uri 補傳 path_mappings（inner uri_to_fs_path 維持不變，
+    # 見 TASK-91-T3.md 站台5 inner/outer 分析結論）。
+    path_mappings = config.get("gallery", {}).get("path_mappings", {})
 
     # 90c-T1 唯讀來源 guard：唯讀來源片不得補劇照寫檔（early-return，先於 DB/uri work）。
     _err = _readonly_source_error(req.file_path)
     if _err:
         return _err
 
-    folder_uri_prefix = to_file_uri(os.path.dirname(uri_to_fs_path(req.file_path))) + "/"
+    folder_uri_prefix = to_file_uri(os.path.dirname(uri_to_fs_path(req.file_path)), path_mappings) + "/"
     repo = VideoRepository()
     count = repo.count_videos_in_folder(folder_uri_prefix)
     if count > 1:
@@ -417,6 +424,7 @@ def fetch_samples_endpoint(req: FetchSamplesRequest) -> dict:
             file_path=req.file_path,
             number=req.number,
             proxy_url=proxy_url,
+            path_mappings=path_mappings,
         )
         from dataclasses import asdict
         return asdict(result)
@@ -528,6 +536,7 @@ async def batch_enrich_endpoint(request: BatchEnrichRequest):
                             source=es if es != "auto" else None,
                             javbus_lang=el,
                             scraper_data=sd,
+                            path_mappings=_ro_mappings,
                         ),
                     )
                     from dataclasses import asdict
