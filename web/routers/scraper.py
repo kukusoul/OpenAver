@@ -30,7 +30,7 @@ from core.cf_transport import get_cf_transport, CfChallengeRequired, CfTransport
 from core.scrapers.javlibrary import JAVLIBRARY_ORIGIN
 from core.logger import get_logger
 from core.config import load_config
-from core.readonly_source import is_path_readonly, readonly_source_prefixes
+from core.readonly_source import is_path_readonly, readonly_source_prefixes, writable_source_prefixes
 from core import thumbnail_cache
 from web.routers.notifications import emit_notification as _emit_notif
 
@@ -99,7 +99,8 @@ def _readonly_source_error(file_path: str) -> Optional[dict]:
     _gallery_config = load_config().get('gallery', {})
     _path_mappings = _gallery_config.get('path_mappings', {})
     _prefixes = readonly_source_prefixes(_gallery_config, _path_mappings)
-    if is_path_readonly(coerce_to_file_uri(file_path, _path_mappings), _prefixes):
+    _writable = writable_source_prefixes(_gallery_config, _path_mappings)
+    if is_path_readonly(coerce_to_file_uri(file_path, _path_mappings), _prefixes, _writable):
         return {"success": False, "error": _READONLY_SOURCE_ERROR_MSG}
     return None
 
@@ -440,6 +441,7 @@ async def batch_enrich_endpoint(request: BatchEnrichRequest):
     _ro_gallery = config.get("gallery", {})
     _ro_mappings = _ro_gallery.get("path_mappings", {})
     _ro_prefixes = readonly_source_prefixes(_ro_gallery, _ro_mappings)
+    _ro_writable = writable_source_prefixes(_ro_gallery, _ro_mappings)
 
     # 去重（按 file_path）
     seen_paths: set = set()
@@ -483,7 +485,7 @@ async def batch_enrich_endpoint(request: BatchEnrichRequest):
                 # 90c-T1 逐項唯讀 guard：唯讀來源片 yield result-item(success:False) +
                 # failed_count+=1 + continue（不 raise、不逐項 _emit_notif——批次層才發通知）。
                 # 混合批中可寫項照常 enrich，整批不中斷（spec-90 §90b(iii) 驗收 2）。
-                if is_path_readonly(coerce_to_file_uri(item.file_path, _ro_mappings), _ro_prefixes):
+                if is_path_readonly(coerce_to_file_uri(item.file_path, _ro_mappings), _ro_prefixes, _ro_writable):
                     failed_count += 1
                     yield f"data: {json.dumps({'type': 'result-item', 'number': item.number, 'file_path': item.file_path, 'success': False, 'error': _READONLY_SOURCE_ERROR_MSG})}\n\n"
                     continue

@@ -34,7 +34,7 @@ from core.config import (
 )
 from core.database import VideoRepository, get_db_path, init_db
 from core import thumbnail_cache
-from core.path_utils import is_path_under_dir, coerce_to_file_uri, uri_to_fs_path
+from core.path_utils import is_path_under_dir, coerce_to_file_uri, uri_to_fs_path, reverse_path_mapping, CURRENT_ENV
 from core.generate_state import is_generate_in_progress
 from core.readonly_producer import _write_strm
 from core.source_config import MAX_ENABLED_SOURCES
@@ -363,7 +363,7 @@ def switch_external_manager(request: SwitchExternalManagerRequest) -> dict:
     }
 
 
-def _collect_strm_targets(repo) -> list:
+def _collect_strm_targets(repo, path_mappings: dict) -> list:
     """枚舉「已產出且夾內有既有 .strm」的片，回 [(strm_path: Path, source_fs_path: str)]。
 
     dry_run 與實際改寫共用此函式 → 「哪些片有 strm」的判定完全一致，保證
@@ -381,7 +381,14 @@ def _collect_strm_targets(repo) -> list:
         # per-row 容錯：單列壞 output_dir（uri_to_fs_path/glob 拋錯）只 skip 該列，
         # 不害整批 rewrite 中止（比照 _write_strm 的 per-movie best-effort 契約）。
         try:
-            strm = next(Path(uri_to_fs_path(v.output_dir)).glob('*.strm'), None)
+            movie_dir_fs = uri_to_fs_path(v.output_dir)
+            # 與 _resolve_movie_dir（core/readonly_producer.py）寫檔當下用同一套 targeted
+            # reverse-map：WSL+UNC mapped 輸出根下，output_dir 存的是映射端 URI，需反解回
+            # 本機實際掛載路徑才 glob 得到磁碟上真正的 .strm（否則恆定位映射端、count 永 0，
+            # 改映射後既有 strm 永不改寫）。無映射/非 wsl → 退回 uri_to_fs_path 直解不變。
+            if CURRENT_ENV == 'wsl' and path_mappings:
+                movie_dir_fs = reverse_path_mapping(movie_dir_fs, path_mappings) or movie_dir_fs
+            strm = next(Path(movie_dir_fs).glob('*.strm'), None)
         except Exception as e:  # noqa: BLE001 — best-effort：壞列 skip 不阻斷整批
             logger.warning("rewrite_strm 略過壞 output_dir 列（%r）: %s", v.output_dir, e)
             continue
@@ -418,7 +425,10 @@ def rewrite_strm(dry_run: bool = False) -> dict:
         db_path = get_db_path()
         init_db(db_path)
         repo = VideoRepository(db_path)
-        targets = _collect_strm_targets(repo)
+        # gallery.path_mappings（WSL↔本機 FS 映射；≠ scraper.strm_path_mappings 播放端重寫）
+        # 供 _collect_strm_targets 反解 mapped output_dir 回本機路徑再 glob。
+        path_mappings = cfg.get('gallery', {}).get('path_mappings', {})
+        targets = _collect_strm_targets(repo, path_mappings)
 
         if dry_run:
             return {"success": True, "count": len(targets)}

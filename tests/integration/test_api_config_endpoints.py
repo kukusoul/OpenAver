@@ -981,6 +981,42 @@ class TestRewriteStrmEndpoint:
 
         assert dry["count"] == real["rewritten"] == 1
 
+    def test_mapped_output_dir_reverse_mapped_before_glob(self, tmp_path, monkeypatch):
+        """PR#93 Codex P2：WSL+UNC mapped 輸出根 → output_dir 存映射端 URI，
+        _collect_strm_targets 需 reverse-map 回本機實際掛載點才 glob 得到 .strm。
+
+        無此反解時（舊 bug）：uri_to_fs_path 直解到映射端 //NAS/... glob 落空 → count 0 →
+        改映射後既有 strm 永不改寫。直接測 module 函式，精準鎖住反解邏輯。
+        """
+        import types
+        from core.path_utils import to_file_uri
+        from web.routers import config as config_module
+
+        # 本機實際寫檔位置（producer 真正落地處）
+        lib = tmp_path / "library"
+        movie = lib / "ABC-001"
+        movie.mkdir(parents=True)
+        (movie / "ABC-001.strm").write_text("x", encoding="utf-8")
+
+        # gallery.path_mappings：本機 lib → 遠端 UNC（WSL↔本機 FS 映射）
+        mappings = {str(lib): "//NAS/share/lib"}
+        # output_dir 存映射端 URI（比照 producer output_uri = to_file_uri(root, mappings)）
+        mapped_output_uri = to_file_uri(str(movie), mappings)
+        assert "NAS" in mapped_output_uri  # 前置：真的映射到遠端了
+
+        v = types.SimpleNamespace(
+            path=to_file_uri(str(tmp_path / "src" / "ABC-001.mp4")),
+            output_dir=mapped_output_uri,
+        )
+        repo = TestRewriteStrmEndpoint._FakeRepo([v])
+        monkeypatch.setattr(config_module, "CURRENT_ENV", "wsl")
+
+        # 有映射 → 反解回本機、glob 命中
+        assert len(config_module._collect_strm_targets(repo, mappings)) == 1
+        # 無映射 → 直解到映射端 //NAS/... glob 落空（重現舊 bug、證明修法必要）
+        repo2 = TestRewriteStrmEndpoint._FakeRepo([v])
+        assert len(config_module._collect_strm_targets(repo2, {})) == 0
+
     def test_dry_run_off_mode_returns_count_zero(self, client, env):
         """off 模式 dry_run → count 0（自守，不 glob）。"""
         env.write_config(external_manager="off", with_mapping=True)

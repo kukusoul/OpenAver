@@ -8,7 +8,11 @@ test_readonly_source.py — core/readonly_source.py 純函式直測（TASK-90c-T
 純邏輯、無 IO → 直接傳 dict/list，無需 mock。
 """
 
-from core.readonly_source import is_path_readonly, readonly_source_prefixes
+from core.readonly_source import (
+    is_path_readonly,
+    readonly_source_prefixes,
+    writable_source_prefixes,
+)
 from core.path_utils import to_file_uri
 
 
@@ -45,6 +49,96 @@ class TestIsPathReadonly:
         prefix = "file:///D:/ro"
         file_uri = "file:///D:/ro/ABC.mp4"
         assert is_path_readonly(file_uri, [prefix]) is True
+
+    # --- PR #93 Codex P2：可寫來源巢狀在唯讀夾下時 override（is_readonly_source=False）---
+
+    def test_writable_nested_under_readonly_overrides(self):
+        # 唯讀 D:/media + 可寫 D:/media/local；片在可寫子夾 → 不算唯讀（可寫 override）
+        ro = to_file_uri("/tmp/media", {})
+        wo = to_file_uri("/tmp/media/local", {})
+        file_uri = to_file_uri("/tmp/media/local/ABC-001.mp4", {})
+        assert is_path_readonly(file_uri, [ro], [wo]) is False
+
+    def test_readonly_sibling_not_overridden(self):
+        # 片在唯讀夾其他子路徑（非可寫子夾）→ 仍唯讀
+        ro = to_file_uri("/tmp/media", {})
+        wo = to_file_uri("/tmp/media/local", {})
+        file_uri = to_file_uri("/tmp/media/other/ABC-001.mp4", {})
+        assert is_path_readonly(file_uri, [ro], [wo]) is True
+
+    def test_deeper_writable_nesting_overrides(self):
+        # 可寫子夾下更深子目錄的片 → 仍 override（is_path_under_dir 任意深度）
+        ro = to_file_uri("/tmp/media", {})
+        wo = to_file_uri("/tmp/media/local", {})
+        file_uri = to_file_uri("/tmp/media/local/sub/deep/ABC.mp4", {})
+        assert is_path_readonly(file_uri, [ro], [wo]) is False
+
+    def test_writable_prefixes_none_is_backward_compatible(self):
+        # writable_prefixes 省略/None → 退回純唯讀比對（舊呼叫相容）
+        ro = to_file_uri("/tmp/media", {})
+        file_uri = to_file_uri("/tmp/media/ABC.mp4", {})
+        assert is_path_readonly(file_uri, [ro]) is True
+        assert is_path_readonly(file_uri, [ro], None) is True
+
+    def test_writable_override_only_applies_when_readonly_hit(self):
+        # 片不落唯讀前綴 → 早退 False，可寫前綴不影響結論
+        ro = to_file_uri("/tmp/media", {})
+        wo = to_file_uri("/tmp/other", {})
+        file_uri = to_file_uri("/tmp/elsewhere/ABC.mp4", {})
+        assert is_path_readonly(file_uri, [ro], [wo]) is False
+
+
+class TestWritableSourcePrefixes:
+    """writable_source_prefixes：枚舉可寫（非唯讀）來源 → coerce 成前綴集（鏡射 readonly 版）。"""
+
+    def test_writable_source_filtered_in(self):
+        gallery = {"directories": [{"path": "/tmp/rw_src", "readonly": False}]}
+        assert writable_source_prefixes(gallery, {}) == [to_file_uri("/tmp/rw_src", {})]
+
+    def test_readonly_source_filtered_out(self):
+        gallery = {"directories": [{"path": "/tmp/ro_src", "readonly": True}]}
+        assert writable_source_prefixes(gallery, {}) == []
+
+    def test_bare_str_source_is_writable(self):
+        # 裸 str → iter_gallery_sources 降級 readonly=False → 視為可寫、計入
+        gallery = {"directories": ["/tmp/bare_src"]}
+        assert writable_source_prefixes(gallery, {}) == [to_file_uri("/tmp/bare_src", {})]
+
+    def test_mixed_only_writable_kept(self):
+        gallery = {
+            "directories": [
+                {"path": "/tmp/ro_src", "readonly": True},
+                {"path": "/tmp/rw_src", "readonly": False},
+                "/tmp/bare_src",
+            ]
+        }
+        prefixes = writable_source_prefixes(gallery, {})
+        assert prefixes == [to_file_uri("/tmp/rw_src", {}), to_file_uri("/tmp/bare_src", {})]
+
+    def test_empty_gallery_returns_empty(self):
+        assert writable_source_prefixes({}, {}) == []
+        assert writable_source_prefixes({"directories": []}, {}) == []
+
+    def test_source_missing_path_skipped(self):
+        gallery = {"directories": [{"path": "", "readonly": False}]}
+        assert writable_source_prefixes(gallery, {}) == []
+
+    def test_dirty_source_raising_valueerror_skipped(self, mocker):
+        good_prefix = to_file_uri("/tmp/rw_good", {})
+
+        def fake_coerce(value, mappings=None):
+            if value == "DIRTY":
+                raise ValueError("dirty path")
+            return good_prefix
+
+        mocker.patch("core.readonly_source.coerce_to_file_uri", side_effect=fake_coerce)
+        gallery = {
+            "directories": [
+                {"path": "DIRTY", "readonly": False},
+                {"path": "/tmp/rw_good", "readonly": False},
+            ]
+        }
+        assert writable_source_prefixes(gallery, {}) == [good_prefix]
 
 
 class TestReadonlySourcePrefixes:
