@@ -182,9 +182,10 @@ def _write_nfo(
     # 若未傳入 user_tags，從 DB 讀取現有值（確保不被覆蓋）
     if user_tags is None:
         repo = VideoRepository()
-        # db-ns-ok: TASK-91b-T1 `_for_db` 式 — fs_path_for_db 來自 caller
-        # （enrich_single 已在其內算好、DB 命名空間值）；None-fallback 用 fs_path
-        # 僅供 legacy 直呼（未傳 fs_path_for_db）相容，production 恆傳，accepted residual。
+        # TASK-91b-T1 `_for_db` 式 — fs_path_for_db 來自 caller（enrich_single 已在其內
+        # 算好、DB 命名空間值）；None-fallback 用 fs_path 僅供 legacy 直呼（未傳
+        # fs_path_for_db）相容，production 恆傳，accepted residual。
+        # db-ns-ok: fs_path_for_db is DB round-trip value, no reverse mapping applied
         path_uri = to_file_uri(fs_path_for_db if fs_path_for_db is not None else fs_path)
         existing = repo.get_by_path(path_uri)
         user_tags = existing.user_tags if existing else []
@@ -505,8 +506,8 @@ def enrich_single(  # ranker-invalidate-ok: (only updates nfo_mtime, not a corpu
         local_cover = str(Path(fs_path).with_suffix(".jpg")) if cover_written else ""
         nfo_path = Path(fs_path).with_suffix(".nfo")
         nfo_mtime = nfo_path.stat().st_mtime if nfo_path.exists() else 0.0
-        # db-ns-ok: fs_path_for_db passed through to _db_upsert's internal primitive
-        # sink（wrapper callsite decision point; helper itself: enforced at callsites）
+        # wrapper callsite decision point; helper itself: enforced at callsites
+        # db-ns-ok: fs_path_for_db passed through to _db_upsert's internal primitive sink
         _db_upsert(repo, number, fs_path_for_db, meta, local_cover_path=local_cover,
                    nfo_mtime=nfo_mtime, written_uris=written_uris, path_mappings=path_mappings)
 
