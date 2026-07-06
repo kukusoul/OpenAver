@@ -1284,7 +1284,7 @@ def get_thumb(request: Request, path: str = Query(..., description="影片路徑
     # 修法：DB 背書比對維持用裸 uri_to_fs_path（與改動前行為等價，零回歸）；
     # 反解只用在「即將真的碰磁碟」的 cover_fs（generate/fallback FileResponse/os.path.isfile）。
     path_mappings = load_config().get('gallery', {}).get('path_mappings', {})
-    cover_fs_for_db = uri_to_fs_path(video.cover_path)  # uri-no-reverse: DB round-trip comparison-only (is_known_cover_path), real disk path uses uri_to_local_fs_path below
+    cover_fs_for_db = uri_to_fs_path(video.cover_path)  # uri-no-reverse: DB round-trip comparison-only (is_known_cover_path), real disk path uses uri_to_local_fs_path below  # db-ns-ok: _for_db, sourced from existing DB URI (uri_to_fs_path, not reverse-mapped), round-trips to mapped namespace
     if not repo.is_known_cover_path(cover_fs_for_db):
         return Response(status_code=404, content="封面不在快取記錄中")
     cover_fs = uri_to_local_fs_path(video.cover_path, path_mappings)

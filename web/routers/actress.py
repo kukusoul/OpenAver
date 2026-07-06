@@ -467,7 +467,11 @@ async def list_photo_candidates(name: str):
 # ---------------------------------------------------------------------------
 
 def _check_cover_path(fs_path: str) -> bool:
-    """Threadpool helper: init DB + check cover path is known (防任意檔案讀取)."""
+    """Threadpool helper: init DB + check cover path is known (防任意檔案讀取).
+
+    db-ns-ok: enforced at callsites — 本體內 is_known_cover_path(fs_path) primitive sink
+    命名空間正確性委派給呼叫端保證（TASK-91b-T1 wrapper sink 登記，callsite 各自標記）。
+    """
     init_db()
     return VideoRepository().is_known_cover_path(fs_path)
 
@@ -522,7 +526,7 @@ async def actress_crop(path: str, spec: str = "v1"):
     """
     # Fix 2 (T2): uri_to_fs_path 已 idempotent（非 URI 直接 normalize_path），直接呼叫
     path_mappings = (await asyncio.to_thread(load_config)).get('gallery', {}).get('path_mappings', {})
-    cover_fs_for_db = uri_to_fs_path(path)  # uri-no-reverse: DB round-trip (is_known_cover_path) must stay in DB namespace; disk crop uses reverse-mapped below
+    cover_fs_for_db = uri_to_fs_path(path)  # uri-no-reverse: DB round-trip (is_known_cover_path) must stay in DB namespace; disk crop uses reverse-mapped below  # db-ns-ok: _for_db, sourced from existing DB URI (uri_to_fs_path, not reverse-mapped), round-trips to mapped namespace
     fs_path = uri_to_local_fs_path(path, path_mappings)
     # Security: cover_path 必須是 DB 中某個 video 的 cover_path（防任意檔案讀取）
     allowed = await asyncio.to_thread(_check_cover_path, cover_fs_for_db)

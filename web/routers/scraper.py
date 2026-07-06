@@ -143,6 +143,7 @@ def scrape_single(request: ScrapeRequest) -> dict:
     config = load_config()
     scraper_config = config.get('scraper', {})
     _proxy_url = config.get('search', {}).get('proxy_url', '')
+    path_mappings = config.get('gallery', {}).get('path_mappings', {})
 
     # 優先使用前端傳來的 metadata
     if request.metadata:
@@ -177,7 +178,10 @@ def scrape_single(request: ScrapeRequest) -> dict:
             user_tags = metadata['user_tags']
             new_filename = result.get('new_filename', '')
             if new_filename:
-                path_uri = to_file_uri(new_filename)
+                # TASK-91b-T1（axis-B 子形狀 ii，forward-map 式）：new_filename 是
+                # organize_file 產出的裸本機路徑，需帶 path_mappings 落 mapped DB
+                # 命名空間，否則 get_by_path miss、既有 user_tags 靜默遺失。
+                path_uri = to_file_uri(new_filename, path_mappings)
                 repo = VideoRepository()
                 existing = repo.get_by_path(path_uri)
                 existing_user_tags = existing.user_tags if existing else []
