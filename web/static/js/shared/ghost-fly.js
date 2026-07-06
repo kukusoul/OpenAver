@@ -808,6 +808,153 @@
         },
 
         /**
+         * 92b-T2 (CD-92b-3/5/6/7): 入庫飛入共用入口 — 取代 playToIcon。
+         *
+         * 三段：起飛 → 懸停（浮動+呼吸，給眼睛捕捉時間）→ 縮入落地（通用 scale
+         * bump + glow）+ 尾段漸隱。參數化、不讀 this（D-D1：不綁 search 專屬假設，
+         * 未來 scanner 可傳自己的 fromEl/coverSrc/toEl/fallback）。
+         *
+         * 分支矩陣（皆非 silent）：
+         *   toEl 不可見           → fallback.toastFn(message)
+         *   reduced-motion/no-gsap → 僅 onLanding(toEl)（無飛行、無 scale/glow）
+         *   fromEl 缺/不可見        → 僅 onLanding(toEl)（無起點可飛）
+         *   正常                   → 完整三段 + scale/glow + onLanding
+         *
+         * @param {object} options - { fromEl, coverSrc, toEl, hold=0.5, holdOffset,
+         *                             endSize=40, duration=0.65, onLanding,
+         *                             fallback:{ toastFn, message } }
+         * @returns {gsap.core.Timeline|null}
+         */
+        playInboundFly: function (options) {
+            options = options || {};
+            var fromEl = options.fromEl;
+            var toEl = options.toEl;
+            var onLanding = typeof options.onLanding === 'function'
+                ? options.onLanding : function () {};
+            var fallback = options.fallback || {};
+            var fireFallback = function () {
+                if (typeof fallback.toastFn === 'function') fallback.toastFn(fallback.message);
+            };
+
+            // 終點缺 / 不可見（sidebar display:none、rect 0）→ 手機/窄螢幕 fallback
+            var toRect = toEl && toEl.getBoundingClientRect();
+            if (!toRect || toRect.width === 0 || toRect.height === 0) {
+                fireFallback();
+                return null;
+            }
+
+            // 終點可見。reduced-motion / 無 gsap → 不播飛行+scale/glow，僅輕量 onLanding
+            if (typeof gsap === 'undefined' ||
+                (window.OpenAver && window.OpenAver.prefersReducedMotion)) {
+                onLanding(toEl);
+                return null;
+            }
+
+            // 起點缺 / 不可見 → 無可飛，退化 onLanding（終點可見）
+            var fromRect = fromEl && fromEl.getBoundingClientRect();
+            if (!fromRect || fromRect.width === 0 || fromRect.height === 0) {
+                onLanding(toEl);
+                return null;
+            }
+
+            var coverSrc = options.coverSrc ||
+                (fromEl.tagName === 'IMG' ? fromEl.src : '');
+            var ghost = createCoverGhost(coverSrc, fromRect);
+            if (!ghost) {
+                onLanding(toEl);
+                return null;
+            }
+
+            var duration = options.duration || 0.65;
+            var hold = (options.hold != null) ? options.hold : 0.5;
+            var endSize = options.endSize || 40;
+
+            var toCenterX = toRect.left + toRect.width / 2;
+            var toCenterY = toRect.top + toRect.height / 2;
+            // 懸停偏移點：目標上方一點（預設沿 y 負向偏移 endSize）
+            var holdOffset = (options.holdOffset != null) ? options.holdOffset : endSize;
+            var holdSize = endSize * 1.6;              // 懸停比落地大、看得清封面
+            var holdX = toCenterX - holdSize / 2;
+            var holdY = toCenterY - holdSize / 2 - holdOffset;
+
+            gsap.killTweensOf(ghost);
+
+            // 落地反饋：通用 scale bump + glow（作用任意 toEl，不依賴特定 class）
+            var landed = false;
+            var doLanding = function () {
+                if (landed) return;
+                landed = true;
+                // C21：toEl 可能有 CSS transition:transform → gsap-animating 停用，
+                //      onComplete + onInterrupt 兩路徑都清 class + clearProps（對稱契約，
+                //      源 playMobilePanelEnter/Exit，非照抄 playActressToHeroCard 漏 onInterrupt）
+                toEl.classList.add('gsap-animating');
+                var clearLanding = function () {
+                    // C21 順序：先清 inline props（transition 仍被 class 停用），再移 class
+                    // 重啟 transition —— 避免對帶 base transform 的通用 toEl 觸發幽靈過渡。
+                    gsap.set(toEl, { clearProps: 'transform,filter' });
+                    toEl.classList.remove('gsap-animating');
+                };
+                gsap.timeline({ onComplete: clearLanding, onInterrupt: clearLanding })
+                    .fromTo(toEl,
+                        { scale: 1.18 },
+                        { scale: 1.0, duration: 0.32, ease: 'power2.out' }
+                    )
+                    .fromTo(toEl,
+                        { filter: 'drop-shadow(0 0 14px rgba(120,190,255,0.7))' },
+                        { filter: 'drop-shadow(0 0 0px rgba(0,0,0,0))', duration: 0.4, ease: 'power2.out' },
+                        '<'
+                    );
+                onLanding(toEl);
+            };
+
+            var tl = gsap.timeline({
+                id: 'ghostInboundFly',
+                onComplete: function () { cleanupGhost(ghost); },
+                onInterrupt: function () { cleanupGhost(ghost); }
+            });
+
+            // 段 1：起飛 → 懸停偏移點（保持較大尺寸、opacity 1）
+            tl.fromTo(ghost,
+                { x: fromRect.left, y: fromRect.top, width: fromRect.width, height: fromRect.height, opacity: 1, borderRadius: '8px' },
+                { x: holdX, y: holdY, width: holdSize, height: holdSize, opacity: 1, borderRadius: '12px', duration: duration, ease: 'power2.inOut' }
+            );
+
+            // 段 2：懸停 — 原地微浮動 + 呼吸（brightness），給眼睛捕捉時間
+            if (hold > 0) {
+                tl.to(ghost, {
+                    y: holdY + 4,
+                    filter: 'brightness(1.15)',
+                    duration: hold / 2,
+                    ease: 'sine.inOut',
+                    yoyo: true,
+                    repeat: 1
+                });
+            }
+
+            // 段 3：縮入落地 — onStart 觸發落地反饋（撞擊感同步）
+            var landDur = 0.34;
+            tl.to(ghost, {
+                x: toCenterX - endSize / 2,
+                y: toCenterY - endSize / 2,
+                width: endSize,
+                height: endSize,
+                borderRadius: '50%',
+                filter: 'brightness(1)',
+                duration: landDur,
+                ease: 'power2.in',
+                onStart: doLanding
+            });
+            // 尾段漸隱（疊在落地段最後 ~35%，取代 playToIcon 抵達即透明的跳變）
+            tl.to(ghost, {
+                opacity: 0,
+                duration: landDur * 0.35,
+                ease: 'power1.in'
+            }, '-=' + (landDur * 0.35));
+
+            return tl;
+        },
+
+        /**
          * 49a-T7: 女優 → 影片跨模式 ghost fly（CD-11）
          *
          * 從女優卡片（grid 或 lightbox 封面）飛往影片模式 hero card 位置，
