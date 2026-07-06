@@ -72,6 +72,31 @@ const SEL_NO_UNLOAD_LISTENER = {
     "addEventListener('unload', …) 已禁用（67-B2/CD-67-7）：新版 Chrome 以 Permissions-Policy 封鎖 'unload'，listener 靜默不註冊 + console 報錯。改用 bfcache-safe 的 'pagehide'（page-lifecycle.js 的 _doCleanup 有 _cleanedUp one-shot guard，pagehide + leavePage 雙觸發安全）。",
 };
 
+// ── 92a-T2 (CD-92a-3) hasContent 手動賦值 ban（限 search/state/**）────
+// hasContent 已改 computed getter（base.js）；禁止 this.hasContent = ... 手動賦值復活，
+// 否則會重現「loading 態殘留 stale true → 取消鈕＋清除鈕並排（兩組 X）」。
+// 只加進 Group 1（search/state/**）陣列，不新開 block（flat config 同 scope 整段 replace，
+// 新 block 會覆蓋 Group 1 既有 selector）。getter 定義是 kind:'get' Property，非 AssignmentExpression，不誤傷。
+const SEL_HASCONTENT_ASSIGN = {
+  selector:
+    "AssignmentExpression[left.type='MemberExpression'][left.property.name='hasContent']",
+  message:
+    "hasContent 已改 computed getter（CD-92a-3，base.js）：禁止手動賦值 this.hasContent = ...；值由 getter 自動推導（pageState !== 'loading' && (searchResults.length>0 || fileList.length>0)）。手動賦值會重現 loading 態殘留 stale true 的「兩組 X」bug。",
+};
+
+// ── 92b-T3 (CD-92b-3) playToIcon 移除防復活 ban ────
+// playToIcon 已由 GhostFly.playInboundFly 取代並移除（懸停+落地反饋+fallback 三分支）。
+// Group 6 抓 definition site（ghost-fly.js），Group 1 抓 caller site（batch.js，Group 6
+// ignores state/**）；flat config 同 rule 後者整段 replace，故兩 group 陣列各自帶此 selector。
+const SEL_NO_PLAYTOICON = {
+  selector: [
+    "MemberExpression[property.name='playToIcon']",
+    "Property[key.name='playToIcon']",
+  ].join(', '),
+  message:
+    "playToIcon 已於 92b 由 GhostFly.playInboundFly 取代並移除（CD-92b-3）。禁止重新引入（定義或呼叫）；改用 playInboundFly（懸停 0.5s + 落地 scale/glow + 手機 fallback 三分支）。",
+};
+
 export default [
   // ── 全域基礎設定 ──────────────────────────────────────────────
   {
@@ -144,6 +169,8 @@ export default [
         SEL_NO_UNLOAD_LISTENER,
         SEL_BREATHING_MANAGER_NEW,
         SEL_STARSETTLE_LITERAL,
+        SEL_HASCONTENT_ASSIGN,
+        SEL_NO_PLAYTOICON,
       ],
     },
   },
@@ -357,6 +384,7 @@ export default [
         SEL_NO_UNLOAD_LISTENER,
         SEL_BREATHING_MANAGER_NEW,
         SEL_STARSETTLE_LITERAL,
+        SEL_NO_PLAYTOICON,
         {
           // CD-T2FIX-3：Set.prototype.intersection 為 ES2025 API，尚未進入 OpenAver baseline
           // Codex r2 F1：改用 MemberExpression[property.name='intersection'] 以同時捕捉
