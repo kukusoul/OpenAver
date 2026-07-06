@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.7] - 2026-07-07
+
+本版主軸：**搜尋頁體驗優化（搜尋列不擠壓 + 整理發現性 + 入庫飛入動畫加強）**（feature/92，spec-92 A/B/C/D 四項）——純前端 UX polish + 一個 latent 正確性 bug 修復，零 API/schema/DB 變更。四個彼此獨立的痛點：搜尋列右側控制項擠壓變形、整理入口埋在頁尾難發現、整理入庫的「飛入側邊欄」動畫太不明顯、以及把該動畫抽成可跨頁複用的共用元件（本版只做 search 端接線，scanner 接線留未來 branch）。
+
+### Added
+#### 🎯 入庫飛入動畫加強（C）
+- **整理入庫回饋更有實感**：某片整理成功並寫進資料庫後，一顆封面 ghost 從該片飛向側邊欄「瀏覽」入口——改為三段節奏（起飛 → 於入口旁懸停約 0.5s 微發光讓眼睛看清是哪片 → 縮入落地並帶 scale 彈跳 + 光暈），取代舊版「抵達即淡掉的小點」。
+- **窄螢幕／手機不再靜默**：側邊欄隱藏時退化為「已入庫」輕量提示，不再毫無反饋；系統開啟「減少動態效果」時保留輕量落地反饋、不播飛行與縮放。
+
+#### 🎯 整理入口更好找（B）
+- **批次整理鈕常駐可見**：拖入一批檔案整理時，「批次整理 N 片」主動作恆在視線內（桌面靠既有固定插槽 + 表頭 sticky；窄視窗改貼底浮動列），不再因結果卡過高被推到畫面外要捲動才找得到。
+- **單片／批次整理各有可辨識 icon**：單片＝單一檔案 icon、批次＝資料夾 icon，一眼分辨；空狀態說明文字旁內嵌同款 icon + 同色，文字與畫面上那顆按鈕對得上。
+
+### Changed
+#### ⌨️ 搜尋列右側控制項不再擠壓變形（A）
+- **「自動」來源膠囊不變形**：在已有結果的頁面回搜尋框打新番號時，「自動」／來源名膠囊不再被壓縮擠壓；右側控制區預留足夠寬度（CDP 實測定值）容納最長來源名 + 清除 + 送出。
+- **格狀／詳情切換鈕穩定可見**：女優／前綴搜尋有結果時，格狀↔詳情切換鈕穩定可見可點、不被裁切；打字搜尋新片時暫時讓位屬預期，結果落定後回來。
+
+### Fixed
+- **不再出現「兩組相同的 ✕」**：在已有結果的頁面重新搜尋（含用「自動」膠囊重搜）進入載入態時，取消鈕與清除鈕不再並排出現兩顆一樣的 ✕——`hasContent` 由手動維護的旗標改為自動推導的 computed 值，根治整類「漏同步一處就出 bug」的結構性缺陷。
+- **整理飛入的封面永遠是「正確那片」**：先前在詳情檢視 X 片時、點清單裡另一片 Y 的「整理此片」，飛出去的會是 X 的封面；改為封面身份永久綁定被整理那片自己的資料（起飛位置才有條件借用目前顯示中的元素）。
+
+### Internal
+- 新增參數化共用動畫入口 `GhostFly.playInboundFly`（起點元素／封面 src／終點／fallback 由呼叫端傳入、不綁 search 專屬假設）取代 `playToIcon`：三段 timeline、對稱 `onComplete`/`onInterrupt` cleanup（C21，契約源 `playMobilePanelEnter/Exit`）、通用 scale/glow 落地反饋、並發序列化（`killTweensOf(toEl)` 讓最新落地勝出）。scanner 端接線留未來 branch（共用入口簽章刻意不含 search 假設）。
+- `hasContent` 改 Alpine computed getter（移除散落 7 處手動賦值）；`playToIcon` 移除並加 ESLint `no-restricted-syntax` 守衛（definition site + caller site 兩 scope，mutation 自驗 RED 防復活）。i18n 新 key `search.toast.db_synced_mobile` 只寫 zh_TW（其餘三語 fallback）。守衛一律走 ESLint 不落 pytest（本版測試數持平）。
+
+### 測試
+- 全套 pytest **5447 passed, 2 skipped**（unit + integration，排除 smoke／e2e，與 0.11.6 baseline 一致、零回歸；本版守衛全走 ESLint，故測試數持平）＋ `ruff check .` 綠 ＋ `npm run lint`（eslint + stylelint）綠。
+- 來源金絲雀：**8 源全 PASS**（javbus／jav321／heyzo／d2pass／avsox／fc2／javdb／dmm，pre-merge live 健康檢查）。
+- ESLint 守衛 mutation 自驗：植入 `this.hasContent = ...`（Group 1）／`playToIcon` 定義或呼叫（Group 1 caller + Group 6 definition）皆轉 RED。
+- Codex 二審 F1（P2 並發落地反饋 race）已修（`killTweensOf` 序列化）；F2（P3，無現行回歸）記 accepted residual（`.gsap-animating` 通用性邊界＝各元件 scoped，現行 `#sidebar-showcase-link` 只 transition color/background 不觸 C21；未來 transform/filter transition 的 toEl caller 須補 scoped 規則，scanner 接線 branch 一併補、端到端驗）。
+- 視覺 hard-gate：owner 真機一次驗收通過（A pill 不變形／無兩組 X、B icon 辨識 + 常駐鈕、C 飛入節奏 + 手機 fallback）。
+
 ## [0.11.6] - 2026-07-06
 
 本版主軸：**跨機器路徑映射（WSL2+UNC path_mappings）的讀寫全棧收斂 + DB-key 命名空間守衛**（feature/91，plan-91 axis-A ＋ plan-91b axis-B）——純 correctness 重構、零使用者可見功能變更、零 API/schema 變動。針對「OpenAver 在 WSL、影片放在網路磁碟（UNC `//NAS/share`）、DB 存映射後路徑」這條情境，把兩類長期潛伏的 silent bug 一次修乾淨並上守衛擋死回不去：一是**讀取端忘了在真正碰磁碟前把 `file:///` URI 反解回本機路徑**（縮圖／封面／劇照／串流／女優裁切一律 404 或讀不到）；二是**已反解的值又被餵回 DB key 建構**、落成沒映射過的命名空間，造成 silent DB miss（重複刮削、掉 user_tags、女優照 403）。
