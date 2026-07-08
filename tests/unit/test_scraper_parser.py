@@ -233,9 +233,13 @@ class TestNormalizeNumber:
         """大寫無橫線 ABC123 → ABC-123"""
         assert normalize_number('ABC123') == 'ABC-123'
 
-    def test_preserve_leading_zeros(self):
-        """保留前導零 abc00123 → ABC-00123"""
-        assert normalize_number('abc00123') == 'ABC-00123'
+    def test_strip_extra_leading_zeros(self):
+        """壓縮多餘前導零 abc00123 → ABC-123"""
+        assert normalize_number('abc00123') == 'ABC-123'
+
+    def test_strip_extra_leading_zeros_to_three_digits(self):
+        """SNIS00091 → SNIS-091"""
+        assert normalize_number('SNIS00091') == 'SNIS-091'
 
     def test_fc2ppv_format(self):
         """FC2-PPV 格式保持不變"""

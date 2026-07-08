@@ -87,6 +87,7 @@ class BaseScraper(ABC):
             正規化後的番號
         """
         import re
+        from .utils import format_no_hyphen_number
         number = number.strip()
         # 清理常見後綴（需有分隔符，避免誤刪 JUC-123 等合法前綴）
         number = re.sub(
@@ -100,5 +101,5 @@ class BaseScraper(ABC):
         # ABC123 → ABC-123
         match = re.match(r'^([A-Z]+)(\d+)$', number)
         if match:
-            return f"{match.group(1)}-{match.group(2)}"
+            return format_no_hyphen_number(match.group(1), match.group(2))
         return number

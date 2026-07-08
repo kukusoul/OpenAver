@@ -53,6 +53,14 @@ class TestExtractNumber:
         """SONE205.mp4 → SONE-205（多字母走 index 6，照舊插 hyphen）"""
         assert extract_number("SONE205.mp4") == "SONE-205"
 
+    def test_regression_multiletter_no_hyphen_strips_extra_zeroes(self):
+        """SNIS00091.mp4 → SNIS-091（前導零壓成常見 3 位番號）"""
+        assert extract_number("SNIS00091.mp4") == "SNIS-091"
+
+    def test_regression_multiletter_no_hyphen_part_suffix(self):
+        """ebvr00097-1.mp4 → EBVR-097（尾端 -1 是分段，不是番號本體）"""
+        assert extract_number("ebvr00097-1.mp4") == "EBVR-097"
+
     def test_regression_hyphen_format_unchanged(self):
         """ABC-123.mp4 → ABC-123（帶 hyphen 不變）"""
         assert extract_number("ABC-123.mp4") == "ABC-123"
