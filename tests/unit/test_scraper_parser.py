@@ -174,6 +174,11 @@ class TestExtractNumber:
         result = extract_number('hhd800.com@SONE-103.mp4')
         assert result == 'SONE-103'
 
+    def test_url_prefix_no_hyphen_with_alpha_suffix(self):
+        """網址前綴 xhd1080.com@snis00824hhb → SNIS-824"""
+        result = extract_number('xhd1080.com@snis00824hhb.mp4')
+        assert result == 'SNIS-824'
+
     def test_garbage_suffix(self):
         """亂碼後綴 SONE-103-C_Thz_fed48"""
         result = extract_number('SONE-103-C_Thz_fed48.mkv')

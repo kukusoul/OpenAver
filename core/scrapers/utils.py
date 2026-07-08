@@ -108,6 +108,8 @@ def extract_number(filename: str) -> Optional[str]:
         r'[-_](UC|UNCEN|UNCENSORED|LEAK|LEAKED)(?=[-_.\s]|$)',
         '', basename, flags=re.IGNORECASE
     )
+    if '@' in basename and re.search(r'\.[A-Za-z]{2,}(?:$|[^A-Za-z])', basename.split('@', 1)[0]):
+        basename = basename.split('@', 1)[1]
 
     patterns = [
         r'(FC2-PPV-\d+)',               # FC2-PPV-1234567
