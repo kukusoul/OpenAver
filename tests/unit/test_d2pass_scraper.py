@@ -347,6 +347,19 @@ CARIBBEANCOM_FULL_HTML = """\
 """
 
 
+# HTML fixture WITH itemprop=description + meta-rating stars (T10)
+CARIBBEANCOM_HTML_WITH_RATING = """\
+<html><body>
+<h1>カリビアン評価テストムービー</h1>
+<p itemprop="description">これはカリビアンのテスト説明文です。</p>
+<ul class="movie-info">
+  <li><span>再生時間</span> <span>00:45:00</span></li>
+  <li><span class="spec-title">ユーザー評価</span> <span class="spec-content rating meta-rating">★★★★</span></li>
+</ul>
+</body></html>
+"""
+
+
 def make_404_response() -> MagicMock:
     resp = MagicMock()
     resp.status_code = 404
@@ -432,6 +445,62 @@ class TestCaribbeancomHtmlFallback:
         scraper._session.get = MagicMock(side_effect=[json_404, html_resp, json_404, json_404])
         video = scraper.search("070116-197")
         assert video is None
+
+    def test_html_fallback_summary(self, scraper):
+        """itemprop=description → Video.summary（去標籤 + strip，非空）"""
+        json_404 = make_404_response()
+        html_resp = make_html_response(CARIBBEANCOM_HTML_WITH_RATING)
+
+        scraper._session.get = MagicMock(side_effect=[json_404, html_resp])
+        video = scraper.search("062726-001")
+
+        assert video is not None
+        assert video.summary == "これはカリビアンのテスト説明文です。"
+
+    def test_html_fallback_rating_stars(self, scraper):
+        """meta-rating ★★★★ → Video.rating == 4.0（數 ★ 顆數，非 0.4/40）"""
+        json_404 = make_404_response()
+        html_resp = make_html_response(CARIBBEANCOM_HTML_WITH_RATING)
+
+        scraper._session.get = MagicMock(side_effect=[json_404, html_resp])
+        video = scraper.search("062726-001")
+
+        assert video is not None
+        assert video.rating == 4.0
+
+    def test_html_fallback_rating_five_stars(self, scraper):
+        """meta-rating ★★★★★ → Video.rating == 5.0（上界）"""
+        html_five = CARIBBEANCOM_HTML_WITH_RATING.replace("★★★★", "★★★★★")
+        json_404 = make_404_response()
+        html_resp = make_html_response(html_five)
+
+        scraper._session.get = MagicMock(side_effect=[json_404, html_resp])
+        video = scraper.search("062626-001")
+
+        assert video is not None
+        assert video.rating == 5.0
+
+    def test_html_fallback_no_summary(self, scraper):
+        """無 itemprop=description → summary == ''（不 raise）"""
+        json_404 = make_404_response()
+        html_resp = make_html_response(CARIBBEANCOM_FULL_HTML)
+
+        scraper._session.get = MagicMock(side_effect=[json_404, html_resp])
+        video = scraper.search("070116-197")
+
+        assert video is not None
+        assert video.summary == ""
+
+    def test_html_fallback_no_rating(self, scraper):
+        """無 meta-rating span → rating is None（不 raise）"""
+        json_404 = make_404_response()
+        html_resp = make_html_response(CARIBBEANCOM_FULL_HTML)
+
+        scraper._session.get = MagicMock(side_effect=[json_404, html_resp])
+        video = scraper.search("070116-197")
+
+        assert video is not None
+        assert video.rating is None
 
 
 # ============================================================
