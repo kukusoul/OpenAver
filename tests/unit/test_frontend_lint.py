@@ -977,35 +977,6 @@ class TestJellyfinCheckManualGuard:
             "scanner.js runJellyfinImageUpdate done 缺少 this.jellyfinCheckState = 'idle' 重設"
 
 
-class TestJellyfinCheckI18nKeys:
-    """40c-T2: 確認新增 i18n key 存在於 zh_TW.json"""
-
-    REQUIRED_KEYS = [
-        "scanner.stats.jellyfin_check_btn",
-        "scanner.stats.jellyfin_check_idle_label",
-        "scanner.stats.jellyfin_checking",
-    ]
-
-    def _zh_tw(self):
-        return json.loads((LOCALES_ROOT / "zh_TW.json").read_text(encoding="utf-8"))
-
-    def _get_nested(self, d, dotted_key):
-        keys = dotted_key.split(".")
-        cur = d
-        for k in keys:
-            if not isinstance(cur, dict) or k not in cur:
-                return None
-            cur = cur[k]
-        return cur
-
-    def test_jellyfin_i18n_keys_exist(self):
-        """zh_TW.json 包含 40c 所有 jellyfin check i18n key"""
-        zh_tw = self._zh_tw()
-        for key in self.REQUIRED_KEYS + ["scanner.stats.jellyfin_check_done_ok"]:
-            val = self._get_nested(zh_tw, key)
-            assert val, f"zh_TW.json missing: {key!r}"
-
-
 class TestShowcaseKeyboardGuard:
     """Phase 40d-T2: Showcase 鍵盤 preventDefault 守衛"""
 
@@ -1499,178 +1470,6 @@ class TestScannerStateGuard:
                 f"scanner.html extra_js 含超過 10 行 inline script（{line_count} 行）"
 
 
-class TestCtaI18nGuard:
-    """39c-T1: 守衛 CTA 文案重構 — 四語系 5 個核心 key 的新值"""
-
-    # 5 個核心 CTA key 的預期新值（各語系）
-    EXPECTED = {
-        "zh_TW.json": {
-            "search.button.search_all": "批次搜尋",
-            "search.filelist.scrape_all": "批次整理",
-            "search.filelist.scrape_nfo": "整理此片",
-            "help.batch.h6_generate_all": "批次整理",
-            "search.filelist.scrape_all_title": "整理所有已搜尋的檔案（重命名 + 建資料夾 + NFO）",
-        },
-        "zh_CN.json": {
-            "search.button.search_all": "批量搜索",
-            "search.filelist.scrape_all": "批量整理",
-            "search.filelist.scrape_nfo": "整理此片",
-            "help.batch.h6_generate_all": "批量整理",
-            "search.filelist.scrape_all_title": "整理所有已搜索的文件（重命名 + 建文件夹 + NFO）",
-        },
-        "en.json": {
-            "search.button.search_all": "Batch Search",
-            "search.filelist.scrape_all": "Batch Organize",
-            "search.filelist.scrape_nfo": "Organize",
-            "help.batch.h6_generate_all": "Batch Organize",
-            "search.filelist.scrape_all_title": "Organize all searched files (rename + folder + NFO)",
-        },
-        "ja.json": {
-            "search.button.search_all": "一括検索",
-            "search.filelist.scrape_all": "一括整理",
-            "search.filelist.scrape_nfo": "この作品を整理",
-            "help.batch.h6_generate_all": "一括整理",
-            "search.filelist.scrape_all_title": "検索済みのファイルをすべて整理（リネーム + フォルダ作成 + NFO）",
-        },
-    }
-
-    def _locale(self, name):
-        return json.loads((LOCALES_ROOT / name).read_text(encoding="utf-8"))
-
-    def _get_nested(self, d, dotted_key):
-        keys = dotted_key.split(".")
-        cur = d
-        for k in keys:
-            if not isinstance(cur, dict) or k not in cur:
-                return None
-            cur = cur[k]
-        return cur
-
-    def test_all_locales_cta_keys(self):
-        """四語系 5 個 CTA key 新值正確"""
-        for locale_file, keys in self.EXPECTED.items():
-            data = self._locale(locale_file)
-            for key, expected in keys.items():
-                actual = self._get_nested(data, key)
-                assert actual == expected, \
-                    f"{locale_file} missing: {key!r} expected {expected!r}, got {actual!r}"
-
-
-class TestScrapeProgressI18nGuard:
-    """39c-T2b: 守衛 scrape progress 進度文字 — 四語系 organizing_prefix key"""
-
-    EXPECTED = {
-        "zh_TW.json": {
-            "search.filelist.organizing_prefix": "整理中",
-        },
-        "zh_CN.json": {
-            "search.filelist.organizing_prefix": "整理中",
-        },
-        "en.json": {
-            "search.filelist.organizing_prefix": "Organizing",
-        },
-        "ja.json": {
-            "search.filelist.organizing_prefix": "整理中",
-        },
-    }
-
-    def _locale(self, name):
-        return json.loads((LOCALES_ROOT / name).read_text(encoding="utf-8"))
-
-    def _get_nested(self, d, dotted_key):
-        keys = dotted_key.split(".")
-        cur = d
-        for k in keys:
-            if not isinstance(cur, dict) or k not in cur:
-                return None
-            cur = cur[k]
-        return cur
-
-    def test_all_locales_have_organizing_prefix(self):
-        """四語系 JSON 都有 search.filelist.organizing_prefix key 且值正確"""
-        for locale_file, keys in self.EXPECTED.items():
-            data = self._locale(locale_file)
-            for key, expected in keys.items():
-                actual = self._get_nested(data, key)
-                assert actual is not None, \
-                    f"{locale_file} 缺少 key: {key}"
-                assert actual != "", \
-                    f"{locale_file} {key} 值不可為空字串"
-                assert actual == expected, \
-                    f"{locale_file} {key} 期望 {expected!r}，實際 {actual!r}"
-
-    def test_search_html_uses_organizing_prefix(self):
-        """search.html 包含 organizing_prefix 字串（確認 HTML 已引用此 key）"""
-        search_html = (LOCALES_ROOT.parent / "web" / "templates" / "search.html").read_text(encoding="utf-8")
-        assert "organizing_prefix" in search_html, \
-            "search.html 未引用 search.filelist.organizing_prefix（請確認 scrape progress section 已插入）"
-
-
-
-
-class TestScrapeToastI18nGuard:
-    """39c-T2c: 守衛批次完成 toast — 四語系 7 個 search.toast.* keys 存在且非空"""
-
-    EXPECTED_KEYS = [
-        'no_searchable_files',
-        'search_complete',
-        'no_scrapable_files',
-        'scrape_complete',
-        'scrape_complete_dup',
-        'no_search_results',
-        'scrape_failed',
-    ]
-
-    def _locale(self, name):
-        return json.loads((LOCALES_ROOT / name).read_text(encoding="utf-8"))
-
-    def _get_nested(self, d, dotted_key):
-        keys = dotted_key.split(".")
-        cur = d
-        for k in keys:
-            if not isinstance(cur, dict) or k not in cur:
-                return None
-            cur = cur[k]
-        return cur
-
-    def test_all_locales_have_toast_keys(self):
-        """四語系 search.toast.* 必須全部存在且非空"""
-        for locale in ['zh_TW', 'zh_CN', 'en', 'ja']:
-            data = self._locale(f"{locale}.json")
-            for key in self.EXPECTED_KEYS:
-                dotted = f"search.toast.{key}"
-                val = self._get_nested(data, dotted)
-                assert val is not None, \
-                    f"{locale}.json missing: {dotted!r}"
-                assert isinstance(val, str) and len(val) > 0, \
-                    f"{locale}.json {dotted!r} must not be empty string"
-
-
-class TestSimilarModeI18nGuard:
-    """57c-T1a: 守衛 Similar Mode 入口按鈕 i18n key（zh_TW.json）"""
-
-    def _locale(self, name):
-        return json.loads((LOCALES_ROOT / name).read_text(encoding="utf-8"))
-
-    def _get_nested(self, d, dotted_key):
-        keys = dotted_key.split(".")
-        cur = d
-        for k in keys:
-            if not isinstance(cur, dict) or k not in cur:
-                return None
-            cur = cur[k]
-        return cur
-
-    def test_zh_tw_has_similar_mode_button_aria_label(self):
-        """zh_TW.json 必須有 similar_mode.button_aria_label，且為非空字串"""
-        data = self._locale("zh_TW.json")
-        val = self._get_nested(data, "similar_mode.button_aria_label")
-        assert val is not None, \
-            "zh_TW.json missing: 'similar_mode.button_aria_label'"
-        assert isinstance(val, str) and len(val) > 0, \
-            "zh_TW.json 'similar_mode.button_aria_label' must not be empty string"
-
-
 class TestSimilarStageGuard:
     """57c-T4+T5: 守衛 state-similar.js 整合 contract — 確保新 mixin 串入 main.js mergeState
     鏈、SIMILAR_ANCHORS 揭露給 Alpine template、.similar-stage sibling DOM 在 showcase.html 對齊。
@@ -2145,80 +1944,6 @@ class TestShowcaseActressCardFooter:
                 "state-actress.js _actressHoverInfo should not contain: 'actress.age'"
 
 
-class TestShowcaseActressI18n:
-    """Phase 44a-T7: showcase actress i18n keys (method folded)"""
-
-    LOCALES_ROOT = Path(__file__).parent.parent.parent / "locales"
-
-    def _locale(self, name):
-        return json.loads((self.LOCALES_ROOT / name).read_text(encoding="utf-8"))
-
-    def _get_nested(self, d, dotted_key):
-        keys = dotted_key.split(".")
-        cur = d
-        for k in keys:
-            if not isinstance(cur, dict) or k not in cur:
-                return None
-            cur = cur[k]
-        return cur
-
-    def test_all_locales_actress_keys(self):
-        """4 locales 含 23 個 showcase actress keys"""
-        keys = [
-            "showcase.mode.actress", "showcase.mode.video",
-            "showcase.search.actress", "showcase.search.video",
-            "showcase.actress.add", "showcase.actress.addPlaceholder",
-            "showcase.actress.addSuccess", "showcase.actress.addDuplicate",
-            "showcase.actress.addNotFound", "showcase.actress.addTimeout",
-            "showcase.actress.remove", "showcase.actress.removeSuccess",
-            "showcase.actress.empty", "showcase.actress.emptyHint",
-            "showcase.actress.search_films",
-            "showcase.sort.actress.video_count", "showcase.sort.actress.name",
-            "showcase.sort.actress.added_at", "showcase.sort.actress.age",
-            "showcase.sort.actress.height", "showcase.sort.actress.cup",
-            "showcase.unit.videos_count", "showcase.unit.films",
-        ]
-        for locale_file in ["zh_TW.json", "zh_CN.json", "en.json", "ja.json"]:
-            data = self._locale(locale_file)
-            for key in keys:
-                val = self._get_nested(data, key)
-                assert val is not None, f"{locale_file} missing: {key!r}"
-        # remove_modal keys (zh_TW only)
-        zh_tw = self._locale("zh_TW.json")
-        for key in ["showcase.actress.remove_modal.title", "showcase.actress.remove_modal.body",
-                    "showcase.actress.remove_modal.cancel", "showcase.actress.remove_modal.confirm"]:
-            val = self._get_nested(zh_tw, key)
-            assert val is not None, f"zh_TW.json missing: {key!r}"
-        # orphan key removed
-        assert self._get_nested(zh_tw, "showcase.actress.removeConfirm") is None, \
-            "zh_TW.json should not contain: 'showcase.actress.removeConfirm'"
-
-
-class TestSettingsResetModalI18n:
-    """T3.4 (CD-52-11): resetConfig fluent-modal i18n key guard (method folded)"""
-
-    LOCALES_ROOT = Path(__file__).parent.parent.parent / "locales"
-
-    def _locale(self, name):
-        return json.loads((self.LOCALES_ROOT / name).read_text(encoding="utf-8"))
-
-    def _get_nested(self, d, dotted_key):
-        keys = dotted_key.split(".")
-        cur = d
-        for k in keys:
-            if not isinstance(cur, dict) or k not in cur:
-                return None
-            cur = cur[k]
-        return cur
-
-    def test_reset_modal_keys_in_zh_tw(self):
-        """T3.4: reset_modal.* 3 keys 在 zh_TW.json 存在"""
-        data = self._locale("zh_TW.json")
-        for key in ["settings.reset_modal.title", "settings.reset_modal.body", "settings.reset_modal.confirm"]:
-            val = self._get_nested(data, key)
-            assert val is not None, f"zh_TW.json missing: {key!r}"
-
-
 class TestShowcaseLightboxSentinel:
     """Phase 44b-T4: Lightbox -1 sentinel nav guards (method folded)"""
 
@@ -2382,7 +2107,6 @@ class TestShowcaseAliasGuard:
         func_body = js[func_start:func_end]
         assert "_nameToGroup" in func_body, \
             "showcase JS _checkPreciseActressMatch missing: '_nameToGroup'"
-
 
 
 # ---------------------------------------------------------------------------
@@ -2865,18 +2589,17 @@ class TestTutorialExpandGuard:
     步驟 IDs 改為 folder → generate → scanner → showcase → search → settings → help。
     """
 
-    def test_tutorial_js_and_i18n(self):
-        """tutorial.js 7 步 (Scanner-first) + 四語系 i18n keys"""
+    def test_tutorial_js_step_ids(self):
+        """tutorial.js 7 步 (Scanner-first) step-id 存在。
+
+        i18n 半邊（四語系 tutorial.stepN_title/content existence）已遷移至
+        scripts/i18n_lint.mjs used-but-missing（tutorial.js 以 window.t('tutorial.stepN_title')
+        靜態引用，掃描集自動覆蓋，96a-T3 移除本 method 的 i18n loop）。
+        # [lint-guard: migrate → eslint] step-id required-string 半邊待 96b（static_guard/eslint）
+        """
         js = Path("web/static/js/components/tutorial.js").read_text(encoding="utf-8")
         for step_id in ['folder', 'generate', 'scanner', 'showcase', 'search', 'settings', 'help']:
             assert f"id: '{step_id}'" in js, f"tutorial.js missing: \"id: '{step_id}'\""
-        for locale in ["zh_TW", "en", "ja", "zh_CN"]:
-            data = json.loads(Path(f"locales/{locale}.json").read_text(encoding="utf-8"))
-            tutorial = data.get("tutorial", {})
-            for i in range(1, 8):
-                for key in [f"step{i}_title", f"step{i}_content"]:
-                    assert key in tutorial and tutorial[key], \
-                        f"{locale}.json missing or empty: tutorial.{key!r}"
 
 
 class TestTutorialSkipPersistsGuard:
@@ -3770,44 +3493,6 @@ class TestT4FooterStructure:
         assert ("display: none" in body or "display:none" in body), \
             "@media (max-width: 640px) missing: display: none"
 
-class TestT4I18n:
-    """49a-T4: showcase i18n keys guard (method folded)"""
-
-    EXPECTED_SWITCH_MODE = {
-        "zh_TW.json": "切換顯示",
-        "zh_CN.json": "切换显示",
-        "en.json": "Switch view",
-        "ja.json": "表示切替",
-    }
-
-    @staticmethod
-    def _load(locale):
-        return json.loads((LOCALES_DIR / locale).read_text(encoding="utf-8"))
-
-    def test_all_locales_i18n(self):
-        """四語系 switch_mode / status / unit.actresses 全部正確"""
-        for locale in LOCALE_FILES:
-            data = self._load(locale)
-            showcase = data.get("showcase", {})
-            # switch_mode value check
-            val = showcase.get("shortcut", {}).get("switch_mode")
-            assert val, f"{locale}: missing showcase.shortcut.switch_mode"
-            expected_val = self.EXPECTED_SWITCH_MODE[locale]
-            assert val == expected_val, \
-                f"{locale}: switch_mode expected {expected_val!r}, got {val!r}"
-            # status.search_empty
-            assert showcase.get("status", {}).get("search_empty"), \
-                f"{locale}: missing showcase.status.search_empty"
-            # status search_actresses parts
-            status = showcase.get("status", {})
-            for key in ("search_actresses_prefix", "search_actresses_middle", "search_actresses_suffix"):
-                assert key in status, f"{locale}: missing showcase.status.{key!r}"
-            # unit.actresses
-            unit = showcase.get("unit", {})
-            assert "actresses" in unit and unit["actresses"], \
-                f"{locale}: missing or empty showcase.unit.actresses"
-
-
 # ─── 49b-T4a: BurstPicker 模組抽出守衛 ────────────────────────────────────────
 BURST_PICKER_JS = Path(__file__).parent.parent.parent / "web" / "static" / "js" / "shared" / "burst-picker.js"
 BASE_HTML_T4A = Path(__file__).parent.parent.parent / "web" / "templates" / "base.html"
@@ -4494,7 +4179,6 @@ class TestMotionLabHtmlHardcoded:
             "picker 兩處 0.15s 已列 Phase 2 whitelist）：\n"
             + "\n".join(violations)
         )
-
 
 
 # ─── 52-T2.1: §5 Ease Roles Demo 守衛 ────────────────────────────────────────
@@ -8301,41 +7985,6 @@ class TestShowcaseSampleGalleryGuard:
             f"showcase.html sg-open-btn (L{sg_btn+1}) 不在 lb-header (L{lb_line+1}~L{lb_close+1}) 內"
 
 
-
-class TestHelpPageGuard:
-    """37d T4 守衛 — help.html 包含 Phase 36/37 新功能說明
-    38a T6 更新：文字已移至 i18n key，改為驗證 HTML 有對應 t() 呼叫 + zh_TW.json 含對應字串"""
-
-    def _zh_tw(self):
-        import json
-        return json.loads((PROJECT_ROOT / 'locales/zh_TW.json').read_text(encoding='utf-8'))
-
-    def test_help_page_guard_html_contains(self):
-        """37d/38a 守衛：help.html 含 i18n keys；zh_TW.json 含對應字串"""
-        html = (PROJECT_ROOT / 'web/templates/help.html').read_text(encoding='utf-8')
-        zh = self._zh_tw()
-        for html_key, json_path, expected_text in [
-            ('help.scraper.h6_default_source', ['help', 'scraper', 'h6_default_source'], '排序'),
-            ('help.scraper.h6_dmm_fuzzy', ['help', 'scraper', 'h6_dmm_fuzzy'], '模糊搜尋'),
-            ('help.showcase.other_lightbox_detail', ['help', 'showcase', 'other_lightbox_detail'], '導演'),
-            ('help.showcase.other_gallery', ['help', 'showcase', 'other_gallery'], '劇照'),
-            ('help.showcase.other_table_cols', ['help', 'showcase', 'other_table_cols'], '片長'),
-            ('help.scanner.subtitle_move', ['help', 'scanner', 'subtitle_move'], '字幕'),
-        ]:
-            assert html_key in html, f"help.html missing: {html_key!r}"
-            cur = zh
-            for part in json_path:
-                cur = cur[part]
-            assert expected_text in cur, \
-                f"zh_TW.json {'.'.join(json_path)} missing: {expected_text!r}"
-
-    def test_help_page_guard_direct_mode(self):
-        """help.html 含 direct（至少 2 次）"""
-        html = (PROJECT_ROOT / 'web/templates/help.html').read_text(encoding='utf-8')
-        assert html.lower().count('direct') >= 2, \
-            "help.html missing: 'direct' at least 2 occurrences"
-
-
 class TestScannerMissingPillGuard:
     """T10 guard - missing NFO/cover pill + SSE completion (method folded)"""
 
@@ -8374,48 +8023,6 @@ class TestGhostFlyPlayLightboxOpen:
         js = self.GHOST_FLY_JS.read_text(encoding='utf-8')
         for expected in ['playLightboxOpen', 'clearProps', 'timelineId']:
             assert expected in js, f"ghost-fly.js missing: {expected!r}"
-
-
-class TestT36ToastI18nKeys:
-    """T3.6 (CD-52-11): alert→toast 改寫後新 i18n keys 必須存在於 zh_TW.json"""
-
-    LOCALE_FILE = PROJECT_ROOT / "locales" / "zh_TW.json"
-
-    REQUIRED_KEYS = [
-        # scanner.toast (6)
-        "scanner.toast.desktop_only",
-        "scanner.toast.folder_already_added",
-        "scanner.toast.copy_path_failed",
-        "scanner.toast.generate_error",
-        "scanner.toast.nfo_update_error",
-        "scanner.toast.jellyfin_update_error",
-        # scanner.copy_fail_modal (3)
-        "scanner.copy_fail_modal.title",
-        "scanner.copy_fail_modal.body",
-        "scanner.copy_fail_modal.close",
-        # settings.toast (1)
-        "settings.toast.desktop_only",
-        # search.toast (4)
-        "search.toast.no_valid_files",
-        "search.toast.desktop_only",
-        "search.toast.load_failed",
-        "search.toast.translate_failed",
-    ]
-
-    def test_all_t36_keys_exist_in_zh_tw(self):
-        import json
-        data = json.loads(self.LOCALE_FILE.read_text(encoding="utf-8"))
-
-        def get_nested(d, dotted):
-            cur = d
-            for part in dotted.split("."):
-                if not isinstance(cur, dict) or part not in cur:
-                    return None
-                cur = cur[part]
-            return cur if isinstance(cur, str) else None
-
-        missing = [k for k in self.REQUIRED_KEYS if get_nested(data, k) is None]
-        assert not missing, f"T3.6 違規：zh_TW.json 缺 i18n keys：{missing}"
 
 
 class TestScannerCopyFailModal:
@@ -10293,37 +9900,6 @@ class TestMetatubeB5RecommendedRemoved:
         )
 
 
-class TestMetatubeB6I18n:
-    """CD-63b-6 / CD-63b-8: 63b 新 UI 文字 key 存在於 zh_TW.json（其他 3 locale 待 milestone）。"""
-
-    ZH_TW = PROJECT_ROOT / "locales" / "zh_TW.json"
-
-    NEW_KEYS = [
-        "mt_enable_label", "mt_enable_help", "mt_lan_mode_label",
-        "mt_connecting_btn", "mt_connect_network_error", "mt_connect_success_toast",
-        "mt_probe_testing", "mt_retest_btn",
-        "mt_probe_hint_title", "mt_probe_hint_reason1",
-        "mt_probe_hint_reason2", "mt_probe_hint_reason3",
-        "mt_promote_unavailable_warning",
-    ]
-
-    def _sources(self) -> dict:
-        data = json.loads(self.ZH_TW.read_text(encoding="utf-8"))
-        return data.get("settings", {}).get("sources", {})
-
-    def test_all_new_keys_exist_and_nonempty(self):
-        sources = self._sources()
-        for key in self.NEW_KEYS:
-            assert sources.get(key), f"CD-63b-6 違規：zh_TW.json settings.sources 缺 {key!r} 或為空"
-
-    def test_tier_hint_no_recommended_mention(self):
-        """CD-63b-8: mt_connected_tier_hint 已移除 ⭐ / 建議起手 提及。"""
-        hint = self._sources().get("mt_connected_tier_hint", "")
-        assert "⭐" not in hint and "建議起手" not in hint, (
-            "CD-63b-8 違規：mt_connected_tier_hint 仍含 Recommended 星標 / 建議起手 文案"
-        )
-
-
 # ─── 63c-3: 進階 picker 接 metatube 真資料（routable / available / proxy_configured 注入）───
 class TestMetatubePickerWiringGuard:
     """63c-3: bootstrap 注入 proxy_configured + state-rescrape.js routable gate 保留 +
@@ -10713,41 +10289,6 @@ class TestPicker64aThreeStateGuard:
 
 
 # ─── 63c-7: i18n zh_TW（DMM proxy hint + Help metatube SQLite hint）───
-class TestMetatube63c7I18nGuard:
-    """63c-7: 63c 新 UI 文字 zh_TW key 存在 + help.html 引用（其他 3 locale 待 milestone）。
-
-    本 branch 只交付 zh_TW（對齊 62/63b i18n 慣例）。不驗 zh_CN/ja/en parity。
-    """
-
-    ZH_TW = LOCALES_ROOT / "zh_TW.json"
-    HELP_HTML = Path(__file__).parent.parent.parent / "web" / "templates" / "help.html"
-
-    def _zh(self):
-        return json.loads(self.ZH_TW.read_text(encoding="utf-8"))
-
-    def test_dmm_proxy_required_hint_exists(self):
-        """63c-6 toast 引用的 key 存在且非空（state-config.js / _rescrape_modal.html）。"""
-        v = self._zh().get("settings", {}).get("sources", {}).get("dmm_proxy_required_hint")
-        assert v, "63c-7 違規：缺 settings.sources.dmm_proxy_required_hint"
-
-    def test_help_metatube_sqlite_keys_exist(self):
-        """Help metatube 教學卡 key（title + db_hint + enable_url）存在且非空。"""
-        metatube = self._zh().get("help", {}).get("metatube", {})
-        assert metatube.get("title"), "64c-1 違規：缺 help.metatube.title"
-        assert metatube.get("db_hint"), "64c-1 違規：缺 help.metatube.db_hint（SQLite 提示）"
-        assert metatube.get("enable_url"), "64c-1 違規：缺 help.metatube.enable_url"
-
-    def test_help_html_references_metatube_hint(self):
-        """help.html 引用 help.metatube.title + help.metatube.db_hint（非孤兒 key）；舊孤兒 key 不存在。"""
-        html = self.HELP_HTML.read_text(encoding="utf-8")
-        assert "help.metatube.title" in html, "64c-1 違規：help.html 未引用 help.metatube.title"
-        assert "help.metatube.db_hint" in html, "64c-1 違規：help.html 未引用 help.metatube.db_hint"
-        assert "help.scraper.h6_metatube" not in html, (
-            "64c-1 違規：help.html 仍含孤兒 key help.scraper.h6_metatube"
-        )
-
-
-
 class TestSettingsQuickToggleGuard:
     """64b-3: quick-toggle 列存在 + 兩 toggle 在列內（CD-64-B8）"""
 
@@ -12143,21 +11684,18 @@ class TestSkippedNfoMultipartToastGuard:
         return self.BATCH_JS.read_text(encoding="utf-8")
 
     def test_skipped_nfo_multipart_flag_referenced(self):
-        """batch.js 引用 skipped_nfo_multipart flag（至少 2 次，對應兩個 consumer）"""
+        """batch.js 引用 skipped_nfo_multipart flag（至少 2 次，對應兩個 consumer）。
+
+        i18n 半邊（search.toast.skipped_nfo_multipart existence）已遷移至
+        scripts/i18n_lint.mjs used-but-missing（batch.js 以靜態 t() 引用，掃描集自動覆蓋，
+        96a-T3 移除本 class 的 i18n-key method）。
+        # [lint-guard: migrate → eslint] flag 計數半邊待 96b（static_guard structure-count）
+        """
         js = self._js()
         count = js.count("skipped_nfo_multipart")
         assert count >= 2, (
             f"batch.js skipped_nfo_multipart 出現 {count} 次，期望 >= 2"
             "（scrapeAll 成功分支 + scrapeSingle 成功分支各一）"
-        )
-
-    def test_skipped_nfo_multipart_i18n_key_referenced(self):
-        """batch.js 引用 search.toast.skipped_nfo_multipart i18n key（至少 2 次）"""
-        js = self._js()
-        count = js.count("search.toast.skipped_nfo_multipart")
-        assert count >= 2, (
-            f"batch.js 'search.toast.skipped_nfo_multipart' 出現 {count} 次，期望 >= 2"
-            "（scrapeAll + scrapeSingle 各一條 showToast 呼叫）"
         )
 
 

@@ -43,6 +43,22 @@ const LOCALE_FILES = { zh_TW: 'zh_TW.json', zh_CN: 'zh_CN.json', en: 'en.json', 
 const FORBIDDEN_WORDS = ['推薦', '風味']; // 未來擴充只改此陣列（CD-96a-4 / CD-96-11）
 const ORPHAN_PREVIEW = 10;
 
+// 「靜態掃不到但必須存在」的 key allowlist：承接自 96a-T3 刪除的 i18n pytest class 的
+// existence 保證。這些 key 在 zh_TW 存在，但全 repo（web 前端 + 後端 core.i18n）實測
+// 無任何靜態/動態 call-site（grep=0）＝ inherited orphan。併入 used-set 使 used-but-missing
+// 續守其存在性（plan-96a DoD[a] "不留缺口"／"存疑往 KEEP 靠"）。
+// 註：這些是 orphan-candidate，未來 locale orphan-cleanup（非 96a 範圍，CD-96a-4）可一併移除，
+//     屆時同步從本清單移除即可。
+const KNOWN_UNSCANNED_KEYS = [
+  'showcase.search.video', //           ← TestShowcaseActressI18n（影片模式搜尋 placeholder）
+  'showcase.unit.videos_count', //      ← TestShowcaseActressI18n（部數單位）
+  'settings.sources.mt_connect_success_toast', // ← TestMetatubeB6I18n（metatube 連線 toast）
+  'settings.sources.mt_probe_hint_title', //      ← TestMetatubeB6I18n
+  'settings.sources.mt_probe_hint_reason1',
+  'settings.sources.mt_probe_hint_reason2',
+  'settings.sources.mt_probe_hint_reason3',
+];
+
 let hadError = false;
 function err(msg) {
   console.error(`✗ i18n_lint: ${msg}`);
@@ -169,6 +185,10 @@ const zhTwKeys = new Set();
 collectLeafKeys(zhTW, '', zhTwKeys);
 
 const used = scanCallSites();
+// 併入 allowlist：靜態掃不到但須守存在性的 inherited-orphan/dynamic key（見 KNOWN_UNSCANNED_KEYS）
+for (const k of KNOWN_UNSCANNED_KEYS) {
+  if (!used.has(k)) used.set(k, ['[known-unscanned allowlist]']);
+}
 
 // 檢 1：used-but-missing（RED）
 const missing = [];
