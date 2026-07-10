@@ -53,6 +53,47 @@ export function serializeTokens(tokens) {
 }
 
 /**
+ * 主動移除字串中「情境排除」的已知 token（D-A6 / CD-95a-6/8）。
+ *
+ * 用途：資料夾層級載入時剝除 `{suffix}`（檔名限定變數）——舊設定若在資料夾樣板放了
+ * `{suffix}`，載入即精確移除、存檔後不再參與資料夾命名。候選 regex 與 `tokenize` 同
+ * （`\{[a-zA-Z]+\}`），故只移除**精確等於** `excluded` 集合的整顆 token：
+ *   - 未知 token（`{studio}`）、資料夾有效 token（`{num}`）、更長 token（`{mysuffix}`、
+ *     `{suffixx}`）、缺括號（`{suffix`）、字面大括號 → 一律**保留**。
+ *   - 殘留分隔符（`{num}-{suffix}` → `{num}-`）刻意不猜、不清（對齊 U-A2 誠實呈現）。
+ * `excluded` 為空集合（如 SSOT fetch 失敗）→ 原字串不變（安全 no-op）。
+ *
+ * @param {string} str
+ * @param {Set<string>} excluded  形如 `new Set(['{suffix}'])`
+ * @returns {string}
+ */
+export function stripFolderExcludedTokens(str, excluded) {
+  return String(str).replace(/\{[a-zA-Z]+\}/g, (m) => (excluded.has(m) ? '' : m));
+}
+
+/**
+ * 資料夾層級載入正規化（CD-95a-7 / D-A6）：原始 `folder_layers` → 乾淨字串陣列（呼叫端配 id）。
+ *
+ * **順序關鍵（Codex PR P1）**：
+ *   1. **先** `slice(0, 3)` 固定後端有效集合——organizer/readonly 皆 `layers[:3]`，第 4 層以上
+ *      是從未建過資料夾的死資料，**不得被提升**成有效層。
+ *   2. **再**於前 3 層內剝除資料夾排除 token（`{suffix}`，D-A6）並濾除剝空的層。
+ *
+ * 若先剝除+濾空再 slice，前導 `{suffix}`-only 層被丟會把原第 4 層以上提升進前 3，違反
+ * 「只保留後端原先使用的前 3 層、功能零改變」。故 slice 必須在 strip/filter 之前。
+ *
+ * @param {string[]} rawLayers    config.scraper.folder_layers（外→內序）
+ * @param {Set<string>} excluded  資料夾排除 token（如 `new Set(['{suffix}'])`）
+ * @returns {string[]}  ≤3 個非空層值
+ */
+export function normalizeFolderLayers(rawLayers, excluded) {
+  return rawLayers
+    .slice(0, 3)                                             // 1. 固定後端有效集合（前 3），死資料不提升
+    .map((v) => stripFolderExcludedTokens(v, excluded))     // 2. 前 3 層內剝除 {suffix}
+    .filter((v) => v.trim() !== '');                        //    剝空的層丟棄
+}
+
+/**
  * ChipEditor —— contentEditable 非受控膠囊編輯器（CD-95a-9 整合模式，plan-95a T4）。
  *
  * 完全依賴注入（不硬編 token/label，配合 SSOT + CD-95a-10〔2〕）：

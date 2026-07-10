@@ -1,4 +1,4 @@
-import { ChipEditor } from '@/settings/chip-editor.js';
+import { ChipEditor, normalizeFolderLayers } from '@/settings/chip-editor.js';
 
 // 同時啟用來源數上限（前端鏡像；後端真理來源 core/source_config.py:MAX_ENABLED_SOURCES）
 const MAX_ENABLED_SOURCES = 10;
@@ -608,14 +608,17 @@ export function stateConfig() {
                         rawLayers = config.scraper.folder_format
                             .replace(/\\/g, '/').split('/').filter(p => p.trim());
                     }
-                    // CD-95a-7 / F2：後端 organizer/readonly 皆 layers[:3]，>3 為從未建過資料夾的
-                    // 死資料 → 保留**前 3**（非最後 3，順手修掉舊「取最後 3」inversion）、丟最內層，
-                    // 功能零損失、不彈窗、debug log 留痕。
+                    // 正規化資料夾層（CD-95a-7 保留後端有效前 3 層 + D-A6 移除 {suffix}）。
+                    // ⚠ 順序：normalizeFolderLayers 內部**先 slice(0,3) 再剝 {suffix}**——避免前導
+                    // suffix-only 層被濾掉後把原第 4 層以上提升成有效層（Codex PR P1）。folderExcluded
+                    // 由 SSOT 的 folder_ok===false 推導（fetch 失敗 → 空集合 → 不剝除）。filenameFormat 不動。
                     if (rawLayers.length > 3) {
                         console.debug(`[settings] folder_layers 有 ${rawLayers.length} 層，已正規化為前 3 層（第 4 層以上為後端未使用的死資料）`);
                     }
-                    this.form.folderLayerList = rawLayers
-                        .slice(0, 3)
+                    const folderExcluded = new Set(
+                        this.formatVariables.filter(v => v.folder_ok === false).map(v => v.name)
+                    );
+                    this.form.folderLayerList = normalizeFolderLayers(rawLayers, folderExcluded)
                         .map(v => ({ id: naming.layerSeq++, value: v }));
 
                     this.form.filenameFormat = config.scraper.filename_format;
