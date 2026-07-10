@@ -1293,3 +1293,118 @@ html.theme-transition-active::view-transition-new(root) {
     background: var(--accent);
     border-radius: var(--radius-sm);
 }
+
+/* ─── 命名區動態層清單 + 檔名列（feature/95 T6）─── */
+#settings-components .naming-block.naming-disabled {
+    opacity: 0.55;
+}
+
+#settings-components .folder-layer-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* 層序號（上到下＝外到內）。language-neutral 數字徽章。 */
+#settings-components .folder-layer-index {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.5rem;
+    height: 1.5rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    background: color-mix(in oklch, var(--surface-2) 60%, transparent);
+    border: 1px solid var(--stroke-subtle);
+    border-radius: var(--radius-pill);
+}
+
+#settings-components .chip-editor-host {
+    min-width: 0;  /* 允許在 flex row 內縮，膠囊 wrap 不撐破 */
+}
+
+#settings-components .filename-format-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+}
+
+/* ＋新增一層：克制的 dashed 主色入口。 */
+#settings-components .btn-add-layer {
+    align-self: flex-start;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.35rem 0.8rem;
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--accent);
+    background: transparent;
+    border: 1px dashed color-mix(in oklch, var(--accent) 45%, var(--stroke-subtle));
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: background var(--fluent-duration-fast) var(--fluent-ease-standard),
+                border-color var(--fluent-duration-fast) var(--fluent-ease-standard);
+}
+
+#settings-components .btn-add-layer:hover:not(:disabled) {
+    background: color-mix(in oklch, var(--accent) 8%, transparent);
+    border-color: color-mix(in oklch, var(--accent) 60%, transparent);
+}
+
+#settings-components .btn-add-layer:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+/* 刪層 icon 鈕（hover 才顯危險色）。 */
+#settings-components .btn-layer-remove {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    color: color-mix(in oklch, var(--text-primary) 50%, transparent);
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: color var(--fluent-duration-fast) var(--fluent-ease-standard),
+                background var(--fluent-duration-fast) var(--fluent-ease-standard);
+}
+
+#settings-components .btn-layer-remove:hover:not(:disabled) {
+    color: var(--color-error);
+    background: color-mix(in oklch, var(--color-error) 12%, transparent);
+}
+
+#settings-components .btn-layer-remove:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* 誠實預覽（有值 + 空值兩行，U-A2）。 */
+#settings-components .naming-preview .preview-line {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+#settings-components .naming-preview .preview-line-empty {
+    margin-top: 0.15rem;
+    opacity: 0.72;
+    font-size: 0.75rem;
+}
+
+#settings-components .naming-preview .preview-empty-tag {
+    flex: 0 0 auto;
+    padding: 0.08rem 0.4rem;
+    font-size: 0.65rem;
+    letter-spacing: 0.02em;
+    color: var(--text-secondary);
+    background: color-mix(in oklch, var(--surface-2) 55%, transparent);
+    border-radius: var(--radius-sm);
+}

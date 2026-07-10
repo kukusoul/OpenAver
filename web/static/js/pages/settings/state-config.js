@@ -157,31 +157,34 @@ export function stateConfig() {
                 || this.openaiUseCustomModel !== this.savedOpenaiUseCustomModel;
         },
 
-        get folderPreviewText() {
-            const filenameFormat = this.form.filenameFormat || '{num} {title}';
-            let filenamePreview = filenameFormat;
-            for (const [key, val] of Object.entries(this.FOLDER_PREVIEW_DATA)) {
-                filenamePreview = filenamePreview.replace(new RegExp(`\\{${key}\\}`, 'g'), val);
-            }
-
-            if (!this.form.createFolder) {
-                return filenamePreview + '.mp4';
-            }
-
-            const layers = this.form.folderLayerList
-                .map(l => l.value.trim())
-                .filter(v => v);
-
-            let folderPreview = layers.map(layer => {
-                let part = layer;
-                for (const [key, val] of Object.entries(this.FOLDER_PREVIEW_DATA)) {
-                    part = part.replace(new RegExp(`\\{${key}\\}`, 'g'), val);
+        // 命名預覽（依 data 套範例值）。誠實反映後端空值行為（U-A2）：空變數 → 空字串，
+        // 殘留分隔符照實呈現、不美化（folderPreviewTextEmpty 用空 actor/suffix 展示）。
+        _previewWith(data) {
+            const applyTokens = (str) => {
+                let out = str;
+                for (const [key, val] of Object.entries(data)) {
+                    out = out.replace(new RegExp(`\\{${key}\\}`, 'g'), val);
                 }
-                return part;
-            }).join('/');
-
+                return out;
+            };
+            const filenamePreview = applyTokens(this.form.filenameFormat || '{num} {title}');
+            if (!this.form.createFolder) return filenamePreview + '.mp4';
+            const folderPreview = this.form.folderLayerList
+                .map(l => l.value.trim())
+                .filter(v => v)
+                .map(applyTokens)
+                .join('/');
             const folder = folderPreview ? folderPreview + '/' : '';
             return folder + filenamePreview + '.mp4';
+        },
+
+        get folderPreviewText() {
+            return this._previewWith(this.FOLDER_PREVIEW_DATA);
+        },
+
+        // 空值範例（無演員/無 suffix）：誠實呈現殘留分隔符（U-A2 / CD-95a-11）。
+        get folderPreviewTextEmpty() {
+            return this._previewWith({ ...this.FOLDER_PREVIEW_DATA, actor: '', actors: '', suffix: '' });
         },
 
         // 71-T5: 縮圖快取預估空間（MB）。每張封面縮圖 ~32KB；`|| 0` 防 NaN。
