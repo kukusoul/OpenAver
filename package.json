@@ -6,7 +6,8 @@
   "scripts": {
     "lint": "npm run lint:js && npm run lint:css",
     "lint:js": "eslint web/static/js/",
-    "lint:css": "stylelint \"web/static/css/**/*.css\""
+    "lint:css": "stylelint \"web/static/css/**/*.css\"",
+    "test:tokenizer": "node --test \"web/static/js/pages/settings/__tests__/**/*.test.mjs\""
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
