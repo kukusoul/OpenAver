@@ -1303,8 +1303,12 @@ export function stateSimilar() {
       if (panelEl) panelEl.classList.add('show');
 
       // 等 x-for 渲染卡 + layout flush（T2/CD-3：waitForMount 取代 $nextTick——冷載
-      // stall 時 observer 於卡片插入當下就緒，非放棄）。predicate 用 items.length 非硬編 6
+      // stall 時 observer 於卡片插入當下就緒，非放棄）。predicate 用 expectedCards 非硬編 6
       // （相似結果可能 <6）；observer root = 恆掛載的 .similar-mobile-panel；close/新 drill abort。
+      // expectedCards = 唯一 video_id 數（x-for :key=runId+'-'+video_id）：正常皆相異＝items.length，
+      // 但若後端誤傳重複 video_id，Alpine keyed dedup 只渲染唯一數 → 用 length 會 predicate 永不成立
+      // 卡死 similarModeAnimating（Opus review P2-1）。uniq ≤ length，只會更早/相等 resolve、不影響暖路徑。
+      const expectedCards = new Set(items.map(i => i.video_id)).size;
       this._mobileReadyAbort?.abort();
       this._mobileReadyAbort = new AbortController();
       const mobilePanelRoot = document.querySelector('.similar-mobile-panel');
@@ -1312,7 +1316,7 @@ export function stateSimilar() {
         mobilePanelRoot,
         () => [...document.querySelectorAll(
           '.similar-mobile-burst-card:not(.similar-mobile-card-detached)')]
-          .filter(el => !preCards.includes(el)).length >= items.length,
+          .filter(el => !preCards.includes(el)).length >= expectedCards,
         { signal: this._mobileReadyAbort.signal },
       );
       if (!openReady.ready) return;   // abort（closeMobilePanel / 新 drill）→ 靜默 bail
@@ -1523,9 +1527,11 @@ export function stateSimilar() {
       if (!(window.BurstPicker && coverEl) && coverEl && item.cover_url) {
         coverEl.src = item.cover_url;
       }
-      // T2/CD-3：waitForMount 等 swap 後的新卡（非 oldCards）mount。predicate 用 items.length
-      // 非硬編 6；observer root = 恆掛載的 .similar-mobile-panel；close（closeMobilePanel abort
-      // + bump runId）→ ready:false 提前 bail（等同下方 runId stale-check，只是更早）。
+      // T2/CD-3：waitForMount 等 swap 後的新卡（非 oldCards）mount。predicate 用 expectedCards
+      // = 唯一 video_id 數（非硬編 6、非裸 length——重複 video_id 時 keyed dedup 渲染較少，用
+      // length 會卡死 similarModeAnimating，Opus review P2-1）；observer root = 恆掛載的
+      // .similar-mobile-panel；close（closeMobilePanel abort + bump runId）→ ready:false 提前 bail。
+      const expectedCards = new Set(items.map(i => i.video_id)).size;
       this._mobileReadyAbort?.abort();
       this._mobileReadyAbort = new AbortController();
       const drillPanelRoot = document.querySelector('.similar-mobile-panel');
@@ -1533,7 +1539,7 @@ export function stateSimilar() {
         drillPanelRoot,
         () => [...document.querySelectorAll(
           '.similar-mobile-burst-card:not(.similar-mobile-card-detached)')]
-          .filter(el => !oldCards.includes(el)).length >= items.length,
+          .filter(el => !oldCards.includes(el)).length >= expectedCards,
         { signal: this._mobileReadyAbort.signal },
       );
       if (!drillReady.ready) return;   // abort（close / 新 drill）→ 靜默 bail
