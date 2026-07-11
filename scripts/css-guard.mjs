@@ -232,6 +232,25 @@ const RULES = [
     },
   },
 
+  // CG-FLU-02 ← test_no_hardcoded_blur_literal（whole-text, property-agnostic — Codex PR P2: 補
+  // custom-property/非-filter 屬性缺口。stylelint 的 declaration-property-value-disallowed-list
+  // 只掃 filter/backdrop-filter 宣告值，會漏 --custom-blur: blur(8px) 這類存在自訂屬性裡、之後
+  // 才被 var() 消費的字面值。此 rule 對整份 comment-stripped 檔案做逐字掃描，忠實鏡射被刪的
+  // pytest test_no_hardcoded_blur_literal 的 re.search(r"blur\(\s*\.?\d", css_no_comments)。）
+  {
+    id: 'CG-FLU-02',
+    file: 'components/fluent-materials.css',
+    kind: 'fn',
+    check(ctx) {
+      if (/blur\(\s*\.?\d/.test(ctx.text)) {
+        ctx.fail(
+          'CG-FLU-02: fluent-materials.css hardcoded blur literal — 用 blur(var(--fluent-blur...))；' +
+            'whole-text scan（含 custom property），忠實 port test_no_hardcoded_blur_literal',
+        );
+      }
+    },
+  },
+
   // CG-FLU-03 ← test_webkit_backdrop_filter_pairing（line-adjacency，用 ctx.text）
   {
     id: 'CG-FLU-03',

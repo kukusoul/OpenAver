@@ -12,11 +12,15 @@ module.exports = {
     'color-no-hex': true,
     'declaration-property-value-disallowed-list': {
       '/^transition/': ['/\\b0?\\.\\d+s\\b/'],
-      // CG-FLU-02 (96c-T2): faithful port of deleted pytest test_no_hardcoded_blur_literal
-      // regex `/blur\(\s*\.?\d/` — bans ANY numeric blur literal (decimal / unitless / non-px:
-      // blur(.5rem) / blur(8) / blur(2.5px)), not just \d+px. Allows blur(var(--fluent-blur*))
-      // (no digit right after '('). blur() is only valid in filter/backdrop-filter, so this
-      // property-scoped rule is equivalent to the pytest's whole-text scan in practice.
+      // Supplementary cross-file (web/static/css/**) guard, NOT the faithful port of the
+      // deleted pytest test_no_hardcoded_blur_literal. Bans ANY numeric blur literal
+      // (decimal / unitless / non-px: blur(.5rem) / blur(8) / blur(2.5px)), not just \d+px,
+      // but ONLY inside filter/backdrop-filter declaration VALUES — it does not see a
+      // literal stored in a custom property (e.g. --custom-blur: blur(8px)) that is later
+      // consumed via backdrop-filter: var(--custom-blur). Allows blur(var(--fluent-blur*))
+      // (no digit right after '('). The faithful whole-text (property-agnostic) port of the
+      // pytest's regex now lives in css-guard rule CG-FLU-02 (scripts/css-guard.mjs), scoped
+      // to fluent-materials.css.
       '/^(-webkit-)?(backdrop-)?filter$/': ['/blur\\(\\s*\\.?\\d/'],
       'box-shadow': ['/\\brgba\\(\\s*\\d/'],
       'border-radius': ['/^\\d+px/'],
