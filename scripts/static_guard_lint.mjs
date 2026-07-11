@@ -748,6 +748,66 @@ const RULES = [
     scope: /const\s+searchable\s*=\s*\[([\s\S]*?)\]\.filter\(Boolean\)/,
     note: `[TestShowcaseCoreJsSearchableFields] searchable array 必須含 video.${f}（required-only subset，允許多餘欄位，不驗 exact-set，見 CD-96-9 忠實原則）`,
   })),
+
+  // ==== 96b-T4（Opus-resolved）：port 自 test_frontend_lint.py 的 text-based 斷言，非 eslint domain ====
+
+  // ---- [TestMotionInfra::test_no_direct_gsap_calls_in_pages] pages/**/*.js + components/**/*.js
+  // 遞迴禁直接 gsap.(to|from|fromTo|set|timeline)( / ScrollTrigger.(create|batch)( 呼叫。
+  // 原 pytest 是純文字 regex 掃描（find_pattern_in_file），非 AST 語意，故留在 static_guard_lint
+  // 而非 eslint（Opus-resolved 決策 1：eslint no-restricted-syntax 對這 7 個分散白名單檔缺乏
+  // 精準 file-scope 手段，改用本引擎既有的 dir-mode exclude by-basename，比開 5 個新 eslint
+  // group 更省事且不擴大 flat-config 陷阱攻擊面）。
+  // 7 檔白名單（動態座標計算 / adapter 本體 / per-host lifecycle 合法呼叫）：
+  //   components/motion-adapter.js、pages/motion-lab.js、pages/motion-lab-state.js、
+  //   pages/search/animations.js、pages/showcase/animations.js、
+  //   pages/motion-lab/constellation-host.js、pages/showcase/state-similar.js。
+  // exclude 比對 basename（非完整相對路徑）：animations.js 在 pages/ 下只有 search/ 與 showcase/
+  // 兩份、皆在白名單內，basename 排除不會誤放行非白名單檔（已 grep 驗證無其他同名檔案）。
+  {
+    file: {
+      dir: 'web/static/js/pages', ext: ['.js'], recursive: true,
+      exclude: ['motion-lab.js', 'motion-lab-state.js', 'animations.js', 'constellation-host.js', 'state-similar.js'],
+    },
+    kind: 'forbidden-string',
+    pattern: /(?:gsap\.(?:to|from|fromTo|set|timeline)\(|ScrollTrigger\.(?:create|batch)\()/,
+    note: '[TestMotionInfra] test_no_direct_gsap_calls_in_pages — pages/**/*.js 禁直接 GSAP/ScrollTrigger 呼叫（白名單 5 檔 exclude by-basename）',
+  },
+  {
+    file: { dir: 'web/static/js/components', ext: ['.js'], recursive: true, exclude: ['motion-adapter.js'] },
+    kind: 'forbidden-string',
+    pattern: /(?:gsap\.(?:to|from|fromTo|set|timeline)\(|ScrollTrigger\.(?:create|batch)\()/,
+    note: '[TestMotionInfra] test_no_direct_gsap_calls_in_pages — components/**/*.js 禁直接 GSAP/ScrollTrigger 呼叫（motion-adapter.js 白名單 exclude）',
+  },
+
+  // ---- [TestOpenAIErrorI18nGuard] settings/state-providers.js：openai error 分支使用 window.t(errorKey)
+  // i18n，非裸 error.message（39a-PR-fix P1）。實測全部 3 個 method 皆 required-string 正斷言，
+  // 無任何 forbidden 半邊 —— 正確歸屬 static_guard_lint required-string，不是 eslint
+  // SEL_NO_ERR_IN_ALERT 的來源（Opus-resolved 決策 2 / TASK-96b-T4.md §3.2 修正 inventory 誤判）。
+  {
+    file: 'web/static/js/pages/settings/state-providers.js', kind: 'required-string', pattern: 'settings.status.openai_',
+    scope: { anchor: /async\s+fetchOpenAIModels\s*\([^)]*\)\s*\{/, braceBalanced: true },
+    note: '[TestOpenAIErrorI18nGuard] test_fetch_models_error_uses_i18n — fetchOpenAIModels() error 分支含 settings.status.openai_ 動態 errorKey 拼接',
+  },
+  {
+    file: 'web/static/js/pages/settings/state-providers.js', kind: 'required-string', pattern: 'settings.status.openai_',
+    scope: { anchor: /async\s+testOpenAITranslation\s*\(\s*\)\s*\{/, braceBalanced: true },
+    note: '[TestOpenAIErrorI18nGuard] test_translate_error_uses_i18n — testOpenAITranslation() error 分支含 settings.status.openai_ 動態 errorKey 拼接',
+  },
+  {
+    file: 'web/static/js/pages/settings/state-providers.js', kind: 'required-string',
+    pattern: "window.t('settings.status.openai_connection_failed')",
+    note: "[TestOpenAIErrorI18nGuard] test_fetch_catch_uses_i18n — fetchOpenAIModels() catch 分支使用 window.t('settings.status.openai_connection_failed')，不顯示裸 error.message",
+  },
+
+  // ---- [TestNoDuplicateNativeDialog::test_duplicate_modal_uses_modal_open_class] search.html
+  // 含 duplicateModalOpen（Alpine state-driven pattern）。實測目標是 HTML required-string
+  // （非 JS、非 forbidden），eslint 只吃 .js 檔管不到 HTML —— 此 required-string 半邊 +
+  // eslint SEL_SHOW_MODAL（universal ban，本 task 已泛化）兩者合力才是完整替代網（見
+  // TASK-96b-T4.md §1a）。此列補齊此前遺漏的 required-string 半邊（gap-fill）。
+  {
+    file: 'web/templates/search.html', kind: 'required-string', pattern: 'duplicateModalOpen',
+    note: '[TestNoDuplicateNativeDialog] test_duplicate_modal_uses_modal_open_class — search.html 含 duplicateModalOpen（Alpine state pattern，非原生 showModal/close）',
+  },
 ];
 
 // ---- helpers ----
