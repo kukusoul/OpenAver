@@ -2288,6 +2288,69 @@ const RULES = [
     file: 'web/static/js/pages/showcase/state-videos.js', kind: 'required-string', pattern: '/api/gallery/player',
     note: '[TestVideoPlaybackGuard] test_video_api_files_contain（JS 半邊，plan CD-96e-5 三分法未明列，96e-T3 研究補洞）',
   },
+
+  // ── 96e-T4：TestPageTransitionDomGuard / TestPageTransitionSettingsScopeGuard /
+  // TestT4FooterStructure 三個混合 class 的 template/JS 半邊（CSS 半邊已由 96c
+  // css-guard CG-XP-03/04/05 承接）。只建網，不刪 pytest（T5 兩半邊皆綠後整刪）。────
+
+  // A1 — base.html <main id="main-content"> + <nav id="sidebar">（whole-file，正向，合併一條）
+  {
+    file: 'web/templates/base.html', kind: 'required-string',
+    pattern: ['id="main-content"', 'id="sidebar"'],
+    note: '[TestPageTransitionDomGuard] test_base_html_main_content_id + test_base_html_sidebar_id',
+  },
+  // A2 — head-region 內 pagereveal/pageswap/skipTransition（head-scoped，正向）
+  {
+    file: 'web/templates/base.html', kind: 'required-string',
+    pattern: ['pagereveal', 'pageswap', 'skipTransition'],
+    scope: /[\s\S]*?(?=<\/head>)/,
+    note: '[TestPageTransitionDomGuard] test_base_html_showcase_skip_script_in_head — head-scoped 三 token',
+  },
+  // A3 — 含 skipTransition 的 <script> 開標籤不可帶 module/defer/async（element-bound，負向 ×4）
+  {
+    file: 'web/templates/base.html', kind: 'forbidden-string',
+    pattern: ['type="module"', "type='module'", 'defer', 'async'],
+    scope: /(<script\b[^>]*>)(?:(?!<\/script>)[\s\S])*?skipTransition/,
+    note: '[TestPageTransitionDomGuard] test_base_html_showcase_skip_script_in_head — VT head-script 負向（CD-96-20c，required-string-only port 會漏此負向斷言）',
+  },
+
+  // B — theme-transition.js class lifecycle（whole-file，正向 ×3）
+  {
+    file: 'web/static/js/pages/settings/theme-transition.js', kind: 'required-string',
+    pattern: ["classList.add('theme-transition-active')", 'transition.finished', "classList.remove('theme-transition-active')"],
+    note: '[TestPageTransitionSettingsScopeGuard] test_theme_transition_js_class_lifecycle',
+  },
+
+  // C1 — showcase.html footer 結構/快捷鍵/pager 17 個字串（whole-file，正向）
+  {
+    file: 'web/templates/showcase.html', kind: 'required-string',
+    pattern: [
+      'class="showcase-footer"', 'class="footer-left"', 'class="footer-center"', 'class="footer-right"',
+      'bi-film', 'bi-person-circle', '<kbd>A</kbd>', '<kbd>S</kbd>', '<kbd>ESC</kbd>', '<kbd>←</kbd>', '<kbd>→</kbd>',
+      'class="footer-pager"', 'x-show="!showFavoriteActresses && totalPages > 1"',
+      'prevPage()', 'nextPage()', 'x-ref="pageSelectFooter"', 'class="pager-current"', 'openPagePicker',
+    ],
+    note: '[TestT4FooterStructure] test_showcase_html_contains — footer 結構/快捷鍵/pager 存在',
+  },
+  // C2 — 舊 class="showcase-status-bar" 不應殘留（whole-file，負向）
+  {
+    file: 'web/templates/showcase.html', kind: 'forbidden-string',
+    pattern: 'class="showcase-status-bar"',
+    note: '[TestT4FooterStructure] test_showcase_html_contains — 舊 status-bar class 不應殘留',
+  },
+  // C3 — showcase-footer 開標籤不可含 x-data（element-bound，負向）
+  {
+    file: 'web/templates/showcase.html', kind: 'tag-scan', mode: 'class-tag',
+    tagName: 'div', className: 'showcase-footer',
+    forbidden: ['x-data'],
+    note: '[TestT4FooterStructure] test_showcase_html_contains — showcase-footer 開標籤不可含 x-data（§11 gotcha 1/3：element-bound + class-token 邊界，用既有 buildTagWithClassRegex）',
+  },
+  // C4 — state-videos.js 含 openPagePicker + showPicker（whole-file，正向，跨檔）
+  {
+    file: 'web/static/js/pages/showcase/state-videos.js', kind: 'required-string',
+    pattern: ['openPagePicker', 'showPicker'],
+    note: '[TestT4FooterStructure] test_showcase_html_contains — core.js openPagePicker 用 showPicker 實作',
+  },
 ];
 
 // ---- helpers ----
