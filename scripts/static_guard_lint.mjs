@@ -58,7 +58,7 @@
 
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, resolve, sep } from 'node:path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(__dirname, '..');
@@ -761,28 +761,37 @@ const RULES = [
   // 遞迴禁直接 gsap.(to|from|fromTo|set|timeline)( / ScrollTrigger.(create|batch)( 呼叫。
   // 原 pytest 是純文字 regex 掃描（find_pattern_in_file），非 AST 語意，故留在 static_guard_lint
   // 而非 eslint（Opus-resolved 決策 1：eslint no-restricted-syntax 對這 7 個分散白名單檔缺乏
-  // 精準 file-scope 手段，改用本引擎既有的 dir-mode exclude by-basename，比開 5 個新 eslint
+  // 精準 file-scope 手段，改用本引擎既有的 dir-mode exclude，比開 5 個新 eslint
   // group 更省事且不擴大 flat-config 陷阱攻擊面）。
-  // 7 檔白名單（動態座標計算 / adapter 本體 / per-host lifecycle 合法呼叫）：
+  // 7 檔白名單（動態座標計算 / adapter 本體 / per-host lifecycle 合法呼叫，與來源 pytest
+  // allowed_files 完全對齊）：
   //   components/motion-adapter.js、pages/motion-lab.js、pages/motion-lab-state.js、
   //   pages/search/animations.js、pages/showcase/animations.js、
   //   pages/motion-lab/constellation-host.js、pages/showcase/state-similar.js。
-  // exclude 比對 basename（非完整相對路徑）：animations.js 在 pages/ 下只有 search/ 與 showcase/
-  // 兩份、皆在白名單內，basename 排除不會誤放行非白名單檔（已 grep 驗證無其他同名檔案）。
+  // exclude 比對「相對於 dir 的相對路徑」（非 basename）：basename 比對會讓未來新增的同名檔
+  // （如 pages/foo/animations.js）被誤放行，故改用完整相對路徑，與來源 pytest 語意一致
+  // （Codex P2 fix，2026-07）。
   {
     file: {
       dir: 'web/static/js/pages', ext: ['.js'], recursive: true,
-      exclude: ['motion-lab.js', 'motion-lab-state.js', 'animations.js', 'constellation-host.js', 'state-similar.js'],
+      exclude: [
+        'motion-lab.js',
+        'motion-lab-state.js',
+        'search/animations.js',
+        'showcase/animations.js',
+        'motion-lab/constellation-host.js',
+        'showcase/state-similar.js',
+      ],
     },
     kind: 'forbidden-string',
     pattern: /(?:gsap\.(?:to|from|fromTo|set|timeline)\(|ScrollTrigger\.(?:create|batch)\()/,
-    note: '[TestMotionInfra] test_no_direct_gsap_calls_in_pages — pages/**/*.js 禁直接 GSAP/ScrollTrigger 呼叫（白名單 5 檔 exclude by-basename）',
+    note: '[TestMotionInfra] test_no_direct_gsap_calls_in_pages — pages/**/*.js 禁直接 GSAP/ScrollTrigger 呼叫（白名單 6 檔 exclude by-relpath）',
   },
   {
     file: { dir: 'web/static/js/components', ext: ['.js'], recursive: true, exclude: ['motion-adapter.js'] },
     kind: 'forbidden-string',
     pattern: /(?:gsap\.(?:to|from|fromTo|set|timeline)\(|ScrollTrigger\.(?:create|batch)\()/,
-    note: '[TestMotionInfra] test_no_direct_gsap_calls_in_pages — components/**/*.js 禁直接 GSAP/ScrollTrigger 呼叫（motion-adapter.js 白名單 exclude）',
+    note: '[TestMotionInfra] test_no_direct_gsap_calls_in_pages — components/**/*.js 禁直接 GSAP/ScrollTrigger 呼叫（motion-adapter.js 白名單 exclude by-relpath）',
   },
 
   // ==== 96b-T6 Phase 1：orphan-net-gap 補網（TASK-96b-T6.md §C，Opus-resolved 決策 (a)）====
@@ -864,16 +873,18 @@ const RULES = [
   // pages/showcase/state-similar.js（CROPMODE_CALLER_WHITELIST 唯一白名單 caller，經 GhostFly API）。
   // state-lightbox.js / state-base.js 不在此白名單內（它們屬於下面規則 3 的獨立掃描名單，
   // plan 文字曾誤讀成同一份白名單，本卡已用 grep 驗證全 repo 目前只有 ghost-fly.js /
-  // state-similar.js 兩檔含這些字串）。exclude 為 basename 比對，已 grep 驗證兩檔全 repo 各僅一份。
+  // state-similar.js 兩檔含這些字串）。exclude 比對「相對於 dir 的相對路徑」（非 basename）：
+  // basename 比對會讓未來新增的同名檔（如另一份 state-similar.js）誤放行，改用完整相對路徑
+  // 與來源 pytest CROPMODE_CALLER_WHITELIST 語意一致（Codex P2 fix，2026-07）。
   {
-    file: { dir: 'web/static/js', ext: ['.js'], recursive: true, exclude: ['ghost-fly.js', 'state-similar.js'] },
+    file: { dir: 'web/static/js', ext: ['.js'], recursive: true, exclude: ['shared/ghost-fly.js', 'pages/showcase/state-similar.js'] },
     kind: 'forbidden-string', pattern: 'cropMode',
-    note: '[TestGhostFlyCropModeBoundary] test_cropmode_string_only_in_ghost_fly — cropMode 只能出現在 ghost-fly.js（定義站）/ state-similar.js（白名單 caller）',
+    note: '[TestGhostFlyCropModeBoundary] test_cropmode_string_only_in_ghost_fly — cropMode 只能出現在 ghost-fly.js（定義站）/ state-similar.js（白名單 caller，exclude by-relpath）',
   },
   {
-    file: { dir: 'web/static/js', ext: ['.js'], recursive: true, exclude: ['ghost-fly.js', 'state-similar.js'] },
+    file: { dir: 'web/static/js', ext: ['.js'], recursive: true, exclude: ['shared/ghost-fly.js', 'pages/showcase/state-similar.js'] },
     kind: 'forbidden-string', pattern: ["'right-half'", '"right-half"'],
-    note: '[TestGhostFlyCropModeBoundary] test_right_half_literal_only_in_ghost_fly — right-half 字面量只能出現在 ghost-fly.js（定義站）/ state-similar.js（白名單 caller）',
+    note: '[TestGhostFlyCropModeBoundary] test_right_half_literal_only_in_ghost_fly — right-half 字面量只能出現在 ghost-fly.js（定義站）/ state-similar.js（白名單 caller，exclude by-relpath）',
   },
   // 規則 3：state-lightbox.js / state-base.js 禁 objectPosition...right（同一行）。
   // state-similar.js 在 pytest 是 CALLER_SCOPE_FILES 的一員但因白名單命中而 pytest.skip，
@@ -939,8 +950,11 @@ function readTarget(relPath) {
 }
 
 // 目錄掃描：預設非遞迴（複刻 pytest glob("*.html") 排除子目錄語意，NoVanillaHandlers 需要）；
-// recursive:true 為 rglob 語意（NoInlineStyleDisplay 需要，含子目錄）；exclude 排除特定檔名
+// recursive:true 為 rglob 語意（NoInlineStyleDisplay 需要，含子目錄）；exclude 排除特定檔案
 // （NoHardcodedColors 需要，排除 design-system.html / motion_lab.html 兩個 demo 頁）。
+// exclude 比對「相對於 dir 的相對路徑」（posix '/' 分隔，非 basename）：basename-only 比對會讓
+// 白名單誤放行「未來同名檔」（例如 pages/foo/animations.js），與來源 pytest 用完整相對路徑比對
+// 的語意不一致，故 exclude 條目一律填相對路徑（Codex P2 fix，2026-07）。
 function listDirFiles(relDir, exts, opts = {}) {
   const { recursive = false, exclude = [] } = opts;
   const full = join(ROOT, relDir);
@@ -960,7 +974,8 @@ function listDirFiles(relDir, exts, opts = {}) {
         if (recursive) walk(join(dirFull, e.name), relPath);
         continue;
       }
-      if (e.isFile() && exts.some((ext) => e.name.endsWith(ext)) && !exclude.includes(e.name)) {
+      const relPathPosix = relPath.split(sep).join('/');
+      if (e.isFile() && exts.some((ext) => e.name.endsWith(ext)) && !exclude.includes(relPathPosix)) {
         results.push(join(relDir, relPath));
       }
     }
