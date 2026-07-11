@@ -624,6 +624,10 @@ export default [
         },
         SEL_NO_ERR_IN_ALERT,
         SEL_NULLISH_PERPAGE,
+        // 96b-T5 Codex P2 修正：SEL_TRACKED_EVENTSOURCE 呼應 Group 1 的 EventSource 禁令
+        // （persistence.js 落在 search/state/ 管轄範圍，被此 Group 8 override 取代，flat config
+        // 同 rule 後者整段 replace，須重述才不會漏掉）。
+        SEL_TRACKED_EVENTSOURCE,
         SEL_LONGPRESS_IDENT,
       ],
     },
