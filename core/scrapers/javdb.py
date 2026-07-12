@@ -1,5 +1,7 @@
 """JavDB 爬蟲"""
+import locale
 import re
+import sys
 from typing import Optional
 
 from core.logger import get_logger
@@ -16,7 +18,8 @@ from .utils import rate_limit, strip_number_prefix
 # patch CURL_CFFI_AVAILABLE=False 的測試會 NameError（spec-97 Codex P2）。
 CURL_CFFI_IMPORT_ERROR: Optional[BaseException] = None
 try:
-    from curl_cffi import requests as curl_requests
+    from curl_cffi import requests as curl_requests, CurlOpt
+    import certifi
     CURL_CFFI_AVAILABLE = True
 except ImportError as e:
     CURL_CFFI_AVAILABLE = False
@@ -26,6 +29,31 @@ except ImportError as e:
 # 歷史教訓：released 版 dist-info 被剝除 → curl_cffi PackageNotFoundError → 這裡靜默
 # 吞掉 → javdb 瞬回無結果、零 log。補此可觀測性（不改降級行為本身）。
 _warned = False
+
+_UNSET = object()
+_cainfo_override = _UNSET   # _UNSET=未算 / None=no-op 或降級 / bytes=CAINFO override
+_ca_warned = False
+
+
+def _cainfo_override_bytes():
+    """Windows + 非 ASCII certifi 路徑 → 回 ACP bytes（給 curl_options CAINFO）；否則 None。
+    算一次快取；併發安全＝算完才 publish（CD-98-6）。只在 CURL_CFFI_AVAILABLE 時被 _get_html 呼叫。"""
+    global _cainfo_override, _ca_warned
+    if _cainfo_override is not _UNSET:
+        return _cainfo_override
+    result = None                                   # 區域變數，計算期間不碰全域（CD-98-6）
+    ca = certifi.where()
+    if sys.platform == "win32" and not ca.isascii():
+        try:
+            result = ca.encode(locale.getencoding(), errors="strict")   # CD-98-1
+        except UnicodeEncodeError as e:                                  # CD-98-3
+            if not _ca_warned:
+                _ca_warned = True
+                logger.warning("javdb: CA 憑證路徑含當前 code page 無法表示的字元，"
+                               "TLS 可能失敗（請改用純英文安裝路徑）: %s", e)
+            # 不覆寫、退回 curl_cffi 原行為
+    _cainfo_override = result                        # 最後一步才 publish（避免併發讀半成品）
+    return result
 
 
 class JavDBScraper(BaseScraper):
@@ -56,6 +84,9 @@ class JavDBScraper(BaseScraper):
                     logger.warning("javdb 已停用：curl_cffi 不可用")
             return None
 
+        _ca = _cainfo_override_bytes()
+        extra = {"curl_options": {CurlOpt.CAINFO: _ca}} if _ca is not None else {}
+
         try:
             response = curl_requests.get(
                 url,
@@ -66,7 +97,8 @@ class JavDBScraper(BaseScraper):
                     "Accept-Language": "zh-TW,zh;q=0.9,ja;q=0.8,en;q=0.7",
                     "Referer": "https://javdb.com/",
                 },
-                timeout=30
+                timeout=30,
+                **extra
             )
 
             if response.status_code == 200:
