@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **javdb released 版永遠「無結果」**：打包不再剝除 `.dist-info`，curl_cffi 在產物內能正常 import，javdb 恢復可用（owner 真機 2026-07-12 實證：補 dist-info + 重啟後搜 DLDSS-491 命中）。全保留 dist-info 壓縮代價僅 ~0.3MB（Windows ZIP 34.8 → 35.1MB，遠低於 48MB 上限）。
+- **javdb 在非 ASCII 安裝路徑（中文/日文等同語系）搜尋 `curl error 77`**（feature/98，接續上條 dist-info 修復後才浮現的第二層問題）：打包 launcher 設 `PYTHONUTF8=1` → curl_cffi 用 UTF-8 編 CA 憑證檔案路徑，但 libcurl `fopen` 用系統 ANSI code page（`GetACP`，如 cp950）→ 非 ASCII 路徑對不上 → `curl: (77) error setting certificate verify locations` → javdb 靜默無結果。改用 `locale.getencoding()`（回 ANSI code page、**不受 UTF-8 mode 影響**）編 bytes 覆寫 `CAINFO`，**同語系**非 ASCII 路徑（含**預設** `C:\Users\<中文>\OpenAver`，中文 Windows 使用者預設安裝就中招的族群）javdb 恢復可用；仍完整驗證 TLS、不複製檔案。**javdb-only**（全 repo 唯一 curl_cffi 消費者；`avsox` 走一般 `requests`／OpenSSL 不受影響）。跨語系/emoji 安裝路徑（字元非當前 code page 可表示，極罕見）優雅降級（log warning 一次 + 退回原行為），workaround＝改用純英文安裝路徑。
+- **番號 7 字母前綴（如 `PARATHD`）拖檔進來被截斷掉開頭字母**：`parathd-02976.mp4` 拖入被讀成 `arathd-02976`（掉 `P`）→ 找不到資料，而文字輸入正常。根因＝檔名抽番號的字母長度上限（`extract_number`／`organizer`／前端 `file.js` 為 5/6）比 codebase 內已有且已測試的基準（`gallery_scanner` 的 7，含 8 字母英文單字守衛）窄，`re.search`／JS regex 滑窗掉首字。把三處落後上限對齊到 7（`{1,7}`/`{2,7}`）；一併修前端「手動輸入番號」逃生口（`formatNumber` 原把 `PARATHD-02976` 絞成 `RATHD-02976`）。`gallery_scanner`（本就是 7）與 `is_prefix_only`（語意不同、故意保 6）不動。**DMM 原檔下載檔名**（`1sdms00808`／`h_839shic00023` 這類 content-id，issue #86）刻意**不**自動轉標準番號——DMM 特殊映射永遠加不完、且用 per-maker 學習映射，改由用戶輸入正確番號、逃生口兜底。
 
 ### Added
 #### 🛡️ 打包產物 runtime 驗證守衛（制度化，堵死 dev-only 測試盲區）
@@ -28,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 產物守衛 mutation 實證（對本機 Windows 產物、WSL interop 跑產物自帶 python.exe）：正常 GREEN；刪 curl_cffi dist-info → `PackageNotFoundError` exit 1（本次事故的自動化重演）；刪整包 → 依賴鏈全列 exit 1；還原 → GREEN。audit 真 fixture：新 build GREEN、歷史壞 ZIP（v0.11.10，零 dist-info）RED。
 - 來源金絲雀：**7 源 PASS + fc2 SKIP**（unreachable／no probe，站方連線問題非 parser 回歸，advisory；**javdb 本身金絲雀 PASS**——parser 一直健康，壞的是打包）。
 - 每 task 獨立 Sonnet structured review（T2/T3/T4/T5 findings 皆修：產物守衛 scanned==0 假綠守衛／audit if-no-files-found／CI YAML semantics／javdb test importorskip）。CI dispatch dry-run + Codex PR review 為 push 後最終網。
+- **本版另 bundle 兩個後續修復**（feature/98 javdb error 77 + 番號 cap 對齊）：全套 pytest 升至 **5030 passed / 1 skipped**（+35 自 4995：javdb CAINFO 12 案〔非 win／ASCII 路徑 no-op／ACP 可編→bytes 覆寫 CAINFO／`UnicodeEncodeError` 降級 warn-once／cache sentinel／併發 publish-after-compute／import-time 優雅降級，皆 mutation 驗〕+ 番號 cap 對齊回歸鎖〔parathd 各形式／合成 7 字母／8 字母維持不變非回歸／Tokyo Hot・日期・FC2 collision guard／organizer 殘留碎片／前端逃生口，皆 mutation 驗〕）；`npm test` 39 pass；`ruff check .` ＋ `npm run lint:js` 綠。兩者各經獨立 Sonnet review + Codex 二審（javdb import-time 降級測試、番號 `extractChineseTitle`／DMM 恆真斷言、organizer 無鎖）皆修並 mutation 證明。
 
 ## [0.11.11] - 2026-07-12
 
