@@ -927,3 +927,130 @@ class TestNfoMtimeRepathAuthoritative:
         assert row.nfo_mtime == 0.0, (
             f"碰撞 merge 分支 nfo_mtime=0 應照寫（合法權威值），實際: {row.nfo_mtime!r}"
         )
+
+
+# ============ TASK-98a-T4: focal + crop_mode preserve-on-conflict（CD-98a-6）============
+
+class TestFocalPreserveOnConflict:
+    """crop_mode/auto_focal 四路 builder preserve-on-conflict 回歸鎖——這是本 milestone
+    最貴的一條（Codex P1）：漏任一 builder＝掃描/重刮把背景算的 focal 與使用者的
+    crop_mode 選擇清回 dataclass 預設值。四路皆須：先用 mutator 寫非預設值，再走
+    對應 builder 寫一筆「看似新掃描」的 Video（focal 欄位是 dataclass 預設），
+    讀回後 focal 欄位須維持 mutator 寫的值，不被覆蓋。
+    """
+
+    def test_upsert_preserves_focal_on_conflict(self, temp_db):
+        """upsert() ON CONFLICT 分支：重掃描/重刮不覆蓋既有 crop_mode/auto_focal"""
+        repo = VideoRepository(temp_db)
+        path = to_file_uri("/focal_upsert.mp4")
+        repo.upsert(Video(path=path, title="舊片"))
+        assert repo.update_crop_mode(path, 'default') is True
+        assert repo.update_auto_focal(path, '0.5,0.4') is True
+
+        repo.upsert(Video(path=path, title="重掃描新片"))
+
+        result = repo.get_by_path(path)
+        assert result is not None
+        assert result.crop_mode == 'default'
+        assert result.auto_focal == '0.5,0.4'
+
+    def test_upsert_batch_preserves_focal_on_conflict(self, temp_db):
+        """upsert_batch() ON CONFLICT 分支（Scanner 增量掃描主路徑，漏此等於沒修）"""
+        repo = VideoRepository(temp_db)
+        path = to_file_uri("/focal_upsert_batch.mp4")
+        repo.upsert(Video(path=path, title="舊片"))
+        assert repo.update_crop_mode(path, 'default') is True
+        assert repo.update_auto_focal(path, '0.5,0.4') is True
+
+        repo.upsert_batch([Video(path=path, title="重掃描新片")])
+
+        result = repo.get_by_path(path)
+        assert result is not None
+        assert result.crop_mode == 'default'
+        assert result.auto_focal == '0.5,0.4'
+
+    def test_repath_normal_update_preserves_focal(self, temp_db):
+        """repath() 分支 2（正常 UPDATE，old 在 DB、new 不在）：SET 子句不含 focal"""
+        repo = VideoRepository(temp_db)
+        old_uri = to_file_uri("/focal_repath_old.mp4")
+        new_uri = to_file_uri("/focal_repath_new.mp4")
+
+        with patch("core.similar.ranker_cache.SimilarRankerCache"):
+            repo.upsert(Video(path=old_uri, title="舊片"))
+        assert repo.update_crop_mode(old_uri, 'default') is True
+        assert repo.update_auto_focal(old_uri, '0.5,0.4') is True
+
+        with patch("core.similar.ranker_cache.SimilarRankerCache"):
+            repo.repath(old_uri, new_uri, Video(path=new_uri, title="重掃描新片"))
+
+        result = repo.get_by_path(new_uri)
+        assert result is not None
+        assert result.crop_mode == 'default'
+        assert result.auto_focal == '0.5,0.4'
+
+    def test_repath_collision_merge_preserves_focal(self, temp_db):
+        """repath() 分支 3（碰撞 delete-merge，new 已有一筆）：DO UPDATE 跳過 focal 欄位"""
+        repo = VideoRepository(temp_db)
+        old_uri = to_file_uri("/focal_collision_old.mp4")
+        new_uri = to_file_uri("/focal_collision_new.mp4")
+
+        with patch("core.similar.ranker_cache.SimilarRankerCache"):
+            repo.upsert(Video(path=old_uri, title="舊片"))
+            repo.upsert(Video(path=new_uri, title="既有新路徑片"))
+        assert repo.update_crop_mode(new_uri, 'default') is True
+        assert repo.update_auto_focal(new_uri, '0.5,0.4') is True
+
+        with patch("core.similar.ranker_cache.SimilarRankerCache"):
+            repo.repath(old_uri, new_uri, Video(path=new_uri, title="重掃描新片"))
+
+        result = repo.get_by_path(new_uri)
+        assert result is not None
+        assert result.crop_mode == 'default'
+        assert result.auto_focal == '0.5,0.4'
+
+    def test_insert_writes_dataclass_focal_defaults(self, temp_db):
+        """INSERT（新 path，非衝突）：focal 欄位照寫 dataclass 預設值（''/'auto'），
+        鏡像操作對稱驗證（CD-98a-6 語意驗證段落）"""
+        repo = VideoRepository(temp_db)
+        path = to_file_uri("/focal_insert_defaults.mp4")
+
+        repo.upsert(Video(path=path, title="新片"))
+
+        result = repo.get_by_path(path)
+        assert result is not None
+        assert result.crop_mode == 'auto'
+        assert result.auto_focal == ''
+
+
+class TestFocalMutators:
+    """VideoRepository.update_auto_focal / update_crop_mode round-trip（CD-98a-6 mutator）"""
+
+    def test_update_auto_focal_roundtrip(self, temp_db):
+        repo = VideoRepository(temp_db)
+        path = to_file_uri("/focal_mutator_auto_focal.mp4")
+        repo.upsert(Video(path=path, title="片"))
+
+        assert repo.update_auto_focal(path, '0.3,0.6') is True
+
+        result = repo.get_by_path(path)
+        assert result is not None
+        assert result.auto_focal == '0.3,0.6'
+
+    def test_update_auto_focal_missing_path_returns_false(self, temp_db):
+        repo = VideoRepository(temp_db)
+        assert repo.update_auto_focal(to_file_uri("/focal_mutator_nonexistent.mp4"), '0.3,0.6') is False
+
+    def test_update_crop_mode_roundtrip(self, temp_db):
+        repo = VideoRepository(temp_db)
+        path = to_file_uri("/focal_mutator_crop_mode.mp4")
+        repo.upsert(Video(path=path, title="片"))
+
+        assert repo.update_crop_mode(path, 'default') is True
+
+        result = repo.get_by_path(path)
+        assert result is not None
+        assert result.crop_mode == 'default'
+
+    def test_update_crop_mode_missing_path_returns_false(self, temp_db):
+        repo = VideoRepository(temp_db)
+        assert repo.update_crop_mode(to_file_uri("/focal_mutator_nonexistent2.mp4"), 'default') is False

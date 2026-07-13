@@ -37,6 +37,8 @@ class Video:
     mtime: float = 0.0
     nfo_mtime: float = 0.0
     scrape_attempted_at: float = 0.0
+    auto_focal: str = ''
+    crop_mode: str = 'auto'
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -145,6 +147,12 @@ class Video:
         return cls(**data)
 
 
+# preserve-on-conflict 欄位集合（CD-98a-6）：比照 path — 首次 INSERT 帶 dataclass 預設值，
+# 衝突/repath 一律保留 DB 既有值。focal 只由專用 update_auto_focal/update_crop_mode mutator
+# 改寫，掃描/重刮（走下方 4 個 builder）永不覆蓋。
+_FOCAL_PRESERVE = frozenset({'auto_focal', 'crop_mode'})
+
+
 class VideoRepository:
     """影片資料存取層"""
 
@@ -189,6 +197,8 @@ class VideoRepository:
             update_parts = []
             for col in columns:
                 if col == 'path':
+                    continue
+                elif col in _FOCAL_PRESERVE:
                     continue
                 elif col == 'user_tags':
                     # user_tags = '[]' 時視同「不更新」，保留 DB 現有值
@@ -345,6 +355,9 @@ class VideoRepository:
             for col, val in video_dict.items():
                 if col == 'user_tags':
                     continue  # handled separately
+                elif col in _FOCAL_PRESERVE:
+                    # focal 欄位一律保留 DB 既有值，只由專用 mutator 改寫（CD-98a-6）
+                    continue
                 elif col == 'output_dir' and not val:
                     # incoming output_dir 空 → 保留既有值（不寫入），與 upsert() CASE-WHEN 對稱
                     continue
@@ -437,6 +450,8 @@ class VideoRepository:
         update_parts = []
         for col in columns:
             if col == 'path':
+                continue
+            elif col in _FOCAL_PRESERVE:
                 continue
             elif col == 'created_at':
                 # 碰撞分支：強制寫入較早的 created_at（DO UPDATE 也要更新）
@@ -557,6 +572,8 @@ class VideoRepository:
                 update_parts = []
                 for col in columns:
                     if col == 'path':
+                        continue
+                    elif col in _FOCAL_PRESERVE:
                         continue
                     elif col == 'user_tags':
                         # user_tags = '[]' 時視同「不更新」，保留 DB 現有值
@@ -975,6 +992,50 @@ class VideoRepository:
             cursor.execute(
                 "UPDATE videos SET scrape_attempted_at = ?, updated_at = CURRENT_TIMESTAMP WHERE path = ?",
                 (ts, path)
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+        finally:
+            conn.close()
+
+    def update_auto_focal(self, path: str, focal: str) -> bool:
+        """安全更新 auto_focal 欄位（不碰其他欄位，CD-98a-6 mutator，鏡射 update_user_tags）。
+
+        Args:
+            path: 影片路徑（DB key，file:/// URI 格式）
+            focal: 新的 auto_focal 值（背景 focal 演算法算出的座標字串，如 '0.5,0.4'）
+
+        Returns:
+            bool: 是否成功更新（path 不存在 → False，不拋例外、不新建 row）
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                "UPDATE videos SET auto_focal = ?, updated_at = CURRENT_TIMESTAMP WHERE path = ?",
+                (focal, path)
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+        finally:
+            conn.close()
+
+    def update_crop_mode(self, path: str, mode: str) -> bool:
+        """安全更新 crop_mode 欄位（不碰其他欄位，CD-98a-6 mutator，鏡射 update_user_tags）。
+
+        Args:
+            path: 影片路徑（DB key，file:/// URI 格式）
+            mode: 新的 crop_mode 值（'auto' 或 'default'）
+
+        Returns:
+            bool: 是否成功更新（path 不存在 → False，不拋例外、不新建 row）
+        """
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                "UPDATE videos SET crop_mode = ?, updated_at = CURRENT_TIMESTAMP WHERE path = ?",
+                (mode, path)
             )
             conn.commit()
             return cursor.rowcount > 0
