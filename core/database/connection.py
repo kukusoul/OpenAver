@@ -90,11 +90,6 @@ def _migrate_old_aliases(rows: list) -> list:
 
 def init_db(db_path: Path = None) -> None:
     """初始化資料庫 Schema"""
-    # ranker-invalidate-ok: 純啟動期 DDL（CREATE/ALTER/DROP）+ 一次性
-    # scrape_attempted_at 回填（非 ranking 訊號欄）。不改 number/tags/maker/
-    # series 等 ranking 輸入 → 不需 SimilarRankerCache.invalidate()。
-    # （test_similar_invalidate_completeness 的 greedy [^;]* 會從 248 行的
-    #  scrape_attempted_at UPDATE 掃到下游 CREATE TABLE actresses 的 tags 欄而誤配。）
     conn = get_connection(db_path)
     cursor = conn.cursor()
 
@@ -252,7 +247,7 @@ def init_db(db_path: Path = None) -> None:
         cursor.execute(
             """UPDATE videos SET scrape_attempted_at = ?
                WHERE scrape_attempted_at = 0
-               AND (cover_path != '' OR nfo_mtime > 0 OR output_dir != '')""",
+               AND (cover_path != '' OR nfo_mtime > 0 OR output_dir != '');""",
             (time.time(),)
         )
 

@@ -278,3 +278,17 @@ class TestFocalSerde:
         assert parse_focal('inf,0.5') is None
         assert parse_focal('1e400,1') is None      # 1e400 -> inf
         assert parse_focal('0.5,-inf') is None
+
+    def test_parse_out_of_range_is_none(self):
+        # focal is a ratio in [0,1]x[0,1]; hand-corrupted DB values outside
+        # that range must degrade to unset (right-crop fallback) rather than
+        # leak into crop math / CSS object-position (98b/98c).
+        assert parse_focal('1.2,-0.1') is None
+        assert parse_focal('1.2,0.5') is None
+        assert parse_focal('0.5,-0.1') is None
+        assert parse_focal('-0.0001,0.5') is None
+
+    def test_parse_boundary_values_are_accepted(self):
+        # inclusive bounds: 0.0 and 1.0 are valid ratios.
+        assert parse_focal('0.0,0.0') == (0.0, 0.0)
+        assert parse_focal('1.0,1.0') == (1.0, 1.0)

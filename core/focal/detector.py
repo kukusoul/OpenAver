@@ -320,9 +320,11 @@ def format_focal(focal):
 def parse_focal(s):
     """"x.xxxx,y.xxxx" -> (x, y) floats; '' / None / malformed -> None.
 
-    Defensive: never raises; wrong # of parts, non-float, or non-finite
-    (nan/inf) -> None. Callers read this from persisted DB rows that could be
-    hand-corrupted, so nan/inf must degrade to "unset" (right-crop fallback)
+    Contract: x and y are ratios in the closed [0,1]x[0,1] unit square
+    (inclusive bounds). Defensive: never raises; wrong # of parts,
+    non-float, non-finite (nan/inf), or out-of-[0,1]-range -> None.
+    Callers read this from persisted DB rows that could be hand-corrupted,
+    so any of the above must degrade to "unset" (right-crop fallback)
     rather than leak into crop math / CSS object-position.
     """
     if not s:
@@ -335,6 +337,8 @@ def parse_focal(s):
     except (TypeError, ValueError):
         return None
     if not (math.isfinite(x) and math.isfinite(y)):
+        return None
+    if not (0.0 <= x <= 1.0 and 0.0 <= y <= 1.0):
         return None
     return x, y
 
