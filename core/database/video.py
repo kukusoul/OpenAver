@@ -669,6 +669,46 @@ class VideoRepository:
         finally:
             conn.close()
 
+    def get_focal_crop_map(self, paths: List[str]) -> dict:
+        """批次讀 {path: (auto_focal, crop_mode)}（Codex PR#105 P2 修復用，避免 N+1）。
+
+        用途：similar-covers 端點的 SimilarRankerCache 回傳快取 Video 物件，其
+        auto_focal/crop_mode 可能因 update_auto_focal()/update_crop_mode() 寫入
+        而 stale（這兩個 mutator 刻意不 invalidate 整個 ranker cache——焦點/裁切
+        模式是純顯示欄位、不影響排序特徵，若比照 upsert/delete invalidate 代價不對稱）。
+        呼叫端可用此 map 對 ranker 結果做 fresh 覆蓋，讓 ranker 快取仍可命中。
+
+        單條 `SELECT path, auto_focal, crop_mode FROM videos WHERE path IN (...)`，超過
+        SQLite 變數上限時分批。空 paths 直接回 {}（不查詢）。鏡射 get_auto_focal_map 連線 pattern。
+
+        Args:
+            paths: 影片 path（DB key，file:/// URI 格式）列表
+
+        Returns:
+            dict[str, tuple[str, str]]: {path: (auto_focal, crop_mode)}；未在 DB 的 path
+            不會出現在結果中。
+        """
+        if not paths:
+            return {}
+
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        try:
+            result: dict = {}
+            chunk_size = 900  # 保守低於 SQLite 999 變數上限
+            for i in range(0, len(paths), chunk_size):
+                chunk = paths[i:i + chunk_size]
+                placeholders = ', '.join(['?'] * len(chunk))
+                cursor.execute(
+                    f"SELECT path, auto_focal, crop_mode FROM videos WHERE path IN ({placeholders})",
+                    chunk,
+                )
+                for row in cursor.fetchall():
+                    result[row[0]] = (row[1], row[2])
+            return result
+        finally:
+            conn.close()
+
     def get_all(self) -> List[Video]:
         """取得所有影片"""
         conn = self._get_connection()

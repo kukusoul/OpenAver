@@ -356,6 +356,40 @@ class TestSimilarCoversAPI:
         assert "auto_focal" not in qv
         assert "crop_mode" not in qv
 
+    def test_focal_fields_reflect_fresh_db_after_cached_ranker(self, client_with_corpus, db_with_corpus):
+        """Codex PR#105 P2：SimilarRankerCache 已建好後，update_auto_focal()/update_crop_mode()
+        不 invalidate 整個 ranker cache（焦點/裁切模式是顯示欄位、不影響排序特徵，比照
+        upsert/delete invalidate 代價不對稱）。similar-covers 端點改用 fresh DB 值覆蓋
+        ranker 快取 Video 物件的 auto_focal/crop_mode，驗證卡片不會停留在 warmup 當下的
+        stale 值。
+        """
+        client, target_id, target_number = client_with_corpus
+        db_path, _, _ = db_with_corpus
+
+        resp_before = client.get(f"/api/similar-covers/by-number/{target_number}")
+        results_before = resp_before.json()["results"]
+        assert len(results_before) > 0
+        victim = results_before[0]
+        assert victim["auto_focal"] == ""       # baseline：_make_video 未設 auto_focal
+        assert victim["crop_mode"] == "auto"     # Video dataclass 預設值
+
+        # 直接寫 DB（模擬 update_auto_focal/update_crop_mode 已 commit，但未 invalidate
+        # ranker cache，鏡射 web/routers/showcase.py 的 crop-mode / detect-focal 端點）
+        repo = VideoRepository(db_path)
+        victim_video = repo.get_by_id(victim["video_id"])
+        assert repo.update_auto_focal(victim_video.path, "0.6000,0.3000")
+        assert repo.update_crop_mode(victim_video.path, "default")
+
+        resp_after = client.get(f"/api/similar-covers/by-number/{target_number}")
+        results_after = resp_after.json()["results"]
+        victim_after = next(r for r in results_after if r["video_id"] == victim["video_id"])
+        assert victim_after["auto_focal"] == "0.6000,0.3000", (
+            "similar-covers 仍回傳 ranker 快取的 stale 焦點，未 fresh 覆蓋"
+        )
+        assert victim_after["crop_mode"] == "default", (
+            "similar-covers 仍回傳 ranker 快取的 stale crop_mode，未 fresh 覆蓋"
+        )
+
     # --- T11: target 不在 results 中 ---
 
     def test_target_not_in_results(self, client_with_corpus):

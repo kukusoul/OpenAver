@@ -703,17 +703,26 @@ def test_focal_uri_matches_db_key_empty_mappings(tmp_path):
 
 
 def test_focal_uri_matches_db_key_nonempty_mappings(tmp_path):
-    """path_mappings 非空且實際轉換：scraper 與 db_inflow 同用該 mapping → 對齊。"""
+    """path_mappings 非空：scraper 與 db_inflow 同用該 mapping → 對齊（平台無關）。
+
+    `to_file_uri` 的 path_mappings 轉換分支只在 CURRENT_ENV == 'wsl' 時生效
+    （見 core/path_utils.py to_file_uri docstring）；純 Linux（CI）下這裡的
+    Windows 磁碟機字母 mapping 對 to_file_uri 是 no-op，屬設計如此、非 bug。
+    「mapping 確實生效（非 trivial identity）」只在 WSL 才有意義，故限定於該
+    環境驗證；核心對齊契約（scraper 重建 URI == DB row key）不論平台皆須成立，
+    因為兩端呼叫的是同一個 to_file_uri(fs_path, path_mappings)。
+    """
     from core.database import init_db, VideoRepository
     from core.db_inflow import try_inflow_upsert
-    from core.path_utils import to_file_uri
+    from core.path_utils import CURRENT_ENV, to_file_uri
 
     scan_dir = tmp_path / "lib"
     scan_dir.mkdir()
     target = scan_dir / "[2024-01-01][SIRO][SIRO-5678] T.mp4"
     target.write_bytes(b"x" * 1024)
 
-    # 把掃描夾映射到 Windows 磁碟機字母 → URI 實際被轉換（非 identity）
+    # 把掃描夾映射到 Windows 磁碟機字母 → WSL 環境下 URI 實際被轉換（非 identity）；
+    # 非 WSL 環境（含 CI）下 to_file_uri 的 mapping 分支不生效，屬設計如此。
     path_mappings = {str(scan_dir): "Z:/lib"}
 
     db_file = tmp_path / "focal_key2.db"
@@ -732,11 +741,14 @@ def test_focal_uri_matches_db_key_nonempty_mappings(tmp_path):
     assert status == "synced"
 
     rebuilt = _scraper_rebuild_uri(str(target), config)
-    # 確認 mapping 真的生效（非 trivial identity）
-    assert rebuilt != to_file_uri(str(target), {}), \
-        "path_mappings 應實際轉換 URI，否則非有效非空情境"
-    assert "Z:/lib" in rebuilt or "Z:" in rebuilt
 
+    if CURRENT_ENV == 'wsl':
+        # WSL 環境：確認 mapping 真的生效（非 trivial identity）
+        assert rebuilt != to_file_uri(str(target), {}), \
+            "path_mappings 應實際轉換 URI，否則非有效非空情境"
+        assert "Z:/lib" in rebuilt or "Z:" in rebuilt
+
+    # 核心契約（平台無關）：scraper 與 db_inflow 同用同一 path_mappings → 對齊
     assert repo.get_by_path(rebuilt) is not None, \
         f"非空 mapping 下重建 URI 未命中 DB row：{rebuilt!r}"
     assert repo.update_auto_focal(rebuilt, "0.4,0.6") is True, \
