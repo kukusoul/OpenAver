@@ -4,6 +4,6 @@ Public surface:
     detect_focal(fs_path, ratio, work_width) -> (x_ratio, y_ratio) | None
     crop_image_position(img, ratio, pos) -> PIL.Image
 """
-from .detector import crop_image_position, detect_focal
+from .detector import WORK_WIDTH, crop_image_position, detect_focal
 
-__all__ = ["crop_image_position", "detect_focal"]
+__all__ = ["WORK_WIDTH", "crop_image_position", "detect_focal"]

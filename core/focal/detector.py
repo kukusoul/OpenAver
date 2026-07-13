@@ -26,6 +26,14 @@ SHIFT_FACTOR = 0.10
 SCALE_FACTOR = 1.08
 CLUSTER_TOLERANCE = 0.05                # compute.go
 
+# Canonical product work-width the background worker feeds detect_focal
+# (CD-98a-10, T2 bench 2026-07-13): 650 kept. Narrower widths (256/384/512)
+# diverged from the P0 owner-validated 650 focal on 3/4 uncensored covers
+# (consistency 1-2/4; 256 missed a face); speed gain (0.33-1.35s vs ~2.2s)
+# didn't justify the lost hit quality. ~2.2s/img on a background single
+# worker is within spec A.5's accepted ~3s. See TASK-98a-T2.md.
+WORK_WIDTH = MAX_IMAGE_WIDTH            # 650
+
 # advanced multi-angle scan (detector.go)
 _FIXED_ANGLES = [0.00, 0.13, 0.87]      # pigo internal rotation (radians frac)
 _ROTATED_ANGLES = [0.0, 90.0, 270.0]    # physical image rotation (degrees)
