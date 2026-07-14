@@ -3319,6 +3319,42 @@ class TestProduceSourceFocalTrigger:
         get_candidates_spy.assert_not_called()  # bulk query itself must not run once aborted
         get_all_spy.assert_called_once()  # prune must still run despite the focal-pass abort
 
+    def test_abort_mid_candidate_loop_stops_after_first_submit(self, tmp_path, temp_db):
+        """Codex P1 (CD-99b-8 二次修): should_abort flips True only AFTER the
+        bulk query has started and the FIRST candidate has already been
+        submitted — the loop-top gate (not just the :912 entry gate) must stop
+        the remaining candidates from being submitted. Without a per-iteration
+        check, a cancel that lands mid-candidate-loop (candidates can reach the
+        thousands, each iteration costs an os.path.exists syscall against a
+        possibly-slow readonly mount) would still queue everything after the
+        point of cancellation into the single-threaded FIFO focal worker."""
+        from core.database import VideoRepository
+
+        filenames = ['SIRO-050.mp4', 'SIRO-051.mp4', 'SIRO-052.mp4']
+        source_dir, output_dir = _focal_setup_source(tmp_path, filenames)
+        repo = VideoRepository(temp_db)
+
+        call_count = [0]
+
+        def abort_after_first_candidate():
+            call_count[0] += 1
+            # Calls 1-3: per-file loop (all 3 files processed, not aborted).
+            # Call 4: post-loop entry gate (:912, not aborted — bulk query runs).
+            # Call 5: top of candidate-loop iteration 1 (not aborted — 1st
+            # candidate gets submitted). Call 6+: abort flips True, so the
+            # candidate-loop-top gate breaks before candidate 2 is submitted.
+            return call_count[0] > 5
+
+        with patch('core.readonly_producer.maybe_submit_video_focal') as mock_submit:
+            result = _focal_run_produce_source(
+                source_dir, output_dir, repo, filenames, should_abort=abort_after_first_candidate)
+
+        assert result.created == 3, "sanity: all 3 files processed before the candidate loop is reached"
+        assert mock_submit.call_count == 1, (
+            "only the first candidate may be submitted — the candidate-loop-top "
+            "gate must stop the remaining 2 once should_abort flips True mid-loop"
+        )
+
     def test_get_empty_focal_candidates_exception_does_not_abort_generation(self, tmp_path, temp_db):
         """DoD ⑦: bulk-query failure is a pure side-effect failure — result.created
         must be unaffected, only a logger.warning(exc_info=True) is left behind."""

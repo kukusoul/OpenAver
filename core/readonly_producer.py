@@ -919,6 +919,12 @@ def produce_source(source, config, repo, *, proxy_url="", on_progress=None, shou
             focal_this_run_uris = [to_file_uri(fi["path"], path_mappings) for fi in files]
             if focal_this_run_uris:
                 for c_path, c_number, c_maker, c_cover_path in repo.get_empty_focal_candidates(focal_this_run_uris):
+                    # Codex P1（CD-99b-8 二次修）：入口 gate（:912）只擋「取消已在
+                    # 迴圈開始前發生」；候選數可達數千、每圈一次 os.path.exists，
+                    # 迴圈本身可能跑到秒級，取消也可能落在迴圈中途。此處每圈
+                    # fresh 查一次，與入口 gate 防同一種傷害、只是取消落點不同。
+                    if should_abort is not None and should_abort():
+                        break
                     if requires_face_detection(c_number, c_maker):
                         cover_fs = uri_to_local_fs_path(c_cover_path, path_mappings)
                         maybe_submit_video_focal(c_number, c_maker, c_path, cover_fs, db_path=repo.db_path, cover_path_uri=c_cover_path)
