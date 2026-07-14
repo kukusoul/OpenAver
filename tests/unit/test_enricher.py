@@ -2459,7 +2459,7 @@ class TestEnrichPreserveCropModeE2E:
     'auto'）隔開，否則兩個機制的職責會疊在同一斷言上、測不出各自的邊界。cover_written=True
     的情境已由 `TestEnrichFocalReset` 覆蓋。"""
 
-    def test_rescrape_preserves_user_crop_mode(self, tmp_path):
+    def test_rescrape_preserves_user_crop_mode(self, tmp_path, seed_crop_mode):
         from unittest.mock import patch
         from core.database import init_db, VideoRepository, Video
         from core.path_utils import to_file_uri, uri_to_fs_path
@@ -2476,7 +2476,7 @@ class TestEnrichPreserveCropModeE2E:
         with patch("core.similar.ranker_cache.SimilarRankerCache"):
             repo.upsert(Video(path=db_key, number="SIRO-1234", title="Old", maker="SOD"))
         # 使用者選了 default（非 auto）
-        assert repo.update_crop_mode(db_key, "default") is True
+        assert seed_crop_mode(repo, db_key, "default") is True
 
         scraper_data = {
             "number": "SIRO-1234", "title": "New", "actors": [],

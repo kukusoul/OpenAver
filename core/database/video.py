@@ -150,7 +150,8 @@ class Video:
 
 # preserve-on-conflict 欄位集合（CD-98a-6）：比照 path — 首次 INSERT 帶 dataclass 預設值，
 # 衝突/repath 走下方 4 個 builder 時不無條件覆蓋。focal 只由專用 update_auto_focal/
-# update_crop_mode mutator 改寫；掃描/重刮的 builder 一律不直接寫入 dataclass 預設值。
+# update_manual_focal/reset_focal_to_auto mutator 改寫（update_crop_mode 已於 99a-T7
+# retire，production 已無獨立呼叫端）；掃描/重刮的 builder 一律不直接寫入 dataclass 預設值。
 #
 # 三欄位行為不對稱（Codex PR#105 P2b 修正）：
 # - crop_mode：純使用者裁切模式偏好，與封面無關，無條件保留 DB 既有值。
@@ -745,9 +746,10 @@ class VideoRepository:
         """批次讀 {path: (auto_focal, crop_mode)}（Codex PR#105 P2 修復用，避免 N+1）。
 
         用途：similar-covers 端點的 SimilarRankerCache 回傳快取 Video 物件，其
-        auto_focal/crop_mode 可能因 update_auto_focal()/update_crop_mode() 寫入
-        而 stale（這兩個 mutator 刻意不 invalidate 整個 ranker cache——焦點/裁切
-        模式是純顯示欄位、不影響排序特徵，若比照 upsert/delete invalidate 代價不對稱）。
+        auto_focal/crop_mode 可能因 update_auto_focal()/update_manual_focal()/
+        reset_focal_to_auto() 寫入而 stale（這些 mutator 刻意不 invalidate 整個
+        ranker cache——焦點/裁切模式是純顯示欄位、不影響排序特徵，若比照
+        upsert/delete invalidate 代價不對稱）。
         呼叫端可用此 map 對 ranker 結果做 fresh 覆蓋，讓 ranker 快取仍可命中。
 
         單條 `SELECT path, auto_focal, crop_mode FROM videos WHERE path IN (...)`，超過
@@ -1233,28 +1235,6 @@ class VideoRepository:
         finally:
             conn.close()
 
-    def update_crop_mode(self, path: str, mode: str) -> bool:
-        """安全更新 crop_mode 欄位（不碰其他欄位，CD-98a-6 mutator，鏡射 update_user_tags）。
-
-        Args:
-            path: 影片路徑（DB key，file:/// URI 格式）
-            mode: 新的 crop_mode 值（'auto' 或 'default'）
-
-        Returns:
-            bool: 是否成功更新（path 不存在 → False，不拋例外、不新建 row）
-        """
-        conn = self._get_connection()
-        cursor = conn.cursor()
-        try:
-            cursor.execute(
-                "UPDATE videos SET crop_mode = ?, updated_at = CURRENT_TIMESTAMP WHERE path = ?",
-                (mode, path)
-            )
-            conn.commit()
-            return cursor.rowcount > 0
-        finally:
-            conn.close()
-
     def update_manual_focal(self, path: str, focal: str) -> bool:
         """原子寫入使用者手動指定的焦點座標（99a-T1a mutator，CD-2）。
 
@@ -1287,11 +1267,18 @@ class VideoRepository:
     def reset_focal_to_auto(self, path: str) -> bool:
         """作廢手動焦點、降回未偵測狀態（99a-T1b mutator，CD-4）。
 
-        單一 UPDATE 原子清空 auto_focal 並把 crop_mode 降回 'auto'（比照
-        update_manual_focal 的原子寫法，不可拆兩次 UPDATE）。呼叫端（enricher 重刮
-        流程）於確認 cover_written=True（實際寫入新封面內容）時呼叫，且必須在排入
-        新的背景 focal 偵測（maybe_submit_video_focal）之前——先清舊值、再讓 gate
+        單一 UPDATE 原子清空 auto_focal、降回 crop_mode='auto'、且把
+        focal_attempted_at 清 NULL（比照 upsert() 的 _FOCAL_ATTEMPTED_AT_CASE_SQL：
+        換封面視同「從未偵測過」，Codex review 補修）。呼叫端（enricher 重刮流程）
+        於確認 cover_written=True（實際寫入新封面內容）時呼叫，且必須在排入新的
+        背景 focal 偵測（maybe_submit_video_focal）之前——先清舊值、再讓 gate
         判斷是否排 worker，避免有碼片在極端時序下短暫殘留 manual。
+
+        若不清 focal_attempted_at：worker 若在 submit 後失敗/未 commit（未呼叫
+        update_auto_focal 蓋章），row 停在 auto_focal='' + focal_attempted_at 仍是
+        舊封面留下的非 NULL 值——get_empty_focal_candidates 的
+        `auto_focal='' AND focal_attempted_at IS NULL` gate 會判定「已偵測過」而
+        永遠跳過，新封面就再也不會被排入偵測（除非手動 force-detect）。
 
         Args:
             path: 影片路徑（DB key，file:/// URI 格式）
@@ -1304,6 +1291,7 @@ class VideoRepository:
         try:
             cursor.execute(
                 "UPDATE videos SET auto_focal = '', crop_mode = 'auto', "
+                "focal_attempted_at = NULL, "
                 "updated_at = CURRENT_TIMESTAMP WHERE path = ?",
                 (path,)
             )
