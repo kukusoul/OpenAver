@@ -2134,11 +2134,12 @@ class TestGenerateAvlistShouldAbortTopLevel:
         mock_html = mocker.patch("web.routers.scanner.HTMLGenerator")
         mock_notif = mocker.patch("web.routers.scanner._emit_notif")
 
-        # 呼叫序列（1 dir / 1 file）：outer #1、inner #2、orphan gate #3、
-        # HTML gate #4、terminal #5。trigger_after=4 → 前 4 次 False（迴圈跑完、
-        # orphan/HTML gate 都通過），第 5 次（terminal fresh 檢查）才 True。
+        # 呼叫序列（1 dir / 1 file）：outer #1、inner #2、focal-pass gate #3
+        # （TASK-99b-T1 sibling 併修新增）、orphan gate #4、HTML gate #5、
+        # terminal #6。trigger_after=5 → 前 5 次 False（迴圈跑完、focal-pass/
+        # orphan/HTML gate 都通過），第 6 次（terminal fresh 檢查）才 True。
         # single-snapshot 版本此情境會誤發 success；fresh 版本應改發 cancelled。
-        fake_should_abort = self._counting_should_abort(trigger_after=4)
+        fake_should_abort = self._counting_should_abort(trigger_after=5)
 
         events = list(generate_avlist(should_abort=fake_should_abort))
 
@@ -2226,7 +2227,7 @@ class TestGenerateAvlistFocalTrigger:
     maybe_submit_video_focal` 只驗接線與 gate，不真跑 pigo。
     """
 
-    def _run(self, tmp_path, num, maker="", seed_auto_focal=None, seed_unchanged=False):
+    def _run(self, tmp_path, num, maker="", seed_auto_focal=None, seed_unchanged=False, should_abort=None):
         import types
         from unittest.mock import patch, MagicMock
         from core.database import init_db, VideoRepository, Video
@@ -2295,7 +2296,7 @@ class TestGenerateAvlistFocalTrigger:
             patch("web.routers.scanner.maybe_submit_video_focal") as mock_submit,
         ):
             from web.routers.scanner import generate_avlist
-            list(generate_avlist())
+            list(generate_avlist(should_abort=should_abort))
         return mock_submit
 
     def test_uncensored_empty_focal_submits(self, tmp_path):
@@ -2321,3 +2322,20 @@ class TestGenerateAvlistFocalTrigger:
         mock_submit.assert_called_once()
         args = mock_submit.call_args[0]
         assert args[0] == "SIRO-1234"
+
+    def test_should_abort_before_focal_pass_zero_submits(self, tmp_path):
+        """TASK-99b-T1 DoD ⑥ (CD-99b-8 sibling): should_abort() flips True right
+        before the :533 focal pass (after the single needs_scan file has already
+        been scanned/upserted) → the focal pass itself must be skipped entirely,
+        zero maybe_submit_video_focal calls — mirrors the readonly_producer
+        abort gate, just on the router's inline (non-readonly) scan path.
+        mutation: drop the newly-added `and not (should_abort and should_abort())`
+        gate → this test goes RED (submit fires despite the fresh abort signal)."""
+        call_count = [0]
+
+        def abort_after_two():
+            call_count[0] += 1
+            return call_count[0] > 2  # let the source-level + per-file checks through once each
+
+        mock_submit = self._run(tmp_path, "SIRO-1234", should_abort=abort_after_two)
+        mock_submit.assert_not_called()
