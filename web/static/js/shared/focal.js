@@ -3,10 +3,17 @@
  *
  * parseFocal：逐條鏡射 Python core/focal/detector.py::parse_focal 契約
  * （falsy→null；split(',') 恰 2 段；空段/非數/非有限→null；閉區間 [0,1]²；否則 null）。
- * focalObjectPosition：crop_mode gate + parse gate + deadzone gate → CSS object-position 字串或 null。
+ * focalObjectPosition：crop_mode gate（'auto'/'manual'，manual 繞 deadzone）+ parse gate
+ * + deadzone gate（只對 auto 生效）→ raw x% 的 CSS object-position 字串或 null。無 aspect
+ * 校正，供遮罩幾何（state-lightbox.js:880，像素空間自行換算）使用，T3 前不可斷。
+ * focalCellObjectPosition（99a-T2）：多吃 imgAspect（naturalWidth/naturalHeight）+
+ * r（--poster-crop-ratio），套 aspect-aware 公式，回傳小格 cover-fit 下「所見即所得」的
+ * CSS object-position 字串或 null（a≤r / crop_mode gate / parse gate / deadzone 皆會擋）。
  *
- * 由 state 模組（T3）import、經 state 屬性揭露 template；null 時退 CSS baseline right center。
- * 純函式：無 DOM、無 Alpine、無 window、無副作用（比照 dir-path.js）。
+ * 由 state 模組 import、經 state 屬性揭露 template或 imperative helper（focal-cell.js）呼叫；
+ * null 時退 CSS baseline right center。
+ * 純函式：無 DOM、無 Alpine、無 window、無副作用（比照 dir-path.js）。imperative 副作用（load-gate
+ * 套用、讀 DOM/CSS var）獨立放 focal-cell.js（TASK-99a-T2 §0，比照 dom-timing.js 的分離慣例）。
  */
 
 /**
@@ -46,22 +53,59 @@ export function parseFocal(s) {
 }
 
 /**
- * 由 video 的 crop_mode / auto_focal 算 CSS object-position 字串（只調 X、Y 恆 center）。
+ * 由 video 的 crop_mode / auto_focal 算 CSS object-position 字串（只調 X、Y 恆 center，raw x%，
+ * 無 aspect 校正）。'auto' 套 deadzone；'manual' 繞過 deadzone（99a-T2 §1.5，spec §7 缺口）。
  *
  * @param {{crop_mode: string, auto_focal: string}|null|undefined} video
- * @returns {string|null} 如 "38.20% center"；null/default 模式 / 無座標 / 畸形 / deadzone 內 → null
+ * @returns {string|null} 如 "38.20% center"；null/default 模式 / 無座標 / 畸形 / (auto) deadzone 內 → null
  */
 export function focalObjectPosition(video) {
-  // T3 imperative 呼叫端（如 _getSlotItem(anchor.id)）可能回 undefined → 優雅退 baseline，不拋。
-  if (!video || video.crop_mode !== 'auto') {
+  // imperative 呼叫端（如 _getSlotItem(anchor.id)）可能回 undefined → 優雅退 baseline，不拋。
+  if (!video || (video.crop_mode !== 'auto' && video.crop_mode !== 'manual')) {
     return null;
   }
   const p = parseFocal(video.auto_focal);
   if (p === null) {
     return null;
   }
-  if (p.x >= FOCAL_X_DEADZONE) {
+  // deadzone 只對 'auto' 生效；'manual' 是使用者明確拖定的座標，無論多接近右緣都精準套用。
+  if (video.crop_mode === 'auto' && p.x >= FOCAL_X_DEADZONE) {
     return null;
   }
   return `${(p.x * 100).toFixed(2)}% center`;
+}
+
+/**
+ * 小格 cover-fit object-position（aspect-aware，99a-T2 §1）。與 focalObjectPosition 的差異：
+ * 多吃 imgAspect / r 兩參數，套公式把「raw focal x（沿整張原圖寬度的比例）」換算成「CSS
+ * object-position 百分比（沿 cover-fit 溢出區間的比例）」，讓小格顯示與遮罩預覽所見即所得。
+ *
+ * 公式（a > r 且未被 gate 擋下時）：
+ *   v = r / a（cover-fit 下可見寬度佔原圖寬度比例）
+ *   objPos = clamp((x − v/2) / (1 − v), 0, 1)
+ *
+ * @param {{crop_mode: string, auto_focal: string}|null|undefined} video
+ * @param {number} imgAspect naturalWidth/naturalHeight（呼叫端算好傳入，本函式不碰 DOM）
+ * @param {number} r --poster-crop-ratio（呼叫端讀好傳入，不裸寫 0.71）
+ * @returns {string|null} 如 "11.79% center"；crop_mode gate / parse 失敗 / a≤r / (auto) deadzone 內 → null
+ */
+export function focalCellObjectPosition(video, imgAspect, r) {
+  if (!video || (video.crop_mode !== 'auto' && video.crop_mode !== 'manual')) {
+    return null;
+  }
+  const p = parseFocal(video.auto_focal);
+  if (p === null) {
+    return null;
+  }
+  if (video.crop_mode === 'auto' && p.x >= FOCAL_X_DEADZONE) {
+    return null;
+  }
+  // a ≤ r（含相等）→ null：cover-fit 下小格不需裁切（或反向公式無意義），避免除以零/負值（Codex P2）。
+  if (!(Number.isFinite(imgAspect) && Number.isFinite(r) && imgAspect > r)) {
+    return null;
+  }
+  const v = r / imgAspect;
+  const raw = (p.x - v / 2) / (1 - v);
+  const clamped = Math.max(0, Math.min(1, raw));
+  return `${(clamped * 100).toFixed(2)}% center`;
 }

@@ -3054,10 +3054,14 @@ class TestCoverLoadingUx67Guard:
     # ---- Track A: grid 卡片三態（A2）----
 
     def test_grid_img_has_load_and_imgloaded_fade(self):
-        """A2/DoD A-1: grid <img> 含 @load 旗標 + .cover-loaded 淡入 class（綁在 img 上）"""
+        """A2/DoD A-1: grid <img> 含 @load 旗標 + .cover-loaded 淡入 class（綁在 img 上）
+
+        99a-T2：@load 現同時設 _imgLoaded 旗標 + 呼叫 applyCellFocal（load-gated focal
+        object-position 套用，取代舊 :style="focalStyle(video)" reactive binding）。
+        """
         img = self._grid_img()
-        assert '@load="video._imgLoaded = true"' in img, \
-            "grid <img> 缺 @load=\"video._imgLoaded = true\"（三態的 loaded 觸發）"
+        assert 'video._imgLoaded = true' in img, \
+            "grid <img> 缺 video._imgLoaded = true（三態的 loaded 觸發）"
         assert ":class=\"{ 'cover-loaded': video._imgLoaded }\"" in img, \
             "grid <img> 缺 :class 淡入綁定（.cover-loaded by _imgLoaded）"
 

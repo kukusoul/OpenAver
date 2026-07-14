@@ -2446,15 +2446,26 @@ const RULES = [
   // north-star：template `:style` 綁定字面 / imperative helper 存在性是靜態字串契約 → lint 不進 pytest。
   // no-`!important` 不變式（inline 必勝前提）由 css-guard.mjs CG-FOCAL-01 守（object-position 半邊）。
 
-  // -- Binding existence：三個 focal-aware template 站的 :style 綁定字面必存在 --
-  { file: 'web/templates/showcase.html', kind: 'required-string', pattern: 'focalStyle(video)', note: '[TestFocalRenderGuard] F1 grid img :style binding' },
-  { file: 'web/templates/showcase.html', kind: 'required-string', pattern: 'focalStyle(_getSlotItem', note: '[TestFocalRenderGuard] F2 similar desktop slot img :style binding' },
-  { file: 'web/templates/showcase.html', kind: 'required-string', pattern: 'focalStyle(item)', note: '[TestFocalRenderGuard] F4 similar mobile burst img :style binding' },
+  // -- Binding existence（99a-T2：:style="focalStyle(...)" → @load="applyCellFocal(...)" load-gated
+  //    imperative wiring；98b-T6 姊妹案例，reactive :style 不會因 load 事件重跑，見 TASK-99a-T2 §4）--
+  // 錨定完整 @load="..." 屬性值（非裸 applyCellFocal(...) 子字串）：F1/F4 的裸呼叫式也出現在
+  // 同 tag 的 x-init $watch callback body 內（() => applyCellFocal(...)），若只認裸子字串，刪掉
+  // @load 的 applyCellFocal 仍會被 $watch body 命中而假綠（偵測力洩漏）。錨 @load=" 前綴 + 完整值
+  // 才唯一。F2 無 $watch，其 (anchor.id) 參數形已唯一，但一併錨 @load=" 前綴保持一致。
+  { file: 'web/templates/showcase.html', kind: 'required-string', pattern: '@load="video._imgLoaded = true; applyCellFocal($el, video)"', note: '[TestFocalRenderGuard] F1 grid img @load applyCellFocal wiring（錨完整 @load 值，防 $watch body 假綠）' },
+  { file: 'web/templates/showcase.html', kind: 'required-string', pattern: '@load="applyCellFocal($el, _getSlotItem(anchor.id))"', note: '[TestFocalRenderGuard] F2 similar desktop slot img @load applyCellFocal wiring' },
+  { file: 'web/templates/showcase.html', kind: 'required-string', pattern: '@load="applyCellFocal($el, item)"', note: '[TestFocalRenderGuard] F4 similar mobile burst img @load applyCellFocal wiring（錨完整 @load 值，防 $watch body 假綠）' },
+  // -- $watch existence：grid / mobile 兩站（穩定物件參考）需 auto_focal + crop_mode 即時重套；
+  //    similar 桌面 slot 故意不加（x-for scope 只有 anchor，無穩定 video/item 可 $watch，見 §3 F2） --
+  { file: 'web/templates/showcase.html', kind: 'required-string', pattern: "$watch('video.auto_focal'", note: '[TestFocalRenderGuard] F1 grid x-init $watch(video.auto_focal) 即時重套' },
+  { file: 'web/templates/showcase.html', kind: 'required-string', pattern: "$watch('video.crop_mode'", note: '[TestFocalRenderGuard] F1 grid x-init $watch(video.crop_mode) 即時重套' },
+  { file: 'web/templates/showcase.html', kind: 'required-string', pattern: "$watch('item.auto_focal'", note: '[TestFocalRenderGuard] F4 mobile drill x-init $watch(item.auto_focal) 即時重套' },
+  { file: 'web/templates/showcase.html', kind: 'required-string', pattern: "$watch('item.crop_mode'", note: '[TestFocalRenderGuard] F4 mobile drill x-init $watch(item.crop_mode) 即時重套' },
 
-  // -- Helper existence：兩 state 模組各 import focal.js + 定義各自 helper --
-  { file: 'web/static/js/pages/showcase/state-videos.js', kind: 'required-string', pattern: "'@/shared/focal.js'", note: '[TestFocalRenderGuard] state-videos.js imports focal.js' },
-  { file: 'web/static/js/pages/showcase/state-videos.js', kind: 'required-string', pattern: 'focalStyle', note: '[TestFocalRenderGuard] state-videos.js focalStyle helper（供 F1/F2/F4 template）' },
-  { file: 'web/static/js/pages/showcase/state-similar.js', kind: 'required-string', pattern: "'@/shared/focal.js'", note: '[TestFocalRenderGuard] state-similar.js imports focal.js' },
+  // -- Helper existence：state-videos.js / state-similar.js 皆改 import focal-cell.js（applyCellFocal）--
+  { file: 'web/static/js/pages/showcase/state-videos.js', kind: 'required-string', pattern: "'@/shared/focal-cell.js'", note: '[TestFocalRenderGuard] state-videos.js imports focal-cell.js' },
+  { file: 'web/static/js/pages/showcase/state-videos.js', kind: 'required-string', pattern: 'applyCellFocal', note: '[TestFocalRenderGuard] state-videos.js 揭露 applyCellFocal 供 template 呼叫' },
+  { file: 'web/static/js/pages/showcase/state-similar.js', kind: 'required-string', pattern: "'@/shared/focal-cell.js'", note: '[TestFocalRenderGuard] state-similar.js imports focal-cell.js' },
   { file: 'web/static/js/pages/showcase/state-similar.js', kind: 'required-string', pattern: 'applyFocalToImg', note: '[TestFocalRenderGuard] state-similar.js applyFocalToImg helper' },
 
   // -- Imperative pairing：state-similar.js applyFocalToImg 出現 >=7 次（helper def 1 + I-a…I-e/I-g 六個 .src= 成對）--
