@@ -3060,6 +3060,9 @@ class TestCoverLoadingUx67Guard:
         object-position 套用，取代舊 :style="focalStyle(video)" reactive binding）。
         """
         img = self._grid_img()
+        # [lint-guard: pytest-justified] showcase.html(HTML @load) ↔ state-videos.js(_imgLoaded
+        # 消費) 的跨檔 Alpine binding contract；ESLint 看不到 HTML 側、static_guard_lint 看不到
+        # JS 側的消費，單邊守衛任一邊都測不出接線斷掉。
         assert 'video._imgLoaded = true' in img, \
             "grid <img> 缺 video._imgLoaded = true（三態的 loaded 觸發）"
         assert ":class=\"{ 'cover-loaded': video._imgLoaded }\"" in img, \

@@ -12,7 +12,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-const { FOCAL_X_DEADZONE, parseFocal, focalObjectPosition, focalCellObjectPosition } =
+const { FOCAL_X_DEADZONE, parseFocal, focalObjectPosition, focalCellObjectPosition, clampMaskWinLeft } =
   await import('../focal.js');
 
 // ── parseFocal（鏡射 parse_focal 同粒度） ─────────────────────────────────
@@ -278,4 +278,42 @@ test('mask/cell 一致性〔by-construction〕x=0.62（deadzone 邊界但 manual
     Math.abs(cellCenter - maskCenter) < 0.002,
     `cell 換算窗中心 ${cellCenter} 應與 mask 換算窗中心 ${maskCenter} 一致`,
   );
+});
+
+// ── clampMaskWinLeft（99a Gemini P2：拖曳死區）────────────────────────────
+// 語意：把窗左緣鉗進 [0, W - winW]。render / dragStart / onMove 三處共用。
+
+test('clampMaskWinLeft〔界內〕原值不動', () => {
+  assert.equal(clampMaskWinLeft(300, 1000, 444), 300);
+});
+
+test('clampMaskWinLeft〔超右界〕鉗到 W - winW', () => {
+  assert.equal(clampMaskWinLeft(700, 1000, 444), 556);
+});
+
+test('clampMaskWinLeft〔超左界〕鉗到 0', () => {
+  assert.equal(clampMaskWinLeft(-172, 1000, 444), 0);
+});
+
+test('clampMaskWinLeft〔邊界〕0 與 W-winW 為閉區間、不被鉗掉', () => {
+  assert.equal(clampMaskWinLeft(0, 1000, 444), 0);
+  assert.equal(clampMaskWinLeft(556, 1000, 444), 556);
+});
+
+// 死區本體：raw x 貼右緣（0.95）算出的起手左緣落在界外 → 必須被鉗回視覺位置，
+// 否則反向拖曳要先吃掉 (unclamped - clamped) 差值才會動（此案約封面寬 17%）。
+test('clampMaskWinLeft〔死區回歸〕raw x=0.95 的起手左緣鉗回視覺右界（差值即原死區寬）', () => {
+  const W = 1000;
+  const winW = 444;
+  const unclamped = 0.95 * W - winW / 2;          // 728 — 界外
+  const clamped = clampMaskWinLeft(unclamped, W, winW);
+  assert.equal(clamped, W - winW);                 // 556 ＝ 視覺上窗子實際停的位置
+  assert.ok(unclamped - clamped > 0.17 * W);       // 未修版的死區寬 > 封面 17%
+});
+
+test('clampMaskWinLeft〔死區回歸〕raw x=0.05 的起手左緣鉗回左界', () => {
+  const W = 1000;
+  const winW = 444;
+  const clamped = clampMaskWinLeft(0.05 * W - winW / 2, W, winW);   // -172 → 0
+  assert.equal(clamped, 0);
 });

@@ -161,6 +161,16 @@ const RULES = [
     note: '[TestMaskToggleGuard] _computeMaskWinStyle 不得硬編 0.71（比例讀 CSS var）',
   },
   {
+    // 99a Gemini P2 回歸鎖：拖曳起手的 startLeft 必須 clamp（否則臉貼邊時窗子停在界內、
+    // 拖曳從界外起算＝死區）。刻意鎖「const startLeft = clampMaskWinLeft(」整串而非裸的
+    // Math.max/Math.min——後者在 _maskDragStart 的 brace scope 內另有 onMove 也在用，
+    // 會 fail-open（拔掉起手 clamp 仍綠）。
+    file: 'web/static/js/pages/showcase/state-lightbox.js', kind: 'required-string',
+    pattern: 'const startLeft = clampMaskWinLeft(',
+    scope: { anchor: /_maskDragStart\s*\(\s*evt\s*\)\s*\{/, braceBalanced: true },
+    note: '[TestMaskToggleGuard] 99a：_maskDragStart 起手 startLeft 須經 clampMaskWinLeft 鉗進封面邊界',
+  },
+  {
     file: 'web/static/js/pages/showcase/state-lightbox.js', kind: 'forbidden-string', pattern: /2\s*\/\s*3/,
     scope: { anchor: /_computeMaskWinStyle\s*\(\s*\)\s*\{/, braceBalanced: true },
     note: '[TestMaskToggleGuard] _computeMaskWinStyle 不得硬編 2/3 比例（讀 CSS var）',

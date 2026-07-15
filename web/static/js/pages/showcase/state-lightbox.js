@@ -12,7 +12,7 @@ import { _filteredVideos, _filteredActresses, _killLightboxTimelines, _NO_COVER_
 import { POSTER_CROP_MAX_W } from '@/shared/breakpoints.js';
 import { detectSwipe } from '@/shared/swipe.js';
 import { waitForMount } from '@/shared/dom-timing.js';
-import { parseFocal } from '@/shared/focal.js';
+import { parseFocal, clampMaskWinLeft } from '@/shared/focal.js';
 
 export function stateLightbox() {
     // 49b T4cd: Picker 動畫參數（T1 fix2 定案，2026-04-25）
@@ -878,9 +878,16 @@ export function stateLightbox() {
             if (!Number.isFinite(r) || r <= 0) return;
             const winW = Math.min(W, H * r);
             const startClientX = evt.clientX;
-            const startLeft = (this._maskFocalX !== null && this._maskFocalX !== undefined)
-                ? this._maskFocalX * W - winW / 2
-                : W - winW;
+            // 起手左緣必須與「視覺上看到的窗位置」一致＝比照 _computeMaskWinStyle 一樣 clamp
+            // （99a Gemini P2）。raw _maskFocalX 貼邊時（臉在封面極左/極右）未鉗的 startLeft 會
+            // 落在 [0, W-winW] 外，窗子停在邊界但拖曳從界外起算 → 反向拖曳有死區、不跟手。
+            const startLeft = clampMaskWinLeft(
+                (this._maskFocalX !== null && this._maskFocalX !== undefined)
+                    ? this._maskFocalX * W - winW / 2
+                    : W - winW,
+                W,
+                winW,
+            );
             const session = this._maskSession;   // 拖曳中途換片/關燈箱防線（雙保險，見下）
 
             this._maskDragging = true;
@@ -890,8 +897,7 @@ export function stateLightbox() {
                 if (session !== this._maskSession) return;
                 e.preventDefault();
                 const dx = e.clientX - startClientX;
-                let left = startLeft + dx;
-                left = Math.max(0, Math.min(left, W - winW));   // clamp 進封面邊界
+                const left = clampMaskWinLeft(startLeft + dx, W, winW);   // clamp 進封面邊界
                 this._maskFocalX = (left + winW / 2) / W;
                 // 99a-T5：恆 object（同 _computeMaskWinStyle，見 _maskWinStyle 宣告處註解）。
                 this._maskWinStyle = { width: `${winW}px`, height: `${H}px`, transform: `translateX(${left}px)` };
@@ -1031,7 +1037,7 @@ export function stateLightbox() {
             } else {
                 left = W - winW;                          // 無焦點（尚未偵測完成/偵測不到臉）→ 右裁基準（D2）
             }
-            left = Math.max(0, Math.min(left, W - winW));     // clamp 進 [0, W-winW]
+            left = clampMaskWinLeft(left, W, winW);           // clamp 進 [0, W-winW]
             return { width: `${winW}px`, height: `${H}px`, transform: `translateX(${left}px)` };
         },
 

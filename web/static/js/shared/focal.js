@@ -23,6 +23,28 @@
 export const FOCAL_X_DEADZONE = 0.62;
 
 /**
+ * 把亮窗左緣鉗制進封面邊界 [0, W - winW]（遮罩幾何唯一 clamp 語意來源）。
+ *
+ * 99a Gemini P2：偵測回的 raw x 可能讓「窗中心對焦點」算出的 left 落在邊界外（臉貼左/右緣，
+ * 以典型封面比例約 x<0.22 或 x>0.78）。渲染側一向 clamp，但 _maskDragStart 的起手 startLeft
+ * 原本用 raw x 直接算、未 clamp → 窗子視覺停在邊界、拖曳卻從界外起算，使用者要先反向拖掉
+ * 差值（x=0.95 時約封面寬 17%）窗子才開始動＝拖曳死區。三處（render / dragStart / onMove）
+ * 一律走本函式，避免其中一處再度漏鉗。
+ *
+ * 注意：clamp 只作用於「像素空間的窗左緣」，**不可**用來鉗 _maskFocalX 本身——使用者未拖曳
+ * 直接按 ✓ 時要存 pigo 的 raw x（小格 focalCellObjectPosition 有自己的 aspect 數學，會用到
+ * 真實落點），鉗過的值會存成較差的座標。
+ *
+ * @param {number} left 未鉗制的窗左緣（px）
+ * @param {number} W 封面 render 寬（px）
+ * @param {number} winW 亮窗寬（px）
+ * @returns {number} 鉗進 [0, W - winW] 的左緣
+ */
+export function clampMaskWinLeft(left, W, winW) {
+  return Math.max(0, Math.min(left, W - winW));
+}
+
+/**
  * 解析 canonical "x,y" 4dp 字串為 {x, y}，鏡射 Python parse_focal。
  *
  * @param {string} s focal 字串（'' / null / undefined / 畸形 → null）
