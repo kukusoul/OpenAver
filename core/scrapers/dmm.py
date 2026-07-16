@@ -54,6 +54,7 @@ class DMMScraper(BaseScraper):
                 description
                 packageImage { largeUrl }
                 makerReleasedAt
+                deliveryStartDate
                 duration
                 actresses { name }
                 directors { name }
@@ -101,7 +102,7 @@ class DMMScraper(BaseScraper):
     SAMPLE_IMAGES_PROBE_QUERY = """
         query ProbeSampleImages($id: ID!) {
             ppvContent(id: $id) {
-                sampleImages { imageUrl }
+                sampleImages { imageUrl largeImageUrl }
             }
         }
     """
@@ -237,7 +238,7 @@ class DMMScraper(BaseScraper):
 
             _sample_images_supported = True
             raw_samples = item.get('sampleImages') or []
-            return [re.sub(r'(?<!jp)-(\d+)\.jpg$', r'jp-\1.jpg', s['imageUrl']) for s in raw_samples if s.get('imageUrl')]
+            return [s.get('largeImageUrl') or s['imageUrl'] for s in raw_samples if s.get('imageUrl')]
 
         except Exception:
             return []
@@ -448,6 +449,22 @@ class DMMScraper(BaseScraper):
             # 儲存學習到的映射
             self._save_prefix_hint(prefix, dmm_prefix)
 
+    def _normalize_result_number(self, requested: str, video: Video) -> Optional[Video]:
+        """確認 DMM 回傳的是目標番號，並保留使用者輸入的前導零格式。"""
+        req_prefix, req_num = self._parse_number(requested)
+        found_prefix, found_num = self._parse_number(video.number)
+        if not (
+            req_prefix
+            and req_prefix == found_prefix
+            and req_num
+            and found_num
+            and int(req_num) == int(found_num)
+        ):
+            return None
+        if len(req_num) <= 3:
+            return video.model_copy(update={'number': requested})
+        return video
+
     def _content_id_to_number(self, content_id: str) -> str:
         """
         從 content_id 推導標準番號格式。
@@ -462,7 +479,7 @@ class DMMScraper(BaseScraper):
             ofje00709   → OFJE-709
             abp01234    → ABP-1234
         """
-        m = re.match(r'^(\d*)([a-z]+)(\d+)$', content_id.lower())
+        m = re.match(r'^(?:h_\d+)?(\d*)([a-z]+)(\d+)$', content_id.lower())
         if m:
             alpha = m.group(2).upper()
             num = m.group(3)
@@ -477,42 +494,65 @@ class DMMScraper(BaseScraper):
         """
         用搜索 API 查找正確的 content_id（MDCX 方法）
         """
-        query_word = number.upper().replace('-', '')
-        prefix, _ = self._parse_number(number)
+        number_upper = number.upper()
+        query_words = [number_upper]
+        compact_query = number_upper.replace('-', '')
+        if compact_query != number_upper:
+            query_words.append(compact_query)
 
-        if not prefix:
+        prefix, num = self._parse_number(number)
+
+        if not prefix or not num:
             return None
 
         try:
-            payload = {
-                'query': self.SEARCH_QUERY,
-                'variables': {
-                    'limit': 5,
-                    'sort': 'RELEASE_DATE',
-                    'queryWord': query_word
+            target_num = int(num)
+            sibling_dmm_prefixes = []
+
+            for query_word in query_words:
+                payload = {
+                    'query': self.SEARCH_QUERY,
+                    'variables': {
+                        'limit': 10,
+                        'sort': 'RELEASE_DATE',
+                        'queryWord': query_word
+                    }
                 }
-            }
-            resp = self._session.post(self.API_URL, json=payload, timeout=10)
+                resp = self._session.post(self.API_URL, json=payload, timeout=10)
 
-            if resp.status_code != 200:
-                return None
+                if resp.status_code != 200:
+                    continue
 
-            data = resp.json()
-            if not data.get('data') or not data['data'].get('legacySearchPPV'):
-                return None
+                data = resp.json()
+                if not data.get('data') or not data['data'].get('legacySearchPPV'):
+                    continue
 
-            contents = data['data']['legacySearchPPV']['result']['contents']
-            if not contents:
-                return None
+                contents = data['data']['legacySearchPPV']['result']['contents']
+                if not contents:
+                    continue
 
-            # 找包含番號前綴的結果
-            for content in contents:
-                cid = content['id']
-                if prefix in cid.lower():
-                    return cid
+                # 嚴格比對反推番號，避免 BZ-01 被 PBZ-016 之類 substring 誤收。
+                for content in contents:
+                    cid = content['id']
+                    candidate_prefix, candidate_num = self._parse_number(
+                        self._content_id_to_number(cid)
+                    )
+                    if (
+                        candidate_prefix == prefix
+                        and candidate_num
+                        and int(candidate_num) == target_num
+                    ):
+                        return cid
+                    if candidate_prefix == prefix and candidate_num:
+                        idx = cid.lower().find(prefix)
+                        dmm_prefix = cid[:idx] if idx > 0 else ""
+                        if dmm_prefix and dmm_prefix not in sibling_dmm_prefixes:
+                            sibling_dmm_prefixes.append(dmm_prefix)
 
-            # 沒找到匹配的，返回第一個
-            return contents[0]['id']
+            for dmm_prefix in sibling_dmm_prefixes:
+                return f"{dmm_prefix}{prefix}{num}"
+
+            return None
 
         except Exception:
             return None
@@ -549,7 +589,7 @@ class DMMScraper(BaseScraper):
                 for a in item.get('actresses', [])
             ]
 
-            release_date = item.get('makerReleasedAt', '')
+            release_date = item.get('makerReleasedAt') or item.get('deliveryStartDate') or ''
             if release_date and 'T' in release_date:
                 release_date = release_date.split('T')[0]
 
@@ -572,7 +612,7 @@ class DMMScraper(BaseScraper):
             series = (item.get('series') or {}).get('name', '')
 
             video = Video(
-                number=item.get('makerContentId', ''),
+                number=item.get('makerContentId') or self._content_id_to_number(content_id),
                 title=item.get('title', ''),
                 actresses=actresses,
                 date=release_date,
@@ -596,6 +636,143 @@ class DMMScraper(BaseScraper):
             raise TimeoutError(f"DMM API timeout for {content_id}") from e
         except Exception:
             return None
+
+    def _fetch_mono_by_number(self, number: str) -> Optional[Video]:
+        """PPV API 找不到時，嘗試解析 DMM DVD/mono 商品頁。"""
+        prefix, num = self._parse_number(number)
+        if not prefix or not num:
+            return None
+
+        content_ids = [f"{prefix}{num}"]
+        padded_id = f"{prefix}{num.zfill(5)}"
+        if padded_id not in content_ids:
+            content_ids.append(padded_id)
+
+        try:
+            payload = {
+                'query': self.SEARCH_QUERY,
+                'variables': {
+                    'limit': 10,
+                    'sort': 'RELEASE_DATE',
+                    'queryWord': prefix.upper(),
+                }
+            }
+            resp = self._session.post(self.API_URL, json=payload, timeout=10)
+            if resp.status_code == 200:
+                data = resp.json()
+                contents = (((data.get('data') or {}).get('legacySearchPPV') or {}).get('result') or {}).get('contents') or []
+                for content in contents:
+                    cid = content.get('id', '')
+                    candidate_prefix, _ = self._parse_number(self._content_id_to_number(cid))
+                    if candidate_prefix != prefix:
+                        continue
+                    idx = cid.lower().find(prefix)
+                    if idx <= 0:
+                        continue
+                    dmm_prefix = cid[:idx]
+                    for candidate in (f"{dmm_prefix}{prefix}{num}", f"{dmm_prefix}{padded_id}"):
+                        if candidate not in content_ids:
+                            content_ids.append(candidate)
+        except Exception:
+            pass
+
+        try:
+            search_url = f"https://www.dmm.co.jp/mono/dvd/-/search/=/searchstr={number.upper()}/"
+            resp = self._session.get(
+                search_url,
+                timeout=self.config.timeout,
+                cookies={"age_check_done": "1"},
+            )
+            if resp.status_code == 200 and 'not-available-in-your-region' not in resp.url:
+                from lxml import etree
+
+                html = etree.fromstring(resp.content, etree.HTMLParser(encoding='utf-8'))
+                for href in html.xpath('//a[contains(@href,"/mono/dvd/-/detail/=/cid=")]/@href'):
+                    match = re.search(r'/cid=([^/?]+)/', href)
+                    if match:
+                        content_id = match.group(1)
+                        if content_id not in content_ids:
+                            content_ids.append(content_id)
+        except Exception:
+            pass
+
+        for content_id in content_ids:
+            url = f"https://www.dmm.co.jp/mono/dvd/-/detail/=/cid={content_id}/"
+            try:
+                resp = self._session.get(
+                    url,
+                    timeout=self.config.timeout,
+                    cookies={"age_check_done": "1"},
+                )
+                if resp.status_code != 200 or 'not-available-in-your-region' in resp.url:
+                    continue
+
+                from lxml import etree
+
+                html = etree.fromstring(resp.content, etree.HTMLParser(encoding='utf-8'))
+                title = ' '.join(html.xpath('string(//h1)').split())
+                if not title:
+                    title = ' '.join(html.xpath('string(//title)').split(' - ')[0].split())
+                if not title:
+                    continue
+
+                def text_after(label: str) -> str:
+                    values = html.xpath(
+                        f'//*[self::th or self::td][contains(normalize-space(.),"{label}")]'
+                        '/following-sibling::td[1]//text()'
+                    )
+                    return ' '.join(v.strip() for v in values if v.strip())
+
+                actresses = [
+                    Actress(name=name.strip())
+                    for name in html.xpath(
+                        '//*[self::th or self::td][contains(normalize-space(.),"出演者")]'
+                        '/following-sibling::td[1]//a/text()'
+                    )
+                    if name.strip()
+                ]
+                release_date = text_after('発売日').replace('/', '-')
+                duration_match = re.search(r'\d+', text_after('収録時間'))
+                cover = ''.join(html.xpath('//meta[@property="og:image"]/@content'))
+                tags = [
+                    tag.strip()
+                    for tag in html.xpath(
+                        '//*[self::th or self::td][contains(normalize-space(.),"ジャンル")]'
+                        '/following-sibling::td[1]//a/text()'
+                    )
+                    if tag.strip()
+                ]
+                sample_images = [
+                    re.sub(
+                        r'(?<!jp)-(\d+)\.jpg$',
+                        r'jp-\1.jpg',
+                        url if url.startswith('http') else f"https:{url}",
+                    )
+                    for url in html.xpath(
+                        '//ul[@id="sample-image-block"]//a[@name="sample-image"]//img/@data-lazy'
+                    )
+                    if url
+                ]
+
+                return Video(
+                    number=number,
+                    title=title,
+                    actresses=actresses,
+                    date=release_date,
+                    maker=text_after('メーカー'),
+                    cover_url=cover,
+                    tags=tags,
+                    source=self.source_name,
+                    detail_url=url,
+                    duration=int(duration_match.group(0)) if duration_match else None,
+                    label=text_after('レーベル'),
+                    series=text_after('シリーズ'),
+                    sample_images=sample_images,
+                )
+            except Exception:
+                continue
+
+        return None
 
     # ========== 主要搜尋方法 ==========
 
@@ -629,6 +806,8 @@ class DMMScraper(BaseScraper):
             cached_cid = cache[number_upper]
             result = self._fetch_by_id(cached_cid)
             if result:
+                result = self._normalize_result_number(number, result)
+            if result:
                 rate_limit(self.config.delay)
                 return result
 
@@ -636,6 +815,8 @@ class DMMScraper(BaseScraper):
         converted_cid = self._convert_with_hints(number)
         if converted_cid:
             result = self._fetch_by_id(converted_cid)
+            if result:
+                result = self._normalize_result_number(number, result)
             if result:
                 self._save_cache(number, converted_cid)
                 rate_limit(self.config.delay)
@@ -646,10 +827,17 @@ class DMMScraper(BaseScraper):
         if discovered_cid:
             result = self._fetch_by_id(discovered_cid)
             if result:
+                result = self._normalize_result_number(number, result)
+            if result:
                 self._save_cache(number, discovered_cid)
                 self._learn_prefix(number, discovered_cid)  # 學習新前綴
                 rate_limit(self.config.delay)
                 return result
+
+        result = self._fetch_mono_by_number(number)
+        if result:
+            rate_limit(self.config.delay)
+            return result
 
         # 4. 完全失敗
         return None
