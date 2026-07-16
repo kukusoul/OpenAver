@@ -180,7 +180,11 @@ class TestAC4BaselineFixtureComparison:
                 f"單檔片 {path} 的 user_rating 在 baseline fixture 情境下必為 0，"
                 f"實際 {actual_v.get('user_rating')}"
             )
-            extra_keys = set(actual_v.keys()) - set(expected_v.keys()) - {"part_tokens", "user_rating"}
+            # part_tokens/user_rating 同上；nfo_path/media_files/media_count 是
+            # 「一個 NFO 服務整個資料夾」的分組欄位（nfo_format 可讓 NFO 不跟影片同名），
+            # 單檔片時 media_files 就是自己一筆、media_count=1，不影響既有欄位的值。
+            extra_keys = (set(actual_v.keys()) - set(expected_v.keys())
+                          - {"part_tokens", "user_rating", "nfo_path", "media_files", "media_count"})
             assert not extra_keys, f"多出非預期 key: {extra_keys}（path={path}）"
 
 

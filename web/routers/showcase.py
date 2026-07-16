@@ -8,6 +8,7 @@ Showcase API 路由 - 影片展示資料端點
 
 import os
 from urllib.parse import quote
+from pathlib import Path
 
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse, Response
@@ -50,7 +51,21 @@ class ManualFocalRequest(BaseModel):
     expected_cover_path: str
 
 
-def _serialize_video(v, path_mappings: dict, enabled: bool = False) -> dict:
+def _media_file_json(v, path_mappings: dict) -> dict:
+    return {
+        "path": v.path,
+        "name": Path(uri_to_local_fs_path(v.path, path_mappings)).name,
+        "size": v.size_bytes or 0,
+        "mtime": int(v.mtime) if v.mtime else 0,
+    }
+
+
+def _serialize_video(
+    v,
+    path_mappings: dict,
+    enabled: bool = False,
+    media_group: list | None = None,
+) -> dict:
     """將 Video ORM 物件序列化為前端 JSON dict（列表端點與單筆端點共用）。
 
     feature/71 T4：thumbnail_cache_enabled 開關決定 cover_url 走 thumb / image 分支。
@@ -73,8 +88,17 @@ def _serialize_video(v, path_mappings: dict, enabled: bool = False) -> dict:
         local_path = uri_to_local_fs_path(img_uri, path_mappings)
         sample_urls.append(f"/api/gallery/image?path={quote(local_path, safe='')}")
 
+    media_group = media_group or [v]
+    media_files = [_media_file_json(item, path_mappings) for item in media_group]
+    # 單檔片原樣傳 v.size_bytes（DB NULL → None），**不套 `or 0`**——AC-4 要求單檔片
+    # 逐鍵逐值不變，把 None 變 0 會踩到前端 `size === null` 這類嚴格判斷。
+    # 真的多檔時才加總，`or 0` 的 NULL 防禦只留在那條路上。
+    total_size = v.size_bytes if len(media_group) == 1 else sum(item.size_bytes or 0 for item in media_group)
+    latest_mtime = max((item.mtime or 0 for item in media_group), default=v.mtime or 0)
+
     return {
         "path": v.path,                                          # file:/// URI（開啟影片用）
+        "nfo_path": v.nfo_path or '',                            # 同一 NFO 分組 key；空值表示一檔一卡
         "title": v.title,
         "original_title": v.original_title,
         "actresses": ','.join(v.actresses) if v.actresses else '',  # 逗號分隔字串
@@ -82,10 +106,10 @@ def _serialize_video(v, path_mappings: dict, enabled: bool = False) -> dict:
         "maker": v.maker,
         "release_date": v.release_date,
         "tags": ','.join(v.tags) if v.tags else '',              # 逗號分隔字串
-        "size": v.size_bytes,
+        "size": total_size,
         "cover_url": cover_url,                                  # enabled→thumb / disabled→image
         "cover_full_url": cover_full_url,                        # 恆原圖 /api/gallery/image?path=...（T6 燈箱）
-        "mtime": int(v.mtime) if v.mtime else 0,                 # Unix timestamp 整數
+        "mtime": int(latest_mtime) if latest_mtime else 0,       # Unix timestamp 整數
         "director": v.director or '',
         "duration": v.duration,                                  # Optional[int]，None 時前端 x-show 隱藏
         "series": v.series or '',
@@ -94,9 +118,11 @@ def _serialize_video(v, path_mappings: dict, enabled: bool = False) -> dict:
         "user_tags": v.user_tags or [],              # list[str]，空時回空 list
         "user_rating": v.user_rating or 0,            # 精選標記（spec-123）；無條件輸出，未精選為 0（FE-ALPINE-06）
         "has_cover": bool(v.cover_path),             # DB 初判（不做 IO）
-        "has_nfo": (v.nfo_mtime or 0) > 0,          # 對齊 41a nfo_mtime 寫入契約，防禦 NULL
+        "has_nfo": bool(v.nfo_path) or (v.nfo_mtime or 0) > 0,  # 對齊 41a nfo_mtime 寫入契約，防禦 NULL
         "auto_focal": v.auto_focal,                  # canonical "x,y" 4dp 字串或 ''（98b：前端 focalObjectPosition 消費）
         "crop_mode": v.crop_mode,                    # 'auto' | 'default'（98b：default 退 baseline 右裁）
+        "media_files": media_files,
+        "media_count": len(media_files),
     }
 
 
@@ -110,7 +136,7 @@ def _serialize_group(group, path_mappings: dict, enabled: bool = False) -> dict:
     單檔片：members==[v]、part_tokens==[]，輸出與今天 `_serialize_video(v, ...)`
     逐鍵逐值相同，只多 `part_tokens: []` 一個新鍵（AC-4）。
     """
-    base = _serialize_video(group.members[0], path_mappings, enabled)
+    base = _serialize_video(group.members[0], path_mappings, enabled, group.members)
     # 單檔片不碰 size：`_serialize_video()` 原樣傳 `v.size_bytes`（DB NULL → None），
     # 套 `or 0` 會把 None 變 0，違反 AC-4「單檔片逐位元組不變」的字面契約。
     # 只有真的多段時才加總，`or 0` 的 NULL 防禦留在那條路上（T2 review P3）。
@@ -193,8 +219,10 @@ def get_videos(request: Request):
                       if any(is_path_under_dir(v.path, uri) for uri in configured_dir_uris)]
 
         # feature/122 CD-122-1：分組在序列化層收斂，前端拿到的 videos 陣列已是
-        # 合併後的一筆一組（多一個 part_tokens 欄位）。單檔片的 group 只有自己
+        # 合併後的一筆一組（多 part_tokens / media_files 欄位）。單檔片的 group 只有自己
         # 一個 member，_serialize_group() 輸出與改動前逐鍵逐值相同（AC-4）。
+        # 分組鍵以 nfo_path 優先（見 core/multipart_group.group_rows），
+        # 刪除／收藏／播放接續也走同一支，四條路的組成一致。
         groups = group_rows(all_videos, fs_path_of=lambda v: uri_to_local_fs_path(v.path, path_mappings))
 
         videos_json = [_serialize_group(g, path_mappings, thumb_enabled)

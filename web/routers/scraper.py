@@ -892,7 +892,14 @@ def fetch_samples_endpoint(req: FetchSamplesRequest) -> dict:
     repo = VideoRepository()
     count = repo.count_videos_in_folder(folder_uri_prefix)
     if count > 1:
-        return {"success": False, "error": "multi_video_folder", "count": count, "extrafanart_written": 0}
+        # 同資料夾多部片原本一律擋——extrafanart/ 是每資料夾一份，會互相覆蓋。
+        # 但 `nfo_format` 上線後「一份 NFO 服務整個資料夾」是合法擺法（分集片、
+        # 多容器版本），那種片在 DB 有 nfo_path，屬於同一部作品的多個檔案，
+        # 共用一份 extrafanart 正是我們要的，不該被這道閘擋下。
+        # 只在真的要擋時才查這一列，單片資料夾維持零額外查詢。
+        video = repo.get_by_path(req.file_path)
+        if not (video and video.nfo_path):
+            return {"success": False, "error": "multi_video_folder", "count": count, "extrafanart_written": 0}
 
     try:
         result = fetch_samples_only(
