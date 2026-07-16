@@ -23,7 +23,10 @@ def _reset_prefix_hint_caches(monkeypatch):
 
 
 def _scraper() -> DMMScraper:
-    return DMMScraper(ScraperConfig(proxy_url=""))
+    scraper = DMMScraper(ScraperConfig(proxy_url=""))
+    # 隔離 legacy DMM mono 頁 fallback（會發真實 HTTP，被 conftest outbound guard 擋）
+    scraper._fetch_mono_by_number = lambda number: None
+    return scraper
 
 
 # ── DoD 1 碰撞 ───────────────────────────────────────────────────────────────

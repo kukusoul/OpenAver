@@ -14,6 +14,8 @@ LOG_SNIPPET = "搜尋 API 查無結果"
 def dmm_scraper(monkeypatch):
     monkeypatch.setattr(dmm_module, "_shipped_table_cache", {})
     monkeypatch.setattr(dmm_module, "rate_limit", lambda *a, **kw: None)
+    # 隔離 legacy DMM mono 頁 fallback（會發真實 HTTP，被 conftest outbound guard 擋）
+    monkeypatch.setattr(DMMScraper, "_fetch_mono_by_number", lambda self, number: None)
     return DMMScraper(ScraperConfig(proxy_url="http://test-proxy:8080"))
 
 
