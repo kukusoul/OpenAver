@@ -500,6 +500,8 @@
       "nfo_title_format_help": "這一列只決定 NFO 裡的標題（Jellyfin／Emby／Kodi 海報牆上看到的名字），不影響檔名、資料夾，也不影響 OpenAver 自己畫面上顯示的片名。",
       "nfo_title_format_help_aria": "NFO 標題格式說明",
       "nfo_title_format_preview_actor_missing_label": "演員資料缺失",
+      "cover_format_label": "封面命名格式",
+      "nfo_format_label": "NFO 命名格式",
       "max_title_length_label": "標題長度限制",
       "unit_chars": "字元",
       "max_filename_length_label": "檔名長度限制",
@@ -610,7 +612,8 @@
       "year": "年份",
       "month": "月份",
       "day": "日",
-      "suffix": "後綴"
+      "suffix": "後綴",
+      "original": "原始檔名"
     },
     "dirty_modal": {
       "title": "尚未儲存的變更",

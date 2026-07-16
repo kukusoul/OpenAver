@@ -500,6 +500,8 @@
       "nfo_title_format_help": "この項目は NFO 内のタイトル（Jellyfin／Emby／Kodi のポスターウォールに表示される名前）だけを決めます。ファイル名やフォルダには影響せず、OpenAver 自身の画面に表示されるタイトルにも影響しません。",
       "nfo_title_format_help_aria": "NFO タイトル形式の説明",
       "nfo_title_format_preview_actor_missing_label": "出演者情報なし",
+      "cover_format_label": "カバー命名形式",
+      "nfo_format_label": "NFO 命名形式",
       "max_title_length_label": "タイトル長さ制限",
       "unit_chars": "文字",
       "max_filename_length_label": "ファイル名長さ制限",
@@ -610,7 +612,8 @@
       "year": "年",
       "month": "月",
       "day": "日",
-      "suffix": "サフィックス"
+      "suffix": "サフィックス",
+      "original": "元のファイル名"
     },
     "dirty_modal": {
       "title": "未保存の変更",
