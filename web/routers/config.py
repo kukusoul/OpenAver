@@ -532,8 +532,9 @@ async def get_version() -> dict:
 async def get_format_variables() -> dict:
     """取得可用的格式變數
 
-    每個變數帶 ``folder_ok`` 情境旗標（CD-95a-6/8）：``{suffix}`` 為檔名限定
-    （版本標記屬影片名稱，不在資料夾層級再分版本），其餘變數 folder/filename 兩情境皆可用。
+    每個變數帶 ``folder_ok`` 情境旗標（CD-95a-6/8）：``{suffix}`` 與 ``{original}``
+    為檔名限定（版本標記與原始檔名不作為資料夾層級），其餘變數 folder/filename
+    兩情境皆可用。
     前端命名區以此端點為變數集 + 情境的單一真理來源（SSOT）；label 仍走 i18n
     ``settings.var.*``（本端點不承擔多語）。
     """
@@ -549,6 +550,7 @@ async def get_format_variables() -> dict:
             {"name": "{month}", "description": "月份（2位）", "example": "01", "folder_ok": True},
             {"name": "{day}", "description": "日（2位）", "example": "15", "folder_ok": True},
             {"name": "{suffix}", "description": "版本標記（自動偵測）", "example": "-4k", "folder_ok": False},
+            {"name": "{original}", "description": "原始檔名（不含副檔名）", "example": "SONE-205_高清", "folder_ok": False},
         ]
     }
 

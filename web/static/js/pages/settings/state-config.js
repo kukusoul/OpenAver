@@ -9,10 +9,12 @@ export function stateConfig() {
     // 與 formatVariables 才需響應（x-for + isDirty / 選單），留在 return 物件（CD-95a-9/12）。
     const naming = {
         filenameEditor: null,   // ChipEditor（檔名格式）
+        formatEditors: {},      // { coverFormat, nfoFormat } 額外命名格式 ChipEditor
         layerEditors: {},       // { [layerId]: ChipEditor } 各資料夾層
         layerSeq: 0,            // 穩定遞增 id 計數器（禁用 index/value 當 key，CD-95a-12）
         ready: false,           // formatVariables 就緒後才 hydrate 膠囊
         filenameHydrated: false, // one-shot：filename editor 是否已完成首次 hydrate（95a-T8，防重載打斷游標）
+        formatHydrated: {},     // { [field]: true } 額外格式 editor 首次 hydrate 狀態
     };
     return {
         // ===== Form State =====
@@ -39,6 +41,8 @@ export function stateConfig() {
             // （後端只用前 3 層，CD-95a-7/12）。id 走 naming.layerSeq，x-for :key="layer.id"。
             folderLayerList: [],
             filenameFormat: '[{num}][{maker}] {title}',
+            coverFormat: '{num}',
+            nfoFormat: '{num}',
             maxTitleLength: 80,
             maxFilenameLength: 200,
             videoExtensions: '.mp4, .avi, .mkv, .wmv, .rmvb, .flv, .mov, .m4v, .ts',
@@ -152,6 +156,7 @@ export function stateConfig() {
             month: '01',
             day: '15',
             suffix: '-4k',
+            original: 'SSNI-618_高清',
         },
 
         // ===== Computed Properties =====
@@ -566,6 +571,7 @@ export function stateConfig() {
             // 否則 one-shot 會擋住 filename editor 的重新載入）。
             this.namingConfigReady = false;
             naming.filenameHydrated = false;
+            naming.formatHydrated = {};
 
             try {
                 // 命名區變數 SSOT（含 folder_ok 情境旗標）——須在設 folderLayerList（觸發層
@@ -638,6 +644,8 @@ export function stateConfig() {
                         .map(v => ({ id: naming.layerSeq++, value: v }));
 
                     this.form.filenameFormat = config.scraper.filename_format;
+                    this.form.coverFormat = config.scraper.cover_format || '{num}';
+                    this.form.nfoFormat = config.scraper.nfo_format || '{num}';
                     this.form.maxTitleLength = config.scraper.max_title_length;
                     this.form.maxFilenameLength = config.scraper.max_filename_length;
                     this.form.videoExtensions = config.scraper.video_extensions.join(', ');
@@ -855,6 +863,8 @@ export function stateConfig() {
                     folder_layers: folderLayers,
                     folder_format: folderLayers.join('/'),
                     filename_format: this.form.filenameFormat,
+                    cover_format: this.form.coverFormat,
+                    nfo_format: this.form.nfoFormat,
                     max_title_length: this.form.maxTitleLength,
                     max_filename_length: this.form.maxFilenameLength,
                     video_extensions: this.form.videoExtensions
@@ -1175,6 +1185,30 @@ export function stateConfig() {
             this.hydrateFilenameEditor();
         },
 
+        // 封面/NFO 命名格式沿用同一 ChipEditor 與 filename 變數集。
+        // hydrate 採與 filename 相同的雙觸發 one-shot，避免 config/editor mount 先後競態。
+        hydrateFormatEditor(field) {
+            if (!this.namingConfigReady) return;
+            const ed = naming.formatEditors[field];
+            if (!ed) return;
+            if (naming.formatHydrated[field]) return;
+            naming.formatHydrated[field] = true;
+            ed.whitelist = this._whitelistFor('filename');
+            ed.load(this.form[field]);
+        },
+
+        mountFormatEditor(hostEl, field, placeholder = '{num}') {
+            const ed = new ChipEditor(hostEl, {
+                whitelist: this._whitelistFor('filename'),
+                labelFor: (n) => this._labelFor(n),
+                deleteAriaFor: (n) => this._chipDeleteAria(n),
+                onChange: () => { this.form[field] = ed.serialize(); },
+                placeholder,
+            });
+            naming.formatEditors[field] = ed;
+            this.hydrateFormatEditor(field);
+        },
+
         // 資料夾層膠囊編輯器 mount（T6 x-init per layer）。onChange 以 layer.id find 寫回 value
         // （非位置索引，CD-95a-12）。
         mountLayerEditor(hostEl, layerId) {
@@ -1198,6 +1232,7 @@ export function stateConfig() {
         },
 
         insertFilenameVar(name) { naming.filenameEditor?.insertVar(name); },
+        insertFormatVar(field, name) { naming.formatEditors[field]?.insertVar(name); },
         insertLayerVar(layerId, name) { naming.layerEditors[layerId]?.insertVar(name); },
 
         // 動態層增減（CD-95a-3/7/12）。硬上限 3；刪層 destroy 該 editor + 移除 id 物件（keyed teardown）。
