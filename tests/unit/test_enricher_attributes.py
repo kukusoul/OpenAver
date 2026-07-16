@@ -159,6 +159,13 @@ def test_boundary2_source_db_syncs_db_via_new_mutator(tmp_path, repo):
     assert "無碼破解" in updated.tags
 
 
+def _sidecar_nfo(video_path, number):
+    """off 模式 sidecar 依番號命名（`nfo_format` 預設 `{num}`），分集片的 cd1/cd2
+    因此共用同一份 `{number}.nfo`。走產品碼同一支解析，測試不自己推導命名規則。"""
+    from core.enricher import _resolve_sidecar_path
+    return Path(_resolve_sidecar_path(str(video_path), number, ".nfo"))
+
+
 # ── 邊界 3：effective_tags 每次 enrich_single 只算一次 ─────────────────────────
 
 
@@ -223,7 +230,7 @@ def test_boundary10_same_number_multi_file_uses_own_row(tmp_path, repo):
     assert "Drama" in cd2_row.tags
 
     # 連帶：寫出的 NFO 也不該帶上 cd1 的標籤
-    nfo_text = _read_nfo(cd2.with_suffix(".nfo"))
+    nfo_text = _read_nfo(_sidecar_nfo(cd2, "ABC-123"))
     assert "<tag>中文字幕</tag>" not in nfo_text
 
     # cd1 那一列不得被這次呼叫動到

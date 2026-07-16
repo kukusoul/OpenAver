@@ -102,6 +102,11 @@ def write_video_file(tmp_path: Path, stem: str) -> Path:
     return path
 
 
+def _sidecar_nfo(video_path: Path, number: str) -> Path:
+    from core.enricher import _resolve_sidecar_path
+    return Path(_resolve_sidecar_path(str(video_path), number, ".nfo"))
+
+
 def make_text_complete_video(
     path_uri: str,
     number: str,
@@ -273,7 +278,7 @@ class TestBatchEnrichConvergence:
         db_path = make_tmp_db(tmp_path, [video])
 
         # 已有 .nfo + overwrite_existing 預設 False → nfo_written=False
-        nfo_path = video_path.with_suffix(".nfo")
+        nfo_path = _sidecar_nfo(video_path, number)
         nfo_path.write_text(
             '<?xml version="1.0"?><movie><title>existing</title></movie>',
             encoding="utf-8",
@@ -320,7 +325,7 @@ class TestBatchEnrichConvergence:
         video = make_text_complete_video(path_uri, number, maker="")
         db_path = make_tmp_db(tmp_path, [video])
 
-        nfo_path = video_path.with_suffix(".nfo")
+        nfo_path = _sidecar_nfo(video_path, number)
         nfo_path.write_text(
             '<?xml version="1.0"?><movie><title>existing</title></movie>',
             encoding="utf-8",

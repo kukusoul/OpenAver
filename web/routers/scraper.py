@@ -640,7 +640,8 @@ def _check_refresh_full_overwrite_guard(request, config, path_mappings, resolved
         # 呼叫之前，純屬計算順序調整，不改變下面既有邏輯。
         external_manager = config.get("scraper", {}).get("external_manager", "off")
         nfo_path, cover_path = resolve_nfo_cover_paths(
-            request.file_path, path_mappings, external_manager
+            request.file_path, path_mappings, external_manager,
+            number="" if external_manager != "off" else request.number,
         )
         will_write_nfo = request.write_nfo and not os.path.exists(nfo_path)
         will_write_cover = not should_preserve_cover(

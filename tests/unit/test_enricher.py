@@ -1897,9 +1897,15 @@ def _t1_write_video(tmp_path, stem):
     return video_path
 
 
-def _t1_nfo_title(video_path):
-    nfo_path = video_path.with_suffix(".nfo")
-    return ET.parse(str(nfo_path)).getroot().find("title").text
+def _t1_nfo_path(video_path, number="SONE-205"):
+    """off 模式 sidecar 依番號命名（`nfo_format` 預設 `{num}`），不跟影片 stem。
+    走產品碼同一支解析，避免測試自己再推導一次命名規則。"""
+    from core.enricher import _resolve_sidecar_path
+    return Path(_resolve_sidecar_path(str(video_path), number, ".nfo"))
+
+
+def _t1_nfo_title(video_path, number="SONE-205"):
+    return ET.parse(str(_t1_nfo_path(video_path, number))).getroot().find("title").text
 
 
 def _t1_expected_title(number, content):
@@ -2065,7 +2071,7 @@ class TestFillMissingCoverAlsoMissing:
         assert result.success is True, f"不得早退成 not_found，error={result.error}"
         assert result.reason != "not_found"
         assert result.nfo_written is True
-        nfo_path = video_path.with_suffix(".nfo")
+        nfo_path = _t1_nfo_path(video_path)
         assert nfo_path.is_file(), "磁碟上必須真的寫出 .nfo"
         assert nfo_path.read_text(encoding="utf-8")
         mock_repo.update_scrape_attempted_at.assert_called_once()
@@ -2222,7 +2228,7 @@ class TestEnrichSinglePreserveTitle:
         # 番號已變 → 不得保留舊標題「[ABC-001]舊片名」，必須是這次刮到的新標題
         assert row.title == "日文片名"
 
-        nfo_file = video_file.with_suffix(".nfo")
+        nfo_file = video_file.parent / "XYZ-002.nfo"
         assert nfo_file.exists()
         root = ET.parse(nfo_file).getroot()
         assert root.findtext("title") == "[XYZ-002]日文片名"
@@ -2389,3 +2395,43 @@ class TestNfoTitleFormatWiring:
 
         assert mock_nfo.call_args is not None, "generate_nfo 應被呼叫"
         assert mock_nfo.call_args.kwargs.get("nfo_title_format") == "{num}-{title}"
+
+
+class TestNfoPathInSameDir:
+
+    def test_sidecars_use_number_in_video_dir(self):
+        """進階重刮固定用番號命名 NFO/cover，但仍只在影片同目錄寫 sidecar。"""
+        video = _make_video()
+        captured_nfo_paths = []
+        captured_cover_paths = []
+
+        def fake_generate_nfo(**kwargs):
+            captured_nfo_paths.append(kwargs.get("output_path", ""))
+            return True
+
+        def fake_download_image(_url, save_path, referer=""):
+            captured_cover_paths.append(save_path)
+            return True
+
+        with (
+            patch("os.path.exists", return_value=True),
+            patch("core.enricher.VideoRepository") as mock_repo_cls,
+            patch("core.enricher.generate_nfo", side_effect=fake_generate_nfo),
+            patch("core.enricher.download_image", side_effect=fake_download_image),
+        ):
+            mock_repo = MagicMock()
+            mock_repo_cls.return_value = mock_repo
+            mock_repo.get_by_numbers.return_value = {"SONE-205": [video]}
+
+            from core.enricher import enrich_single
+            result = enrich_single(
+                file_path="/video/original-name.mp4",
+                number="SONE-205",
+                write_nfo=True,
+                write_cover=True,
+                overwrite_existing=True,
+            )
+
+        assert result.success is True
+        assert captured_nfo_paths == ["/video/SONE-205.nfo"]
+        assert captured_cover_paths == ["/video/SONE-205.jpg"]
