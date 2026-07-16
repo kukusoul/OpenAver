@@ -4,6 +4,8 @@
     "folder_layers": ["{actor}"],
     "folder_format": "{actor}",
     "filename_format": "[{num}][{maker}] {title}{suffix}",
+    "cover_format": "{num}",
+    "nfo_format": "{num}",
     "download_cover": true,
     "cover_filename": "poster.jpg",
     "create_nfo": true,
