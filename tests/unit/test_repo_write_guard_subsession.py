@@ -105,7 +105,9 @@ def _seed_magicmock_enrich_test(pytester) -> None:
         def test_seed_magicmock_db_path(tmp_path):
             video = tmp_path / "video.mp4"
             video.write_bytes(b"x")
-            nfo = tmp_path / "video.nfo"
+            # _sync_nfo_mtime 依番號解析 sidecar（`nfo_format` 預設 `{num}`）——
+            # NFO 要落在它會找的位置，否則早退、根本走不到 sqlite3.connect 那個 sink。
+            nfo = tmp_path / "T113A-BASE.nfo"
             nfo.write_text("<xml></xml>", encoding="utf-8")
             repo = MagicMock()  # repo.db_path 是裸 MagicMock，刻意不手動設
             _sync_nfo_mtime(repo, str(video), str(video), "T113A-BASE")

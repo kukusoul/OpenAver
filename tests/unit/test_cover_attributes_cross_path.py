@@ -146,7 +146,10 @@ def _run_enrich(tmp_path, filename, number, tags=None):
     repo = VideoRepository(db_path=db_path)
     video_path = work / filename
     video_path.write_bytes(b"stub")
-    nfo_path = video_path.with_suffix(".nfo")
+    # off 模式 sidecar 依番號命名（`nfo_format` 預設 `{num}`），不跟影片 stem；
+    # 走產品碼同一支解析，測試不自己推導命名規則。
+    from core.enricher import _resolve_sidecar_path
+    nfo_path = Path(_resolve_sidecar_path(str(video_path), number, ".nfo"))
     patches = _enrich_patches(repo)
     with patches[0], patches[1], patches[2]:
         from core.enricher import enrich_single

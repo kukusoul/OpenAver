@@ -314,12 +314,19 @@ def test_boundary5_update_tags_if_changed_invalidates_when_changed(tmp_path, rep
     assert updated.tags == ["A", "B"]
 
 
+def _sidecar_nfo(video_path, number):
+    """off 模式 sidecar 依番號命名（`nfo_format` 預設 `{num}`），分集片的 cd1/cd2
+    因此共用同一份 `{number}.nfo`。走產品碼同一支解析，測試不自己推導命名規則。"""
+    from core.enricher import _resolve_sidecar_path
+    return Path(_resolve_sidecar_path(str(video_path), number, ".nfo"))
+
+
 # ── 邊界 6：A4 — 無屬性檔名不產生任何屬性 tag ──────────────────────────────────
 
 def test_boundary6_a4_no_attribute_tags_for_plain_multipart(tmp_path, repo):
     video_path = tmp_path / "ABC-123-cd1.mp4"
     video_path.write_bytes(b"stub")
-    nfo_path = video_path.with_suffix(".nfo")
+    nfo_path = _sidecar_nfo(video_path, "ABC-123")
 
     patches = _patches(repo)
     with patches[0], patches[1], patches[2]:
@@ -572,7 +579,7 @@ def test_boundary10_same_number_multi_file_uses_own_row(tmp_path, repo):
     assert "Drama" in cd2_row.tags
 
     # 連帶：寫出的 NFO 也不該帶上 cd1 的標籤
-    nfo_text = _read_nfo(cd2.with_suffix(".nfo"))
+    nfo_text = _read_nfo(_sidecar_nfo(cd2, "ABC-123"))
     assert "<tag>中文字幕</tag>" not in nfo_text
 
     # cd1 那一列不得被這次呼叫動到
