@@ -79,6 +79,7 @@ def test_proxy_rules_matches_reconciliation_table():
         "javten.com",
         "fc2.com",
         "jdbstatic.com",
+        "mgstage.com",  # JavBus sample images may point to MGStage CDN (e.g. ABF-026)
     }
     # roots must be a tuple (stable export shape), not a set
     assert isinstance(roots, tuple)
@@ -264,7 +265,7 @@ def test_cf_javfree_me_in_static_proxy_exact():
 
 def test_registry_truth_table_download_and_proxy_consumers():
     """Walk every IMAGE_HOSTS row × (download, proxy) + one live dynamic row."""
-    assert len(IMAGE_HOSTS) == 28
+    assert len(IMAGE_HOSTS) == 29
 
     for entry in IMAGE_HOSTS:
         download_allowed = "download" in entry.consumers

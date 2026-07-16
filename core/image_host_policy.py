@@ -230,6 +230,13 @@ IMAGE_HOSTS: tuple[ImageHost, ...] = (
         consumers=("proxy",),
         photo_source=None,
     ),
+    ImageHost(
+        host="mgstage.com",  # JavBus sample images may point to MGStage CDN (e.g. ABF-026)
+        match="root",
+        schemes=("https",),
+        consumers=("proxy",),
+        photo_source=None,
+    ),
     # ---- T3a: sole §1.4-enumerated new host (exact CDN subdomain only) ----
     ImageHost(
         host="cf.javfree.me",
