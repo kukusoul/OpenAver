@@ -1579,7 +1579,8 @@ class TestGenerateAvlistShouldAbortTopLevel:
         from core.gallery_scanner import VideoInfo
         calls = []
 
-        def fake_scan_file(self, video_path, base_path=None):
+        # nfo_path 是第 3 個參數（一份 NFO 可服務整個資料夾，掃描端把它傳給 scan_file）
+        def fake_scan_file(self, video_path, base_path=None, nfo_path=None):
             calls.append(video_path)
             return VideoInfo(path=to_file_uri(video_path), title="t", num="ABC-001")
 
@@ -1764,7 +1765,7 @@ class TestGenerateAvlistFocalTrigger:
         mock_scanner = MagicMock()
         if extra_nums:
             mock_scanner.scan_file.side_effect = (
-                lambda video_path, base_path=None: scan_file_infos[video_path]
+                lambda video_path, base_path=None, nfo_path=None: scan_file_infos[video_path]
             )
         else:
             mock_scanner.scan_file.return_value = info

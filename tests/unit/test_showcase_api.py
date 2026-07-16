@@ -1,5 +1,6 @@
 """測試 Showcase API"""
 import pytest
+from types import SimpleNamespace
 from fastapi.testclient import TestClient
 
 from core.database import Video, VideoRepository
@@ -156,6 +157,50 @@ class TestShowcaseVideosAPI:
         assert decoded_path.startswith("//"), f"UNC 路徑格式錯誤: {decoded_path}"
         assert not decoded_path.startswith("///"), f"UNC 路徑多了 /: {decoded_path}"
         assert "PRED-001" in decoded_path
+
+    def test_get_videos_groups_by_nfo_path(self, make_populated_db, showcase_config, monkeypatch):
+        """同一 nfo_path 的多個媒體檔在 Showcase 只輸出一張作品卡。"""
+        import json
+        from web.routers import showcase
+
+        nfo_uri = to_file_uri("/home/user/media/MOVIE/movie.nfo")
+        db_path = make_populated_db([
+            Video(
+                path=to_file_uri("/home/user/media/MOVIE/movie-1080p.mp4"),
+                nfo_path=nfo_uri,
+                number="MOVIE-001",
+                title="Grouped Movie",
+                size_bytes=100,
+                mtime=10.0,
+            ),
+            Video(
+                path=to_file_uri("/home/user/media/MOVIE/movie-4k.mp4"),
+                nfo_path=nfo_uri,
+                number="MOVIE-001",
+                title="Grouped Movie",
+                size_bytes=200,
+                mtime=20.0,
+            ),
+        ])
+
+        def mock_get_db_path():
+            return db_path
+        monkeypatch.setattr(showcase, "get_db_path", mock_get_db_path)
+        monkeypatch.setattr(showcase, "load_config", lambda: showcase_config)
+
+        # get_videos 帶 ETag（CD-145a-8/11/12），需要 Request 才能讀 if-none-match；
+        # 這裡只要「沒有該標頭」的最小假件，走完整序列化路徑。
+        request = SimpleNamespace(headers={})
+        response = showcase.get_videos(request)
+        data = json.loads(response.body)
+
+        assert data["success"] is True
+        assert data["total"] == 1
+        video = data["videos"][0]
+        assert video["nfo_path"] == nfo_uri
+        assert video["media_count"] == 2
+        assert video["size"] == 300
+        assert [item["name"] for item in video["media_files"]] == ["movie-1080p.mp4", "movie-4k.mp4"]
 
 
 class TestShowcaseDirectoryFiltering:

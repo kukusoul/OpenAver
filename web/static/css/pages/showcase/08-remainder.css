@@ -2071,6 +2071,21 @@ body.sidebar-collapsed .showcase-footer {
 }
 .av-card-preview:hover .cover-badges-part { opacity: 0; }
 
+.media-count-badge {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    z-index: 2;
+    padding: 0.15rem 0.45rem;
+    border: 1px solid var(--stroke-subtle);
+    border-radius: var(--radius-pill);
+    background: var(--surface-2);
+    color: var(--text-primary);
+    font-size: 0.6875rem;
+    line-height: 1.2;
+    pointer-events: none;
+}
+
 /* 121d-T2: 燈箱標籤整組下移，讓開常駐的魔法棒。只覆寫 top，其餘繼承 base。
    為什麼是兩個值：魔法棒 `.lightbox-similar-btn` 相對 `.lightbox-content` 的 padding box
    定位（top:1rem、高 44px ⇒ 下緣恆在內距邊起算 60px）；封面 `.lightbox-cover` 是該 flex

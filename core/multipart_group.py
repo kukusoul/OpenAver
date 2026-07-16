@@ -114,7 +114,11 @@ def group_rows(rows: List[T], fs_path_of: Callable[[T], str]) -> List['VideoGrou
     order: List[Tuple[str, str]] = []
     for row in rows:
         fs_path = fs_path_of(row)
-        key = group_key(fs_path)
+        # nfo_path 優先（`nfo_format` 讓 NFO 可以不跟影片同名，一個 NFO 服務整個資料夾
+        # 的多個影片檔，此時剝 token 後的 stem 不會相同、token 分組抓不到它們）。
+        # 沒有 nfo_path（未掃到／無 NFO）才退回「同資料夾 + 剝 token 後 stem 相同」。
+        nfo_path = (getattr(row, 'nfo_path', '') or '').strip()
+        key = ('nfo', nfo_path) if nfo_path else ('fs', group_key(fs_path))
         if key not in buckets:
             buckets[key] = []
             order.append(key)
@@ -126,6 +130,29 @@ def group_rows(rows: List[T], fs_path_of: Callable[[T], str]) -> List['VideoGrou
         parsed = [(r, *part_info(fs_path)) for r, fs_path in buckets[key]]
         members = [r for r, _, _ in parsed]
         tokens = [t for _, t, _ in parsed]
+
+        if key[0] == 'nfo':
+            # 共用同一個 NFO ＝ 同一部作品（owner 裁決：此鍵優先於 CD-122-10／13 的 token 規則）。
+            # ⚠️ 代價：同資料夾同 NFO 的「兩種容器版本」（ABC-123.mp4 ＋ ABC-123.mkv）也會併成
+            # 一張卡，刪該卡會一次移除兩列 DB。token 齊全時仍依段號排序，保住 part-1 當代表。
+            if len(members) < 2:
+                groups.append(VideoGroup(members=members, part_tokens=[]))
+                continue
+            numbers = [n for _, _, n in parsed]
+            if all(tokens) and len(set(numbers)) == len(numbers):
+                order_pairs = sorted(parsed, key=lambda p: p[2])
+                groups.append(VideoGroup(
+                    members=[m for m, _, _ in order_pairs],
+                    part_tokens=[t for _, t, _ in order_pairs],
+                ))
+            else:
+                # token 不齊（或段號撞號）→ 仍成組，但不宣稱段號：依 fs path 排序、part_tokens 留空
+                order_pairs = sorted(buckets[key], key=lambda pair: pair[1])
+                groups.append(VideoGroup(
+                    members=[m for m, _ in order_pairs],
+                    part_tokens=[],
+                ))
+            continue
 
         # CD-122-10（P0）：一組成立的條件是「成員 >= 2 且每一個成員都帶 part token」。
         # 不成立 → bucket 內每一列各自單飛成單檔組。少了這條，
