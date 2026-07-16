@@ -17,6 +17,19 @@ DEFAULT_HEADERS = {
 }
 
 
+def format_no_hyphen_number(prefix: str, digits: str) -> str:
+    """Format compact numbers like SONE205 or SNIS00091 as SONE-205 / SNIS-091.
+
+    只有「壓掉前導零後剩 ≤3 位」才收斂成常見的 3 位番號（SNIS00091 → 091、
+    ABC00123 → 123）。壓完仍有 4 位以上的是真的長番號，原樣保留——
+    PARATHD02976 的 02976 若一併壓成 2976 就變成另一部片（test_parathd_no_hyphen 鎖住）。
+    """
+    stripped = digits.lstrip('0')
+    if len(digits) > 3 and digits.startswith('0') and len(stripped) <= 3:
+        return f"{prefix.upper()}-{(stripped or '0').zfill(3)}"
+    return f"{prefix.upper()}-{digits}"
+
+
 def get_html(url: str, timeout: int = DEFAULT_TIMEOUT,
              headers: Optional[dict[str, str]] = None, cookies: Optional[dict[str, str]] = None) -> Optional[str]:
     """
@@ -104,7 +117,15 @@ def extract_number(filename: str) -> Optional[str]:
         'T28-103'
     """
     from pathlib import Path
-    basename = Path(filename).stem
+    name = Path(filename).name
+    # 網址前綴（hhd800.com@SONE-103）：'@' 左邊長得像網域就整段丟掉。
+    # 必須在取 stem **之前**做——'zzpp06.com@n1666' 沒有真副檔名，Path.stem 會把
+    # '.com@n1666' 整串當副檔名吃掉只剩 'zzpp06'，'@' 判斷就永遠碰不到，
+    # 網域本身反而被當成番號抽出來（zzpp06 → ZZPP-06）。用 .name 而非原字串，
+    # 是為了不讓路徑中間的資料夾名（/a@b.com/…）參與判斷。
+    if '@' in name and re.search(r'\.[A-Za-z]{2,}(?:$|[^A-Za-z])', name.split('@', 1)[0]):
+        name = name.split('@', 1)[1]
+    basename = Path(name).stem
 
     # 預處理 - 清理常見後綴（需有分隔符，避免誤刪 JUC-123 等合法前綴）
     basename = re.sub(
@@ -116,10 +137,11 @@ def extract_number(filename: str) -> Optional[str]:
         rf'(?P<fc2>{FC2_TOKEN_PATTERN})',
         r'(\d{6}-\d{2,})',              # 041417-413 日期-編號格式（無碼）
         r'(\d{6}_\d{2,})',             # 120415_201 / 082912_01 底線格式（無碼）
+        r'([A-Za-z]{2,7})(\d{2,5})(?=-\d+\b)',  # EBVR00097-1 → EBVR-097（尾端 -1 是分段）
         r'([A-Za-z]+\d+-\d+)',          # T28-103 混合格式
-        r'\[([A-Za-z]{1,7}-\d{3,5})\]', # [ABC-123] 方括號
-        r'([A-Za-z]{1,7}-\d{3,5})',     # ABC-123 帶橫線
-        r'([A-Za-z]{2,7})(\d{3,5})',    # ABC12345 不帶橫線（index 6，兩 group → 插 hyphen）
+        r'\[([A-Za-z]{1,7}-\d{2,5})\]', # [ABC-123] 方括號
+        r'([A-Za-z]{1,7}-\d{2,5})',     # ABC-123 帶橫線
+        r'([A-Za-z]{2,7})(\d{2,5})',    # ABC12345 不帶橫線（兩 group → 插 hyphen）
         r'([nkcmsNKCMS]\d{4})(?!\d)',      # n0762 單字母 + 恰 4 位（Tokyo Hot 無碼，前綴限 n/k/c/m/s（spec-73 US2 權威模型），右側無更多數字）
         # 139c 若要恢復數字前綴保留是新設計，不是還原這條
     ]
@@ -129,8 +151,8 @@ def extract_number(filename: str) -> Optional[str]:
         if match:
             if i == 0:
                 return normalize_number_impl(match.group('fc2'))
-            elif i == 6:  # 不帶橫線需重組（ABC12345）
-                number = f"{match.group(1).upper()}-{match.group(2)}"
+            if match.lastindex and match.lastindex >= 2:  # 不帶橫線需重組（ABC12345 / SNIS00091）
+                number = format_no_hyphen_number(match.group(1), match.group(2))
             else:
                 number = match.group(1).upper()
             return number
@@ -382,7 +404,7 @@ def normalize_number_impl(number: str) -> str:
     # ABC123 → ABC-123
     match = re.match(r'^([A-Z]+)(\d+)$', number)
     if match:
-        return f"{match.group(1)}-{match.group(2)}"
+        return format_no_hyphen_number(match.group(1), match.group(2))
     return number
 
 
@@ -484,9 +506,10 @@ _STRICT_NUMBER_PATTERNS = [
     (r'[A-Z]\d{4}', 'uncensored'),                # N0762 單字母 + 恰 4 位（東京熱）
     (r'\d{1,4}[A-Z]+-\d{3,}', 'censored'),        # 200GANA-3360 / 529STCV-152 / 7IPZ-154 數字前綴
     (r'[A-Z]+\d+-\d{3,}', 'censored'),            # T28-103 混合
-    (r'[A-Z]+-?\d{3,}', 'censored'),              # SONE-205 / SONE205 一般（hyphen 可省、至少 3 位——
-                                                  # 與舊 is_number_format 的 ^[a-zA-Z]+-?\d{3,}$ 邊界逐字對齊。
-                                                  # 1-2 位數是「部分番號」的地盤，故意不收：那條路要給候選清單）
+    (r'[A-Z]+-?\d{2,}', 'censored'),              # SONE-205 / SONE205 / SONE-10 一般（hyphen 可省、至少 2 位——
+                                                  # 與 is_number_format 的 ^[a-zA-Z]+-?\d{2,}$ 邊界逐字對齊。
+                                                  # 2 位尾數（ABP-12）視為完整番號走精準搜尋；只有 1 位數
+                                                  # 才留給 is_partial_number 的候選清單）
 ]
 
 
@@ -525,7 +548,7 @@ def is_strict_uncensored_number(s: str) -> bool:
 
 
 # D 專用寬表（139-T8，CD-b2）：strict 表 ∪ 短尾碼（1-2 位）。
-# 不供 C／G 使用——C 的 ≥3 位下限是刻意的（1-2 位要留給 is_partial_number 給候選清單），
+# 不供 C／G 使用——C 的 ≥2 位下限是刻意的（1 位要留給 is_partial_number 給候選清單），
 # D 只是「送去查之前的格式衛生檢查」，不該替 C 做路由決定。
 _LENIENT_NUMBER_PATTERN = r'[A-Z]+\d*-\d{1,2}'   # 有 hyphen 且尾碼 1-2 位（HITMA-16 / T28-10）
 
