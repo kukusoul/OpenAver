@@ -17,6 +17,13 @@ DEFAULT_HEADERS = {
 }
 
 
+def format_no_hyphen_number(prefix: str, digits: str) -> str:
+    """Format compact numbers like SONE205 or SNIS00091 as SONE-205 / SNIS-091."""
+    if len(digits) > 3 and digits.startswith('0'):
+        digits = (digits.lstrip('0') or '0').zfill(3)
+    return f"{prefix.upper()}-{digits}"
+
+
 def get_html(url: str, timeout: int = DEFAULT_TIMEOUT,
              headers: Optional[dict[str, str]] = None, cookies: Optional[dict[str, str]] = None) -> Optional[str]:
     """
@@ -101,24 +108,27 @@ def extract_number(filename: str) -> Optional[str]:
         r'[-_](UC|UNCEN|UNCENSORED|LEAK|LEAKED)(?=[-_.\s]|$)',
         '', basename, flags=re.IGNORECASE
     )
+    if '@' in basename and re.search(r'\.[A-Za-z]{2,}(?:$|[^A-Za-z])', basename.split('@', 1)[0]):
+        basename = basename.split('@', 1)[1]
 
     patterns = [
         r'(FC2-PPV-\d+)',               # FC2-PPV-1234567
         r'(\d{6}-\d{2,})',              # 041417-413 日期-編號格式（無碼）
         r'(\d{6}_\d{2,})',             # 120415_201 / 082912_01 底線格式（無碼）
+        r'([A-Za-z]{2,7})(\d{2,5})(?=-\d+\b)',  # EBVR00097-1 → EBVR-097（尾端 -1 是分段）
         r'([A-Za-z]+\d+-\d+)',          # T28-103 混合格式
-        r'\[([A-Za-z]{1,7}-\d{3,5})\]', # [ABC-123] 方括號
-        r'([A-Za-z]{1,7}-\d{3,5})',     # ABC-123 帶橫線
-        r'([A-Za-z]{2,7})(\d{3,5})',    # ABC12345 不帶橫線（index 6，兩 group → 插 hyphen）
+        r'\[([A-Za-z]{1,7}-\d{2,5})\]', # [ABC-123] 方括號
+        r'([A-Za-z]{1,7}-\d{2,5})',     # ABC-123 帶橫線
+        r'([A-Za-z]{2,7})(\d{2,5})',    # ABC12345 不帶橫線（兩 group → 插 hyphen）
         r'([nkcmsNKCMS]\d{4})(?!\d)',      # n0762 單字母 + 恰 4 位（Tokyo Hot 無碼，前綴限 n/k/c/m/s（spec-73 US2 權威模型），右側無更多數字）
         r'(\d{3}[A-Za-z]{3,4}-?\d{3,4})', # 123ABC-456 或 123ABC456
     ]
 
-    for i, pattern in enumerate(patterns):
+    for pattern in patterns:
         match = re.search(pattern, basename, re.IGNORECASE)
         if match:
-            if i == 6:  # 不帶橫線需重組（ABC12345）
-                number = f"{match.group(1).upper()}-{match.group(2)}"
+            if match.lastindex and match.lastindex >= 2:  # 不帶橫線需重組（ABC12345 / SNIS00091）
+                number = format_no_hyphen_number(match.group(1), match.group(2))
             else:
                 number = match.group(1).upper()
             return number
@@ -366,7 +376,7 @@ def normalize_number_impl(number: str) -> str:
     # ABC123 → ABC-123
     match = re.match(r'^([A-Z]+)(\d+)$', number)
     if match:
-        return f"{match.group(1)}-{match.group(2)}"
+        return format_no_hyphen_number(match.group(1), match.group(2))
     return number
 
 

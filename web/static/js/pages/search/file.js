@@ -135,7 +135,7 @@ async function parseFilenames(filenames, { signal } = {}) {
  */
 function formatNumber(input) {
     if (!input) return null;
-    const match = input.match(/([A-Z]{1,7})-?(\d{3,7})/i);
+    const match = input.match(/([A-Z]{1,7})-?(\d{2,7})/i);
     if (match) {
         return `${match[1].toUpperCase()}-${match[2]}`;
     }
