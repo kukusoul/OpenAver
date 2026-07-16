@@ -62,6 +62,10 @@ _BASELINE_VIDEO_COLUMNS = {
     # spec-123 精選：user_rating（全域 migration 加的欄位，同樣不是 off-flavor 寫入路徑新增；
     # 該路徑對它零寫入——CD-123-3 已把它排除在 upsert/upsert_batch/repath 分支 2 之外）
     "user_rating",
+    # NFO 分組 key：nfo_path（同樣是全域 migration 欄位，不是 off-flavor 寫入路徑新增）。
+    # `nfo_format` 讓 NFO 可以不跟影片同名、一份 NFO 服務整個資料夾，掃描端把它記進 DB
+    # 供 Showcase 分組用（見 core/multipart_group.group_rows）。
+    "nfo_path",
 }
 
 _FAKE_COVER_BYTES = b"\xff\xd8\xff\xe0FAKE-COVER-JPEG"

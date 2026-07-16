@@ -5,6 +5,7 @@ spec-48b §b3 — multi-video folder gate + fetch_samples_only() integration
 """
 import pytest
 from unittest.mock import patch, MagicMock
+from types import SimpleNamespace
 from dataclasses import asdict
 from fastapi.testclient import TestClient
 
@@ -42,6 +43,31 @@ class TestFetchSamplesEndpoint:
     - capabilities 揭露 fetch_samples 含 confirmation_required: true
     """
 
+    def test_multi_video_folder_sharing_one_nfo_is_not_gated(self, client):
+        """count=3 但共用同一份 NFO（`nfo_format` 讓一份 NFO 服務整個資料夾）：
+        這是同一部作品的多個檔案，共用一份 extrafanart/ 正是預期行為，不得被 gate 擋下。"""
+        mock_result = _make_enrich_result(success=True, extrafanart_written=2)
+
+        with patch("web.routers.scraper.VideoRepository") as mock_repo_cls, \
+             patch("web.routers.scraper.fetch_samples_only", return_value=mock_result) as mock_fetch:
+            mock_repo = MagicMock()
+            mock_repo.count_videos_in_folder.return_value = 3
+            mock_repo.get_by_path.return_value = SimpleNamespace(
+                nfo_path=to_file_uri("/home/user/movies/SONE-205/SONE-205.nfo")
+            )
+            mock_repo_cls.return_value = mock_repo
+
+            resp = client.post("/api/scraper/fetch-samples", json={
+                "file_path": to_file_uri("/home/user/movies/SONE-205/SONE-205-cd2.mp4"),
+                "number": "SONE-205",
+            })
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["success"] is True
+        assert data["extrafanart_written"] == 2
+        mock_fetch.assert_called_once()
+
     def test_single_video_folder_calls_fetch_samples(self, client):
         """count=1：gate 不觸發，呼叫 fetch_samples_only()，回傳其 EnrichResult"""
         mock_result = _make_enrich_result(success=True, extrafanart_written=3)
@@ -68,11 +94,13 @@ class TestFetchSamplesEndpoint:
         assert call_kwargs.kwargs.get("file_path") or call_kwargs.args[0]  # file_path 有值
 
     def test_multi_video_folder_returns_gate_response(self, client):
-        """count=3：gate 觸發，不呼叫 fetch_samples_only()，回傳 multi_video_folder 錯誤"""
+        """count=3 且各片不共用 NFO：gate 觸發，不呼叫 fetch_samples_only()"""
         with patch("web.routers.scraper.VideoRepository") as mock_repo_cls, \
              patch("web.routers.scraper.fetch_samples_only") as mock_fetch:
             mock_repo = MagicMock()
             mock_repo.count_videos_in_folder.return_value = 3
+            # nfo_path 空 ＝ 這幾部片各自獨立，共用一份 extrafanart/ 會互相覆蓋
+            mock_repo.get_by_path.return_value = SimpleNamespace(nfo_path="")
             mock_repo_cls.return_value = mock_repo
 
             resp = client.post("/api/scraper/fetch-samples", json={
