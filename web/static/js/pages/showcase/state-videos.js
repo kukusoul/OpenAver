@@ -479,6 +479,7 @@ export function stateVideos() {
                         video.tags,
                         video.release_date,
                         video.path,
+                        (video.media_files || []).map(item => item.name).join(' '),
                         video.director,
                         video.series,
                         video.label,

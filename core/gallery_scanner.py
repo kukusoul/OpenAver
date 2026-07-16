@@ -65,6 +65,7 @@ class VideoInfo:
     label: str = ""
     sample_images: List[str] = field(default_factory=list)
     user_tags: List[str] = field(default_factory=list)
+    nfo_path: str = ""
     nfo_thumb: Optional[str] = None  # 暫存用途，不序列化進 DB/cache
 
     def to_dict(self) -> dict:
@@ -86,6 +87,7 @@ class VideoInfo:
             "label": self.label,
             "sample_images": self.sample_images,
             "user_tags": self.user_tags,
+            "nfo_path": self.nfo_path,
         }
 
     @classmethod
@@ -187,7 +189,10 @@ def fast_scan_directory(
                                     on_error=lambda e, entry=entry: _safe_on_skip(entry.path, e),
                                 )
                                 if mt is not None:
-                                    dir_nfos[stem] = mt
+                                    dir_nfos[stem] = {
+                                        'path': entry.path,
+                                        'mtime': mt,
+                                    }
                             elif ext in extensions:
                                 stat = entry.stat()
                                 if min_size_bytes <= 0 or ext in ZERO_SIZE_EXTENSIONS or stat.st_size >= min_size_bytes:
@@ -207,9 +212,12 @@ def fast_scan_directory(
                 if dir_files:
                     extrafanart_image_count = _count_extrafanart_images(path)
 
-                # 將 NFO mtime 加入對應的影片資訊
+                # 將 NFO path/mtime 加入對應的影片資訊：同名優先；單 NFO 資料夾則全資料夾共用。
+                sole_nfo = next(iter(dir_nfos.values())) if len(dir_nfos) == 1 else None
                 for f in dir_files:
-                    f['nfo_mtime'] = dir_nfos.get(f['stem'], 0)
+                    nfo = dir_nfos.get(f['stem']) or sole_nfo
+                    f['nfo_path'] = nfo['path'] if nfo else ''
+                    f['nfo_mtime'] = nfo['mtime'] if nfo else 0
                     # 同目錄下所有影片本來就共用同一個 extrafanart/（scan_file()
                     # 也是用 video_path.parent / 'extrafanart' 算路徑，既有行為）
                     # ——均等掛給本層每部片，不是只掛給其中一部（TASK-118b-T9）。
@@ -496,7 +504,7 @@ class VideoScanner:
 
         return fs if Path(fs).is_file() else None
 
-    def find_cover_image(self, video_path: str, nfo_thumb: Optional[str] = None) -> str:
+    def find_cover_image(self, video_path: str, nfo_thumb: Optional[str] = None, nfo_path: str = None) -> str:
         """尋找封面圖片（5 層 fallback）
 
         L1:   同名圖片（{stem}{ext}）
@@ -508,12 +516,20 @@ class VideoScanner:
         video_path = Path(video_path)
         video_dir = video_path.parent
         video_stem = video_path.stem
+        nfo_stem = Path(nfo_path).stem if nfo_path else ''
 
         # L1: 同名圖片
         for ext in IMAGE_EXTENSIONS:
             img_path = video_dir / f"{video_stem}{ext}"
             if img_path.exists():
                 return str(img_path)
+
+        # L1.25: NFO 同名圖片（單 NFO 資料夾多影片時的作品封面）
+        if nfo_stem and nfo_stem != video_stem:
+            for ext in IMAGE_EXTENSIONS:
+                img_path = video_dir / f"{nfo_stem}{ext}"
+                if img_path.exists():
+                    return str(img_path)
 
         # L1.5: {stem}-fanart / {stem}-poster（外部管理器工具慣用命名：MDCX/Javinizer + OpenAver jellyfin/emby 輸出）
         #       -fanart 優先（全圖橫版，showcase 顯示一致），-poster 次之
@@ -567,7 +583,7 @@ class VideoScanner:
                 continue
             yield img_path
 
-    def scan_file(self, video_path: str, base_path: str = None) -> VideoInfo:
+    def scan_file(self, video_path: str, base_path: str = None, nfo_path: str = None) -> VideoInfo:
         """掃描單一影片檔案"""
         t_start = time.time()
         video_path = Path(video_path)
@@ -598,9 +614,10 @@ class VideoScanner:
             pass
 
         # 嘗試讀取 NFO
-        nfo_path = video_path.with_suffix('.nfo')
+        nfo_path = Path(nfo_path) if nfo_path else video_path.with_suffix('.nfo')
         t_nfo_check = time.time()
         if nfo_path.exists():
+            info.nfo_path = to_file_uri(str(nfo_path), self.path_mappings) if not base_path else str(nfo_path).replace('\\', '/')
             logger.debug(f"[Scan]   nfo_exists: {t_nfo_check - t_start:.2f}s")
             nfo_info = self.parse_nfo(str(nfo_path))
             t_parse = time.time()
@@ -634,7 +651,7 @@ class VideoScanner:
         info.maker = self.normalize_maker(info.num, info.maker)
 
         # 尋找封面圖片
-        img_path = self.find_cover_image(str(video_path), nfo_thumb=info.nfo_thumb)
+        img_path = self.find_cover_image(str(video_path), nfo_thumb=info.nfo_thumb, nfo_path=str(nfo_path) if info.nfo_path else None)
         if img_path:
             if base_path:
                 try:
@@ -705,6 +722,7 @@ class VideoScanner:
         # 步驟 2: 從 SQLite 取得現有 mtime 索引
         # 注意：資料庫中的 path 是 file:/// 格式
         db_index = repo.get_mtime_index()  # {path: (mtime, nfo_mtime, sample_count)}
+        db_nfo_path_index = repo.get_nfo_path_index()
 
         # 建立 file:/// 路徑到原始路徑的映射，以及原始路徑到 mtime 的映射
         # scan_file 會產生 file:/// 格式的路徑（使用 core.path_utils.to_file_uri）
@@ -732,6 +750,9 @@ class VideoScanner:
             ):
                 # mtime、nfo_mtime 或劇照張數變更
                 needs_scan.append(file_info)
+            elif file_info.get('nfo_path') and not db_nfo_path_index.get(file_uri):
+                # 舊 DB row 沒有 nfo_path；補齊 NFO 分組 key
+                needs_scan.append(file_info)
 
         # 步驟 4: 清理已刪除的檔案（比對 file:/// 格式的路徑）
         deleted_paths = set(db_index.keys()) - current_file_uris
@@ -753,7 +774,7 @@ class VideoScanner:
             logger.info(f"[{i}/{total_needs_scan}] 處理: {video_name}")
 
             try:
-                video_info = self.scan_file(file_info['path'], None)
+                video_info = self.scan_file(file_info['path'], None, file_info.get('nfo_path'))
                 video = Video.from_video_info(video_info)
                 video.mtime = file_info['mtime']
                 video.nfo_mtime = file_info.get('nfo_mtime', 0)
@@ -864,7 +885,7 @@ class VideoScanner:
                 # 緩存未命中，重新解析
                 logger.info(f"[{i}/{len(all_files)}] 處理: {video_name}")
                 try:
-                    info = self.scan_file(path_key, base_path)
+                    info = self.scan_file(path_key, base_path, file_info.get('nfo_path'))
                     videos.append(info)
                     cache_misses += 1
 

@@ -167,6 +167,49 @@ class TestShowcaseVideosAPI:
         assert "size" in video1
         assert "cover_url" in video1
         assert "mtime" in video1
+        assert "media_files" in video1
+        assert "media_count" in video1
+
+    def test_get_videos_groups_by_nfo_path(self, make_populated_db, showcase_config, monkeypatch):
+        """同一 nfo_path 的多個媒體檔在 Showcase 只輸出一張作品卡。"""
+        import json
+        from web.routers import showcase
+
+        nfo_uri = to_file_uri("/home/user/media/MOVIE/movie.nfo")
+        db_path = make_populated_db([
+            Video(
+                path=to_file_uri("/home/user/media/MOVIE/movie-1080p.mp4"),
+                nfo_path=nfo_uri,
+                number="MOVIE-001",
+                title="Grouped Movie",
+                size_bytes=100,
+                mtime=10.0,
+            ),
+            Video(
+                path=to_file_uri("/home/user/media/MOVIE/movie-4k.mp4"),
+                nfo_path=nfo_uri,
+                number="MOVIE-001",
+                title="Grouped Movie",
+                size_bytes=200,
+                mtime=20.0,
+            ),
+        ])
+
+        def mock_get_db_path():
+            return db_path
+        monkeypatch.setattr(showcase, "get_db_path", mock_get_db_path)
+        monkeypatch.setattr(showcase, "load_config", lambda: showcase_config)
+
+        response = showcase.get_videos()
+        data = json.loads(response.body)
+
+        assert data["success"] is True
+        assert data["total"] == 1
+        video = data["videos"][0]
+        assert video["nfo_path"] == nfo_uri
+        assert video["media_count"] == 2
+        assert video["size"] == 300
+        assert [item["name"] for item in video["media_files"]] == ["movie-1080p.mp4", "movie-4k.mp4"]
 
     def test_cover_url_conversion_unix_path(self, client, populated_db, monkeypatch):
         """測試 cover_url 正確轉換（Unix 路徑）— 使用真實 Unix 路徑，CI 環境無關"""

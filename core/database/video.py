@@ -38,6 +38,7 @@ class Video:
     duration: Optional[int] = None
     size_bytes: int = 0
     cover_path: str = ""
+    nfo_path: str = ""
     output_dir: str = ''
     release_date: str = ""
     mtime: float = 0.0
@@ -84,6 +85,7 @@ class Video:
             duration=info.duration,
             size_bytes=info.size,
             cover_path=info.img,
+            nfo_path=getattr(info, 'nfo_path', '') or '',
             release_date=info.date,
             mtime=mtime_unix,
             nfo_mtime=0.0  # VideoInfo 沒有直接的 nfo_mtime
@@ -848,6 +850,18 @@ class VideoRepository:
                         pass
                 result[path] = (mtime, nfo_mtime, sample_count)
             return result
+        finally:
+            conn.close()
+
+    def get_nfo_path_index(self) -> dict:
+        """取得 {path: nfo_path} 索引，用於增量掃描補齊 NFO 分組 key。"""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+
+        try:
+            cursor.execute("SELECT path, nfo_path FROM videos")
+            rows = cursor.fetchall()
+            return {row[0]: row[1] or '' for row in rows}
         finally:
             conn.close()
 
