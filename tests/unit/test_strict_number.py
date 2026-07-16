@@ -64,24 +64,29 @@ ALL_POSITIVE = (
 )
 
 NEGATIVE_PARTIAL_NUMBERS = [
-    # 一般形（鎖 `[A-Z]+-?\d{3,}` 的位數下限）
-    "ABP-01",
+    # 一般形（鎖 `[A-Z]+-?\d{2,}` 的位數下限——只有 1 位才留給 is_partial_number）
     "ABP-1",
     "SNIS-1",
-    "ABC-12",
-    "SONE-01",
-    # 數字前綴形（鎖 `\d{1,4}[A-Z]+-\d{3,}` 的位數下限）
+    # 數字前綴形（鎖 `\d{1,4}[A-Z]+-\d{3,}` 的位數下限，未隨一般形放寬）
     "200GANA-36",
     "7IPZ-01",
     "529STCV-1",
-    # 混合形（鎖 `[A-Z]+\d+-\d{3,}` 的位數下限）
+    # 混合形（鎖 `[A-Z]+\d+-\d{3,}` 的位數下限，未隨一般形放寬）
     "T28-01",
     "T28-12",
-    # FC2 / HEYZO 形（鎖那三條 uncensored pattern 的位數下限）——
-    # 少了下限，使用者打 HEYZO-12 想瀏覽系列會被判成完整番號、候選清單消失
-    "FC21",
+    # FC2 / HEYZO 專條的位數下限（`FC2-12` / `HEYZO1` 連一般形也接不住）
     "FC2-12",
     "HEYZO1",
+]
+
+# 一般形 2 位尾碼：下限降到 2 位後改判完整番號（走精準搜尋，不再進候選清單）。
+# `FC21` / `HEYZO-12` 也在此列——它們接不住 FC2／HEYZO 專條（那三條仍要求 ≥3 位），
+# 但接得住一般形 `[A-Z]+-?\d{2,}`，因此歸 censored 精準搜尋。
+POSITIVE_TWO_DIGIT_TAIL = [
+    "ABP-01",
+    "ABC-12",
+    "SONE-01",
+    "FC21",
     "HEYZO-12",
 ]
 
@@ -170,25 +175,43 @@ def test_strict_number_positive_no_hyphen(num: str):
 
 @pytest.mark.parametrize("num", NEGATIVE_PARTIAL_NUMBERS)
 def test_strict_number_negative_partial_numbers(num: str):
-    """DoD 增補反向鎖：部分番號 ABP-01/ABP-1/SNIS-1/ABC-12/SONE-01 皆為 False"""
+    """反向鎖：1 位尾碼與各專條下限（ABP-1/SNIS-1/T28-01/FC2-12/HEYZO1）皆為 False"""
     assert is_strict_number(num) is False
 
 
-def test_is_number_format_and_is_partial_number_exclusive():
-    """DoD 增補：is_number_format 與 is_partial_number 不得同時為 True"""
+@pytest.mark.parametrize("num", POSITIVE_TWO_DIGIT_TAIL)
+def test_strict_number_positive_two_digit_tail(num: str):
+    """正向鎖：一般形 2 位尾碼為完整番號（下限由 3 位降到 2 位）"""
+    assert is_strict_number(num) is True
+
+
+def test_one_digit_tail_stays_partial_only():
+    """1 位尾碼仍是 is_partial_number 獨佔——候選清單那條路不得被吃掉"""
     from core.scraper import is_number_format, is_partial_number
-    for s in ["SNIS-1", "ABP-01", "ABC-12", "SONE-01",
-              # grok review 抓到 sonnet 漏掉的一組：FC2/HEYZO 的短尾也必須留給 partial
-              "FC21", "HEYZO1", "HEYZO-12"]:
+    for s in ["SNIS-1", "ABP-1", "ABC-1", "HEYZO1"]:
         assert is_number_format(s) is False, f"is_number_format({s!r}) 應為 False"
         assert is_partial_number(s) is True, f"is_partial_number({s!r}) 應為 True"
+
+
+def test_two_digit_tail_routes_exact_over_partial():
+    """2 位尾碼兩者皆 True——路由由「先問 is_number_format」決定走精準搜尋。
+
+    下限降到 2 位後兩個述詞在這一段刻意重疊，不再互斥；真正要鎖的是呼叫端的
+    先後順序（_detect_mode / smart_search 都先問 is_number_format）。
+    """
+    from core.scraper import is_number_format, is_partial_number
+    for s in POSITIVE_TWO_DIGIT_TAIL:
+        assert is_number_format(s) is True, f"is_number_format({s!r}) 應為 True"
+    for s in ["ABP-01", "ABC-12", "SONE-01"]:
+        assert is_partial_number(s) is True, f"is_partial_number({s!r}) 仍為 True（順序決勝）"
 
 
 # ============ TASK-139-T8：D 專用寬表測試 ============
 
 # 舊 D（139b 之前）= is_strict_number(s)；新 D = is_lenient_number(s)
 CORPUS_T8 = [
-    # 短尾碼（1-2 位，收窄修復對象——舊 D 收、is_strict_number 不收）
+    # 短尾碼（1-2 位）。2 位的一般形（HITMA-16／SONE-01／IPZZ-03／ABP-01）現已被
+    # is_strict_number 收下，只有 1 位尾碼與混合形 T28-10 還是 D 專屬。
     "HITMA-16", "T28-10", "ABC-1", "SONE-01", "IPZZ-03", "SNIS-1", "ABP-01",
     # ❗數字前綴 ＋ 1-2 位尾碼：**舊 D 也不收**（`^[A-Z]+-\d+$` 要求字母開頭），
     # 不是回歸、不在本卡範圍。放進語料是為了「反向鎖住它仍然不收」。
@@ -206,10 +229,10 @@ CORPUS_T8 = [
     "", "三上悠亜",
 ]
 EXPECTED_DIFF_T8 = [
-    ("HITMA-16", False, True), ("T28-10", False, True), ("ABC-1", False, True),
-    ("SONE-01", False, True), ("IPZZ-03", False, True), ("SNIS-1", False, True),
-    ("ABP-01", False, True),
+    ("T28-10", False, True), ("ABC-1", False, True), ("SNIS-1", False, True),
     # ❗`200GANA-36` / `529STCV-1` **不在差集裡**——見上方語料註解，兩者 old_D 也是 False。
+    # ❗`HITMA-16` / `SONE-01` / `IPZZ-03` / `ABP-01` 也已離開差集：一般形下限降到 2 位後
+    #   is_strict_number 自己就收了，不再只靠 D 的寬表。差集只剩 1 位尾碼與混合形短尾。
 ]
 
 

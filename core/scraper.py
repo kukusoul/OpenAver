@@ -116,7 +116,7 @@ def expand_partial_number(partial: str) -> List[str]:
     prefix, num = match.groups()
     prefix = prefix.upper()
 
-    if len(num) >= 3:
+    if len(num) >= 2:
         return [f"{prefix}-{num}"]
 
     candidates = []

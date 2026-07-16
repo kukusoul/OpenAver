@@ -182,6 +182,11 @@ class TestExtractNumber:
         result = extract_number('hhd800.com@SONE-103.mp4')
         assert result == 'SONE-103'
 
+    def test_url_prefix_no_hyphen_with_alpha_suffix(self):
+        """網址前綴 xhd1080.com@snis00824hhb → SNIS-824"""
+        result = extract_number('xhd1080.com@snis00824hhb.mp4')
+        assert result == 'SNIS-824'
+
     def test_garbage_suffix(self):
         """亂碼後綴 SONE-103-C_Thz_fed48"""
         result = extract_number('SONE-103-C_Thz_fed48.mkv')
@@ -241,9 +246,13 @@ class TestNormalizeNumber:
         """大寫無橫線 ABC123 → ABC-123"""
         assert normalize_number('ABC123') == 'ABC-123'
 
-    def test_preserve_leading_zeros(self):
-        """保留前導零 abc00123 → ABC-00123"""
-        assert normalize_number('abc00123') == 'ABC-00123'
+    def test_strip_extra_leading_zeros(self):
+        """壓縮多餘前導零 abc00123 → ABC-123"""
+        assert normalize_number('abc00123') == 'ABC-123'
+
+    def test_strip_extra_leading_zeros_to_three_digits(self):
+        """SNIS00091 → SNIS-091"""
+        assert normalize_number('SNIS00091') == 'SNIS-091'
 
     def test_fc2ppv_format(self):
         """FC2-PPV 格式正規化為正典 FC2-<純數字>"""
@@ -489,10 +498,19 @@ class TestIsNumberFormat:
         """LEAKED 後綴 IPZZ-001_LEAKED"""
         assert is_number_format('IPZZ-001_LEAKED') is True
 
+    # --- 2 位數格式（支援）---
+    def test_two_digit_number(self):
+        """2 位數番號 SONE-10"""
+        assert is_number_format('SONE-10') is True
+
+    def test_two_digit_no_hyphen(self):
+        """2 位數無橫線 ABC12"""
+        assert is_number_format('ABC12') is True
+
     # --- 無效格式 ---
     def test_invalid_partial(self):
-        """部分番號 SONE-01"""
-        assert is_number_format('SONE-01') is False
+        """部分番號 SONE-0（1 位數）"""
+        assert is_number_format('SONE-0') is False
 
     def test_invalid_prefix_only(self):
         """純前綴 SONE"""
@@ -503,8 +521,8 @@ class TestIsNumberFormat:
         assert is_number_format('123456') is False
 
     def test_invalid_short_number(self):
-        """數字太短 ABC-12"""
-        assert is_number_format('ABC-12') is False
+        """數字太短 ABC-1（1 位數）"""
+        assert is_number_format('ABC-1') is False
 
 
 # ============ 整合測試：搜尋流程 ============
@@ -756,7 +774,8 @@ class TestSmartSearchUncensoredAndConsistency:
                     corpus_182 = [item["input"] for item in ast.literal_eval(node.value)]
 
         extra_24 = [
-            "SONE-0", "ABP-12", "HITMA-1",                      # partial：必須維持 partial
+            "SONE-0", "HITMA-1",                                # partial：必須維持 partial
+            "ABP-12",                                           # 2 位尾碼：現為 exact（is_strict_number 下限降到 2 位）
             "IPZZ", "SONE", "ABP",                              # prefix：必須維持 prefix
             "[ABC-123]", "ABC-123.mp4", "【ABC-123】", "(ABC-123)",
             "[JavBus] ABC-123 標題.mp4", "ABC-123 - 中文字幕.mkv",  # residual #6 的包裝
@@ -806,7 +825,9 @@ class TestSmartSearchUncensoredAndConsistency:
                 diff.append((q, old_m, new_m))
 
         allowed_transitions_ss = {('actress', 'exact'), ('actress', 'uncensored'), ('uncensored', 'exact')}
-        expected_counts_ss = {('actress', 'exact'): 118, ('actress', 'uncensored'): 47, ('uncensored', 'exact'): 4}
+        # actress -> exact 118 → 122：同 Oracle B，一般番號尾碼下限降到 2 位 + 網址前綴在取 stem 前剝除。
+        # uncensored 兩桶未變（無碼三條的 3 位下限刻意不動），方向不變式仍由 ① 把關。
+        expected_counts_ss = {('actress', 'exact'): 122, ('actress', 'uncensored'): 47, ('uncensored', 'exact'): 4}
         expected_unc_to_exact = ['n9110', 'N0762', 'K0150', 'T1234']
         expected_a2u = [
             'FC2PPV-123456-1',
@@ -910,7 +931,8 @@ class TestSmartSearchUncensoredAndConsistency:
         cases = [
             ("../etc/passwd/SONE-103", "SONE-103"),
             ("https://evil.com/SONE-103", "SONE-103"),
-            ("hhd800.com@SONE-103", "HHD-800"),  # extract_number("hhd800.com@...") 先抽取 hhd800 為 HHD-800 (corpus U3)
+            # 網址前綴改在取 Path.stem 前剝除後，抽到的是 @ 右邊的真番號（corpus U3 → R8）
+            ("hhd800.com@SONE-103", "SONE-103"),
         ]
         for raw, expected_number in cases:
             # ❶ exact 分支呼叫的是 search_jav_single_source（core/scraper.py:885），**不是** search_jav

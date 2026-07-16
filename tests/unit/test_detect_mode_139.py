@@ -46,7 +46,8 @@ def test_oracle_b_detect_mode():
                 corpus_182 = [item["input"] for item in ast.literal_eval(node.value)]
 
     extra_24 = [
-        "SONE-0", "ABP-12", "HITMA-1",                      # partial：必須維持 partial
+        "SONE-0", "HITMA-1",                                # partial：必須維持 partial
+        "ABP-12",                                           # 2 位尾碼：現為 exact（is_strict_number 下限降到 2 位）
         "IPZZ", "SONE", "ABP",                              # prefix：必須維持 prefix
         "[ABC-123]", "ABC-123.mp4", "【ABC-123】", "(ABC-123)",
         "[JavBus] ABC-123 標題.mp4", "ABC-123 - 中文字幕.mkv",  # residual #6 的包裝
@@ -77,7 +78,11 @@ def test_oracle_b_detect_mode():
             diff.append((q, old_m, new_m))
 
     allowed_transitions_dm = {('actress', 'exact')}
-    expected_counts_dm = {('actress', 'exact'): 165}
+    # 165 → 169：is_strict_number 一般番號下限由 3 位降到 2 位，且 extract_number 改在取
+    # Path.stem **之前**剝網址前綴（`zzpp06.com@n1666`／`test.xxx@133ARA-030`）——
+    # MCBD-18／MURA-42 這類 2 位尾碼與網址前綴案例由 actress 轉 exact。
+    # 方向不變式（只准 actress -> exact）未鬆動，仍由 ① 把關。
+    expected_counts_dm = {('actress', 'exact'): 169}
 
     # ① 方向不變式（只准 actress -> exact）
     assert set(moves) <= allowed_transitions_dm

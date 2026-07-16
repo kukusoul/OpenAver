@@ -56,6 +56,14 @@ class TestExtractNumber:
         """SONE205.mp4 → SONE-205（多字母走 index 6，照舊插 hyphen）"""
         assert extract_number("SONE205.mp4") == "SONE-205"
 
+    def test_regression_multiletter_no_hyphen_strips_extra_zeroes(self):
+        """SNIS00091.mp4 → SNIS-091（前導零壓成常見 3 位番號）"""
+        assert extract_number("SNIS00091.mp4") == "SNIS-091"
+
+    def test_regression_multiletter_no_hyphen_part_suffix(self):
+        """ebvr00097-1.mp4 → EBVR-097（尾端 -1 是分段，不是番號本體）"""
+        assert extract_number("ebvr00097-1.mp4") == "EBVR-097"
+
     def test_regression_hyphen_format_unchanged(self):
         """ABC-123.mp4 → ABC-123（帶 hyphen 不變）"""
         assert extract_number("ABC-123.mp4") == "ABC-123"
@@ -201,14 +209,15 @@ class TestExtractNumberCollisionGuards:
         """sone103.mp4 → SONE-103（無 hyphen 插入行為不受 cap 寬度影響）"""
         assert extract_number("sone103.mp4") == "SONE-103"
 
-    def test_dmm_content_id_1sdms00808_unchanged(self):
-        """1sdms00808.mp4 → SDMS-00808（CD-6：DMM content-id 不被自動轉成 SDMS-808）。
+    def test_dmm_content_id_1sdms00808(self):
+        """1sdms00808.mp4 → SDMS-808（CD-6 的 Bug B 現已由 format_no_hyphen_number 修掉）。
 
-        SDMS-808 才是 DMM 正式番號（Bug B，本 task 刻意不做）。extract_number
-        走 index 8 pattern（123ABC456）產出 SDMS-00808，保留完整 5 位數字。
-        鎖住此字面值，防日後 cap/pattern 變動誤動 CD-6 邊界。
+        CD-6 當時鎖 SDMS-00808 是「這個 task 不做」的現況快照，並非把 00808 認定為正解——
+        同一段註解自己寫著「SDMS-808 才是 DMM 正式番號」。前導零壓縮上線後即為該正解。
+        壓縮只收「壓完 ≤3 位」的情形，PARATHD-02976 那種真長番號不受影響
+        （見 test_parathd_no_hyphen）。
         """
-        assert extract_number("1sdms00808.mp4") == "SDMS-00808"
+        assert extract_number("1sdms00808.mp4") == "SDMS-808"
 
     def test_is_prefix_only_unchanged_CD4(self):
         """is_prefix_only("ABCDEFG") is False（CD-4，core/scraper.py 零行變更）"""
@@ -338,8 +347,8 @@ class TestExtractNumberTASK139T1b:
     # --- F8 must-not-break 四條 ---
 
     def test_f8_dmm_content_id_1sdms00808(self):
-        """F8-1: 1sdms00808.mp4 → SDMS-00808（不被破壞）"""
-        assert extract_number("1sdms00808.mp4") == "SDMS-00808"
+        """F8-1: 1sdms00808.mp4 → SDMS-808（前導零壓縮後的 DMM 正式番號，見 CD-6 上面那條）"""
+        assert extract_number("1sdms00808.mp4") == "SDMS-808"
 
     def test_f8_tokyo_hot_single_letter(self):
         """F8-2: 東京熱單字母 + 4 位不插 hyphen（n0762, k0150）"""

@@ -4310,13 +4310,12 @@ class TestVrEndToEnd:
             f"NFO 應含恰一個 <genre>VR</genre>，count={nfo_content.count('<genre>VR</genre>')}"
         )
 
-        # (c) NFO sidecar 檔名 stem 與影片 stem 對齊（VR tail 隨行，prove GB）
+        # (c) off 模式 NFO sidecar 依 nfo_format 命名（預設 {num}），不跟影片 stem。
+        # 「sidecar stem 與影片 stem 對齊」現在是外部管理器模式（jellyfin/emby/kodi）的契約——
+        # 那邊靠 stem 對齊關聯 metadata，所以恆等於 filename_base、VR tail 隨行。
         nfo_stem = Path(nfo_path).stem
-        assert nfo_stem == stem, (
-            f"NFO sidecar stem({nfo_stem!r}) 應與影片 stem({stem!r}) 完全對齊"
-        )
-        assert nfo_stem.endswith("_mkx200_LR"), (
-            f"NFO sidecar stem 應帶 VR tail：{nfo_stem!r}"
+        assert nfo_stem == "KAVR-001", (
+            f"off 模式 NFO stem 應為 nfo_format 預設的 {{num}}，實際：{nfo_stem!r}"
         )
 
     def test_vr_file_scraper_already_has_vr_no_duplicate(self, tmp_path):
@@ -4433,12 +4432,10 @@ class TestVrEndToEnd:
         nfo_path = result.get("nfo_path")
         assert nfo_path is not None, "create_nfo=True 時 nfo_path 不應為 None"
         nfo_content = Path(nfo_path).read_text(encoding="utf-8")
+        # off 模式 NFO sidecar 依 nfo_format 命名（預設 {num}）——雙寫防護鎖在影片 stem 上（上面已驗）
         nfo_stem = Path(nfo_path).stem
-        assert nfo_stem == stem, (
-            f"NFO sidecar stem({nfo_stem!r}) 應與影片 stem({stem!r}) 對齊"
-        )
-        assert nfo_stem.count("_180_LR") == 1, (
-            f"NFO sidecar stem _180_LR 也應單一，實際：{nfo_stem!r}"
+        assert nfo_stem == "ABC-123", (
+            f"off 模式 NFO stem 應為 nfo_format 預設的 {{num}}，實際：{nfo_stem!r}"
         )
         assert nfo_content.count("<tag>VR</tag>") == 1, (
             f"NFO <tag>VR</tag> 應恰一個，count={nfo_content.count('<tag>VR</tag>')}"
