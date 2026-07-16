@@ -70,6 +70,7 @@ class DMMScraper(BaseScraper):
                 description
                 packageImage { largeUrl }
                 makerReleasedAt
+                deliveryStartDate
                 duration
                 actresses { name }
                 directors { name }
@@ -117,7 +118,7 @@ class DMMScraper(BaseScraper):
     SAMPLE_IMAGES_PROBE_QUERY = """
         query ProbeSampleImages($id: ID!) {
             ppvContent(id: $id) {
-                sampleImages { imageUrl }
+                sampleImages { imageUrl largeImageUrl }
             }
         }
     """
@@ -250,7 +251,7 @@ class DMMScraper(BaseScraper):
 
             _sample_images_supported = True
             raw_samples = item.get('sampleImages') or []
-            return [re.sub(r'(?<!jp)-(\d+)\.jpg$', r'jp-\1.jpg', s['imageUrl']) for s in raw_samples if s.get('imageUrl')]
+            return [s.get('largeImageUrl') or s['imageUrl'] for s in raw_samples if s.get('imageUrl')]
 
         except Exception:
             return []
@@ -479,6 +480,22 @@ class DMMScraper(BaseScraper):
             return False  # 解析不出來 → 不拒絕（這就是「不對稱」）
         return (vp, vn.lstrip("0") or "0") != (ip, in_.lstrip("0") or "0")
 
+    def _preserve_requested_number(self, requested: str, video: Video) -> Video:
+        """保留使用者輸入的前導零寫法（BZ-01 不被 DMM 的 makerContentId 'BZ-1' 蓋掉）。
+
+        只做「形狀對齊」，**不做驗證**——番號是否為同一片由 `_number_conflicts()`／
+        `_number_matches()` 在呼叫端把關（兩者語意不同，見各自 docstring，不可合併成一支）。
+        兩邊解析不出來、數值不等、或請求端本來就是 4 位以上（DMM canonical 形式已經對）
+        時原樣回傳。
+        """
+        req_prefix, req_num = self._parse_number(requested)
+        found_prefix, found_num = self._parse_number(video.number)
+        if not (req_prefix and req_num and found_num and req_prefix == found_prefix):
+            return video
+        if int(req_num) != int(found_num) or len(req_num) > 3:
+            return video
+        return video.model_copy(update={'number': requested})
+
     def _content_id_to_number(self, content_id: str) -> str:
         """
         從 content_id 推導標準番號格式。
@@ -493,7 +510,7 @@ class DMMScraper(BaseScraper):
             ofje00709   → OFJE-709
             abp01234    → ABP-1234
         """
-        m = re.match(r'^(\d*)([a-z]+)(\d+)$', content_id.lower())
+        m = re.match(r'^(?:h_\d+)?(\d*)([a-z]+)(\d+)$', content_id.lower())
         if m:
             alpha = m.group(2).upper()
             num = m.group(3)
@@ -510,47 +527,67 @@ class DMMScraper(BaseScraper):
         """
         prefix, num = self._parse_number(number)
 
-        if not prefix:
+        if not prefix or not num:
             return None
 
-        query_word = f"{prefix.upper()} {num}"
+        # 第一式維持 TASK-134a-T4 的 'PFX NUM'（命中率最高，如 'NWF 237' → 3nwf237）。
+        # 第一式查不到才試帶 hyphen／壓縮形——舊式短番號（BZ-01）用 'BZ 01' 搜不到，
+        # 得靠 'BZ-01'／'BZ01' 才撈得出同系列結果。
+        number_upper = number.upper()
+        query_words = [f"{prefix.upper()} {num}"]
+        for extra in (number_upper, number_upper.replace('-', '')):
+            if extra not in query_words:
+                query_words.append(extra)
 
         try:
-            payload = {
-                'query': self.SEARCH_QUERY,
-                'variables': {
-                    'limit': 5,
-                    'sort': 'RELEASE_DATE',
-                    'queryWord': query_word
+            target_num = int(num)
+            sibling_dmm_prefixes = []
+
+            for query_word in query_words:
+                payload = {
+                    'query': self.SEARCH_QUERY,
+                    'variables': {
+                        'limit': 10,
+                        'sort': 'RELEASE_DATE',
+                        'queryWord': query_word
+                    }
                 }
-            }
-            resp = self._session.post(self.API_URL, json=payload, timeout=10)
+                resp = self._session.post(self.API_URL, json=payload, timeout=10)
 
-            if resp.status_code != 200:
-                return None
+                if resp.status_code != 200:
+                    continue
 
-            data = resp.json()
-            if not data.get('data') or not data['data'].get('legacySearchPPV'):
-                return None
+                data = resp.json()
+                if not data.get('data') or not data['data'].get('legacySearchPPV'):
+                    continue
 
-            contents = data['data']['legacySearchPPV']['result']['contents']
-            if not contents:
-                return None
+                contents = data['data']['legacySearchPPV']['result']['contents']
+                if not contents:
+                    continue
 
-            # 找系列段精確匹配番號前綴的結果（防誤學：搜 ERK-116 不應命中 gerk116，
-            # 搜 ID-xxx 不應命中 midv 系）。結構 {dmm_prefix}{series}{num}，series 段
-            # 必須 == prefix；找不到精確匹配 → 返回 None（不盲取第一個，避免誤刮）。
-            for content in contents:
-                cid = content['id']
-                m = re.match(
-                    r'^((?:h_\d+)|(?:\d+))?([a-z]+)(\d+)$',
-                    cid.lower()
-                )
-                if m and m.group(2) == prefix:
-                    return cid
+                # 系列段必須精確 == prefix（防誤學：搜 ERK-116 不應命中 gerk116，
+                # 搜 ID-xxx 不應命中 midv 系）。結構 {dmm_prefix}{series}{num}。
+                for content in contents:
+                    cid = content['id']
+                    m = re.match(
+                        r'^((?:h_\d+)|(?:\d+))?([a-z]+)(\d+)$',
+                        cid.lower()
+                    )
+                    if not m or m.group(2) != prefix:
+                        continue
+                    if int(m.group(3)) == target_num:
+                        return cid
+                    # 前綴對、號碼不對 → 這是同系列的別片（BZ-01 搜到 61bz016）。
+                    # 記下該系列在 DMM 的出貨前綴，全部查完仍無精確命中時用來直接組出目標 cid。
+                    dmm_prefix = m.group(1) or ""
+                    if dmm_prefix and dmm_prefix not in sibling_dmm_prefixes:
+                        sibling_dmm_prefixes.append(dmm_prefix)
 
-            # 沒找到精確匹配 → 返回 None（原邏輯 return contents[0]['id'] 會誤刮
-            # 子串相近的其他系列，例如 ERK-116 → gerk116）
+            # 用同系列鄰居的出貨前綴組 cid（出貨前綴表沒收錄這個系列時的補救）
+            for dmm_prefix in sibling_dmm_prefixes:
+                return f"{dmm_prefix}{prefix}{num}"
+
+            # 沒找到精確匹配也推不出來 → 返回 None（不盲取第一個，避免誤刮）
             return None
 
         except Exception:
@@ -588,7 +625,8 @@ class DMMScraper(BaseScraper):
                 for a in item.get('actresses', [])
             ]
 
-            release_date = item.get('makerReleasedAt') or ''
+            # 舊片 makerReleasedAt 常為 null，退 deliveryStartDate（配信開始日）
+            release_date = item.get('makerReleasedAt') or item.get('deliveryStartDate') or ''
             if release_date and 'T' in release_date:
                 release_date = release_date.split('T')[0]
 
@@ -622,7 +660,7 @@ class DMMScraper(BaseScraper):
                              f"{content_id}/{content_id}jp.jpg")
 
             video = Video(
-                number=item.get('makerContentId', ''),
+                number=item.get('makerContentId') or self._content_id_to_number(content_id),
                 title=item.get('title', ''),
                 actresses=actresses,
                 date=release_date,
@@ -646,6 +684,143 @@ class DMMScraper(BaseScraper):
             raise TimeoutError(f"DMM API timeout for {content_id}") from e
         except Exception:
             return None
+
+    def _fetch_mono_by_number(self, number: str) -> Optional[Video]:
+        """PPV API 找不到時，嘗試解析 DMM DVD/mono 商品頁。"""
+        prefix, num = self._parse_number(number)
+        if not prefix or not num:
+            return None
+
+        content_ids = [f"{prefix}{num}"]
+        padded_id = f"{prefix}{num.zfill(5)}"
+        if padded_id not in content_ids:
+            content_ids.append(padded_id)
+
+        try:
+            payload = {
+                'query': self.SEARCH_QUERY,
+                'variables': {
+                    'limit': 10,
+                    'sort': 'RELEASE_DATE',
+                    'queryWord': prefix.upper(),
+                }
+            }
+            resp = self._session.post(self.API_URL, json=payload, timeout=10)
+            if resp.status_code == 200:
+                data = resp.json()
+                contents = (((data.get('data') or {}).get('legacySearchPPV') or {}).get('result') or {}).get('contents') or []
+                for content in contents:
+                    cid = content.get('id', '')
+                    candidate_prefix, _ = self._parse_number(self._content_id_to_number(cid))
+                    if candidate_prefix != prefix:
+                        continue
+                    idx = cid.lower().find(prefix)
+                    if idx <= 0:
+                        continue
+                    dmm_prefix = cid[:idx]
+                    for candidate in (f"{dmm_prefix}{prefix}{num}", f"{dmm_prefix}{padded_id}"):
+                        if candidate not in content_ids:
+                            content_ids.append(candidate)
+        except Exception:
+            pass
+
+        try:
+            search_url = f"https://www.dmm.co.jp/mono/dvd/-/search/=/searchstr={number.upper()}/"
+            resp = self._session.get(
+                search_url,
+                timeout=self.config.timeout,
+                cookies={"age_check_done": "1"},
+            )
+            if resp.status_code == 200 and 'not-available-in-your-region' not in resp.url:
+                from lxml import etree
+
+                html = etree.fromstring(resp.content, etree.HTMLParser(encoding='utf-8'))
+                for href in html.xpath('//a[contains(@href,"/mono/dvd/-/detail/=/cid=")]/@href'):
+                    match = re.search(r'/cid=([^/?]+)/', href)
+                    if match:
+                        content_id = match.group(1)
+                        if content_id not in content_ids:
+                            content_ids.append(content_id)
+        except Exception:
+            pass
+
+        for content_id in content_ids:
+            url = f"https://www.dmm.co.jp/mono/dvd/-/detail/=/cid={content_id}/"
+            try:
+                resp = self._session.get(
+                    url,
+                    timeout=self.config.timeout,
+                    cookies={"age_check_done": "1"},
+                )
+                if resp.status_code != 200 or 'not-available-in-your-region' in resp.url:
+                    continue
+
+                from lxml import etree
+
+                html = etree.fromstring(resp.content, etree.HTMLParser(encoding='utf-8'))
+                title = ' '.join(html.xpath('string(//h1)').split())
+                if not title:
+                    title = ' '.join(html.xpath('string(//title)').split(' - ')[0].split())
+                if not title:
+                    continue
+
+                def text_after(label: str) -> str:
+                    values = html.xpath(
+                        f'//*[self::th or self::td][contains(normalize-space(.),"{label}")]'
+                        '/following-sibling::td[1]//text()'
+                    )
+                    return ' '.join(v.strip() for v in values if v.strip())
+
+                actresses = [
+                    Actress(name=name.strip())
+                    for name in html.xpath(
+                        '//*[self::th or self::td][contains(normalize-space(.),"出演者")]'
+                        '/following-sibling::td[1]//a/text()'
+                    )
+                    if name.strip()
+                ]
+                release_date = text_after('発売日').replace('/', '-')
+                duration_match = re.search(r'\d+', text_after('収録時間'))
+                cover = ''.join(html.xpath('//meta[@property="og:image"]/@content'))
+                tags = [
+                    tag.strip()
+                    for tag in html.xpath(
+                        '//*[self::th or self::td][contains(normalize-space(.),"ジャンル")]'
+                        '/following-sibling::td[1]//a/text()'
+                    )
+                    if tag.strip()
+                ]
+                sample_images = [
+                    re.sub(
+                        r'(?<!jp)-(\d+)\.jpg$',
+                        r'jp-\1.jpg',
+                        url if url.startswith('http') else f"https:{url}",
+                    )
+                    for url in html.xpath(
+                        '//ul[@id="sample-image-block"]//a[@name="sample-image"]//img/@data-lazy'
+                    )
+                    if url
+                ]
+
+                return Video(
+                    number=number,
+                    title=title,
+                    actresses=actresses,
+                    date=release_date,
+                    maker=text_after('メーカー'),
+                    cover_url=cover,
+                    tags=tags,
+                    source=self.source_name,
+                    detail_url=url,
+                    duration=int(duration_match.group(0)) if duration_match else None,
+                    label=text_after('レーベル'),
+                    series=text_after('シリーズ'),
+                    sample_images=sample_images,
+                )
+            except Exception:
+                continue
+
+        return None
 
     # ========== 主要搜尋方法 ==========
 
@@ -683,7 +858,7 @@ class DMMScraper(BaseScraper):
                 # 解析不出來照舊接受。CD-134-11 的 320 命中是**離線算式**、不經過
                 # 這條路，所以不受影響；實測 24 筆真連線裡 0 筆會被這條擋掉。
                 rate_limit(self.config.delay)
-                return result
+                return self._preserve_requested_number(number, result)
 
             # 第一試失敗才試不補零第二試；兩式相同就不重複發請求
             unpadded_cid = self._convert_with_hints(number, zfill=False)
@@ -723,6 +898,11 @@ class DMMScraper(BaseScraper):
             if result:
                 rate_limit(self.config.delay)
                 return result
+
+        result = self._fetch_mono_by_number(number)
+        if result:
+            rate_limit(self.config.delay)
+            return result
 
         # 4. 完全失敗
         return None

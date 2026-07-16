@@ -77,7 +77,10 @@ def test_search_content_id_query_word_is_pfx_space_num(dmm_scraper):
         dmm_scraper._search_content_id("START-525")
 
     assert mock_post.called
-    payload = mock_post.call_args.kwargs.get("json") or mock_post.call_args[1].get("json")
+    # 取**第一次**呼叫：'PFX NUM' 是主查詢式，查不到才會再試帶 hyphen／壓縮形，
+    # 用 call_args（最後一次）會讀到 fallback 的查詢字串。
+    first = mock_post.call_args_list[0]
+    payload = first.kwargs.get("json") or first[1].get("json")
     assert payload["variables"]["queryWord"] == "START 525"
 
 
