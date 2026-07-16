@@ -144,6 +144,7 @@ class TestDMMSearchByKeyword:
         assert dmm_scraper._content_id_to_number("ofje00709") == "OFJE-709"
         assert dmm_scraper._content_id_to_number("ssni00001") == "SSNI-001"  # NOT SSNI-1
         assert dmm_scraper._content_id_to_number("abc00001") == "ABC-001"    # NOT ABC-1
+        assert dmm_scraper._content_id_to_number("h_208top001") == "TOP-001"
         # 4-digit number preserved
         assert dmm_scraper._content_id_to_number("abp01234") == "ABP-1234"
         # edge: no leading zeros
