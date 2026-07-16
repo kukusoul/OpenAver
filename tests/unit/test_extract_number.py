@@ -31,6 +31,14 @@ class TestExtractNumber:
         """SONE205.mp4 → SONE-205（多字母走 index 6，照舊插 hyphen）"""
         assert extract_number("SONE205.mp4") == "SONE-205"
 
+    def test_regression_multiletter_no_hyphen_strips_extra_zeroes(self):
+        """SNIS00091.mp4 → SNIS-091（前導零壓成常見 3 位番號）"""
+        assert extract_number("SNIS00091.mp4") == "SNIS-091"
+
+    def test_regression_multiletter_no_hyphen_part_suffix(self):
+        """ebvr00097-1.mp4 → EBVR-097（尾端 -1 是分段，不是番號本體）"""
+        assert extract_number("ebvr00097-1.mp4") == "EBVR-097"
+
     def test_regression_hyphen_format_unchanged(self):
         """ABC-123.mp4 → ABC-123（帶 hyphen 不變）"""
         assert extract_number("ABC-123.mp4") == "ABC-123"
@@ -127,8 +135,8 @@ class TestExtractNumberTASK139T1b:
     # --- F8 must-not-break 四條 ---
 
     def test_f8_dmm_content_id_1sdms00808(self):
-        """F8-1: 1sdms00808.mp4 → SDMS-00808（不被破壞）"""
-        assert extract_number("1sdms00808.mp4") == "SDMS-00808"
+        """F8-1: 1sdms00808.mp4 → SDMS-808（前導零壓縮後的 DMM 正式番號，見 CD-6 上面那條）"""
+        assert extract_number("1sdms00808.mp4") == "SDMS-808"
 
 
     def test_f8_date_format_delimiters_not_swapped(self):
@@ -139,3 +147,21 @@ class TestExtractNumberTASK139T1b:
     # --- F9 反向鎖 ---
 
 
+class TestExtractNumberFc2PpvNormalization:
+    """FC2PPV 各種分隔符寫法（含完全無分隔）都收斂成 FC2-<digits>"""
+
+    def test_fc2ppv_no_hyphen_normalized(self):
+        """FC2PPV-999999.mp4 → FC2-999999（PPV 後無 hyphen）"""
+        assert extract_number("FC2PPV-999999.mp4") == "FC2-999999"
+
+    def test_fc2ppv_no_hyphen_lowercase(self):
+        """fc2ppv-1234567.mp4 → FC2-1234567（小寫 + 無 hyphen）"""
+        assert extract_number("fc2ppv-1234567.mp4") == "FC2-1234567"
+
+    def test_fc2ppv_no_separator_at_all(self):
+        """FC2PPV999999.mp4 → FC2-999999（完全無分隔符）"""
+        assert extract_number("FC2PPV999999.mp4") == "FC2-999999"
+
+    def test_fc2ppv_underscore(self):
+        """FC2_PPV-1234567.mp4 → FC2-1234567（底線分隔）"""
+        assert extract_number("FC2_PPV-1234567.mp4") == "FC2-1234567"

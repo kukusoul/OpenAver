@@ -34,7 +34,8 @@ def test_maker_names_resolve_to_maker(known, q):
 
 
 @pytest.mark.parametrize("q,mode", [
-    ("MIDV", "prefix"), ("MIDV-01", "partial"), ("SONE-205", "exact"),
+    # 2 位尾碼（MIDV-01）是完整番號走精準搜尋；只有 1 位才是部分番號
+    ("MIDV", "prefix"), ("MIDV-1", "partial"), ("MIDV-01", "exact"), ("SONE-205", "exact"),
     ("三上悠亜", "actress"),
 ])
 def test_non_maker_modes(known, q, mode):

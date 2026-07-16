@@ -54,6 +54,11 @@ class TestExtractNumber:
         # T28 混合格式（字母+數字前綴），現已支援
         assert result == 'T28-103'
 
+    def test_url_prefix_no_hyphen_with_alpha_suffix(self):
+        """網址前綴 xhd1080.com@snis00824hhb → SNIS-824"""
+        result = extract_number('xhd1080.com@snis00824hhb.mp4')
+        assert result == 'SNIS-824'
+
 
     # --- tricky/ 刁鑽案例 ---
 
@@ -81,6 +86,14 @@ class TestNormalizeNumber:
     def test_lowercase_no_hyphen(self):
         """小寫無橫線 sone103 → SONE-103"""
         assert normalize_number('sone103') == 'SONE-103'
+
+    def test_strip_extra_leading_zeros(self):
+        """壓縮多餘前導零 abc00123 → ABC-123"""
+        assert normalize_number('abc00123') == 'ABC-123'
+
+    def test_strip_extra_leading_zeros_to_three_digits(self):
+        """SNIS00091 → SNIS-091"""
+        assert normalize_number('SNIS00091') == 'SNIS-091'
 
 
     # --- 後綴清理 ---
@@ -275,7 +288,8 @@ class TestSmartSearchUncensoredAndConsistency:
                     corpus_182 = [item["input"] for item in ast.literal_eval(node.value)]
 
         extra_24 = [
-            "SONE-0", "ABP-12", "HITMA-1",                      # partial：必須維持 partial
+            "SONE-0", "HITMA-1",                                # partial：必須維持 partial
+            "ABP-12",                                           # 2 位尾碼：現為 exact（is_strict_number 下限降到 2 位）
             "IPZZ", "SONE", "ABP",                              # prefix：必須維持 prefix
             "[ABC-123]", "ABC-123.mp4", "【ABC-123】", "(ABC-123)",
             "[JavBus] ABC-123 標題.mp4", "ABC-123 - 中文字幕.mkv",  # residual #6 的包裝
@@ -325,7 +339,9 @@ class TestSmartSearchUncensoredAndConsistency:
                 diff.append((q, old_m, new_m))
 
         allowed_transitions_ss = {('actress', 'exact'), ('actress', 'uncensored'), ('uncensored', 'exact')}
-        expected_counts_ss = {('actress', 'exact'): 118, ('actress', 'uncensored'): 47, ('uncensored', 'exact'): 4}
+        # actress -> exact 118 → 122：同 Oracle B，一般番號尾碼下限降到 2 位 + 網址前綴在取 stem 前剝除。
+        # uncensored 兩桶未變（無碼三條的 3 位下限刻意不動），方向不變式仍由 ① 把關。
+        expected_counts_ss = {('actress', 'exact'): 122, ('actress', 'uncensored'): 47, ('uncensored', 'exact'): 4}
         expected_unc_to_exact = ['n9110', 'N0762', 'K0150', 'T1234']
         expected_a2u = [
             'FC2PPV-123456-1',
@@ -423,7 +439,8 @@ class TestSmartSearchUncensoredAndConsistency:
         cases = [
             ("../etc/passwd/SONE-103", "SONE-103"),
             ("https://evil.com/SONE-103", "SONE-103"),
-            ("hhd800.com@SONE-103", "HHD-800"),  # extract_number("hhd800.com@...") 先抽取 hhd800 為 HHD-800 (corpus U3)
+            # 網址前綴改在取 Path.stem 前剝除後，抽到的是 @ 右邊的真番號（corpus U3 → R8）
+            ("hhd800.com@SONE-103", "SONE-103"),
         ]
         for raw, expected_number in cases:
             # ❶ exact 分支呼叫的是 search_jav_single_source（core/scraper.py:885），**不是** search_jav
