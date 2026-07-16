@@ -453,6 +453,7 @@ def enrich_single_endpoint(request: EnrichRequest) -> dict:
     # TASK-91-T3：讀取端 path_mappings，供 resolve_nfo_cover_paths / uri_to_local_fs_path /
     # enrich_single 共用一次算好的同一組值（避免重複 .get() chain）。
     path_mappings = config.get("gallery", {}).get("path_mappings", {})
+    external_manager = config.get("scraper", {}).get("external_manager", "off")
 
     # TASK-104-T3 (CD-104-5)：唯讀來源片不再一律拒絕——改道 output_dir。
     # resolve_owning_output_root 依 canonical URI 找最內層唯讀來源（尊重 writable
@@ -543,9 +544,9 @@ def enrich_single_endpoint(request: EnrichRequest) -> dict:
         # 一來讓 T3 三步規則落地時零呼叫端改動即可生效，二來避免留一段「簽名已加、
         # 呼叫端仍傳預設值」的窗口期看起來像已接線。上移到 resolve_nfo_cover_paths
         # 呼叫之前，純屬計算順序調整，不改變下面既有邏輯。
-        external_manager = config.get("scraper", {}).get("external_manager", "off")
         nfo_path, cover_path = resolve_nfo_cover_paths(
-            request.file_path, path_mappings, external_manager
+            request.file_path, path_mappings, external_manager,
+            number="" if external_manager != "off" else request.number,
         )
         will_write_nfo = request.write_nfo and not os.path.exists(nfo_path)
         will_write_cover = not should_preserve_cover(
@@ -609,7 +610,7 @@ def enrich_single_endpoint(request: EnrichRequest) -> dict:
             write_cover=request.write_cover,
             write_extrafanart=request.write_extrafanart,
             overwrite_existing=request.overwrite_existing,
-            external_manager=config.get("scraper", {}).get("external_manager", "off"),
+            external_manager=external_manager,
             proxy_url=proxy_url,
             source=request.source,
             javbus_lang=request.javbus_lang,
@@ -755,6 +756,7 @@ async def batch_enrich_endpoint(request: BatchEnrichRequest):
     config = await asyncio.to_thread(load_config)
     search_cfg = config.get("search", {})
     proxy_url = search_cfg.get("proxy_url", "")
+    external_manager = config.get("scraper", {}).get("external_manager", "off")
 
     # 90c-T1 唯讀 guard（async-safe）：config 已於上方 to_thread 載入，這裡從既載入的
     # config 算一次唯讀前綴集（純比對、無 I/O），逐項用 is_path_readonly 純比對——不可在
@@ -971,7 +973,7 @@ async def batch_enrich_endpoint(request: BatchEnrichRequest):
                             write_cover=request.write_cover,
                             write_extrafanart=request.write_extrafanart,
                             overwrite_existing=request.overwrite_existing,
-                            external_manager=config.get("scraper", {}).get("external_manager", "off"),
+                            external_manager=external_manager,
                             proxy_url=proxy_url,
                             source=es if es != "auto" else None,
                             javbus_lang=el,
