@@ -237,6 +237,62 @@ class TestGalleryScanner:
         found = scanner.find_cover_image(str(video_path))
         assert found == str(fanart_path)
 
+    def test_find_cover_image_nfo_stem_for_single_nfo_folder(self, scanner, tmp_path):
+        """單 NFO 多影片資料夾：影片不同名時，作品封面可用 NFO stem 圖片。"""
+        video_path = tmp_path / "movie-disc1.mp4"
+        nfo_path = tmp_path / "movie.nfo"
+        cover_path = tmp_path / "movie.jpg"
+        video_path.touch()
+        nfo_path.touch()
+        cover_path.touch()
+
+        found = scanner.find_cover_image(str(video_path), nfo_path=str(nfo_path))
+        assert found == str(cover_path)
+
+    def test_fast_scan_single_nfo_folder_groups_all_videos(self, tmp_path):
+        """同資料夾只有一個 NFO 時，所有影片 file_info 都帶同一 nfo_path/nfo_mtime。"""
+        from core.gallery_scanner import fast_scan_directory
+
+        nfo_path = tmp_path / "movie.nfo"
+        nfo_path.write_text("<movie><title>Movie</title></movie>", encoding="utf-8")
+        first = tmp_path / "movie-disc1.mp4"
+        second = tmp_path / "movie-disc2.mp4"
+        first.touch()
+        second.touch()
+
+        results = fast_scan_directory(str(tmp_path), {'.mp4'}, 0)
+
+        assert {r['path'] for r in results} == {str(first), str(second)}
+        assert {r['nfo_path'] for r in results} == {str(nfo_path)}
+        assert all(r['nfo_mtime'] > 0 for r in results)
+
+    def test_scan_to_sqlite_backfills_missing_nfo_path(self, scanner, tmp_path):
+        """既有 DB row mtime 未變但缺 nfo_path 時，下次掃描要回填分組 key。"""
+        from core.database import Video, VideoRepository, init_db
+
+        video_path = tmp_path / "movie.mp4"
+        nfo_path = tmp_path / "movie.nfo"
+        video_path.write_bytes(b"video")
+        nfo_path.write_text("<movie><title>Movie</title><num>MOVIE-001</num></movie>", encoding="utf-8")
+
+        db_path = tmp_path / "openaver.db"
+        init_db(db_path)
+        repo = VideoRepository(db_path)
+        stat = video_path.stat()
+        repo.upsert(Video(
+            path=to_file_uri(str(video_path)),
+            title="Old",
+            mtime=stat.st_mtime,
+            nfo_mtime=nfo_path.stat().st_mtime,
+            nfo_path="",
+        ))
+
+        result = scanner.scan_to_sqlite(str(tmp_path), db_path=db_path, video_extensions={'.mp4'})
+        updated = VideoRepository(db_path).get_by_path(to_file_uri(str(video_path)))
+
+        assert result['updated'] == 1
+        assert updated.nfo_path == to_file_uri(str(nfo_path))
+
 
 # ============ NUM_PATTERNS 多字母後綴 ============
 

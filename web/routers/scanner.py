@@ -445,6 +445,7 @@ def generate_avlist(should_abort: Optional[Callable[[], bool]] = None) -> Genera
 
                 # 取得現有 mtime 索引
                 db_index = repo.get_mtime_index()
+                db_nfo_path_index = repo.get_nfo_path_index()
 
                 # 比對決定需要處理的檔案
                 needs_scan = []
@@ -461,6 +462,9 @@ def generate_avlist(should_abort: Optional[Callable[[], bool]] = None) -> Genera
                         needs_scan.append(file_info)
                     elif db_entry[0] != file_info['mtime'] or db_entry[1] != file_info.get('nfo_mtime', 0):
                         # mtime 或 nfo_mtime 變更
+                        needs_scan.append(file_info)
+                    elif file_info.get('nfo_path') and not db_nfo_path_index.get(file_uri):
+                        # 舊 DB row 沒有 nfo_path；補齊 NFO 分組 key
                         needs_scan.append(file_info)
 
                 # 清理已刪除的檔案（限定在此目錄下）
@@ -504,7 +508,7 @@ def generate_avlist(should_abort: Optional[Callable[[], bool]] = None) -> Genera
                     yield _sse_event({"type": "log", "level": "info", "message": f"  [{i}/{len(needs_scan)}] {video_name}"})
 
                     try:
-                        video_info = scanner.scan_file(file_info['path'], None)
+                        video_info = scanner.scan_file(file_info['path'], None, file_info.get('nfo_path'))
                         video = Video.from_video_info(video_info)
                         video.mtime = file_info['mtime']
                         video.nfo_mtime = file_info.get('nfo_mtime', 0)
@@ -573,7 +577,8 @@ def generate_avlist(should_abort: Optional[Callable[[], bool]] = None) -> Genera
                 genre=','.join(v.tags) if v.tags else '',
                 size=v.size_bytes,
                 mtime=int(v.mtime * 10000000 + 116444736000000000) if v.mtime else 0,
-                img=v.cover_path
+                img=v.cover_path,
+                nfo_path=v.nfo_path or ''
             )
             all_videos.append(info)
 

@@ -113,6 +113,7 @@ def init_db(db_path: Path = None) -> None:
             duration INTEGER,
             size_bytes INTEGER,
             cover_path TEXT,
+            nfo_path TEXT DEFAULT '',
             release_date TEXT,
             mtime REAL,
             nfo_mtime REAL,
@@ -225,6 +226,8 @@ def init_db(db_path: Path = None) -> None:
         cursor.execute("ALTER TABLE videos ADD COLUMN label TEXT DEFAULT ''")
     if 'sample_images' not in existing_cols:
         cursor.execute("ALTER TABLE videos ADD COLUMN sample_images TEXT DEFAULT ''")
+    if 'nfo_path' not in existing_cols:
+        cursor.execute("ALTER TABLE videos ADD COLUMN nfo_path TEXT DEFAULT ''")
 
     # Migration: 加入 Phase 41b user_tags 欄位
     if 'user_tags' not in existing_cols:
