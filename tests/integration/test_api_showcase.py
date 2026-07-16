@@ -796,7 +796,11 @@ class TestAC18EnrichOnlyTouchesPart1:
         assert result.success is True
         assert result.nfo_written is True
 
-        part1_nfo = part1_fs.with_suffix(".nfo")
+        # off 模式 sidecar 依番號命名（`nfo_format` 預設 `{num}`）——整組分集片共用
+        # 這一份 `ABC-123.nfo`，而不是每段一份 `ABC-123-cdN.nfo`。
+        from pathlib import Path as _Path
+        from core.enricher import _resolve_sidecar_path
+        part1_nfo = _Path(_resolve_sidecar_path(str(part1_fs), "ABC-123", ".nfo"))
         assert part1_nfo.exists(), "part-1 的 NFO 必須被寫入"
 
         # part-2 完全未被觸碰：沒有新產生 NFO、mtime 與內容不變

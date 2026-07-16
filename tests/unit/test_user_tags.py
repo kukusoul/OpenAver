@@ -413,7 +413,9 @@ def test_write_nfo_passes_user_tags_to_generate_nfo():
                 has_subtitle=False,
             )
 
-        nfo_path = str(Path(video_path).with_suffix(".nfo"))
+        # _write_nfo 依番號命名 sidecar（`nfo_format` 預設 `{num}`），不跟影片 stem
+        from core.enricher import _resolve_sidecar_path
+        nfo_path = _resolve_sidecar_path(video_path, "ABC-001", ".nfo")
         try:
             content = Path(nfo_path).read_text(encoding="utf-8")
             assert "<user_tag>評5</user_tag>" in content
