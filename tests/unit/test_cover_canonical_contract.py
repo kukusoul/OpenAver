@@ -1684,19 +1684,22 @@ class TestContractTableC_Organizer:
 
     def test_C_off_first_organize_plain_jpg(self, tmp_path, temp_config_path):
         """C-off｜off（唯一可達列，organize_file 是 shutil.move 新檔案，無既有
-        封面軸）。鎖：下載=是、canonical=`{filename_base}.jpg`、無 poster/
-        fanart、DB=`{filename_base}.jpg`（經 try_inflow_upsert 重掃磁碟得到，
-        非 result['cover_path']）。
+        封面軸）。鎖：下載=是、canonical=`{cover_format}.jpg`（cover_format/
+        nfo_format 預設 `{num}`，off 模式 sidecar 依番號命名，不跟影片檔名）、
+        無 poster/fanart、NFO 圖 tag 與 sidecar 自洽（同以 nfo stem 派生）。
+        DB=`{num}.jpg`（經 try_inflow_upsert 重掃磁碟得到，非
+        result['cover_path']）。
         T3-T6 後：不變。"""
         ctx = self._run(tmp_path, temp_config_path, "c_off", number="COFF-001", external_manager="off")
         basename = f"COFF-001 {self._TITLE}"
-        cover = ctx.library_dir / f"{basename}.jpg"
-        nfo = ctx.library_dir / f"{basename}.nfo"
+        cover = ctx.library_dir / "COFF-001.jpg"
+        nfo = ctx.library_dir / "COFF-001.nfo"
         assert cover.exists()
+        assert not (ctx.library_dir / f"{basename}.jpg").exists()
         assert not (ctx.library_dir / f"{basename}-poster.jpg").exists()
         assert not (ctx.library_dir / f"{basename}-fanart.jpg").exists()
         tags = _assert_nfo_tags_exist(nfo, {"poster": True, "thumb": True, "fanart": True})
-        assert tags["poster"] == tags["thumb"] == tags["fanart"] == f"{basename}.jpg"
+        assert tags["poster"] == tags["thumb"] == tags["fanart"] == "COFF-001.jpg"
         assert ctx.inflow_status == "synced", (
             "not_linked 代表 fixture 的 gallery.directories 沒真的覆蓋到 tmp_path "
             "目標目錄，DB 斷言會恆為『沒有這筆記錄』——這是 fixture 設定錯誤，不能"

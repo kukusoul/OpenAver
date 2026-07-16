@@ -437,7 +437,8 @@ def format_string(template: str, data: Dict[str, Any], use_fallback: bool = Fals
     - {year}: 年份
     - {month}: 月份（2位）
     - {day}: 日（2位）
-    - {suffix}: 版本後綴（Fix-1）
+    - {suffix}: 版本後綴
+    - {original}: 原始檔名（不含副檔名）
 
     Args:
         use_fallback: True 時空值使用 FALLBACKS（僅資料夾層級傳 True）。
@@ -473,8 +474,11 @@ def format_string(template: str, data: Dict[str, Any], use_fallback: bool = Fals
     result = result.replace('{month}', date[5:7] if len(date) >= 7 else fb.get('month', ''))
     result = result.replace('{day}',   date[8:10] if len(date) >= 10 else fb.get('day', ''))
 
-    # 後綴（Fix-1，空值就是空字串，不需 fallback）
+    # 後綴（空值就是空字串，不需 fallback）
     result = result.replace('{suffix}', data.get('suffix', ''))
+
+    # 原始檔名（不含副檔名）
+    result = result.replace('{original}', data.get('original', ''))
 
     return sanitize_filename(result.strip())
 
@@ -1113,6 +1117,7 @@ def organize_file(  # noqa: C901 — 整理主流程；Phase 2（110b）會在�
         'actors': actors,
         'maker': metadata.get('maker', ''),
         'date': metadata.get('date', ''),
+        'original': os.path.splitext(original_filename)[0],
     }
 
     # 偵測版本後綴；外部模式過濾掉多段 token 避免 {suffix}+part_tail 雙寫（CD-72b-T5）
@@ -1273,10 +1278,13 @@ def organize_file(  # noqa: C901 — 整理主流程；Phase 2（110b）會在�
 
         result['new_filename'] = target_path
 
-        # 下載封面（檔名跟隨影片命名）
+        # 下載封面（off 模式使用 cover_format；外部管理器模式跟隨影片命名——
+        # {stem}-poster/-fanart 與 {stem}.nfo 的關聯全靠 stem 對齊，不可改名）
         img_url = metadata.get('cover', '')
         if img_url:
-            cover_path = resolve_cover_target(os.path.join(target_dir, filename_base), ext_mode)
+            cover_base = (format_string(config.get('cover_format', '{num}'), format_data)
+                          if ext_mode == 'off' else filename_base)
+            cover_path = resolve_cover_target(os.path.join(target_dir, cover_base), ext_mode)
             # CD-126-3（owner 2026-08-23 裁決納入）：原址優先，取不到才退 metatube 代理。
             # 後端重刮與前端整理（`buildOrganizeMetadata()`）**兩條都有值**——Codex PR
             # review P2-1 之後前端不再剝除 preview 欄位。113c-T3b 的不變式是「代理網址
@@ -1329,8 +1337,11 @@ def organize_file(  # noqa: C901 — 整理主流程；Phase 2（110b）會在�
                 except Exception as e:
                     logger.warning(f"extrafanart 目錄建立失敗: {e}")
 
-        # 生成 NFO（檔名跟隨影片命名）
-        nfo_path = os.path.join(target_dir, filename_base + '.nfo')
+        # 生成 NFO（off 模式使用 nfo_format；外部管理器模式跟隨影片命名——
+        # Kodi/Jellyfin 以 {stem}.nfo 關聯 metadata，不可改名）
+        nfo_base = (format_string(config.get('nfo_format', '{num}'), format_data)
+                    if ext_mode == 'off' else filename_base)
+        nfo_path = os.path.join(target_dir, nfo_base + '.nfo')
         tags = metadata.get('tags', [])
         user_tags = metadata.get('user_tags', [])
         if generate_nfo(
