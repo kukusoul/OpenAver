@@ -305,6 +305,7 @@ def enrich_single_endpoint(request: EnrichRequest) -> dict:
     # TASK-91-T3：讀取端 path_mappings，供 resolve_nfo_cover_paths / uri_to_local_fs_path /
     # enrich_single 共用一次算好的同一組值（避免重複 .get() chain）。
     path_mappings = config.get("gallery", {}).get("path_mappings", {})
+    external_manager = config.get("scraper", {}).get("external_manager", "off")
 
     # 90c-T1 唯讀來源 guard：唯讀來源片不得 enrich 寫檔。須在 refresh_full 預檢
     # （resolve_nfo_cover_paths / os.path.exists）之前——預檢對唯讀掛載可能拋錯。
@@ -321,11 +322,14 @@ def enrich_single_endpoint(request: EnrichRequest) -> dict:
     # 故不得計入「保證會寫 sidecar」；補劇照請用 /api/scraper/fetch-samples（Codex PR#47 round-2 P2）。
     # 在 try 之前 raise，避免被下方 except Exception 吞成籠統 200。
     if request.mode == "refresh_full" and not request.overwrite_existing:
-        nfo_path, cover_path = resolve_nfo_cover_paths(request.file_path, path_mappings)
+        nfo_path, cover_path = resolve_nfo_cover_paths(
+            request.file_path,
+            path_mappings,
+            number="" if external_manager != "off" else request.number,
+        )
         will_write_nfo = request.write_nfo and not os.path.exists(nfo_path)
         will_write_cover = request.write_cover and not os.path.exists(cover_path)
         # 72d-P2A：外部圖寫出機會也是合法的寫出路徑（72b-T6 加入 external_manager 後守衛未同步）
-        external_manager = config.get("scraper", {}).get("external_manager", "off")
         if external_manager != "off":
             stem = os.path.splitext(uri_to_local_fs_path(request.file_path, path_mappings))[0]
             poster_path = stem + "-poster.jpg"
@@ -377,7 +381,7 @@ def enrich_single_endpoint(request: EnrichRequest) -> dict:
             write_cover=request.write_cover,
             write_extrafanart=request.write_extrafanart,
             overwrite_existing=request.overwrite_existing,
-            external_manager=config.get("scraper", {}).get("external_manager", "off"),
+            external_manager=external_manager,
             proxy_url=proxy_url,
             source=request.source,
             javbus_lang=request.javbus_lang,
@@ -449,6 +453,7 @@ async def batch_enrich_endpoint(request: BatchEnrichRequest):
     config = await asyncio.to_thread(load_config)
     search_cfg = config.get("search", {})
     proxy_url = search_cfg.get("proxy_url", "")
+    external_manager = config.get("scraper", {}).get("external_manager", "off")
 
     # 90c-T1 唯讀 guard（async-safe）：config 已於上方 to_thread 載入，這裡從既載入的
     # config 算一次唯讀前綴集（純比對、無 I/O），逐項用 is_path_readonly 純比對——不可在
@@ -539,7 +544,7 @@ async def batch_enrich_endpoint(request: BatchEnrichRequest):
                             write_cover=request.write_cover,
                             write_extrafanart=request.write_extrafanart,
                             overwrite_existing=request.overwrite_existing,
-                            external_manager=config.get("scraper", {}).get("external_manager", "off"),
+                            external_manager=external_manager,
                             proxy_url=proxy_url,
                             source=es if es != "auto" else None,
                             javbus_lang=el,

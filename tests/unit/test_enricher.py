@@ -754,6 +754,43 @@ class TestNfoPathInSameDir:
             f"NFO path {output_path} is outside video dir {video_dir}"
         )
 
+    def test_sidecars_use_number_in_video_dir(self):
+        """進階重刮固定用番號命名 NFO/cover，但仍只在影片同目錄寫 sidecar。"""
+        video = _make_video()
+        captured_nfo_paths = []
+        captured_cover_paths = []
+
+        def fake_generate_nfo(**kwargs):
+            captured_nfo_paths.append(kwargs.get("output_path", ""))
+            return True
+
+        def fake_download_image(_url, save_path, referer=""):
+            captured_cover_paths.append(save_path)
+            return True
+
+        with (
+            patch("os.path.exists", return_value=True),
+            patch("core.enricher.VideoRepository") as mock_repo_cls,
+            patch("core.enricher.generate_nfo", side_effect=fake_generate_nfo),
+            patch("core.enricher.download_image", side_effect=fake_download_image),
+        ):
+            mock_repo = MagicMock()
+            mock_repo_cls.return_value = mock_repo
+            mock_repo.get_by_numbers.return_value = {"SONE-205": [video]}
+
+            from core.enricher import enrich_single
+            result = enrich_single(
+                file_path="/video/original-name.mp4",
+                number="SONE-205",
+                write_nfo=True,
+                write_cover=True,
+                overwrite_existing=True,
+            )
+
+        assert result.success is True
+        assert captured_nfo_paths == ["/video/SONE-205.nfo"]
+        assert captured_cover_paths == ["/video/SONE-205.jpg"]
+
 
 # ── 23. organize_file / shutil.move / os.makedirs 不被呼叫 ───────────────────
 

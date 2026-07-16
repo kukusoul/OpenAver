@@ -14,7 +14,13 @@ from core.config import _STEM_IMAGE_MODES
 from core.database import Video, VideoRepository, get_connection
 from core.logger import get_logger
 from core.nfo_updater import parse_nfo
-from core.organizer import crop_to_poster, download_image, find_subtitle_files, generate_nfo
+from core.organizer import (
+    crop_to_poster,
+    download_image,
+    find_subtitle_files,
+    generate_nfo,
+    sanitize_filename,
+)
 from core.path_utils import to_file_uri, uri_to_fs_path, uri_to_local_fs_path
 from core.scraper import search_jav
 
@@ -166,6 +172,7 @@ def _write_nfo(
     write_nfo: bool,
     overwrite_existing: bool,
     has_subtitle: bool,
+    sidecar_number: Optional[str] = None,
     user_tags: List[str] = None,
     external_manager: str = "off",
     has_poster: bool = False,
@@ -175,7 +182,7 @@ def _write_nfo(
     if not write_nfo:
         return False
 
-    nfo_path = str(Path(fs_path).with_suffix(".nfo"))
+    nfo_path = _resolve_sidecar_path(fs_path, number if sidecar_number is None else sidecar_number, ".nfo")
 
     if os.path.exists(nfo_path) and not overwrite_existing:
         return False
@@ -222,20 +229,28 @@ def _write_nfo(
 
 def _write_cover(
     fs_path: str,
+    number: str,
     cover_url: str,
     write_cover: bool,
     overwrite_existing: bool,
+    sidecar_number: Optional[str] = None,
 ) -> bool:
     if not write_cover:
         return False
     if not cover_url:
         return False
 
-    cover_path = str(Path(fs_path).with_suffix(".jpg"))
+    cover_path = _resolve_sidecar_path(fs_path, number if sidecar_number is None else sidecar_number, ".jpg")
     if os.path.exists(cover_path) and not overwrite_existing:
         return False
 
     return download_image(cover_url, cover_path)
+
+
+def _resolve_sidecar_path(fs_path: str, number: str, suffix: str) -> str:
+    video_path = Path(fs_path)
+    base = sanitize_filename(number) or video_path.stem
+    return str(video_path.with_name(base + suffix))
 
 
 def _write_external_images(
@@ -439,6 +454,7 @@ def enrich_single(  # ranker-invalidate-ok: (only updates nfo_mtime, not a corpu
     preserved_user_tags = existing_record.user_tags if existing_record else []
 
     cover_url = meta.get("cover_url", "")
+    sidecar_number = "" if external_manager != "off" else number
 
     nfo_written = False
     cover_written = False
@@ -449,9 +465,11 @@ def enrich_single(  # ranker-invalidate-ok: (only updates nfo_mtime, not a corpu
         # jellyfin / emby 與 kodi 均使用 stem 長格式（無 per-folder 切換邏輯）。
         cover_written = _write_cover(
             fs_path=fs_path,
+            number=number,
             cover_url=cover_url,
             write_cover=write_cover,
             overwrite_existing=overwrite_existing,
+            sidecar_number=sidecar_number,
         )
         imgs = _write_external_images(
             fs_path=fs_path,
@@ -466,6 +484,7 @@ def enrich_single(  # ranker-invalidate-ok: (only updates nfo_mtime, not a corpu
                 write_nfo=write_nfo,
                 overwrite_existing=overwrite_existing,
                 has_subtitle=has_subtitle,
+                sidecar_number=sidecar_number,
                 user_tags=preserved_user_tags,
                 external_manager=external_manager,
                 has_poster=imgs["poster"],
@@ -486,6 +505,7 @@ def enrich_single(  # ranker-invalidate-ok: (only updates nfo_mtime, not a corpu
                 write_nfo=write_nfo,
                 overwrite_existing=overwrite_existing,
                 has_subtitle=has_subtitle,
+                sidecar_number=sidecar_number,
                 user_tags=preserved_user_tags,
                 fs_path_for_db=fs_path_for_db,
             )
@@ -496,9 +516,11 @@ def enrich_single(  # ranker-invalidate-ok: (only updates nfo_mtime, not a corpu
 
         cover_written = _write_cover(
             fs_path=fs_path,
+            number=number,
             cover_url=cover_url,
             write_cover=write_cover,
             overwrite_existing=overwrite_existing,
+            sidecar_number=sidecar_number,
         )
 
     written_uris = _write_extrafanart(
@@ -512,8 +534,8 @@ def enrich_single(  # ranker-invalidate-ok: (only updates nfo_mtime, not a corpu
     # DB upsert 在寫檔後執行，才能知道本地封面路徑
     # db_to_sidecar 不打 scraper 也不更新 DB（metadata 不變）
     if mode in ("refresh_full", "fill_missing") and source_used not in ("db", "nfo", ""):
-        local_cover = str(Path(fs_path).with_suffix(".jpg")) if cover_written else ""
-        nfo_path = Path(fs_path).with_suffix(".nfo")
+        local_cover = _resolve_sidecar_path(fs_path, sidecar_number, ".jpg") if cover_written else ""
+        nfo_path = Path(_resolve_sidecar_path(fs_path, sidecar_number, ".nfo"))
         nfo_mtime = nfo_path.stat().st_mtime if nfo_path.exists() else 0.0
         # wrapper callsite decision point; helper itself: enforced at callsites
         # db-ns-ok: fs_path_for_db passed through to _db_upsert's internal primitive sink
@@ -522,7 +544,7 @@ def enrich_single(  # ranker-invalidate-ok: (only updates nfo_mtime, not a corpu
 
     # nfo_mtime 獨立更新：不論 mode/source，只要 NFO 存在就同步 DB
     # 避免 analysis 永遠視為 missing_nfo
-    nfo_path = Path(fs_path).with_suffix(".nfo")
+    nfo_path = Path(_resolve_sidecar_path(fs_path, sidecar_number, ".nfo"))
     if nfo_path.exists():
         conn = None
         try:
@@ -711,15 +733,20 @@ def fetch_samples_only(
     )
 
 
-def resolve_nfo_cover_paths(file_path: str, path_mappings: dict = None) -> tuple:
+def resolve_nfo_cover_paths(
+    file_path: str,
+    path_mappings: dict = None,
+    number: str = "",
+) -> tuple:
     """由影片 file_path 推導目標 NFO / cover 的 FS 路徑。
 
     復用 enrich_single / _write_nfo / _write_cover 的同一套路徑邏輯：
-    先以 uri_to_local_fs_path() 解析（fallback 原值），再 with_suffix。
+    先以 uri_to_local_fs_path() 解析（fallback 原值），再由 `_resolve_sidecar_path`
+    依番號（空番號則影片 stem）產生命名。
     回傳 (nfo_path, cover_path)，兩者皆為當前環境 FS 字串路徑。
 
-    ⚠️ 路徑邏輯必須與 `_write_nfo`（with_suffix(".nfo")）/ `_write_cover`
-    （with_suffix(".jpg")）保持同步——62a-1 的 refresh_full 分裂守衛
+    ⚠️ 路徑邏輯必須與 `_write_nfo` / `_write_cover` 保持同步——62a-1 的
+    refresh_full 分裂守衛
     （web/routers/scraper.py enrich_single_endpoint）靠本函數判斷檔案是否已存在。
     若 writer 改了 cover 命名（poster.jpg / .png / fanart 等）或 fs_path 推導，
     本函數要一起改，否則守衛會悄悄檢查錯路徑（false-allow 重現分裂 / false-block 打爆缺封面 quick-enrich）。
@@ -728,6 +755,6 @@ def resolve_nfo_cover_paths(file_path: str, path_mappings: dict = None) -> tuple
         fs_path = uri_to_local_fs_path(file_path, path_mappings)
     except Exception:
         fs_path = file_path
-    nfo_path = str(Path(fs_path).with_suffix(".nfo"))
-    cover_path = str(Path(fs_path).with_suffix(".jpg"))
+    nfo_path = _resolve_sidecar_path(fs_path, number, ".nfo")
+    cover_path = _resolve_sidecar_path(fs_path, number, ".jpg")
     return nfo_path, cover_path
