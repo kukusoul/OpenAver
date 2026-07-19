@@ -99,6 +99,8 @@ export function searchStateBase() {
         // 讓哨兵偵測到「同 path/index/length 但候選被換掉」→ 關掉 stale 編輯框。
         // 短暫 UI 訊號（同 editingX 性質）：不寫進 saveState / snapshot / restoreState（不持久化）。
         _candidateReplaceSeq: 0,
+        metadataEditorOpen: false,
+        editedMetadata: {},
         addingTag: false,
         newTagValue: '',
         coverError: '',
