@@ -469,6 +469,11 @@
                 <div class="av-card-full-info">
                 <div class="av-card-full-header">
                     <h4 class="av-num" id="resultNumber" x-text="current().number || '-'">-</h4>
+                    <button class="info-icon-btn"
+                            @click="openMetadataEditor()"
+                            :title="t('search.action.edit_metadata')">
+                        <i :class="current()._metadataEdited ? 'bi bi-pencil-fill text-success' : 'bi bi-pencil text-muted'"></i>
+                    </button>
                     <span id="localBadge" class="local-badge"
                           x-show="hasLocalBadge()"
                           :title="localBadgeTitle()"
@@ -953,6 +958,38 @@
             <span x-text="_toast.message"></span>
         </div>
     </div>
+
+    <dialog class="modal fluent-modal"
+            :class="{ 'modal-open': metadataEditorOpen }"
+            @click.self="closeMetadataEditor()"
+            @keydown.escape.window="metadataEditorOpen && closeMetadataEditor()">
+        <div class="modal-box fluent-modal-box max-w-3xl">
+            <h3 class="fluent-modal-title">
+                <i class="bi bi-pencil-square"></i> {{ t('search.metadata_editor.title') }}
+            </h3>
+            <div class="grid grid-cols-1 gap-3 py-4 md:grid-cols-2">
+                <label class="form-control"><span class="label-text">{{ t('search.label.number') }}</span><input x-ref="metadataNumberInput" class="input input-bordered" type="text" x-model="editedMetadata.number"></label>
+                <label class="form-control"><span class="label-text">{{ t('search.label.date') }}</span><input class="input input-bordered" type="text" x-model="editedMetadata.date"></label>
+                <label class="form-control md:col-span-2"><span class="label-text">{{ t('search.label.title') }}</span><textarea class="textarea textarea-bordered" rows="2" x-model="editedMetadata.title"></textarea></label>
+                <label class="form-control md:col-span-2"><span class="label-text">{{ t('search.label.chinese_title') }}</span><textarea class="textarea textarea-bordered" rows="2" x-model="editedMetadata.translated_title"></textarea></label>
+                <label class="form-control"><span class="label-text">{{ t('search.label.duration') }}</span><input class="input input-bordered" type="number" min="0" x-model="editedMetadata.duration"></label>
+                <label class="form-control"><span class="label-text">{{ t('search.label.maker') }}</span><input class="input input-bordered" type="text" x-model="editedMetadata.maker"></label>
+                <label class="form-control"><span class="label-text">{{ t('search.label.label') }}</span><input class="input input-bordered" type="text" x-model="editedMetadata.label"></label>
+                <label class="form-control"><span class="label-text">{{ t('search.label.series') }}</span><input class="input input-bordered" type="text" x-model="editedMetadata.series"></label>
+                <label class="form-control md:col-span-2"><span class="label-text">{{ t('search.label.actor') }}</span><textarea class="textarea textarea-bordered" rows="2" x-model="editedMetadata.actors"></textarea></label>
+                <label class="form-control"><span class="label-text">{{ t('search.label.director') }}</span><input class="input input-bordered" type="text" x-model="editedMetadata.director"></label>
+                <label class="form-control"><span class="label-text">{{ t('search.label.source') }}</span><input class="input input-bordered" type="text" x-model="editedMetadata.source"></label>
+                <label class="form-control md:col-span-2"><span class="label-text">{{ t('search.label.tags') }}</span><textarea class="textarea textarea-bordered" rows="2" x-model="editedMetadata.tags"></textarea><span class="label-text-alt">{{ t('search.metadata_editor.list_hint') }}</span></label>
+                <label class="form-control md:col-span-2"><span class="label-text">{{ t('search.label.cover') }}</span><input class="input input-bordered" type="url" x-model="editedMetadata.cover"></label>
+                <label class="form-control md:col-span-2"><span class="label-text">{{ t('search.label.sample_images') }}</span><textarea class="textarea textarea-bordered" rows="3" x-model="editedMetadata.sample_images"></textarea><span class="label-text-alt">{{ t('search.metadata_editor.list_hint') }}</span></label>
+                <label class="form-control md:col-span-2"><span class="label-text">{{ t('search.label.source_url') }}</span><input class="input input-bordered" type="url" x-model="editedMetadata.url"></label>
+            </div>
+            <div class="modal-action">
+                <button class="btn btn-ghost" @click="closeMetadataEditor()">{{ t('search.metadata_editor.cancel') }}</button>
+                <button class="btn btn-primary" @click="confirmMetadataEditor()">{{ t('search.metadata_editor.confirm') }}</button>
+            </div>
+        </div>
+    </dialog>
 
     <!-- Fix-1: 覆蓋警告 Modal (Alpine state-driven) -->
     <dialog class="modal fluent-modal"

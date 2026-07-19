@@ -129,6 +129,68 @@ export function searchStateResultCard() {
         this.editingChineseTitle = false;
     },
 
+    openMetadataEditor() {
+        const current = this.current();
+        this.editedMetadata = {
+            number: current.number || '',
+            title: current.title || '',
+            translated_title: current.translated_title || '',
+            actors: (current.actors || []).join(', '),
+            date: current.date || '',
+            duration: current.duration ?? '',
+            maker: current.maker || '',
+            label: current.label || '',
+            series: current.series || '',
+            director: current.director || '',
+            tags: (current.tags || []).join('\n'),
+            cover: current.cover || '',
+            sample_images: (current.sample_images || []).join('\n'),
+            source: current.source || current._source || '',
+            url: current.url || '',
+        };
+        this.metadataEditorOpen = true;
+        this.$nextTick(() => this.$refs.metadataNumberInput?.focus());
+    },
+
+    closeMetadataEditor() {
+        this.metadataEditorOpen = false;
+        this.editedMetadata = {};
+    },
+
+    confirmMetadataEditor() {
+        const current = this.current();
+        const metadata = this.editedMetadata;
+        const toList = value => String(value || '')
+            .split(/[\n,]/)
+            .map(item => item.trim())
+            .filter(Boolean);
+        const duration = String(metadata.duration ?? '').trim();
+        const parsedDuration = Number(duration);
+
+        current.number = String(metadata.number || '').trim();
+        current.title = String(metadata.title || '').trim();
+        current.translated_title = String(metadata.translated_title || '').trim();
+        current.actors = toList(metadata.actors);
+        current.date = String(metadata.date || '').trim();
+        current.duration = duration && Number.isFinite(parsedDuration) && parsedDuration >= 0
+            ? parsedDuration
+            : null;
+        current.maker = String(metadata.maker || '').trim();
+        current.label = String(metadata.label || '').trim();
+        current.series = String(metadata.series || '').trim();
+        current.director = String(metadata.director || '').trim();
+        current.tags = toList(metadata.tags);
+        current.cover = String(metadata.cover || '').trim();
+        current.sample_images = toList(metadata.sample_images);
+        current.source = String(metadata.source || '').trim();
+        current._source = current.source;
+        current.url = String(metadata.url || '').trim();
+        current._metadataEdited = true;
+        this._resetCoverState();
+        this.closeMetadataEditor();
+        this.saveState();
+    },
+
     // ===== T1c: Translate =====
 
     async translateWithAI() {

@@ -72,6 +72,7 @@
       "load_favorite": "載入我的最愛資料夾",
       "load_favorite_folder": "載入：{folder}",
       "add_tag": "新增標籤",
+      "edit_metadata": "編輯所有欄位",
       "edit_title": "編輯標題",
       "translate_ai": "AI 翻譯",
       "edit_chinese_title": "編輯中文片名",
@@ -105,8 +106,19 @@
       "series": "系列",
       "tags": "標籤",
       "title": "標題",
+      "number": "番號",
       "chinese_title": "中文片名",
-      "chinese_title_ai": "AI 翻譯標題"
+      "chinese_title_ai": "AI 翻譯標題",
+      "cover": "封面 URL",
+      "sample_images": "劇照 URL",
+      "source": "資料來源",
+      "source_url": "來源頁面 URL"
+    },
+    "metadata_editor": {
+      "title": "編輯搜尋結果",
+      "list_hint": "多個項目可用逗號或換行分隔",
+      "cancel": "取消",
+      "confirm": "儲存變更"
     },
     "unit": {
       "minutes": "分鐘",
