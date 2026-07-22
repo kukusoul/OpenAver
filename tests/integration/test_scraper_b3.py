@@ -106,6 +106,26 @@ class TestFetchSamplesEndpoint:
         assert resp.status_code == 200
         mock_fetch.assert_called_once()
 
+    def test_selected_source_is_forwarded_to_fetch_samples(self, client):
+        """來源選擇器指定 javdb 時，端點必須原樣傳給補劇照核心。"""
+        mock_result = _make_enrich_result(success=True, extrafanart_written=2)
+
+        with patch("web.routers.scraper.VideoRepository") as mock_repo_cls, \
+             patch("web.routers.scraper.fetch_samples_only", return_value=mock_result) as mock_fetch:
+            mock_repo = MagicMock()
+            mock_repo.count_videos_in_folder.return_value = 1
+            mock_repo_cls.return_value = mock_repo
+
+            resp = client.post("/api/scraper/fetch-samples", json={
+                "file_path": to_file_uri("/home/user/movies/SONE-205/SONE-205.mp4"),
+                "number": "SONE-205",
+                "source": "javdb",
+            })
+
+        assert resp.status_code == 200
+        assert resp.json()["success"] is True
+        assert mock_fetch.call_args.kwargs["source"] == "javdb"
+
     def test_missing_file_path_returns_422(self, client):
         """缺少必填欄位 file_path → 422"""
         resp = client.post("/api/scraper/fetch-samples", json={"number": "SONE-205"})

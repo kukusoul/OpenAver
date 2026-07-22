@@ -58,7 +58,7 @@ test('enrichVideo（放大鏡）body 無條件送 readonly_action:\'ingest\'，�
 });
 
 test('fetchSamples body 不含 readonly_action（後端 fetch-samples 不讀此欄位）', () => {
-  const body = extractFnBody(lightboxSrc, 'async fetchSamples(video) {', 'fetchSamples');
+  const body = extractFnBody(lightboxSrc, "async fetchSamples(video, source = 'auto') {", 'fetchSamples');
   assert.ok(
     !body.includes('readonly_action'),
     'fetchSamples 不應送 readonly_action —— 後端 fetch-samples 端點不讀此欄位（T3 確認），僅靠按鈕解禁即可',

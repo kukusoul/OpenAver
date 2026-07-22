@@ -1,0 +1,60 @@
+{# 劇照補抓來源選擇器：與重新刮削共用來源清單與 source-pill 視覺契約。 #}
+<dialog class="modal fluent-modal rescrape-dialog" x-cloak
+        :class="{ 'modal-open': sampleSourceOpen }"
+        @click.self="closeSampleSourcePicker()"
+        @keydown.escape.window="sampleSourceOpen && closeSampleSourcePicker()">
+  <div class="modal-box fluent-modal-box rescrape-modal-box">
+    <button type="button" class="rescrape-x" @click="closeSampleSourcePicker()"
+            :aria-label="t('showcase.rescrape.close')">
+      <i class="bi bi-x-lg"></i>
+    </button>
+    <h3 class="fluent-modal-title"><i class="bi bi-images"></i> {{ t('showcase.samples.fetch_btn') }}</h3>
+
+    <div class="rescrape-section">
+      <label class="rescrape-label">{{ t('showcase.rescrape.source_question') }}</label>
+      <div class="source-pill-row">
+        <button type="button" class="source-pill source-pill--action" data-enabled="true"
+                :disabled="_fetchSamplesLoading"
+                @click="fetchSamplesFromSource('auto')">
+          <i class="bi bi-stars" aria-hidden="true"></i>
+          <span class="pill-name">{{ t('showcase.rescrape.auto_source') }}</span>
+        </button>
+        <template x-for="s in rescrapeBuiltinSources()" :key="s.id">
+          <button type="button"
+                  :class="{
+                      'source-pill': true,
+                      'source-pill--action': !isJlUnavailable(s),
+                      'source-pill--manual-only': isJlUnavailable(s),
+                      'source-pill--uncensored': !s.is_censored
+                  }"
+                  data-enabled="true"
+                  :aria-disabled="isJlUnavailable(s) ? 'true' : 'false'"
+                  :title="isJlUnavailable(s) ? window.t('showcase.rescrape.jl_desktop_only') : ''"
+                  :disabled="_fetchSamplesLoading"
+                  @click="isJlUnavailable(s) ? showToast(window.t('showcase.rescrape.jl_desktop_only'), 'warning') : (isSourceProxyBlocked(s) ? showToast(window.t('settings.sources.dmm_proxy_required_hint'), 'warning') : fetchSamplesFromSource(s.id))">
+            <i class="bi bi-slash-circle slash-icn" aria-hidden="true"></i>
+            <span class="pill-name" x-text="s.display_name_raw || s.display_name_key || s.id"></span>
+            <span class="source-pill-badge" x-show="s.manual_only && s.is_beta" aria-hidden="true">BETA</span>
+          </button>
+        </template>
+      </div>
+
+      <div class="rescrape-group-sep">Metatube</div>
+      <div class="source-pill-row" x-show="rescrapeMetatubeSources().length > 0">
+        <template x-for="s in rescrapeMetatubeSources()" :key="s.id">
+          <button type="button" class="source-pill source-pill--action"
+                  :class="{ 'source-pill--uncensored': !s.is_censored }"
+                  :disabled="_fetchSamplesLoading || !s.available"
+                  :aria-disabled="s.available ? 'false' : 'true'"
+                  :title="!s.available ? t('showcase.rescrape.offline_tooltip') : ''"
+                  @click="s.available ? fetchSamplesFromSource(s.id) : null">
+            <i class="bi bi-slash-circle slash-icn" aria-hidden="true"></i>
+            <span class="pill-name" x-text="s.display_name_raw || s.display_name_key || s.id"></span>
+            <span class="source-pill-mt-badge" aria-hidden="true">m</span>
+          </button>
+        </template>
+      </div>
+      <div class="rescrape-empty-note" x-show="rescrapeMetatubeSources().length === 0">{{ t('settings.advanced_search.group_metatube_empty') }}</div>
+    </div>
+  </div>
+</dialog>
