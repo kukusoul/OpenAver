@@ -681,8 +681,9 @@ def fetch_samples_only(
     number: str,
     proxy_url: str = "",
     path_mappings: dict = None,
+    source: str = "auto",
 ) -> EnrichResult:
-    """只補抓劇照：呼叫 scraper → 下載 extrafanart → 更新 DB sample_images。
+    """只補抓劇照：呼叫指定 scraper → 下載 extrafanart → 更新 DB sample_images。
     不寫 NFO / cover / 其他欄位。
     """
     _empty = EnrichResult(
@@ -707,7 +708,7 @@ def fetch_samples_only(
         return _empty
 
     meta = search_jav(number, proxy_url=proxy_url,
-                      source="auto", javbus_lang=None)
+                      source=source, javbus_lang=None)
     if not meta:
         logger.warning("[fetch_samples_only] 找不到資料: %s", number)
         _empty.error = f"找不到 {number} 的資料"

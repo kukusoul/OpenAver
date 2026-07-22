@@ -548,7 +548,7 @@
         <!-- Lightbox (M3a) -->
         <div class="showcase-lightbox"
              :class="{ 'show': lightboxOpen }"
-             x-trap.inert="lightboxOpen && !sampleGalleryOpen && !removeActressModalOpen && !rescrapeOpen && !deleteVideoModalOpen && !similarModeMobileOpen"
+             x-trap.inert="lightboxOpen && !sampleGalleryOpen && !removeActressModalOpen && !rescrapeOpen && !sampleSourceOpen && !deleteVideoModalOpen && !similarModeMobileOpen"
              @touchstart.passive="_lbTouchStart($event)"
              @touchend.passive="_lbTouchEnd($event)"
              @click="handleLightboxBackdropClick($event)">
@@ -757,7 +757,7 @@
                                         :class="{ 'is-readonly-disabled': !!currentLightboxVideo?.is_readonly_source }"
                                         :title="!!currentLightboxVideo?.is_readonly_source ? t('showcase.enrich.readonly_tooltip') : ''"
                                         :aria-label="!!currentLightboxVideo?.is_readonly_source ? t('showcase.enrich.readonly_tooltip') : ''"
-                                        @click="fetchSamples(currentLightboxVideo)">
+                                        @click="openSampleSourcePicker(currentLightboxVideo)">
                                     <i class="bi bi-cloud-download" aria-hidden="true"></i>
                                     <span x-text="t('showcase.samples.fetch_btn')"></span>
                                 </button>
@@ -1396,6 +1396,7 @@
 
     {# 進階重新刮削彈窗（62a-2）。放 showcase x-data 作用域內，使 rescrape* hook 在 showcase Alpine root 求值。 #}
     {% include '_rescrape_modal.html' %}
+    {% include '_sample_source_modal.html' %}
 </div>
 {% endblock %}
 

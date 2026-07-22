@@ -72,6 +72,10 @@ export function stateLightbox() {
         // Enrich 狀態 (T3)
         _enriching: false,
 
+        // 劇照來源選擇器：沿用重新刮削的來源清單與 pill 樣式。
+        sampleSourceOpen: false,
+        _sampleSourceVideo: null,
+
         // --- helper in return {} ---
 
         // 83a-T1 M1：比例 hook — 縮圖 base img @load 讀 naturalWidth/naturalHeight，
@@ -826,14 +830,31 @@ export function stateLightbox() {
             }
         },
 
-        async fetchSamples(video) {
+        openSampleSourcePicker(video) {
+            if (!video || !video.path || !video.number || this._fetchSamplesLoading) return;
+            this._sampleSourceVideo = video;
+            this.sampleSourceOpen = true;
+        },
+
+        closeSampleSourcePicker() {
+            if (!this._fetchSamplesLoading) this.sampleSourceOpen = false;
+        },
+
+        async fetchSamplesFromSource(source) {
+            const video = this._sampleSourceVideo;
+            if (!video || this._fetchSamplesLoading) return;
+            this.sampleSourceOpen = false;
+            await this.fetchSamples(video, source);
+        },
+
+        async fetchSamples(video, source = 'auto') {
             if (!video || !video.path || !video.number) return;
             this._fetchSamplesLoading = true;
             try {
                 const res = await fetch('/api/scraper/fetch-samples', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ file_path: video.path, number: video.number })
+                    body: JSON.stringify({ file_path: video.path, number: video.number, source })
                 });
                 const data = await res.json();
                 if (data.success) {
@@ -1270,6 +1291,15 @@ export function stateLightbox() {
                 return;
             }
             if (this.rescrapeOpen) return;
+
+            // 劇照來源選擇器同樣蓋在 lightbox 之上；鎖住 Esc 與方向鍵，避免操作穿透。
+            if (e.key === 'Escape' && this.sampleSourceOpen) {
+                this.closeSampleSourcePicker();
+                e.preventDefault();
+                e.stopPropagation();
+                return;
+            }
+            if (this.sampleSourceOpen) return;
 
             // C-1: 刪除確認框開啟時，Esc 只關刪除框、其餘鍵不穿透到燈箱（鏡像 removeActressModalOpen）
             if (e.key === 'Escape' && this.deleteVideoModalOpen) {

@@ -293,6 +293,7 @@ _TOOLS: list[dict] = [
             "properties": {
                 "file_path": {"type": "string", "description": "影片檔案路徑（file:/// URI 或原生 FS 路徑）"},
                 "number": {"type": "string", "description": "番號"},
+                "source": {"type": "string", "default": "auto", "description": "劇照來源（auto=依啟用來源順序自動選擇）"},
             },
             "required": ["file_path", "number"],
         },
@@ -311,7 +312,7 @@ _TOOLS: list[dict] = [
         "idempotent": True,
         "retry_safe": True,
         "cost_hint": "會打外部網站抓劇照，並寫入本機磁碟與 DB",
-        "_example_template": "curl -X POST -H 'Content-Type: application/json' -d '{{\"file_path\":\"file:///library/SONE-205/SONE-205.mp4\",\"number\":\"SONE-205\"}}' {base}/api/scraper/fetch-samples",
+        "_example_template": "curl -X POST -H 'Content-Type: application/json' -d '{{\"file_path\":\"file:///library/SONE-205/SONE-205.mp4\",\"number\":\"SONE-205\",\"source\":\"javdb\"}}' {base}/api/scraper/fetch-samples",
     },
     {
         "name": "batch_enrich",
