@@ -7,7 +7,7 @@ from typing import Optional
 from core.logger import get_logger
 
 logger = get_logger(__name__)
-from urllib.parse import quote, urlparse
+from urllib.parse import quote, urljoin, urlparse
 from urllib.request import getproxies, proxy_bypass
 from bs4 import BeautifulSoup
 from .base import BaseScraper
@@ -330,11 +330,12 @@ class JavDBScraper(BaseScraper):
             cover_elem = soup.select_one('.video-cover img, .column-video-cover img')
             cover_url = str(cover_elem.get('src', '')) if cover_elem else ''
 
-            # 劇照：必須限定 .preview-images，否則會混進「相關影片」封面
+            # 劇照：必須限定 .preview-images，否則會混進「相關影片」封面。
+            # href 經 urljoin 補成絕對網址——JavDB 偶爾給相對路徑，原樣存下去會變成打不開的圖。
             sample_images = [
-                str(a['href'])
+                urljoin(detail_url, str(a['href']).strip())
                 for a in soup.select('.preview-images a.tile-item')
-                if a.get('href')
+                if str(a.get('href') or '').strip()
             ]
 
             # 解析資訊面板（抽出以壓低 search() 複雜度，見 TASK §7）
