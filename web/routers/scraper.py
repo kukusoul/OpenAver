@@ -814,6 +814,7 @@ def enrich_single_endpoint(request: EnrichRequest) -> dict:
 class FetchSamplesRequest(BaseModel):
     file_path: str
     number: str
+    source: str = "auto"
 
 
 @router.post("/scraper/fetch-samples")
@@ -917,6 +918,7 @@ def fetch_samples_endpoint(req: FetchSamplesRequest) -> dict:
             number=req.number,
             proxy_url=proxy_url,
             path_mappings=path_mappings,
+            source=req.source,
         )
         return asdict(result)
     except Exception:
