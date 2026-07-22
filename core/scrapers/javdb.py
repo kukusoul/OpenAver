@@ -7,7 +7,7 @@ from typing import Optional
 from core.logger import get_logger
 
 logger = get_logger(__name__)
-from urllib.parse import quote
+from urllib.parse import quote, urljoin
 from bs4 import BeautifulSoup
 from .base import BaseScraper
 from .models import Video, Actress
@@ -170,6 +170,14 @@ class JavDBScraper(BaseScraper):
             cover_elem = soup.select_one('.video-cover img, .column-video-cover img')
             cover_url = str(cover_elem.get('src', '')) if cover_elem else ''
 
+            # 劇照：JavDB 將原圖放在 `.preview-images .tile-item` 的 href，
+            # 內層 img 則是縮圖。限定 tile-item 可排除同區塊的預覽影片封面連結。
+            sample_images = []
+            for image_link in soup.select('.preview-images a.tile-item[href]'):
+                image_url = str(image_link['href']).strip()
+                if image_url:
+                    sample_images.append(urljoin(detail_url, image_url))
+
             # 解析資訊面板
             date = ''
             maker = ''
@@ -248,6 +256,7 @@ class JavDBScraper(BaseScraper):
                 rating=rating,
                 source=self.source_name,
                 detail_url=detail_url,
+                sample_images=sample_images,
             )
 
             rate_limit(self.config.delay)

@@ -176,6 +176,21 @@ class TestJavdbCoverUpgrade:
         assert "ps.jpg" not in video.cover_url
 
 
+class TestJavdbSampleImages:
+    """劇照：取 preview-images 的原圖 href，且不混入預覽影片的封面。"""
+
+    def test_sample_images_from_fixture(self, scraper):
+        video = run_search(scraper, SEARCH_HTML, DETAIL_HTML)
+
+        assert video is not None
+        assert len(video.sample_images) == 10
+        assert video.sample_images[0] == (
+            "https://c0.jdbstatic.com/samples/ww/Ww9zN8_l_0.jpg"
+        )
+        assert all("/samples/" in image for image in video.sample_images)
+        assert all("_l_" in image for image in video.sample_images)
+
+
 class TestJavdbValidateGuard:
     """validate_number 失敗 → ValueError"""
 
