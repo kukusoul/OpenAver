@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field, field_validator
 from core.atomic_write import atomic_write
 from core.data_root import get_data_root, get_project_root, is_layout_finalized
 from core.logger import get_logger
-from core.path_utils import is_fs_path_under_dir, coerce_to_file_uri
+from core.path_utils import is_fs_path_under_dir, coerce_to_file_uri, uri_to_fs_path
 from core.source_config import SourceConfig, get_builtin_sources, get_manual_only_sources
 from core.video_extensions import DEFAULT_VIDEO_EXTENSIONS
 
@@ -724,7 +724,9 @@ def get_configured_gallery_dirs(config: dict) -> tuple[set, dict]:
             # coerce_to_file_uri：來源 path 可能已是 file:/// URI（DirectoryConfig.path
             # schema「FS 路徑或 URI」）。已是 URI 就原樣回，避免 to_file_uri 二次包成
             # file:///file:/// 把 readonly 來源的列從 Showcase 過濾掉（PR#91 P2-D 同源）。
-            configured_dir_uris.add(coerce_to_file_uri(p, path_mappings))  # uri-no-reverse: coerce_to_file_uri forward URI build, D2 complement
+            # 先 normalize 成本地 FS 路徑（WSL UNC → POSIX），再轉 URI，確保與 DB 內 file URI 格式一致。
+            fs_path = uri_to_fs_path(p)
+            configured_dir_uris.add(coerce_to_file_uri(fs_path, path_mappings))  # uri-no-reverse: coerce_to_file_uri forward URI build, D2 complement
         except ValueError:
             continue
 
