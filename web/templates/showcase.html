@@ -833,7 +833,7 @@
                                     <i class="bi bi-trash"></i>
                                 </button>
                             </div>
-                            <div class="lb-media-files" x-show="(currentLightboxVideo?.media_files || []).length > 1">
+                            <div class="lb-media-files" x-show="(currentLightboxVideo?.media_files || []).length >= 1">
                                 <template x-for="item in (currentLightboxVideo?.media_files || [])" :key="item.path">
                                     <button type="button"
                                             class="lb-media-file-btn"
