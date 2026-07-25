@@ -144,7 +144,7 @@ function extractNumber(filename) {
     const basename = filename.split(/[/\\]/).pop().replace(/\.[^.]+$/, '');
 
     const patterns = [
-        /\b(FC2-PPV)-(\d{5,7})\b/i,          // FC2-PPV-1234567（優先）
+        /\b(FC2[-_]?PPV)-?(\d{5,7})\b/i,   // FC2-PPV-1234567 / FC2PPV-1234567（優先）
         /\b([A-Z]+\d+-\d+)\b/i,              // T28-103 混合格式（字母+數字-數字）
         /\b([A-Z]{1,7})-(\d{2,5})\b/i,       // SONE-12（支援單字母）
         /\b([A-Z]{2,7})(\d{2,5})\b/i,        // IPTD12（無連字號需 2+ 字母避免誤判）
@@ -154,8 +154,8 @@ function extractNumber(filename) {
         const match = basename.match(pattern);
         if (match) {
             const prefix = match[1].toUpperCase();
-            // FC2-PPV 特殊處理
-            if (prefix === 'FC2-PPV') return `FC2-PPV-${match[2]}`;
+            // FC2-PPV 特殊處理（統一格式：FC2PPV-123 → FC2-PPV-123）
+            if (prefix.match(/^FC2[-_]?PPV$/i)) return `FC2-PPV-${match[2]}`;
             // 混合格式已包含完整番號
             if (pattern === patterns[1]) return prefix;
             // 其他格式需組合

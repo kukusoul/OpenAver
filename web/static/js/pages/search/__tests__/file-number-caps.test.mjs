@@ -53,6 +53,18 @@ test('extractNumber: FC2-PPV 優先序不受寬度影響', () => {
   assert.equal(extractNumber('FC2-PPV-1234567.mp4'), 'FC2-PPV-1234567');
 });
 
+test('extractNumber: FC2PPV-999999（無 hyphen）→ FC2-PPV-999999', () => {
+  assert.equal(extractNumber('FC2PPV-999999.mp4'), 'FC2-PPV-999999');
+});
+
+test('extractNumber: FC2PPV999999（完全無分隔符）→ FC2-PPV-999999', () => {
+  assert.equal(extractNumber('FC2PPV999999.mp4'), 'FC2-PPV-999999');
+});
+
+test('extractNumber: fc2ppv-1234567（小寫無 hyphen）→ FC2-PPV-1234567', () => {
+  assert.equal(extractNumber('fc2ppv-1234567.mp4'), 'FC2-PPV-1234567');
+});
+
 test('extractNumber: SONE-205.mp4 不變', () => {
   assert.equal(extractNumber('SONE-205.mp4'), 'SONE-205');
 });
