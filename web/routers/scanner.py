@@ -580,10 +580,10 @@ def generate_avlist(should_abort: Optional[Callable[[], bool]] = None) -> Genera
         configured_dir_uris = set()
         for p in get_gallery_source_paths(gallery_config):
             try:
-                # coerce_to_file_uri：來源 path 可能已是 file:/// URI（含 readonly 剛
-                # upsert 的列），已是 URI 就原樣回、FS 才轉，避免 to_file_uri 二次包成
-                # file:///file:/// 把 readonly 生成的列全數過濾掉（PR#91 P2-D）。
-                configured_dir_uris.add(coerce_to_file_uri(p, path_mappings))  # uri-no-reverse: coerce_to_file_uri forward URI build, D2 complement
+                # 先 normalize 成本地 FS 路徑（WSL UNC → POSIX），再轉 URI，
+                # 確保與掃描產出的 file URI 格式一致（PR#91 P2-D 同源）。
+                fs_path = uri_to_fs_path(p)
+                configured_dir_uris.add(coerce_to_file_uri(fs_path, path_mappings))  # uri-no-reverse: coerce_to_file_uri forward URI build, D2 complement
             except ValueError:
                 continue
 
