@@ -196,6 +196,25 @@ class TestExtractNumberCollisionGuards:
     def test_fc2_unchanged(self):
         assert extract_number("FC2-PPV-1234567.mp4") == "FC2-1234567"
 
+    # 以下四條鎖「分隔符的各種寫法都收斂成同一個正典形式」。
+    # 正典形式是 139-T1b 的 `FC2-<純數字>`（PPV 字樣不保留），與上面
+    # test_fc2_unchanged 同一形狀——normalize_number_impl 是唯一決定它的地方。
+    def test_fc2ppv_no_hyphen_normalized(self):
+        """FC2PPV-999999.mp4 → FC2-999999（PPV 後無 hyphen）"""
+        assert extract_number("FC2PPV-999999.mp4") == "FC2-999999"
+
+    def test_fc2ppv_no_hyphen_lowercase(self):
+        """fc2ppv-1234567.mp4 → FC2-1234567（小寫 + 無 hyphen）"""
+        assert extract_number("fc2ppv-1234567.mp4") == "FC2-1234567"
+
+    def test_fc2ppv_no_separator_at_all(self):
+        """FC2PPV999999.mp4 → FC2-999999（完全無分隔符）"""
+        assert extract_number("FC2PPV999999.mp4") == "FC2-999999"
+
+    def test_fc2ppv_underscore(self):
+        """FC2_PPV-1234567.mp4 → FC2-1234567（底線分隔）"""
+        assert extract_number("FC2_PPV-1234567.mp4") == "FC2-1234567"
+
     def test_sone_205_unchanged(self):
         assert extract_number("SONE-205.mp4") == "SONE-205"
 
