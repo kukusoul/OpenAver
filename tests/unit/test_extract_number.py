@@ -180,6 +180,22 @@ class TestExtractNumberCollisionGuards:
     def test_fc2_unchanged(self):
         assert extract_number("FC2-PPV-1234567.mp4") == "FC2-PPV-1234567"
 
+    def test_fc2ppv_no_hyphen_normalized(self):
+        """FC2PPV-999999.mp4 → FC2-PPV-999999（無 hyphen 之 FC2PPV 統一格式）"""
+        assert extract_number("FC2PPV-999999.mp4") == "FC2-PPV-999999"
+
+    def test_fc2ppv_no_hyphen_lowercase(self):
+        """fc2ppv-1234567.mp4 → FC2-PPV-1234567（小寫 + 無 hyphen）"""
+        assert extract_number("fc2ppv-1234567.mp4") == "FC2-PPV-1234567"
+
+    def test_fc2ppv_no_separator_at_all(self):
+        """FC2PPV999999.mp4 → FC2-PPV-999999（完全無分隔符）"""
+        assert extract_number("FC2PPV999999.mp4") == "FC2-PPV-999999"
+
+    def test_fc2ppv_underscore(self):
+        """FC2_PPV-1234567.mp4 → FC2-PPV-1234567（底線分隔）"""
+        assert extract_number("FC2_PPV-1234567.mp4") == "FC2-PPV-1234567"
+
     def test_sone_205_unchanged(self):
         assert extract_number("SONE-205.mp4") == "SONE-205"
 

@@ -112,7 +112,7 @@ def extract_number(filename: str) -> Optional[str]:
         basename = basename.split('@', 1)[1]
 
     patterns = [
-        r'(FC2-PPV-\d+)',               # FC2-PPV-1234567
+        r'(FC2[-_]?PPV[-_]?\d+)',       # FC2-PPV-1234567 / FC2PPV-1234567
         r'(\d{6}-\d{2,})',              # 041417-413 日期-編號格式（無碼）
         r'(\d{6}_\d{2,})',             # 120415_201 / 082912_01 底線格式（無碼）
         r'([A-Za-z]{2,7})(\d{2,5})(?=-\d+\b)',  # EBVR00097-1 → EBVR-097（尾端 -1 是分段）
@@ -131,6 +131,9 @@ def extract_number(filename: str) -> Optional[str]:
                 number = format_no_hyphen_number(match.group(1), match.group(2))
             else:
                 number = match.group(1).upper()
+            # FC2-PPV 統一格式（FC2PPV999 → FC2-PPV-999）
+            if re.match(r'^FC2[-_]?PPV', number, re.IGNORECASE):
+                number = re.sub(r'^FC2[-_]?PPV[-_]?', 'FC2-PPV-', number, flags=re.IGNORECASE)
             return number
     return None
 
