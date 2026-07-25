@@ -211,6 +211,9 @@ export function searchStateNavigation() {
         // Escape 由 _rescrape_modal 的 @keydown.escape.window 自理，不在此重複關閉）
         if (this.rescrapeOpen) return;
 
+        // 編輯器 / 覆蓋警告彈窗開啟時鎖所有快捷鍵（焦點留在 modal 內）
+        if (this.metadataEditorOpen || this.duplicateModalOpen) return;
+
         // T8: Sample Gallery 鍵盤導航（最高優先：gallery 疊在 lightbox 之上，ESC 先關 gallery）
         if (this.sampleGalleryOpen) {
             if (event.key === 'Escape') {
