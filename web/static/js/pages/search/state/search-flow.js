@@ -582,21 +582,23 @@ export function searchStateSearchFlow() {
     },
 
     /**
-     * 「再開來源/版本挑選」入口可見條件（CD-86-P2 副作用修正）。
-     * JavLibrary 採用後 searchQuery === currentQuery → isComposing() false，
-     * 但使用者仍應可在 exact 結果頁重開 advanced picker 換版本/來源。
-     * 條件：search workflow 正在看某番號的 exact 結果（listMode='search', pageState='result',
-     * currentMode='exact', 搜尋框非空）。
-     * listMode 收斂（CD-86-P2 副作用修正）：file/batch workflow 也會進 pageState='result' +
-     * currentMode='exact'，但 searchQuery 只在載入第一個檔案時設一次、切換檔案不同步，故此頂部入口
-     * 在 file mode 會帶舊番號 → 限定 listMode==='search'。file mode 換來源走結果卡的 switch-source 入口。
-     * 不修改 isComposing()，避免波及 Grid/Detail Toggle 的 !isComposing() 互斥判斷。
+     * 自動來源膠囊可見條件（owner 2026-08-18：只要搜尋框有輸入就常駐，不再要求
+     * 輸入與上次送出不同——取代舊的「isComposing()‖exact 結果頁再開入口（CD-86-P2）」
+     * 組合，後者一併撤除）。核心情境：搜尋失敗（pageState='error' / 無結果）後按鈕
+     * 必須還在，才能換來源重搜——failure path 不會設 listMode（只有成功路徑設
+     * 'search'，performSearch 開頭先重設 null），故 gate 用「listMode==='file' 才退
+     * compose」而非「==='search' 才常駐」，否則 error 態會落回 isComposing()（送出後
+     * searchQuery===currentQuery → false）而消失。
+     * file mode 維持 compose 態才顯示：searchQuery 只在載入第一個檔案時設一次、
+     * 切換檔案不同步，常駐會讓 @click 的 rescrapeNumber 預填帶到舊番號（CD-86-P2 同因）；
+     * file mode 換來源走結果卡的 switch-source 入口。
+     * 不修改 isComposing() 本身，避免波及 Grid/Detail Toggle 的 !isComposing() 互斥判斷。
      */
-    canReopenSourcePick() {
-        return this.listMode === 'search'
-            && this.pageState === 'result'
-            && this.currentMode === 'exact'
-            && (this.searchQuery || '').trim() !== '';
+    showAutoSourcePill() {
+        if (this.listMode === 'file') {
+            return this.isComposing();
+        }
+        return (this.searchQuery || '').trim() !== '';
     },
 
     /**

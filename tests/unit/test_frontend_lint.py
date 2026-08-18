@@ -3741,13 +3741,13 @@ class TestSearchAutoSourcePill:
         assert m, "search.html 找不到 extra_classes='search-auto-pill' 的 source_pill(...) 呼叫"
         return m.group(0)
 
-    def test_auto_pill_xshow_is_composing(self):
-        """自動膠囊 macro 呼叫的 x-show 含 isComposing()（compose 態才顯示）。"""
+    def test_auto_pill_xshow_is_show_auto_source_pill(self):
+        """自動膠囊 macro 呼叫的 x-show 綁 showAutoSourcePill()（有輸入就常駐 gate）。"""
         call = self._auto_pill_call()
         xshow_m = re.search(r'x-show=\\?["\']([^"\']*)', call)
         assert xshow_m, f"search-auto-pill 呼叫缺 x-show binding；call: {call!r}"
-        assert "isComposing()" in xshow_m.group(1), (
-            f"search-auto-pill x-show 缺 isComposing()；x-show: {xshow_m.group(1)!r}"
+        assert "showAutoSourcePill()" in xshow_m.group(1), (
+            f"search-auto-pill x-show 缺 showAutoSourcePill()；x-show: {xshow_m.group(1)!r}"
         )
 
     def test_auto_pill_click_opens_rescrape_with_prefill(self):
@@ -3765,46 +3765,61 @@ class TestSearchAutoSourcePill:
             f"search-auto-pill @click 缺 rescrapeNumber = 預填；call: {call!r}"
         )
 
-    def test_auto_pill_xshow_contains_can_reopen_source_pick(self):
-        """自動膠囊 x-show 含 canReopenSourcePick()（CD-86-P2 修正：exact 結果頁再開入口）。
+    def test_auto_pill_xshow_uses_show_auto_source_pill(self):
+        """自動膠囊 x-show 綁 showAutoSourcePill()（owner 2026-08-18：有輸入就常駐）。
 
-        JavLibrary 採用後 searchQuery == currentQuery → isComposing() false，
-        需要 canReopenSourcePick() 讓 pill 在 exact 結果時常駐。
-        mutation：把 x-show 改回只 isComposing() → 此斷言紅。
+        取代舊的 isComposing()‖canReopenSourcePick() 組合（CD-86-P2 一併撤除）：
+        search workflow 只要搜尋框有輸入，pill 就常駐（不再要求輸入與上次送出不同）；
+        file/batch mode 仍限 compose 態（searchQuery 切檔不同步，常駐會帶舊番號預填）。
+        mutation：x-show 改回 isComposing() 或加回 canReopenSourcePick() → 此斷言紅。
         """
         call = self._auto_pill_call()
         xshow_m = re.search(r'x-show=\\?["\']([^"\']*)', call)
         assert xshow_m, f"search-auto-pill 呼叫缺 x-show binding；call: {call!r}"
-        assert "canReopenSourcePick()" in xshow_m.group(1), (
-            f"search-auto-pill x-show 缺 canReopenSourcePick()；x-show: {xshow_m.group(1)!r}"
+        assert "showAutoSourcePill()" in xshow_m.group(1), (
+            f"search-auto-pill x-show 缺 showAutoSourcePill()；x-show: {xshow_m.group(1)!r}"
+        )
+        assert "canReopenSourcePick" not in xshow_m.group(1), (
+            f"search-auto-pill x-show 不得再含 canReopenSourcePick()（已撤 CD-86-P2）；"
+            f"x-show: {xshow_m.group(1)!r}"
         )
 
-    def test_can_reopen_source_pick_defined_in_search_flow_js(self):
-        """search-flow.js 定義 canReopenSourcePick()，且包含 listMode + exact + pageState + searchQuery 四條件。
+    def test_show_auto_source_pill_defined_in_search_flow_js(self):
+        """search-flow.js 定義 showAutoSourcePill()：file mode 退 isComposing()、
+        其餘（search/null）只看 searchQuery 非空；且不得殘留 canReopenSourcePick()（死碼）。
 
-        listMode==='search' gate（CD-86-P2 副作用修正）：file/batch mode 也進 result+exact，但 searchQuery
-        切檔不同步，頂部再入口會帶舊番號 → 限定 search workflow。
-        mutation：移除 method 或刪任一條件（含 listMode）→ 此斷言紅。
+        gate 方向鎖 `listMode === 'file'`（不是 `=== 'search'`）：failure path 不設
+        listMode（performSearch 開頭重設 null、只有成功路徑設 'search'），若寫成
+        「'search' 才常駐」，搜尋失敗（pageState='error'）會落回 isComposing()
+        （送出後 searchQuery===currentQuery → false）→ 按鈕消失，換來源重搜的
+        核心情境就沒了。
+        mutation：移除 method、把 gate 反成 === 'search'、或加回 canReopenSourcePick
+        → 此斷言紅。
         """
         js_path = (
             SEARCH_HTML.parent.parent
             / "static" / "js" / "pages" / "search" / "state" / "search-flow.js"
         )
         js = js_path.read_text(encoding="utf-8")
-        m = re.search(r"canReopenSourcePick\s*\(\s*\)\s*\{(.*?)\n    \},", js, re.DOTALL)
-        assert m, "search-flow.js 找不到 canReopenSourcePick() method 定義"
+        m = re.search(r"showAutoSourcePill\s*\(\s*\)\s*\{(.*?)\n    \},", js, re.DOTALL)
+        assert m, "search-flow.js 找不到 showAutoSourcePill() method 定義"
         body = m.group(1)
-        assert "listMode" in body and "'search'" in body, (
-            f"canReopenSourcePick body 缺 listMode === 'search' 條件；body: {body!r}"
+        assert re.search(r"listMode\s*===\s*'file'", body), (
+            f"showAutoSourcePill body 缺 listMode === 'file' gate（方向不可反成 'search'，"
+            f"error 態 listMode 是 null）；body: {body!r}"
         )
-        assert "pageState" in body and "'result'" in body, (
-            f"canReopenSourcePick body 缺 pageState === 'result' 條件；body: {body!r}"
-        )
-        assert "'exact'" in body, (
-            f"canReopenSourcePick body 缺 currentMode === 'exact' 條件；body: {body!r}"
+        assert "'search'" not in body, (
+            f"showAutoSourcePill body 不得以 listMode === 'search' 當常駐條件"
+            f"（failure path 不設 listMode）；body: {body!r}"
         )
         assert "searchQuery" in body, (
-            f"canReopenSourcePick body 缺 searchQuery 非空條件；body: {body!r}"
+            f"showAutoSourcePill body 缺 searchQuery 非空條件；body: {body!r}"
+        )
+        assert "isComposing()" in body, (
+            f"showAutoSourcePill body 缺 file mode 的 isComposing() fallback；body: {body!r}"
+        )
+        assert "canReopenSourcePick" not in js, (
+            "search-flow.js 不應殘留 canReopenSourcePick（已由 showAutoSourcePill 取代）"
         )
 
 
