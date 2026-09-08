@@ -32,7 +32,7 @@ from core.nfo_read import (
 )
 from core.nfo_stat import NFO_MTIME_FILL_MISSING, NFO_MTIME_REFRESH, nfo_mtime_or_none
 from core.nfo_updater import parse_nfo
-from core.organizer import crop_to_poster, download_image, find_subtitle_files, generate_nfo
+from core.organizer import crop_to_poster, download_image, find_subtitle_files, generate_nfo, _strip_num_prefixes
 from core.path_utils import to_file_uri, uri_to_fs_path, uri_to_local_fs_path
 from core.scraper import search_jav
 from core.scrapers.utils import check_subtitle
@@ -570,19 +570,47 @@ def enrich_single(  # ranker-invalidate-ok: (no literal SQL here; corpus writes 
                     meta = _nfo_to_meta(root)
                     source_used = "nfo"
 
+        # CD-145a-9：title 剝掉番號前綴後等於檔名 stem → 判定為掃描時塞入的佔位值。
+        # 清空成 '' 才能讓 _missing_fields() 把它算進缺項（該函式只認 falsy，非空
+        # 字串的佔位值本身不會被當缺項）。
+        _filename_stem = Path(fs_path).stem
+        _placeholder_title = meta.get('title') or ''
+        _is_placeholder_title = bool(_placeholder_title) and (
+            _strip_num_prefixes(_placeholder_title, number) == _filename_stem
+        )
+        _title_only_synthetic_missing = False
+        if _is_placeholder_title:
+            _title_only_synthetic_missing = not _missing_fields(meta)   # 今天（未清空 title）missing 是否為空
+            meta['title'] = ''
+
         missing = _missing_fields(meta)
         if missing:
             if scraper_data is None:
                 scraper_data = search_jav(number, proxy_url=proxy_url,
                                           source=source or 'auto', javbus_lang=javbus_lang)
             if not scraper_data:
-                repo.update_scrape_attempted_at(to_file_uri(fs_path_for_db), time.time())  # db-ns-ok: fs_path_for_db, DB round-trip value, no reverse mapping applied
-                _empty.error = f"找不到 {number} 的資料"
-                _empty.reason = "not_found"
-                return _empty
-            supplement = _scraper_to_meta(scraper_data)
-            meta, fields_filled = _merge_meta(meta, supplement)
-            source_used = scraper_data.get("source", "scraper") or "scraper"
+                if _title_only_synthetic_missing:
+                    # CD-145a-9：八欄本來就齊，只差我們自己清空的合成 title 缺項——
+                    # 刮不到來源不算「真的缺資料」，early return 會是這次改動自己
+                    # 造成的回歸（今天這一列本來就會成功）。還原佔位標題，走原本的
+                    # 寫入路徑（NFO 從 DB 現值重寫，與今天逐值相同）。
+                    meta['title'] = _placeholder_title
+                else:
+                    # missing 本來就有 title 以外的缺項：早退行為與今天完全一致
+                    repo.update_scrape_attempted_at(to_file_uri(fs_path_for_db), time.time())  # db-ns-ok: fs_path_for_db, DB round-trip value, no reverse mapping applied
+                    _empty.error = f"找不到 {number} 的資料"
+                    _empty.reason = "not_found"
+                    return _empty
+            else:
+                # scraper_data 有值才會進來這支——None 進 _scraper_to_meta 會炸。
+                supplement = _scraper_to_meta(scraper_data)
+                meta, fields_filled = _merge_meta(meta, supplement)
+                source_used = scraper_data.get("source", "scraper") or "scraper"
+
+        # CD-145a-9：scraper 有回應但沒給 title 時，meta['title'] 會停在上面清空後
+        # 的空字串——這裡補回原本的佔位值，避免 NFO／卡片標題變成真的空白。
+        if _is_placeholder_title and not meta.get('title'):
+            meta['title'] = _placeholder_title
 
     has_subtitle, meta['tags'] = _resolve_subtitle_and_tags(fs_path, meta)
 

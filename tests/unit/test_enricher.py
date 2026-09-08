@@ -6,6 +6,7 @@ test_enricher.py - core/enricher.py TDD-lite 單元測試（full mock）
 
 import io
 import os
+import xml.etree.ElementTree as ET
 import pytest
 from dataclasses import dataclass
 from pathlib import Path
@@ -4774,3 +4775,330 @@ class TestT4bFetchSamplesOnlyFallback(_T4bFailedHostsMixin):
         assert result.extrafanart_written == 0
         assert mg.call_count == 1, "不得有第二次嘗試"
         assert "fallback_url" not in mg.call_args.kwargs
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TASK-145-T1（CD-145a-9）：fill_missing 標題佔位判定 —— 不再被檔名佔位卡死
+# ══════════════════════════════════════════════════════════════════════════════
+#
+# DB／sidecar NFO 讀出的 title 剝掉番號前綴後等於檔名 stem，就當成缺項讓既有的
+# _missing_fields()/_merge_meta() 流程去刮回真標題；刮不到／刮到但沒給 title
+# 時還原成原本的佔位值。
+#
+# BE-TEST-11：本節 fixture 的檔名 stem 與 number（"SONE-205"）刻意不同（DoD8
+# 「真標題巧合等於檔名」除外，那一條本來就是要測 stem/number 巧合的殘留情境），
+# 確保「剝完前綴後是否等於 stem」這個分岔的兩側都有真實命中的樣本。
+#
+# generate_nfo() 本身會把 title 再剝一次番號前綴、重組成 f"[{number}]{stem 或
+# 真標題}"（core/organizer.py:842-844），所以這裡的斷言一律比對
+# f"[SONE-205]{content}" 這個 generate_nfo 正規化後的形狀，不是 meta['title'] 的
+# 裸字串。
+
+
+def _t1_write_video(tmp_path, stem):
+    video_path = tmp_path / f"{stem}.mp4"
+    video_path.write_bytes(b"fake video bytes")
+    return video_path
+
+
+def _t1_nfo_title(video_path):
+    nfo_path = video_path.with_suffix(".nfo")
+    return ET.parse(str(nfo_path)).getroot().find("title").text
+
+
+def _t1_expected_title(number, content):
+    return f"[{number}]{content}"
+
+
+def _t1_mock_repo(get_by_numbers_result):
+    mock_repo = MagicMock()
+    mock_repo.get_by_path.return_value = None
+    mock_repo.get_by_numbers.return_value = get_by_numbers_result
+    mock_repo.db_path = ":memory:"
+    return mock_repo
+
+
+class TestFillMissingPlaceholderTitle:
+    @pytest.mark.parametrize(
+        "stem, placeholder_title",
+        [
+            ("bare_stem_video", "bare_stem_video"),
+            ("bracket_stem_video", "[SONE-205]bracket_stem_video"),
+        ],
+        ids=["bare-filename", "bracket-number-filename"],
+    )
+    def test_fill_missing_placeholder_title_replaced_with_scraped(self, tmp_path, stem, placeholder_title):
+        """驗收 1：無 sidecar NFO 的片，DB title 落在佔位形狀（裸檔名或
+        `[番號]檔名` 兩種寫法）→ 補完後拿到刮回來的真標題，不是檔名。"""
+        video_path = _t1_write_video(tmp_path, stem)
+        video = _make_video(title=placeholder_title)
+        mock_repo = _t1_mock_repo({"SONE-205": [video]})
+        scraper_data = _make_scraper_result(title="真正刮回來的標題")
+
+        with (
+            patch("core.enricher.VideoRepository", return_value=mock_repo),
+            patch("core.enricher.search_jav", return_value=scraper_data) as mock_search,
+        ):
+            from core.enricher import enrich_single
+            result = enrich_single(
+                file_path=str(video_path),
+                number="SONE-205",
+                mode="fill_missing",
+                write_cover=False,
+                write_extrafanart=False,
+            )
+
+        mock_search.assert_called_once()
+        assert result.success is True
+        assert result.nfo_written is True
+        assert _t1_nfo_title(video_path) == _t1_expected_title("SONE-205", "真正刮回來的標題")
+
+    def test_fill_missing_placeholder_title_idempotent_second_run(self, tmp_path):
+        """驗收 2：用第 1 條跑完後的新 DB 狀態（title 已是真標題）再呼叫一次
+        → title 不再被判定為佔位，search_jav 不再被呼叫，寫出的值與上一次相同。"""
+        stem = "idem_video_720p"
+        video_path = _t1_write_video(tmp_path, stem)
+        scraper_data = _make_scraper_result(title="真標題已刮回")
+
+        video1 = _make_video(title=stem)
+        mock_repo1 = _t1_mock_repo({"SONE-205": [video1]})
+        with (
+            patch("core.enricher.VideoRepository", return_value=mock_repo1),
+            patch("core.enricher.search_jav", return_value=scraper_data) as mock_search1,
+        ):
+            from core.enricher import enrich_single
+            result1 = enrich_single(
+                file_path=str(video_path),
+                number="SONE-205",
+                mode="fill_missing",
+                write_cover=False,
+                write_extrafanart=False,
+                overwrite_existing=True,
+            )
+        assert result1.success is True
+        mock_search1.assert_called_once()
+        title1 = _t1_nfo_title(video_path)
+
+        video2 = _make_video(title="真標題已刮回")
+        mock_repo2 = _t1_mock_repo({"SONE-205": [video2]})
+        with (
+            patch("core.enricher.VideoRepository", return_value=mock_repo2),
+            patch("core.enricher.search_jav", return_value=scraper_data) as mock_search2,
+        ):
+            from core.enricher import enrich_single
+            result2 = enrich_single(
+                file_path=str(video_path),
+                number="SONE-205",
+                mode="fill_missing",
+                write_cover=False,
+                write_extrafanart=False,
+                overwrite_existing=True,
+            )
+        assert result2.success is True
+        mock_search2.assert_not_called()
+        title2 = _t1_nfo_title(video_path)
+
+        expected = _t1_expected_title("SONE-205", "真標題已刮回")
+        assert title1 == expected
+        assert title2 == expected
+
+    def test_fill_missing_user_edited_title_not_overwritten(self, tmp_path):
+        """驗收 4a：DB title 是使用者手改過、剝前綴後不等於 stem 的字串 →
+        不判定為佔位、不進 missing，其餘欄位齊全時 search_jav 完全不被呼叫。"""
+        stem = "user_edited_video"
+        video_path = _t1_write_video(tmp_path, stem)
+        video = _make_video(title="使用者自己改過的標題")
+        mock_repo = _t1_mock_repo({"SONE-205": [video]})
+
+        with (
+            patch("core.enricher.VideoRepository", return_value=mock_repo),
+            patch("core.enricher.search_jav") as mock_search,
+        ):
+            from core.enricher import enrich_single
+            result = enrich_single(
+                file_path=str(video_path),
+                number="SONE-205",
+                mode="fill_missing",
+                write_cover=False,
+                write_extrafanart=False,
+            )
+
+        mock_search.assert_not_called()
+        assert result.success is True
+        assert _t1_nfo_title(video_path) == _t1_expected_title("SONE-205", "使用者自己改過的標題")
+
+    def test_fill_missing_third_party_nfo_title_equal_stem_overwritten(self, tmp_path):
+        """驗收 4b：DB 無列、sidecar NFO 存在且其 <title> 剝前綴後等於 stem →
+        走 else: 讀 NFO 分支，仍被判定為佔位、仍被覆蓋成刮回來的真標題。"""
+        stem = "third_party_nfo_video"
+        video_path = _t1_write_video(tmp_path, stem)
+        nfo_path = video_path.with_suffix(".nfo")
+        nfo_path.write_text(
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+            "<movie>\n"
+            f"  <title>[SONE-205]{stem}</title>\n"
+            "  <studio>SOD</studio>\n"
+            "  <director>テスト監督</director>\n"
+            "  <set><name>テストシリーズ</name></set>\n"
+            "  <label>LABEL</label>\n"
+            "  <genre>タグ</genre>\n"
+            "  <release>2024-01-01</release>\n"
+            "  <actor><name>女優A</name></actor>\n"
+            "</movie>\n",
+            encoding="utf-8",
+        )
+        mock_repo = _t1_mock_repo({})
+        scraper_data = _make_scraper_result(title="第三方後刮到的真標題")
+
+        with (
+            patch("core.enricher.VideoRepository", return_value=mock_repo),
+            patch("core.enricher.search_jav", return_value=scraper_data) as mock_search,
+        ):
+            from core.enricher import enrich_single
+            result = enrich_single(
+                file_path=str(video_path),
+                number="SONE-205",
+                mode="fill_missing",
+                write_cover=False,
+                write_extrafanart=False,
+                overwrite_existing=True,
+            )
+
+        mock_search.assert_called_once()
+        assert result.success is True
+        assert _t1_nfo_title(video_path) == _t1_expected_title("SONE-205", "第三方後刮到的真標題")
+
+    def test_fill_missing_scraper_returns_no_title_falls_back_to_placeholder(self, tmp_path):
+        """驗收 5a：scraper 有回應但沒給 title（空字串）→ meta['title'] 落回原本
+        的佔位值，不留空白；其餘缺項（label）仍正常被 _merge_meta() 填入。"""
+        stem = "no_title_scrape_video"
+        video_path = _t1_write_video(tmp_path, stem)
+        video = _make_video(title=stem, label="")
+        mock_repo = _t1_mock_repo({"SONE-205": [video]})
+        scraper_data = _make_scraper_result(title="", label="真正刮回的LABEL")
+
+        with (
+            patch("core.enricher.VideoRepository", return_value=mock_repo),
+            patch("core.enricher.search_jav", return_value=scraper_data) as mock_search,
+        ):
+            from core.enricher import enrich_single
+            result = enrich_single(
+                file_path=str(video_path),
+                number="SONE-205",
+                mode="fill_missing",
+                write_cover=False,
+                write_extrafanart=False,
+            )
+
+        mock_search.assert_called_once()
+        assert result.success is True
+        assert _t1_nfo_title(video_path) == _t1_expected_title("SONE-205", stem)
+        nfo_path = video_path.with_suffix(".nfo")
+        label_text = ET.parse(str(nfo_path)).getroot().find("label").text
+        assert label_text == "真正刮回的LABEL"
+
+    def test_fill_missing_scraper_offline_with_synthetic_title_only_missing_succeeds(self, tmp_path):
+        """強制刮削回歸防呆・今天會成功的列不得變失敗：DB 列八欄全滿、只有
+        title 是佔位形狀，scraper 整個失敗（search_jav 回 None）→ 仍必須成功，
+        title 落回原佔位值，且不記一次 scrape_attempted_at。"""
+        stem = "offline_synthetic_video"
+        video_path = _t1_write_video(tmp_path, stem)
+        video = _make_video(title=stem)
+        mock_repo = _t1_mock_repo({"SONE-205": [video]})
+
+        with (
+            patch("core.enricher.VideoRepository", return_value=mock_repo),
+            patch("core.enricher.search_jav", return_value=None) as mock_search,
+        ):
+            from core.enricher import enrich_single
+            result = enrich_single(
+                file_path=str(video_path),
+                number="SONE-205",
+                mode="fill_missing",
+                write_cover=False,
+                write_extrafanart=False,
+            )
+
+        mock_search.assert_called_once()
+        assert result.success is True, f"today 本來就會成功的列不該變 not_found，error={result.error}"
+        assert result.reason != "not_found"
+        mock_repo.update_scrape_attempted_at.assert_not_called()
+        assert _t1_nfo_title(video_path) == _t1_expected_title("SONE-205", stem)
+
+    def test_fill_missing_scraper_offline_with_real_missing_field_still_early_returns(self, tmp_path):
+        """強制刮削回歸防呆・今天本來就會失敗的列維持早退：DB 列 title 佔位
+        ＋ maker 也真的缺，scraper 整個失敗 → 必須維持今天的早退行為
+        （reason == "not_found"，且 update_scrape_attempted_at 被呼叫恰好一次）。"""
+        stem = "offline_real_missing_video"
+        video_path = _t1_write_video(tmp_path, stem)
+        video = _make_video(title=stem, maker="")
+        mock_repo = _t1_mock_repo({"SONE-205": [video]})
+
+        with (
+            patch("core.enricher.VideoRepository", return_value=mock_repo),
+            patch("core.enricher.search_jav", return_value=None) as mock_search,
+        ):
+            from core.enricher import enrich_single
+            result = enrich_single(
+                file_path=str(video_path),
+                number="SONE-205",
+                mode="fill_missing",
+                write_cover=False,
+                write_extrafanart=False,
+            )
+
+        mock_search.assert_called_once()
+        assert result.success is False
+        assert result.reason == "not_found"
+        mock_repo.update_scrape_attempted_at.assert_called_once()
+
+    def test_fill_missing_real_title_equal_stem_request_not_idempotent_but_value_stable(self, tmp_path):
+        """驗收 2 的精確表述（plan 已接受的殘留）：真標題剛好等於檔名 stem
+        （非合成佔位，只是巧合）→ 連續呼叫兩次都會被判定為佔位、search_jav 兩次
+        都被呼叫（請求不 idempotent），但兩次寫出的 title 逐字相同（值 idempotent，
+        沒有被改壞）。"""
+        stem = "coincidental_real_title"
+        video_path = _t1_write_video(tmp_path, stem)
+        scraper_data = _make_scraper_result(title=stem)
+
+        video1 = _make_video(title=stem)
+        mock_repo1 = _t1_mock_repo({"SONE-205": [video1]})
+        with (
+            patch("core.enricher.VideoRepository", return_value=mock_repo1),
+            patch("core.enricher.search_jav", return_value=scraper_data) as mock_search1,
+        ):
+            from core.enricher import enrich_single
+            result1 = enrich_single(
+                file_path=str(video_path),
+                number="SONE-205",
+                mode="fill_missing",
+                write_cover=False,
+                write_extrafanart=False,
+                overwrite_existing=True,
+            )
+        assert result1.success is True
+        mock_search1.assert_called_once()
+        title1 = _t1_nfo_title(video_path)
+
+        video2 = _make_video(title=stem)
+        mock_repo2 = _t1_mock_repo({"SONE-205": [video2]})
+        with (
+            patch("core.enricher.VideoRepository", return_value=mock_repo2),
+            patch("core.enricher.search_jav", return_value=scraper_data) as mock_search2,
+        ):
+            from core.enricher import enrich_single
+            result2 = enrich_single(
+                file_path=str(video_path),
+                number="SONE-205",
+                mode="fill_missing",
+                write_cover=False,
+                write_extrafanart=False,
+                overwrite_existing=True,
+            )
+        assert result2.success is True
+        mock_search2.assert_called_once()
+        title2 = _t1_nfo_title(video_path)
+
+        expected = _t1_expected_title("SONE-205", stem)
+        assert title1 == expected
+        assert title2 == expected

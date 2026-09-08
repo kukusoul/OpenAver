@@ -177,10 +177,15 @@ EXEMPTIONS: dict[tuple[str, str], tuple[int, str]] = {
         "等跨語句共享狀態打散到多個函式，可讀性不會變好。",
     ),
     ("core/enricher.py", "enrich_single"): (
-        249,
+        275,
         "單片 enrich 主流程，含多個 write_* flag（nfo/cover/extrafanart/overwrite_existing/"
         "external_manager）的正交組合分支，是核心編排函式；已標記 ranker-invalidate-ok，flag "
-        "組合邏輯搬到別處會打散單一事務語意。",
+        "組合邏輯搬到別處會打散單一事務語意。"
+        " ／ 249→275（feature/145a-release-fixes T1）：fill_missing 分支必須在「讀完 DB/NFO」與"
+        "「判定缺項」之間插入佔位標題判定（掃描把檔名塞進 videos.title，_missing_fields() 只認 falsy，"
+        "title 因此永遠不進缺項清單），而判定的三個狀態（是不是佔位／原本的佔位值／今天是否本來就沒有缺項）"
+        "必須跨 if missing: 區塊存活到還原那一步。抽成 helper 會把這三個狀態打散到函式邊界之外，"
+        "正是這段最容易寫錯的地方（scope 一錯，refresh_full／db_to_sidecar 兩個 mode 會 UnboundLocalError）。",
     ),
     ("core/database/video.py", "VideoRepository.repath"): (
         242,
