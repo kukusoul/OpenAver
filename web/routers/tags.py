@@ -5,12 +5,10 @@ Tags API Router — /api/tags
     GET /api/tags/top — NFO tag 頻次排序（不含 user_tags），AI agent 用於跨語言同義詞候選分析
 """
 
-import sqlite3
-
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
-from core.database import get_db_path, init_db
+from core.database import get_connection, get_db_path, init_db
 from core.logger import get_logger
 
 logger = get_logger(__name__)
@@ -30,7 +28,7 @@ def get_top_tags(
         # 此時 DB 檔尚未建立 → sqlite3.connect 會新建空檔但 videos 表不存在 → OperationalError。
         # init_db() idempotent，已存在 schema 時為 no-op。
         init_db(db_path)
-        with sqlite3.connect(str(db_path)) as conn:
+        with get_connection(db_path) as conn:
             cur = conn.cursor()
 
             # top N tags（套 min_count + limit）
