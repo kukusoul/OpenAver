@@ -8,7 +8,11 @@ import pytest
 
 import core.database.version_tracker as version_tracker
 from core.database import get_connection, init_db
-from core.database.version_tracker import compute_db_fingerprint, get_showcase_revision
+from core.database.version_tracker import (
+    compute_db_fingerprint,
+    compute_etag,
+    get_showcase_revision,
+)
 
 
 def _insert_one(db_path, number):
@@ -258,3 +262,53 @@ def test_get_connection_pragma_unchanged(tmp_path):
     mode = conn.execute("PRAGMA journal_mode").fetchone()[0]
     conn.close()
     assert mode.lower() == "wal"
+
+
+# ============ compute_etag() (TASK-145-T3) ============
+
+_FP = ((True, 1, 2, 3, 4), (False, 0, 0, 0, 0))
+_PROJECTION = {"directories": ["/a"], "path_mappings": {}, "thumbnail_cache_enabled": False}
+
+
+def test_compute_etag_same_input_same_output():
+    """同一組輸入呼叫兩次 → 逐字元相同的字串（快取比對靠這個穩定性）。"""
+    a = compute_etag(1, _FP, _PROJECTION)
+    b = compute_etag(1, _FP, _PROJECTION)
+    assert a == b
+
+
+def test_compute_etag_revision_change_changes_output():
+    a = compute_etag(1, _FP, _PROJECTION)
+    b = compute_etag(2, _FP, _PROJECTION)
+    assert a != b
+
+
+def test_compute_etag_db_fingerprint_change_changes_output():
+    a = compute_etag(1, _FP, _PROJECTION)
+    other_fp = ((True, 1, 2, 3, 999), (False, 0, 0, 0, 0))
+    b = compute_etag(1, other_fp, _PROJECTION)
+    assert a != b
+
+
+def test_compute_etag_projection_change_changes_output():
+    a = compute_etag(1, _FP, _PROJECTION)
+    other_projection = {**_PROJECTION, "thumbnail_cache_enabled": True}
+    b = compute_etag(1, _FP, other_projection)
+    assert a != b
+
+
+def test_compute_etag_projection_key_order_does_not_matter():
+    """projection dict 的插入順序不影響結果——序列化必須 sort_keys，不能依賴呼叫端湊出的順序。"""
+    p1 = {"a": 1, "b": 2}
+    p2 = {"b": 2, "a": 1}
+    assert compute_etag(1, _FP, p1) == compute_etag(1, _FP, p2)
+
+
+def test_compute_etag_output_is_quoted_hex_strong_validator():
+    """輸出是雙引號包住的十六進位字串，不帶 `W/` 弱驗證前綴。"""
+    etag = compute_etag(1, _FP, _PROJECTION)
+    assert etag.startswith('"') and etag.endswith('"')
+    assert not etag.startswith('W/')
+    inner = etag.strip('"')
+    assert len(inner) == 64  # sha256 hexdigest
+    int(inner, 16)  # 全部是合法十六進位字元，不會拋例外

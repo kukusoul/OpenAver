@@ -2,6 +2,9 @@
 
 供 web/routers/showcase.py 的 ETag 計算使用（CD-145a-8/10/12）。
 """
+import hashlib
+import hmac
+import json
 import secrets
 import sqlite3
 import threading
@@ -52,3 +55,22 @@ def _stat_fingerprint(path: Path) -> tuple:
 def compute_db_fingerprint(db_path: Path) -> tuple:
     wal_path = db_path.with_name(db_path.name + "-wal")
     return (_stat_fingerprint(db_path), _stat_fingerprint(wal_path))
+
+
+def compute_etag(revision: int, db_fingerprint: tuple, projection: dict) -> str:
+    """把 revision／DB 指紋／設定投影三項與開機隨機值一起算 HMAC，回傳可直接
+    當 ETag response header 值使用的字串（強驗證子，帶雙引號、不加 `W/` 前綴）。
+
+    三個輸入分別覆蓋「同一次啟動內部發生的寫入」（revision）、「外部整份抽換
+    或還原 DB 檔／未經連線工廠的 -wal 寫入」（db_fingerprint）、「使用者改了
+    會影響回應內容的設定」（projection）；`_BOOT_SECRET` 讓同一個鍵在不同次
+    啟動之間也不會撞值。序列化用 `sort_keys=True` 是刻意的——`db_fingerprint`
+    是巢狀 tuple、`projection` 是 dict，都不能依賴呼叫端湊出的插入順序。
+    """
+    material = json.dumps(
+        {"revision": revision, "db_fingerprint": db_fingerprint, "projection": projection},
+        sort_keys=True,
+        default=str,
+    )
+    digest = hmac.new(_BOOT_SECRET, material.encode("utf-8"), hashlib.sha256).hexdigest()
+    return f'"{digest}"'

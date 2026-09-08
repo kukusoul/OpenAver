@@ -9,11 +9,16 @@ Showcase API 路由 - 影片展示資料端點
 import os
 from urllib.parse import quote
 
-from fastapi import APIRouter, Query
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Query, Request
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 
 from core.database import VideoRepository, get_db_path, init_db
+from core.database.version_tracker import (
+    compute_db_fingerprint,
+    compute_etag,
+    get_showcase_revision,
+)
 from core.path_utils import (
     is_path_under_dir,
     uri_to_local_fs_path,
@@ -133,9 +138,27 @@ def _get_configured_dirs(config: dict) -> tuple[set, dict]:
     return configured_dir_uris, path_mappings
 
 
+def _etag_matches(if_none_match: str, etag: str) -> bool:
+    """比對 `If-None-Match` 語意（抄 Starlette `StaticFiles.is_not_modified()` 的比對方式，
+    不 import 該函式本身——它綁定 `FileResponse` 用的 `Headers` 型別，這裡是手寫 JSON 端點）。
+
+    依逗號拆多值、去除頭尾空白與 `W/` 弱驗證前綴，逐一比對是否等於 `etag`。
+    """
+    if not if_none_match:
+        return False
+    return etag in [tag.strip().removeprefix("W/") for tag in if_none_match.split(",")]
+
+
 @router.get("/videos")
-def get_videos():
-    """取得所有影片資料（用於 Showcase 頁面客戶端渲染）"""
+def get_videos(request: Request):
+    """取得所有影片資料（用於 Showcase 頁面客戶端渲染）。
+
+    帶 ETag（CD-145a-8/11/12）：涵蓋 DB 內部寫入 revision、DB/-wal 檔案指紋（涵蓋外部
+    抽換或還原備份）、無機密設定投影（來源資料夾／path_mappings／縮圖開關）三項，
+    加上開機隨機值一起 HMAC（`core.database.version_tracker.compute_etag`）。命中
+    `If-None-Match` 時在序列化之前短路回 304，資料真的沒變時不用重新序列化整份清單、
+    不用把整包 JSON 再傳一次。
+    """
     try:
         db_path = get_db_path()
 
@@ -148,12 +171,24 @@ def get_videos():
             })
 
         init_db(db_path)  # 確保 schema 存在（防止半毀損 DB）
-        repo = VideoRepository(db_path)
 
         # 只取「當前設定資料夾」底下的記錄（DB 保留全部當 cache）
         config = load_config()
+        gallery_config = config.get('gallery', {})
         configured_dir_uris, path_mappings = _get_configured_dirs(config)
+        thumb_enabled = config.get('thumbnail_cache_enabled', False)
 
+        projection = {
+            "directories": sorted(get_gallery_source_paths(gallery_config)),
+            "path_mappings": path_mappings,
+            "thumbnail_cache_enabled": thumb_enabled,
+        }
+        etag = compute_etag(get_showcase_revision(), compute_db_fingerprint(db_path), projection)
+
+        if _etag_matches(request.headers.get("if-none-match"), etag):
+            return Response(status_code=304, headers={"ETag": etag, "Cache-Control": "no-cache"})
+
+        repo = VideoRepository(db_path)
         all_videos = [v for v in repo.get_all()
                       if any(is_path_under_dir(v.path, uri) for uri in configured_dir_uris)]
 
@@ -162,15 +197,17 @@ def get_videos():
         # 一個 member，_serialize_group() 輸出與改動前逐鍵逐值相同（AC-4）。
         groups = group_rows(all_videos, fs_path_of=lambda v: uri_to_local_fs_path(v.path, path_mappings))
 
-        thumb_enabled = config.get('thumbnail_cache_enabled', False)
         videos_json = [_serialize_group(g, path_mappings, thumb_enabled)
                        for g in groups]
 
-        return JSONResponse({
+        resp = JSONResponse({
             "success": True,
             "videos": videos_json,
             "total": len(videos_json)
         })
+        resp.headers["ETag"] = etag
+        resp.headers["Cache-Control"] = "no-cache"
+        return resp
 
     except Exception as e:
         logger.error("取得影片資料失敗: %s", e)
@@ -290,7 +327,7 @@ def detect_video_focal(req: DetectFocalRequest):
     `POST /video/save-focal` 存檔時原樣帶回，讓 `update_manual_focal` 的
     compare-and-store 守衛比對「使用者觀察當下」與「存檔當下」的封面是否一致，
     擋掉 rescan/rescrape 換封面卻把舊座標存成新封面 manual 值的 race。
-    `def`（非 async）→ threadpool；detect_focal 同步 ~2.2s。**不進 capabilities（不揭露）。**
+    `def`（非 async）→ threadpool；detect_focal 同步耗時 x86 約 2.2s、DS218 NAS 實機約 42.7s（19 倍，來源：DS218 POC 實測）。**不進 capabilities（不揭露）。**
     """
     try:
         db_path = get_db_path()
