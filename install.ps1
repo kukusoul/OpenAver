@@ -13,7 +13,7 @@ $InstallDir = "$HOME\OpenAver"
 function Exit-WithPause {
     param([int]$Code = 0)
     Write-Host ""
-    Write-Host "請按 Enter 關閉此視窗"
+    Write-Host $(if ($T) { $T.exit_prompt } else { "Press Enter to close this window" })
     try { $Host.UI.RawUI.FlushInputBuffer() } catch {}
     Read-Host | Out-Null
     exit $Code
@@ -27,7 +27,7 @@ function Exit-WithPause {
 # 工作」的順序同時滿足兩者，且仍是最省事的表達方式，故守衛的位置斷言維持不變。
 trap {
     Write-Host ""
-    Write-Host "❌ 安裝過程發生未預期錯誤" -ForegroundColor Red
+    Write-Host $(if ($T) { $T.trap_error_header } else { "An unexpected error occurred during installation" }) -ForegroundColor Red
     Write-Host "$_" -ForegroundColor Red
     try {
         if ($_.InvocationInfo) {
@@ -71,12 +71,162 @@ public static class OpenAverConsole {
     }
 } catch {}
 
+# ============ 語言判定與訊息表（CD-145b-8b／CD-145b-10）============
+function Get-InstallerLang {
+    # CD-145b-8b：環境變數覆寫優先於系統顯示語言，值不合法就忽略、退回系統判定。
+    $o = $env:OPENAVER_INSTALL_LANG
+    if ($o -in 'zh-TW', 'zh-CN', 'ja', 'en') { return $o }
+
+    $name = (Get-UICulture).Name
+    if ($name -match '^zh-(TW|HK|MO|Hant)') { return 'zh-TW' }
+    if ($name -match '^zh-(CN|SG|Hans)') { return 'zh-CN' }
+    if ($name -match '^ja') { return 'ja' }
+    return 'en'
+}
+
+$L = @{
+    'zh-TW' = @{
+        exit_prompt = "請按 Enter 關閉此視窗"
+        trap_error_header = "❌ 安裝過程發生未預期錯誤"
+        title_banner = "   OpenAver 安裝程式"
+        app_running_warning = "⚠️  OpenAver 目前正在執行，無法覆蓋安裝。"
+        app_running_close_continue_prompt = "   請關閉 OpenAver 視窗後，按 Enter 繼續（或輸入 q 取消）"
+        install_cancelled = "取消安裝"
+        webview2_progress_fmt = "`r   下載並安裝中 {0}  {1}s   "
+        checking_latest_version = "🔍 查詢最新版本..."
+        github_connect_failed = "❌ 無法連線到 GitHub，請檢查網路"
+        download_link_not_found = "❌ 找不到 Windows 下載連結"
+        latest_version_fmt = "   最新版本: {0}"
+        existing_install_detected_fmt = "⚠️  已偵測到現有安裝: {0}"
+        overwrite_confirm_prompt = "   是否覆蓋安裝？(y/N)"
+        downloading_fmt = "📦 下載 {0}..."
+        cleaning_old_python = "🧹 清除舊版 Python runtime..."
+        cleanup_failed_warning = "⚠️  無法清除舊版（OpenAver 可能正在執行）。"
+        cleanup_failed_close_retry_prompt = "   請關閉 OpenAver 視窗後，按 Enter 重試（或輸入 q 取消）"
+        installing_to_fmt = "📂 安裝到 {0}..."
+        removing_security_restrictions = "🔓 解除 Windows 安全限制..."
+        webview2_installing = "🌐 偵測到系統未安裝 WebView2 Runtime，正在自動安裝（視網速約 1–3 分鐘）..."
+        webview2_install_success = "   ✅ WebView2 安裝完成"
+        webview2_install_incomplete_header = "✅ OpenAver 本體已安裝完成，只差 WebView2。"
+        webview2_manual_required = "   WebView2 自動安裝未完成，OpenAver 需要它才能開啟視窗。"
+        webview2_manual_instruction = "   請手動安裝："
+        webview2_after_install_instruction = "   裝好後雙擊桌面 OpenAver 捷徑即可啟動。"
+        desktop_shortcut_created = "🖥️  桌面捷徑已建立"
+        desktop_shortcut_failed = "   (桌面捷徑建立失敗，可手動執行)"
+        install_complete = "✅ 安裝完成！"
+        launch_instructions_header = "   啟動方式："
+        launch_instruction_1 = "   1. 雙擊桌面上的 OpenAver 捷徑"
+        launch_instruction_2_fmt = "   2. 或執行 {0}\OpenAver.bat"
+    }
+    'zh-CN' = @{
+        exit_prompt = "请按 Enter 关闭此窗口"
+        trap_error_header = "❌ 安装过程中发生意外错误"
+        title_banner = "   OpenAver 安装程序"
+        app_running_warning = "⚠️  OpenAver 当前正在运行，无法覆盖安装。"
+        app_running_close_continue_prompt = "   请关闭 OpenAver 窗口后，按 Enter 继续（或输入 q 取消）"
+        install_cancelled = "取消安装"
+        webview2_progress_fmt = "`r   正在下载安装 {0}  {1}s   "
+        checking_latest_version = "🔍 正在查询最新版本..."
+        github_connect_failed = "❌ 无法连接到 GitHub，请检查网络"
+        download_link_not_found = "❌ 找不到 Windows 下载链接"
+        latest_version_fmt = "   最新版本: {0}"
+        existing_install_detected_fmt = "⚠️  检测到已存在的安装: {0}"
+        overwrite_confirm_prompt = "   是否覆盖安装？(y/N)"
+        downloading_fmt = "📦 正在下载 {0}..."
+        cleaning_old_python = "🧹 正在清除旧版 Python 运行时..."
+        cleanup_failed_warning = "⚠️  无法清除旧版（OpenAver 可能正在运行）。"
+        cleanup_failed_close_retry_prompt = "   请关闭 OpenAver 窗口后，按 Enter 重试（或输入 q 取消）"
+        installing_to_fmt = "📂 正在安装到 {0}..."
+        removing_security_restrictions = "🔓 正在解除 Windows 安全限制..."
+        webview2_installing = "🌐 检测到系统未安装 WebView2 Runtime，正在自动安装（视网速约 1–3 分钟）..."
+        webview2_install_success = "   ✅ WebView2 安装完成"
+        webview2_install_incomplete_header = "✅ OpenAver 本体已安装完成，只差 WebView2。"
+        webview2_manual_required = "   WebView2 自动安装未完成，OpenAver 需要它才能打开窗口。"
+        webview2_manual_instruction = "   请手动安装："
+        webview2_after_install_instruction = "   安装完成后，双击桌面上的 OpenAver 快捷方式即可启动。"
+        desktop_shortcut_created = "🖥️  桌面快捷方式已创建"
+        desktop_shortcut_failed = "   (桌面快捷方式创建失败，可手动运行)"
+        install_complete = "✅ 安装完成！"
+        launch_instructions_header = "   启动方式："
+        launch_instruction_1 = "   1. 双击桌面上的 OpenAver 快捷方式"
+        launch_instruction_2_fmt = "   2. 或运行 {0}\OpenAver.bat"
+    }
+    'ja' = @{
+        exit_prompt = "Enter キーを押してこのウィンドウを閉じてください"
+        trap_error_header = "❌ インストール中に予期しないエラーが発生しました"
+        title_banner = "   OpenAver インストーラー"
+        app_running_warning = "⚠️  OpenAver が実行中のため、上書きインストールできません。"
+        app_running_close_continue_prompt = "   OpenAver のウィンドウを閉じてから Enter キーを押して続行してください（キャンセルする場合は q を入力）"
+        install_cancelled = "インストールをキャンセルしました"
+        webview2_progress_fmt = "`r   ダウンロードとインストール中 {0}  {1}秒   "
+        checking_latest_version = "🔍 最新バージョンを確認中..."
+        github_connect_failed = "❌ GitHub に接続できません。ネットワークを確認してください"
+        download_link_not_found = "❌ Windows 用のダウンロードリンクが見つかりません"
+        latest_version_fmt = "   最新バージョン: {0}"
+        existing_install_detected_fmt = "⚠️  既存のインストールを検出しました: {0}"
+        overwrite_confirm_prompt = "   上書きインストールしますか？(y/N)"
+        downloading_fmt = "📦 {0} をダウンロード中..."
+        cleaning_old_python = "🧹 古いバージョンの Python ランタイムを削除中..."
+        cleanup_failed_warning = "⚠️  旧バージョンを削除できません（OpenAver が実行中の可能性があります）。"
+        cleanup_failed_close_retry_prompt = "   OpenAver のウィンドウを閉じてから Enter キーを押して再試行してください（キャンセルする場合は q を入力）"
+        installing_to_fmt = "📂 {0} にインストール中..."
+        removing_security_restrictions = "🔓 Windows のセキュリティ制限を解除中..."
+        webview2_installing = "🌐 WebView2 Runtime が未インストールのため、自動的にインストールしています（回線速度により約 1～3 分かかります）..."
+        webview2_install_success = "   ✅ WebView2 のインストールが完了しました"
+        webview2_install_incomplete_header = "✅ OpenAver 本体のインストールは完了しました。あとは WebView2 だけです。"
+        webview2_manual_required = "   WebView2 の自動インストールが完了しませんでした。OpenAver の起動には WebView2 が必要です。"
+        webview2_manual_instruction = "   手動でインストールしてください："
+        webview2_after_install_instruction = "   インストール後、デスクトップの OpenAver ショートカットをダブルクリックすると起動できます。"
+        desktop_shortcut_created = "🖥️  デスクトップショートカットを作成しました"
+        desktop_shortcut_failed = "   (デスクトップショートカットの作成に失敗しました。手動で実行してください)"
+        install_complete = "✅ インストールが完了しました！"
+        launch_instructions_header = "   起動方法："
+        launch_instruction_1 = "   1. デスクトップの OpenAver ショートカットをダブルクリック"
+        launch_instruction_2_fmt = "   2. または {0}\OpenAver.bat を実行"
+    }
+    'en' = @{
+        exit_prompt = "Press Enter to close this window"
+        trap_error_header = "An unexpected error occurred during installation"
+        title_banner = "   OpenAver Installer"
+        app_running_warning = "⚠️  OpenAver is currently running, cannot overwrite the installation."
+        app_running_close_continue_prompt = "   Please close OpenAver, then press Enter to continue (or type q to cancel)"
+        install_cancelled = "Installation cancelled"
+        webview2_progress_fmt = "`r   Downloading and installing {0}  {1}s   "
+        checking_latest_version = "🔍 Checking for the latest version..."
+        github_connect_failed = "❌ Could not connect to GitHub, please check your network connection"
+        download_link_not_found = "❌ Could not find the Windows download link"
+        latest_version_fmt = "   Latest version: {0}"
+        existing_install_detected_fmt = "⚠️  Existing installation detected: {0}"
+        overwrite_confirm_prompt = "   Overwrite the existing installation? (y/N)"
+        downloading_fmt = "📦 Downloading {0}..."
+        cleaning_old_python = "🧹 Removing old Python runtime..."
+        cleanup_failed_warning = "⚠️  Could not remove the old version (OpenAver may still be running)."
+        cleanup_failed_close_retry_prompt = "   Please close OpenAver, then press Enter to retry (or type q to cancel)"
+        installing_to_fmt = "📂 Installing to {0}..."
+        removing_security_restrictions = "🔓 Removing Windows security restrictions..."
+        webview2_installing = "🌐 WebView2 Runtime not detected, installing it automatically (this may take 1-3 minutes depending on your connection speed)..."
+        webview2_install_success = "   ✅ WebView2 installed successfully"
+        webview2_install_incomplete_header = "✅ OpenAver itself has been installed, only WebView2 is missing."
+        webview2_manual_required = "   WebView2 automatic installation did not complete. OpenAver needs it to open its window."
+        webview2_manual_instruction = "   Please install it manually:"
+        webview2_after_install_instruction = "   After installing it, double-click the OpenAver shortcut on your desktop to launch it."
+        desktop_shortcut_created = "🖥️  Desktop shortcut created"
+        desktop_shortcut_failed = "   (Failed to create the desktop shortcut, you can launch it manually)"
+        install_complete = "✅ Installation complete!"
+        launch_instructions_header = "   How to launch:"
+        launch_instruction_1 = "   1. Double-click the OpenAver shortcut on your desktop"
+        launch_instruction_2_fmt = "   2. Or run {0}\OpenAver.bat"
+    }
+}
+$Lang = Get-InstallerLang
+$T = $L[$Lang]
+
 # 乾淨映像 / 舊系統的 PowerShell 5.1 預設可能用 TLS1.0，GitHub 會拒連
 try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12 } catch {}
 
 Write-Host ""
 Write-Host "=============================="
-Write-Host "   OpenAver 安裝程式"
+Write-Host $T.title_banner
 Write-Host "=============================="
 Write-Host ""
 
@@ -153,10 +303,10 @@ function Wait-OpenAverClosed {
     param([scriptblock]$Check)
     while (& $Check) {
         Write-Host ""
-        Write-Host "⚠️  OpenAver 目前正在執行，無法覆蓋安裝。" -ForegroundColor Yellow
-        Write-Host "   請關閉 OpenAver 視窗後，按 Enter 繼續（或輸入 q 取消）" -ForegroundColor Yellow
+        Write-Host $T.app_running_warning -ForegroundColor Yellow
+        Write-Host $T.app_running_close_continue_prompt -ForegroundColor Yellow
         $r = Read-Host
-        if ($r -eq 'q' -or $r -eq 'Q') { Write-Host "取消安裝"; Exit-WithPause 0 }
+        if ($r -eq 'q' -or $r -eq 'Q') { Write-Host $T.install_cancelled; Exit-WithPause 0 }
     }
 }
 
@@ -176,7 +326,7 @@ function Install-WebView2 {
         $spin = '|/-\'; $i = 0; $t0 = Get-Date
         while (-not $proc.HasExited) {
             $el = [int]((Get-Date) - $t0).TotalSeconds
-            Write-Host ("`r   下載並安裝中 {0}  {1}s   " -f $spin[$i % 4], $el) -NoNewline
+            Write-Host ($T.webview2_progress_fmt -f $spin[$i % 4], $el) -NoNewline
             if ($el -ge $TimeoutSec) { try { $proc.Kill() } catch {}; break }
             Start-Sleep -Milliseconds 250; $i++
         }
@@ -191,11 +341,11 @@ function Install-WebView2 {
 }
 
 # ============ 查詢最新版本 ============
-Write-Host "🔍 查詢最新版本..."
+Write-Host $T.checking_latest_version
 try {
     $Release = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases/latest"
 } catch {
-    Write-Host "❌ 無法連線到 GitHub，請檢查網路" -ForegroundColor Red
+    Write-Host $T.github_connect_failed -ForegroundColor Red
     Exit-WithPause 1
 }
 
@@ -203,20 +353,20 @@ $Version = $Release.tag_name
 $Asset = $Release.assets | Where-Object { $_.name -match "Windows-x64\.zip$" } | Select-Object -First 1
 
 if (-not $Asset) {
-    Write-Host "❌ 找不到 Windows 下載連結" -ForegroundColor Red
+    Write-Host $T.download_link_not_found -ForegroundColor Red
     Exit-WithPause 1
 }
 
 $DownloadUrl = $Asset.browser_download_url
-Write-Host "   最新版本: $Version"
+Write-Host ($T.latest_version_fmt -f $Version)
 
 # ============ 檢查現有安裝 ============
 if (Test-Path $InstallDir) {
     Write-Host ""
-    Write-Host "⚠️  已偵測到現有安裝: $InstallDir" -ForegroundColor Yellow
-    $Reply = Read-Host "   是否覆蓋安裝？(y/N)"
+    Write-Host ($T.existing_install_detected_fmt -f $InstallDir) -ForegroundColor Yellow
+    $Reply = Read-Host $T.overwrite_confirm_prompt
     if ($Reply -ne "y" -and $Reply -ne "Y") {
-        Write-Host "取消安裝"
+        Write-Host $T.install_cancelled
         Exit-WithPause 0
     }
 
@@ -226,7 +376,7 @@ if (Test-Path $InstallDir) {
 
 # ============ 下載 ============
 Write-Host ""
-Write-Host "📦 下載 $Version..."
+Write-Host ($T.downloading_fmt -f $Version)
 $TmpDir = Join-Path $env:TEMP "OpenAver-install"
 $TmpZip = Join-Path $TmpDir "OpenAver.zip"
 
@@ -247,7 +397,7 @@ try {
 # 提醒關閉 → 等 Enter 重試（不必重跑整條 irm），不強殺。
 $PythonDir = Join-Path $InstallDir "python"
 if (Test-Path $PythonDir) {
-    Write-Host "🧹 清除舊版 Python runtime..."
+    Write-Host $T.cleaning_old_python
     # 權威信號＝Remove-Item 本身能否成功（鎖著就 throw）。失敗 → 提醒 → 等 Enter
     # 重試，user-paced 不會空轉；非 app 因素導致一直失敗時可按 q 退出。
     while ($true) {
@@ -256,35 +406,35 @@ if (Test-Path $PythonDir) {
             break
         } catch {
             Write-Host ""
-            Write-Host "⚠️  無法清除舊版（OpenAver 可能正在執行）。" -ForegroundColor Yellow
-            Write-Host "   請關閉 OpenAver 視窗後，按 Enter 重試（或輸入 q 取消）" -ForegroundColor Yellow
+            Write-Host $T.cleanup_failed_warning -ForegroundColor Yellow
+            Write-Host $T.cleanup_failed_close_retry_prompt -ForegroundColor Yellow
             $r = Read-Host
-            if ($r -eq 'q' -or $r -eq 'Q') { Write-Host "取消安裝"; Exit-WithPause 0 }
+            if ($r -eq 'q' -or $r -eq 'Q') { Write-Host $T.install_cancelled; Exit-WithPause 0 }
         }
     }
 }
 
 # ============ 解壓安裝（覆蓋程式檔案，保留用戶資料）============
-Write-Host "📂 安裝到 $InstallDir..."
+Write-Host ($T.installing_to_fmt -f $InstallDir)
 Expand-ZipRobust -ZipPath $TmpZip -Destination $HOME -ConfineTo $InstallDir
 
 # ============ 解除 Windows 安全限制 ============
-Write-Host "🔓 解除 Windows 安全限制..."
+Write-Host $T.removing_security_restrictions
 Get-ChildItem -Path $InstallDir -Recurse | Unblock-File -ErrorAction SilentlyContinue
 
 # ============ WebView2 Runtime（缺它必開不了）============
 if (-not (Test-WebView2)) {
     Write-Host ""
-    Write-Host "🌐 偵測到系統未安裝 WebView2 Runtime，正在自動安裝（視網速約 1–3 分鐘）..." -ForegroundColor Yellow
+    Write-Host $T.webview2_installing -ForegroundColor Yellow
     if ((Install-WebView2) -and (Test-WebView2)) {
-        Write-Host "   ✅ WebView2 安裝完成" -ForegroundColor Green
+        Write-Host $T.webview2_install_success -ForegroundColor Green
     } else {
         Write-Host ""
-        Write-Host "✅ OpenAver 本體已安裝完成，只差 WebView2。" -ForegroundColor Green
-        Write-Host "   WebView2 自動安裝未完成，OpenAver 需要它才能開啟視窗。" -ForegroundColor Yellow
-        Write-Host "   請手動安裝：" -ForegroundColor Yellow
+        Write-Host $T.webview2_install_incomplete_header -ForegroundColor Green
+        Write-Host $T.webview2_manual_required -ForegroundColor Yellow
+        Write-Host $T.webview2_manual_instruction -ForegroundColor Yellow
         Write-Host "   https://go.microsoft.com/fwlink/p/?LinkId=2124703" -ForegroundColor Cyan
-        Write-Host "   裝好後雙擊桌面 OpenAver 捷徑即可啟動。" -ForegroundColor Yellow
+        Write-Host $T.webview2_after_install_instruction -ForegroundColor Yellow
     }
 }
 
@@ -297,9 +447,9 @@ try {
     $Shortcut.WorkingDirectory = $InstallDir
     $Shortcut.Description = "OpenAver"
     $Shortcut.Save()
-    Write-Host "🖥️  桌面捷徑已建立"
+    Write-Host $T.desktop_shortcut_created
 } catch {
-    Write-Host "   (桌面捷徑建立失敗，可手動執行)" -ForegroundColor Yellow
+    Write-Host $T.desktop_shortcut_failed -ForegroundColor Yellow
 }
 
 # ============ 清理暫存 ============
@@ -307,10 +457,10 @@ Remove-Item $TmpDir -Recurse -Force
 
 # ============ 完成 ============
 Write-Host ""
-Write-Host "✅ 安裝完成！" -ForegroundColor Green
+Write-Host $T.install_complete -ForegroundColor Green
 Write-Host ""
-Write-Host "   啟動方式："
-Write-Host "   1. 雙擊桌面上的 OpenAver 捷徑"
-Write-Host "   2. 或執行 $InstallDir\OpenAver.bat"
+Write-Host $T.launch_instructions_header
+Write-Host $T.launch_instruction_1
+Write-Host ($T.launch_instruction_2_fmt -f $InstallDir)
 Write-Host ""
 Exit-WithPause 0
