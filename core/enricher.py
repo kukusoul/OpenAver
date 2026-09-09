@@ -479,6 +479,26 @@ def _preserve_nfo_only_fields(meta: dict, scraper_data: dict, fs_path: str) -> N
         meta["url"] = nfo_text(root, "website")
 
 
+def _is_filename_placeholder_title(title: str, number: str, fs_path: str) -> bool:
+    """判斷 title 是不是掃描時從檔名塞進來的佔位值（CD-145a-15）。
+
+    A：title 逐字等於檔名 stem（掃描器把 stem 原樣塞進 videos.title 的一般情況）
+    B：title 本身以番號開頭（剝除有作用），且剝完之後與 stem 剝完之後相等
+       （涵蓋舊版被寫壞成 `[NUMBER]` / `[NUMBER]4K` 的既有 NFO）
+
+    B 的 `stripped != title` guard 是承重的，不得簡化掉——拿掉它，整理過的片
+    （檔名 `[NUMBER]真標題.mp4`、NFO title `真標題`）會被誤判成佔位。
+    """
+    if not title:
+        return False
+    stem = Path(fs_path).stem
+    stripped = _strip_num_prefixes(title, number)
+    return (
+        title == stem
+        or (stripped != title and stripped == _strip_num_prefixes(stem, number))
+    )
+
+
 def enrich_single(  # ranker-invalidate-ok: (no literal SQL here; corpus writes go via _db_upsert → repo.upsert and via repo.update_tags_if_changed — both already invalidate)
     file_path: str,
     number: str,
@@ -570,14 +590,11 @@ def enrich_single(  # ranker-invalidate-ok: (no literal SQL here; corpus writes 
                     meta = _nfo_to_meta(root)
                     source_used = "nfo"
 
-        # CD-145a-9：title 剝掉番號前綴後等於檔名 stem → 判定為掃描時塞入的佔位值。
-        # 清空成 '' 才能讓 _missing_fields() 把它算進缺項（該函式只認 falsy，非空
-        # 字串的佔位值本身不會被當缺項）。
-        _filename_stem = Path(fs_path).stem
+        # CD-145a-15：判定 title 是不是掃描時塞進來的佔位值（判定式本體見
+        # _is_filename_placeholder_title）。清空成 '' 才能讓 _missing_fields()
+        # 把它算進缺項（該函式只認 falsy，非空字串的佔位值本身不會被當缺項）。
         _placeholder_title = meta.get('title') or ''
-        _is_placeholder_title = bool(_placeholder_title) and (
-            _strip_num_prefixes(_placeholder_title, number) == _filename_stem
-        )
+        _is_placeholder_title = _is_filename_placeholder_title(_placeholder_title, number, fs_path)
         _title_only_synthetic_missing = False
         if _is_placeholder_title:
             _title_only_synthetic_missing = not _missing_fields(meta)   # 今天（未清空 title）missing 是否為空

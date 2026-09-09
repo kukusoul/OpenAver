@@ -5102,3 +5102,89 @@ class TestFillMissingPlaceholderTitle:
         expected = _t1_expected_title("SONE-205", stem)
         assert title1 == expected
         assert title2 == expected
+
+    def test_fill_missing_end_to_end_number_prefixed_stem_placeholder_replaced_with_scraped(self, tmp_path):
+        """CD-145a-15 表格第 1 列端到端正向：檔名 stem 就是番號本身
+        （issue #182／owner 真機樣本 JURA-163.mp4 的同類情境）→ 判定為佔位，
+        search_jav 被呼叫一次，NFO title 變成刮回來的真標題。"""
+        stem = "SONE-205"
+        video_path = _t1_write_video(tmp_path, stem)
+        video = _make_video(title=stem)
+        mock_repo = _t1_mock_repo({"SONE-205": [video]})
+        scraper_data = _make_scraper_result(title="真正刮回來的標題")
+
+        with (
+            patch("core.enricher.VideoRepository", return_value=mock_repo),
+            patch("core.enricher.search_jav", return_value=scraper_data) as mock_search,
+        ):
+            from core.enricher import enrich_single
+            result = enrich_single(
+                file_path=str(video_path),
+                number="SONE-205",
+                mode="fill_missing",
+                write_cover=False,
+                write_extrafanart=False,
+            )
+
+        mock_search.assert_called_once()
+        assert result.success is True
+        assert _t1_nfo_title(video_path) == _t1_expected_title("SONE-205", "真正刮回來的標題")
+
+    def test_fill_missing_organized_real_title_not_misdetected_as_placeholder(self, tmp_path):
+        """CD-145a-15 表格第 8 列端到端負向：整理過的片（檔名 `[番號]真標題`，
+        NFO/DB title 是剝除後的真標題）不得被誤判為佔位——search_jav 不得被
+        呼叫，title 維持原樣。"""
+        stem = "[SONE-205]真標題"
+        video_path = _t1_write_video(tmp_path, stem)
+        video = _make_video(title="真標題")
+        mock_repo = _t1_mock_repo({"SONE-205": [video]})
+
+        with (
+            patch("core.enricher.VideoRepository", return_value=mock_repo),
+            patch("core.enricher.search_jav") as mock_search,
+        ):
+            from core.enricher import enrich_single
+            result = enrich_single(
+                file_path=str(video_path),
+                number="SONE-205",
+                mode="fill_missing",
+                write_cover=False,
+                write_extrafanart=False,
+            )
+
+        mock_search.assert_not_called()
+        assert result.success is True
+        assert _t1_nfo_title(video_path) == _t1_expected_title("SONE-205", "真標題")
+
+
+class TestIsFilenamePlaceholderTitle:
+    """CD-145a-15 判定表 8 列，直接對純函式 _is_filename_placeholder_title() 驗證
+    （零 mock、零 I/O）。"""
+
+    @pytest.mark.parametrize(
+        "title, stem, expected",
+        [
+            ("SONE-205", "SONE-205", True),
+            ("SONE-205-C", "SONE-205-C", True),
+            ("SONE-205 4K", "SONE-205 4K", True),
+            ("[SONE-205]bare", "[SONE-205]bare", True),
+            ("[SONE-205]", "SONE-205", True),
+            ("[SONE-205]4K", "SONE-205 4K", True),
+            ("hhd800.com@SONE-205", "hhd800.com@SONE-205", True),
+            ("真標題", "[SONE-205]真標題", False),
+        ],
+        ids=[
+            "row1_verbatim_equal_number_stem",
+            "row2_verbatim_equal_suffix_c",
+            "row3_verbatim_equal_4k_suffix",
+            "row4_verbatim_equal_bracket_bare",
+            "row5_legacy_bracket_only",
+            "row6_legacy_bracket_4k",
+            "row7_prefixed_scene_tag",
+            "row8_organized_real_title_not_placeholder",
+        ],
+    )
+    def test_is_filename_placeholder_title(self, title, stem, expected):
+        from core.enricher import _is_filename_placeholder_title
+        fs_path = f"/video/{stem}.mp4"
+        assert _is_filename_placeholder_title(title, "SONE-205", fs_path) is expected
