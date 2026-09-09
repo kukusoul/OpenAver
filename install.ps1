@@ -37,6 +37,40 @@ trap {
     Exit-WithPause 1
 }
 
+# ============ 關閉 QuickEdit（CD-145b-9）============
+# QuickEdit 模式下，滑鼠在主控台視窗裡點一下會讓下一次 Write-Host 卡住，
+# 直到按 Enter/Esc 才放行——這正是 F1 要修的「安裝視窗停在半路等人按 Enter」。
+# 只清這一個視窗自己的 console mode，不寫登錄檔，關掉視窗即失效（CD-145b-1）。
+# 失敗必須吞掉，不能讓 trap 觸發——非互動情境（無真實 console handle）下
+# GetConsoleMode 會回 False，安靜跳過，這是已知且允許的降級，不是 bug。
+try {
+    $sig = @'
+using System;
+using System.Runtime.InteropServices;
+public static class OpenAverConsole {
+    [DllImport("kernel32.dll", SetLastError = true)]
+    public static extern IntPtr GetStdHandle(int nStdHandle);
+    [DllImport("kernel32.dll", SetLastError = true)]
+    public static extern bool GetConsoleMode(IntPtr hConsoleHandle, out uint lpMode);
+    [DllImport("kernel32.dll", SetLastError = true)]
+    public static extern bool SetConsoleMode(IntPtr hConsoleHandle, uint dwMode);
+}
+'@
+    Add-Type -TypeDefinition $sig -ErrorAction Stop
+    $STD_INPUT_HANDLE = -10
+    $ENABLE_QUICK_EDIT_MODE = 0x0040
+    $ENABLE_EXTENDED_FLAGS = 0x0080
+    $hStdIn = [OpenAverConsole]::GetStdHandle($STD_INPUT_HANDLE)
+    [uint32]$mode = 0
+    if ([OpenAverConsole]::GetConsoleMode($hStdIn, [ref]$mode)) {
+        # 兩個 flag 必須一起設：只清 QUICK_EDIT 不加 EXTENDED_FLAGS 不會生效
+        # （Win32 文件：SetConsoleMode 要求 ENABLE_EXTENDED_FLAGS 開著，
+        #  ENABLE_INSERT_MODE/ENABLE_QUICK_EDIT_MODE 的寫入才會被採用）。
+        $newMode = ($mode -band (-bnot $ENABLE_QUICK_EDIT_MODE)) -bor $ENABLE_EXTENDED_FLAGS
+        [OpenAverConsole]::SetConsoleMode($hStdIn, $newMode) | Out-Null
+    }
+} catch {}
+
 # 乾淨映像 / 舊系統的 PowerShell 5.1 預設可能用 TLS1.0，GitHub 會拒連
 try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12 } catch {}
 
