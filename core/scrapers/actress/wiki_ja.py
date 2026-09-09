@@ -27,7 +27,7 @@ HEADERS = {
 }
 
 _THUMB_RE = re.compile(
-    r"(https?:)?//upload\.wikimedia\.org/wikipedia/commons/thumb/([^/]+/[^/]+/[^/]+)/\d+px-.*"
+    r"(https?:)?//(?:upload|thumb)\.wikimedia\.org/wikipedia/commons/thumb/([^/]+/[^/]+/[^/]+)/\d+px-.*"
 )
 
 
