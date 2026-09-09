@@ -82,3 +82,68 @@ def test_install_ps1_no_hardcoded_cjk_outside_lang_table():  # [lint-guard:ps1-i
         "一律不得含變數內插（$Version 在表賦值當下還沒被賦值，會固化成空白），"
         f"改成 {{0}}/{{1}} 佔位符，呼叫端用 `-f` 帶入：{dollar_violations}"
     )
+
+
+INSTALL_SH = Path(__file__).resolve().parent.parent.parent / "install.sh"
+
+_SH_TABLE_RE = re.compile(
+    r'^    case "\$\{LANG_KEY\}:\$1" in\n(.*?)\n    esac\n',
+    re.MULTILINE | re.DOTALL,
+)
+_SH_KEY_LINE_RE = re.compile(r'^        (zh-TW|zh-CN|ja|en):([A-Za-z0-9_]+)\) echo "([^"]*)" ;;$', re.MULTILINE)
+
+
+def _extract_sh_lang_keysets(sh_text: str):
+    m = _SH_TABLE_RE.search(sh_text)
+    assert m is not None, (
+        "install.sh 找不到 `case \"${LANG_KEY}:$1\" in ... esac` 語言表區塊——"
+        "CD-145b-17 的縮排格式可能被改動，fail-closed 直接判失敗，不對整檔掃描"
+    )
+    result: dict[str, set[str]] = {}
+    for lang, key, _val in _SH_KEY_LINE_RE.findall(m.group(1)):
+        result.setdefault(lang, set()).add(key)
+    return result, m
+
+
+def test_install_sh_language_keysets_equal():  # [lint-guard:ps1-i18n]
+    text = INSTALL_SH.read_text(encoding="utf-8")
+    keysets, _m = _extract_sh_lang_keysets(text)
+    assert set(keysets.keys()) == set(_LANGS), (
+        f"install.sh 語言表只抓到 {sorted(keysets.keys())}，缺少的語言 case 分支"
+        "可能沒寫全，或縮排不符 CD-145b-17 格式"
+    )
+    reference_keys = keysets["zh-TW"]
+    assert len(reference_keys) >= 15, "zh-TW key 數量低於預期下限，抽取邏輯可能沒抓到東西（空翻假綠）"
+    for lang in _LANGS:
+        diff = keysets[lang].symmetric_difference(reference_keys)
+        assert not diff, f"install.sh：{lang} 與 zh-TW 的 key 集合不相等，差異：{sorted(diff)}"
+
+
+def test_install_sh_no_hardcoded_cjk_outside_lang_table():  # [lint-guard:ps1-i18n]
+    text = INSTALL_SH.read_text(encoding="utf-8")
+    _keysets, m = _extract_sh_lang_keysets(text)
+    stripped = text[: m.start()] + text[m.end():]
+    host_re = re.compile(r"\b(echo|printf|read -p)\b")
+    violations = [
+        (lineno, line)
+        for lineno, line in enumerate(stripped.splitlines(), start=1)
+        if not line.strip().startswith("#") and host_re.search(line) and _CJK_RE.search(line)
+    ]
+    assert not violations, (
+        "install.sh 語言表外仍有硬編碼中日文字元的 echo/printf/read -p 行"
+        f"（漏改成 \"$(t <key>)\"）：{violations}"
+    )
+
+
+def test_install_sh_no_dollar_in_lang_table():  # [lint-guard:ps1-i18n]
+    text = INSTALL_SH.read_text(encoding="utf-8")
+    _keysets, m = _extract_sh_lang_keysets(text)
+    dollar_violations = [
+        (lang, key, val)
+        for lang, key, val in _SH_KEY_LINE_RE.findall(m.group(1))
+        if "$" in val
+    ]
+    assert not dollar_violations, (
+        "install.sh 語言表內出現 `$` 變數內插——CD-145b-17 佔位符規則：一律用 %s，"
+        f"呼叫端 printf 帶入：{dollar_violations}"
+    )
