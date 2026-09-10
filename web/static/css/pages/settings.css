@@ -3,9 +3,12 @@
 /* 保護 settings 頁內所有 .hidden（避免被自定義 CSS 覆蓋）*/
 #settings-components .hidden { display: none !important; }
 
-.settings-container {
-    max-width: 900px;
-    margin: 0 auto;
+/* 146b-T5（CD-146b-15 §2／CD-146b-7 ownership）：#settingsForm 是 .page-layer 的
+ * 直接子區塊，自己吃一次 --layer-inset，讓內容側左緣對齊 .settings-header 的
+ * flush-left padding（fluent-materials.css Rule 46，兩頁共用同一字面值 1.5rem，
+ * 本卡不動該共用規則，掃描頁的等價修正歸 T7 各自處理）。*/
+#settingsForm {
+    padding-inline: var(--layer-inset);
 }
 
 .settings-header h4 {
