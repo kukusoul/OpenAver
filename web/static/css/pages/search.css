@@ -434,7 +434,7 @@
     margin: 0.75rem auto 0;
     padding-top: 0.75rem;
     border-top: 1px solid var(--stroke-subtle);
-    text-align: center;
+    text-align: left;
 }
 
 .empty-explainer-line {
@@ -450,10 +450,44 @@
     margin-top: 0.3em;
 }
 
-/* 92a-T4: explainer 內嵌整理 icon — success 綠對齊實際整理鈕（U-B2）。token 不硬編。 */
+/* 146a-T4: 說明區的路徑／命名範例膠囊與設定連結 —— 沿用掃描頁輸出列
+   （theme.css .output-info .path code / .settings-link）的視覺語彙，零新增設計語言。
+   那組規則在 :is(#ds-gallery-components, .ds-gallery-composition) 作用域內，
+   本區不在該作用域，故在此重述同值，不掛那個 class（避免帶進整組無關的後代規則）。 */
+.empty-explainer-line code {
+    font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+    font-size: 0.95em;
+    background: var(--border-light);
+    padding: 0.15rem 0.4rem;
+    border-radius: var(--radius-xs);
+    color: var(--text-primary);
+    /* inline-block ＝ 原子行內盒，永遠不會被拆到兩行：放不下就整顆移到下一行。
+       max-width + overflow-wrap 只服務「膠囊本身比容器還寬」的極端長路徑，
+       那時才允許在內部斷，避免撐破 34em 容器。 */
+    display: inline-block;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+}
+
+.empty-explainer-line a {
+    color: var(--accent);
+    text-decoration: none;
+}
+
+.empty-explainer-line a:hover {
+    text-decoration: underline;
+}
+
+/* 146a-T4: explainer 行首 icon —— 與上方對應按鈕的圖示同一個 glyph（spec §6.4）。
+   星＝btnFavorite（btn-warning，恆為琥珀）故用 warning；
+   時鐘＝btnAutoOrganize，該鈕預設狀態是 btn-outline（中性），
+   故不覆寫顏色、沿用說明行本身的 muted 色，維持整區克制。 */
 .empty-explainer-line .explainer-icon {
-    color: var(--color-success);
-    margin-left: 0.2em;
+    margin-right: 0.35em;
+}
+
+.empty-explainer-line .explainer-icon-favorite {
+    color: var(--color-warning);
 }
 
 @media (max-width: 480px) {

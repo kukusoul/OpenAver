@@ -542,18 +542,28 @@
             </div>
             <small class="state-page-hint">{{ t('search.empty.drag_hint') }}</small>
             <div class="empty-explainer">
-                <p class="empty-explainer-line">{{ t('search.empty.explainer_lookup') }}</p>
-                {# 92a-T4: explainer_organize 兩整理標籤旁內嵌對應 icon（單片 file-earmark-plus / 批次 folder-plus，success 綠）。
-                   用 scrape_nfo/scrape_all 當 replace needle → 語言無關、四語系文字全保留、不新增 i18n key。內容全來自受控 i18n（|safe 安全，比照 :957）。 #}
-                {% set _single_label = t('search.filelist.scrape_nfo') %}
-                {% set _batch_label = t('search.filelist.scrape_all') %}
-                <p class="empty-explainer-line">{{
-                    t('search.empty.explainer_organize')
-                    | replace(_single_label, _single_label ~ ' <i class="bi bi-file-earmark-plus explainer-icon" aria-hidden="true"></i>')
-                    | replace(_batch_label, _batch_label ~ ' <i class="bi bi-folder-plus explainer-icon" aria-hidden="true"></i>')
-                    | safe
-                }}</p>
-                <p class="empty-explainer-line">{{ t('search.empty.explainer_partial') }}</p>
+                <p class="empty-explainer-line">{{ t('search.empty.explain_add') }}</p>
+
+                <p class="empty-explainer-line" x-show="!favoriteConfigured()">
+                    <i class="bi bi-star-fill explainer-icon explainer-icon-favorite" aria-hidden="true"></i>
+                    {{ t('search.empty.explain_favorite_unset') }}
+                </p>
+                <p class="empty-explainer-line" x-show="favoriteConfigured()">
+                    <i class="bi bi-star-fill explainer-icon explainer-icon-favorite" aria-hidden="true"></i>
+                    {{ t('search.empty.explain_favorite_set_prefix') }}<code x-text="favoritePathDisplay()"></code>{{ t('search.empty.explain_favorite_set_suffix') }}
+                    <span class="text-warning" x-show="favoriteScannerLinked === false">{{ t('search.empty.explain_favorite_untracked') }}</span>
+                </p>
+
+                <p class="empty-explainer-line">
+                    <i class="bi bi-clock-history explainer-icon" aria-hidden="true"></i>
+                    {{ t('search.empty.explain_auto_organize') }}
+                </p>
+
+                <p class="empty-explainer-line">
+                    {{ t('search.empty.explain_naming_prefix') }}<code x-text="namingPreviewExample()"></code>
+                    <span x-show="appConfig?.translate?.enabled">{{ t('search.empty.explain_naming_translate_suffix') }}</span>
+                    <a href="/settings#filenameFormat">{{ t('search.empty.explain_naming_link') }}</a>
+                </p>
             </div>
         </div>
 

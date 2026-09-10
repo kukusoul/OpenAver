@@ -65,6 +65,8 @@ export function searchStateBase() {
 
         // ===== App Config =====
         appConfig: null,
+        formatVariables: [],          // SSOT: /api/config/format-variables（CD-146a-17）
+        favoriteScannerLinked: null,  // null=尚未查或未設定最愛資料夾／true/false=既有端點回的 linked（CD-146a-14）
 
         // ===== Translation State =====
         isTranslating: false,

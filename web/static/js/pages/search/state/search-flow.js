@@ -16,19 +16,39 @@ export function searchStateSearchFlow() {
     return {
     // ===== Methods =====
     async loadAppConfig() {
-        // T4: inline 直接 fetch，消除 SearchCore.loadAppConfig 委派
+        // config／format-variables 平行發起、各自獨立失敗隔離（CD-146a-17 不變式）。
+        const configPromise = fetch('/api/config').then(r => r.json());
+        const varsPromise = fetch('/api/config/format-variables').then(r => r.json());
+        // 先掛一個 no-op rejection handler，避免 varsPromise 在「configPromise 還沒 await 完」
+        // 的窗口裡被瀏覽器誤記成 Uncaught (in promise)。這不吞掉錯誤——下面 await varsPromise
+        // 時它仍會 reject 並由該段的 try/catch 處理，只是提前把它標記為「已有人接手」。
+        varsPromise.catch(() => {});
+
         try {
-            const resp = await fetch('/api/config');
-            const data = await resp.json();
-            if (data.success) {
-                this.appConfig = data.data;
-                // nexttick-hydrate T4.1：移除 $nextTick imperative title 寫入死碼——
-                // #btnFavorite 是 id、非 x-ref，this.$refs.btnFavorite 恆 undefined，此 tick
-                // 從未生效（tooltip 一直是 template 靜態 title=favorite_note 的釐清說明）。
-                // 若要改動態「載入：{folder}」tooltip 屬 UX 變更、非 cleanup，留待 owner 定奪。
-            }
+            const data = await configPromise;
+            if (data.success) this.appConfig = data.data;
         } catch (e) {
             console.error('載入設定失敗:', e);
+        }
+        try {
+            const data = await varsPromise;
+            this.formatVariables = Array.isArray(data.variables) ? data.variables : [];
+        } catch (e) {
+            console.error('載入命名變數失敗:', e);
+        }
+
+        // favorite-scanner-link 需要 favorite 參數，依賴上面 appConfig 已處理完成（CD-146a-14）；
+        // 未設定最愛資料夾時不必打（該端點本身對空 favorite 也是直接回 linked:false，但前端
+        // 不顯示未設定情境下的追蹤警示，打了也白打，見 CD-146a-16 的 favoriteConfigured() 分支）。
+        const favoriteFolder = ((this.appConfig && this.appConfig.search && this.appConfig.search.favorite_folder) || '').trim();
+        if (favoriteFolder) {
+            try {
+                const resp = await fetch('/api/settings/favorite-scanner-link?favorite=' + encodeURIComponent(favoriteFolder));
+                const data = await resp.json();
+                this.favoriteScannerLinked = !!data.linked;
+            } catch (e) {
+                console.error('載入我的最愛連動狀態失敗:', e);
+            }
         }
     },
 

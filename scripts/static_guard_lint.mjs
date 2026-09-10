@@ -4912,6 +4912,8 @@ const RULES = [
     pattern: '!enabled',
     note: '[TASK-144 Codex 四審] search.html 自動整理開關的 :disabled 綁定必須含 !enabled（只看 !folderIsSet 會讓清空最愛資料夾後這顆開關關不掉）',
   },
+
+  { file: 'web/templates/search.html', kind: 'required-string', pattern: 'favoriteScannerLinked === false', note: '[TestSearchEmptyFavoriteLinkedStrict] CD-146a-16／FE-JS-01：三態嚴格比較不得精簡成 !favoriteScannerLinked' },
 ];
 
 // ---- helpers ----
