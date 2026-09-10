@@ -619,7 +619,10 @@
                 <div class="page-layer" style="padding: 1.5rem; margin-bottom: 1rem;">
                     <strong>桌面態</strong>（≥1024px：圓角＋邊框＋tint）
                 </div>
-                <div class="page-layer" style="padding: 1.5rem; max-width: 1023px;">
+                <!-- demo-only 模擬手機滿版態：產品規則在 Rule 49 的 @media (max-width: 1023.98px) 分支。
+                     元素自身 max-width 觸發不了 viewport media query；demo 中直接套目標視覺
+                     （與 Sample Gallery Overlay「原本是 position: fixed; inset: 0，demo 中以相對定位容器模擬」同口吻）。 -->
+                <div class="page-layer" style="padding: 1.5rem; border-radius: 0; border: none; width: 100%;">
                     <strong>手機滿版態</strong>（&lt;1024px：無圓角無邊框，貼滿容器寬）
                 </div>
             </div>

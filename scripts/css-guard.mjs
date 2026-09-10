@@ -686,6 +686,66 @@ const RULES = [
     },
   },
 
+  // CG-FLU-17 ← 146b-T3 Codex review：.page-layer 桌機 border/radius 存在 + <1024 歸零
+  {
+    id: 'CG-FLU-17',
+    file: 'components/fluent-materials.css',
+    kind: 'fn',
+    check(ctx) {
+      // FE-GUARD-14：fluent-materials.css 裡 .page-layer 有三個 block，不可寫死第 N 個。
+      //   ① 頂層 selector === '.page-layer'          → 桌機外框（本規則守 border + radius）
+      //   ② 頂層 '[data-theme="dim"] .page-layer'    → tint 覆寫（只有 background/border-color，不守）
+      //   ③ @media (max-width: 1023.98px) 內 .page-layer → 手機歸零（本規則守 radius:0 / border:none）
+      const desktop = ctx.blocks.filter((b) => b.selector.trim() === '.page-layer');
+      if (desktop.length === 0) {
+        ctx.fail('CG-FLU-17: 找不到頂層 .page-layer 規則（Rule 49 桌機外框）');
+      } else if (desktop.length > 1) {
+        ctx.fail(
+          `CG-FLU-17: 找到 ${desktop.length} 個頂層 .page-layer block，cascade 無法機械驗證；`
+          + 'Rule 49 應是唯一一份（CD-146b-4），若確實需要第二個 block，請先更新這條守衛的對帳方式',
+        );
+      } else {
+        const decls = desktop[0].declarations;
+        if (!/(?<![-\w])border\s*:/.test(decls)) {
+          ctx.fail('CG-FLU-17: 頂層 .page-layer 缺 border:（spec §2.1 細邊）');
+        }
+        if (!/border-radius\s*:\s*var\(\s*--fluent-radius-xl\s*\)/.test(decls)) {
+          ctx.fail('CG-FLU-17: 頂層 .page-layer 缺 border-radius: var(--fluent-radius-xl)');
+        }
+      }
+
+      const mobileBodies = extractMediaBodies(ctx.text, MW1024);
+      if (!mobileBodies.length) {
+        ctx.fail('CG-FLU-17: 找不到 @media (max-width: 1023.98px) block');
+        return;
+      }
+      const mobileLayer = [];
+      for (const body of mobileBodies) {
+        for (const b of parseRuleBlocks(body)) {
+          if (b.selector.trim() === '.page-layer') mobileLayer.push(b);
+        }
+      }
+      if (mobileLayer.length === 0) {
+        ctx.fail('CG-FLU-17: @media (max-width: 1023.98px) 內找不到 .page-layer（手機滿版歸零）');
+        return;
+      }
+      if (mobileLayer.length > 1) {
+        ctx.fail(
+          `CG-FLU-17: 找到 ${mobileLayer.length} 個 @media (max-width: 1023.98px) 內 .page-layer block，`
+          + 'cascade 無法機械驗證；Rule 49 應是唯一一份（CD-146b-4），若確實需要第二個 block，請先更新這條守衛的對帳方式',
+        );
+        return;
+      }
+      const mdecls = mobileLayer[0].declarations;
+      if (!/border-radius\s*:\s*0/.test(mdecls)) {
+        ctx.fail('CG-FLU-17: <1024 .page-layer 缺 border-radius: 0');
+      }
+      if (!/(?<![-\w])border\s*:\s*none/.test(mdecls)) {
+        ctx.fail('CG-FLU-17: <1024 .page-layer 缺 border: none');
+      }
+    },
+  },
+
   // CG-FLU-15 ← test_rescrape_preview_mobile_stack（rescrape-modal.css @media(max-width:480px)）
   {
     id: 'CG-FLU-15',
