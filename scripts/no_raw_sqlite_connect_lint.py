@@ -17,8 +17,8 @@ sqlite3 連線／寫入（CD-145a-14），外加對 executescript() 的零容忍
 grep/regex 連寫在註解或 docstring 裡「不要這樣寫」的說明文字都會誤判成
 違規呼叫）：
 
-  1. 裸 `sqlite3.connect(...)`（或 `from sqlite3 import connect` 之後的裸
-     `connect(...)`）出現在 core/ 或 web/ 底下即違規，除非：
+  1. 裸 `sqlite3.connect(...)`（或 `from sqlite3 import connect [as <別名>]`
+     之後用那個名字做的呼叫）出現在 core/ 或 web/ 底下即違規，除非：
        - 帶 `uri=True`，且第一個位置引數的靜態字串片段含 "mode=ro"
          （常數字串或 f-string 皆可；f-string 的 ast.FormattedValue
          插值片段一律跳過，不參與比對，只串接 ast.Constant 片段）；或
@@ -29,6 +29,10 @@ grep/regex 連寫在註解或 docstring 裡「不要這樣寫」的說明文字�
          置收斂取代型別驗證。
      其餘型態的第一引數（變數、函式呼叫組出來的字串……）一律視為無法
      靜態判定 → 當作違規（fail-closed）。
+
+  1b. 檔案讀不到或 ast 解析不了，一律當違規（fail-closed）——回空清單等於
+     讓整支腳本印 PASS，而那個檔裡的裸連線照樣繞過 revision 追蹤
+     （BE-TEST-05：認不出的寫法被跳過＝假綠）。
 
   2. core/ 或 web/ 底下任何 `.executescript(...)` 呼叫一律違規，不分
      receiver 型別——2026-09-09 現況零呼叫點，這是白紙起點的 fail-closed
@@ -107,7 +111,7 @@ def _static_string_content(node: ast.expr) -> str | None:
 
 
 def _is_sqlite_connect_call(
-    node: ast.Call, sqlite_module_names: set[str], bare_connect_ok: bool
+    node: ast.Call, sqlite_module_names: set[str], bare_connect_names: set[str]
 ) -> bool:
     """比對 ``<name>.connect(...)``（attribute 形狀）或 ``connect(...)``
     （bare-name 形狀）。
@@ -121,7 +125,7 @@ def _is_sqlite_connect_call(
     （見呼叫端組集合的段落）。
 
     bare-name 形狀僅在本檔確實有 ``from sqlite3 import connect`` 時才算
-    （``bare_connect_ok``）——bare "connect" 在本庫另有其他無關用途，例如
+    （``bare_connect_names``）——bare "connect" 在本庫另有其他無關用途，例如
     ``core/metatube/state.py`` 的 ``def connect(self, ...)`` 與
     ``web/routers/settings_metatube.py`` 的 ``async def connect(req)``
     endpoint，沒有 import 前提會把它們一起誤殺。
@@ -130,7 +134,7 @@ def _is_sqlite_connect_call(
     if isinstance(func, ast.Attribute) and func.attr == "connect":
         if isinstance(func.value, ast.Name) and func.value.id in sqlite_module_names:
             return True
-    if bare_connect_ok and isinstance(func, ast.Name) and func.id == "connect":
+    if isinstance(func, ast.Name) and func.id in bare_connect_names:
         return True
     return False
 
@@ -140,17 +144,34 @@ def scan_file(path: Path) -> list[Violation]:
     底下——範圍由呼叫端（main()）決定，這讓 BE-TEST-13 的掃描範圍外
     fixture 可以直接被測，不必經過完整目錄 walk。
     """
+    def _rel(p: Path) -> str:
+        try:
+            return p.relative_to(ROOT).as_posix()
+        except ValueError:
+            return str(p)
+
+    # 讀不到／解析不了一律當違規（fail-closed）。回 [] 是 fail-open：掃不到的
+    # 檔案會讓整支腳本印 PASS，而那個檔裡的裸連線照樣繞過 revision 追蹤——
+    # 「認不出的寫法被跳過＝假綠」正是 BE-TEST-05 的形狀。
     try:
         source = path.read_text(encoding="utf-8")
-    except OSError:
-        return []
+    except (OSError, UnicodeDecodeError) as exc:
+        return [Violation(_rel(path), 0, f"無法讀取，守衛掃不到這個檔（fail-closed）：{exc}")]
     try:
         tree = ast.parse(source, filename=str(path))
-    except SyntaxError:
-        return []
+    except SyntaxError as exc:
+        return [
+            Violation(
+                _rel(path),
+                exc.lineno or 0,
+                f"無法解析，守衛掃不到這個檔（fail-closed）：{exc.msg}",
+            )
+        ]
 
     sqlite_module_names: set[str] = {"sqlite3"}  # baseline，恆含，見上方 docstring
-    bare_connect_ok = False
+    # ``from sqlite3 import connect as db_connect`` 之後，呼叫端的名字是 db_connect
+    # 不是 connect ⇒ 記的必須是「本檔實際綁到的那個名字」，不是一個布林旗標。
+    bare_connect_names: set[str] = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             for alias in node.names:
@@ -160,7 +181,7 @@ def scan_file(path: Path) -> list[Violation]:
             if node.module == "sqlite3":
                 for alias in node.names:
                     if alias.name == "connect":
-                        bare_connect_ok = True
+                        bare_connect_names.add(alias.asname or alias.name)
 
     try:
         rel_path = path.relative_to(ROOT).as_posix()
@@ -182,7 +203,7 @@ def scan_file(path: Path) -> list[Violation]:
             )
             continue
 
-        if not _is_sqlite_connect_call(node, sqlite_module_names, bare_connect_ok):
+        if not _is_sqlite_connect_call(node, sqlite_module_names, bare_connect_names):
             continue
 
         has_uri_true = any(
