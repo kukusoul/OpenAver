@@ -476,43 +476,54 @@ const RULES = [
     },
   },
 
-  // CG-FLU-10 ← test_77d_headers_float_theme_agnostic（11a all-widths padding；11b 已於 146b-T3 移除）
+  // CG-FLU-10 ← 146b-T3b：Rule 46/47 回復（CD-146b-15/16），11a/11b 改 exact-selector 0/1/≥2
   {
     id: 'CG-FLU-10',
     file: 'components/fluent-materials.css',
     kind: 'fn',
     check(ctx) {
-      // 11a: all-widths padding（146b-T3 收窄：只守 .settings-header。
-      // .avlist-header 依 CD-146b-7 不再吃水平 padding，不再列入對帳。
-      // Rule 10 同選擇器也有 padding: 1rem 0；cascade 以最後一條為準（FE-GUARD-14），
-      // 期望值維持 1rem 1.5rem（改吃 --layer-inset 是 T5 的事，不預先放寬）。）
-      let lastPadding = null;
-      for (const { selector, declarations } of ctx.blocks) {
-        if (
-          selector.includes('.settings-header')
-          && !selector.includes('@media')
-          && /padding\s*:/.test(declarations)
-        ) {
-          lastPadding = { selector, declarations };
+      const SEL = ':is(.settings-header, .avlist-header)';
+      // 11a: all-widths padding fix（Rule 46，146b-T3b 從 `.settings-header` 復原回
+      // `:is(.settings-header, .avlist-header)`）。原本用 `.includes('.settings-header')`
+      // 只認子字串——`.avlist-header` 忘了放回去也會照樣通過（子字串仍含 .settings-header），
+      // 這條不變式其實沒真的被守到。改成整段選擇器逐字比對 + 0/1/≥2 三岔拒絕歧義。
+      const paddingBlocks = ctx.blocks.filter(
+        (b) => b.selector.trim() === SEL && /padding\s*:/.test(b.declarations),
+      );
+      if (paddingBlocks.length === 0) {
+        ctx.fail(`CG-FLU-10: ${SEL} all-widths padding rule not found (Rule 46)`);
+      } else if (paddingBlocks.length > 1) {
+        ctx.fail(`CG-FLU-10: 找到 ${paddingBlocks.length} 個 ${SEL} padding block，cascade 無法機械驗證`);
+      } else {
+        const { selector, declarations } = paddingBlocks[0];
+        if (selector.includes('[data-theme="dim"]')) {
+          ctx.fail(`CG-FLU-10: padding rule must be theme-agnostic — ${selector}`);
+        }
+        if (!/padding\s*:\s*1rem\s+1\.5rem/.test(declarations)) {
+          ctx.fail('CG-FLU-10: padding should be 1rem 1.5rem (flush-left fix)');
         }
       }
-      if (!lastPadding) {
-        ctx.fail('CG-FLU-10: .settings-header all-widths padding rule not found (Rule 46)');
-        return;
-      }
-      if (lastPadding.selector.includes('[data-theme="dim"]')) {
-        ctx.fail(`CG-FLU-10: .settings-header padding rule must be theme-agnostic — ${lastPadding.selector}`);
-      }
-      if (!/padding\s*:\s*1rem\s+1\.5rem/.test(lastPadding.declarations)) {
-        ctx.fail('CG-FLU-10: .settings-header padding should be 1rem 1.5rem (flush-left fix)');
-      }
 
-      // 11b（`:is(.settings-header, .avlist-header)` 的桌機浮動規則 / Rule 47）已於 146b-T3 移除：
-      // spec-146b 用「一頁一個 Layer」取代 A/B chrome，B 浮動處理本身不再存在。
-      // 它守的兩個視覺屬性去向不同：border 由 .page-layer（Rule 49）接手；
-      // border-radius 同樣由 Rule 49 接手（var(--fluent-radius-xl)，與被刪的
-      // Rule 13b/45/47 同值）。兩者目前都沒有等價的 css-guard 對帳——Layer
-      // 外框的視覺由 CD-146b-3 的 owner 真機批次驗收把關，不是機械守衛。
+      // 11b: desktop B-floating geometry（Rule 47，146b-T3b 從整條刪除復原）。巢狀在
+      // @media (min-width: 1024px) 內，ctx.blocks 只在頂層收 block（FE-GUARD-14 同型坑：
+      // @media wrapper 被當成一個不透明 block），改用 flattenRuleBlocks 展平後再比對。
+      const floatBlocks = flattenRuleBlocks(ctx.blocks).filter(
+        (b) => b.selector.trim() === SEL
+          && (/border-radius\s*:/.test(b.declarations) || /(?<![-\w])border\s*:/.test(b.declarations)),
+      );
+      if (floatBlocks.length === 0) {
+        ctx.fail(`CG-FLU-10: ${SEL} desktop B-floating rule not found (Rule 47)`);
+      } else if (floatBlocks.length > 1) {
+        ctx.fail(`CG-FLU-10: 找到 ${floatBlocks.length} 個 desktop B-floating block，cascade 無法機械驗證`);
+      } else {
+        const { declarations } = floatBlocks[0];
+        if (!/border-radius\s*:\s*var\(\s*--fluent-radius-xl\s*\)/.test(declarations)) {
+          ctx.fail('CG-FLU-10: Rule 47 缺 border-radius: var(--fluent-radius-xl)');
+        }
+        if (!/(?<![-\w])border\s*:\s*1px\s+solid\s+var\(\s*--glass-shell-border\s*\)/.test(declarations)) {
+          ctx.fail('CG-FLU-10: Rule 47 缺 border: 1px solid var(--glass-shell-border)');
+        }
+      }
     },
   },
 
@@ -686,63 +697,41 @@ const RULES = [
     },
   },
 
-  // CG-FLU-17 ← 146b-T3 Codex review：.page-layer 桌機 border/radius 存在 + <1024 歸零
+  // CG-FLU-17 ← 146b-T3b CD-146b-16 §1：.page-layer 降為純契約，全檔材質宣告一律禁止
   {
     id: 'CG-FLU-17',
     file: 'components/fluent-materials.css',
     kind: 'fn',
     check(ctx) {
-      // FE-GUARD-14：fluent-materials.css 裡 .page-layer 有三個 block，不可寫死第 N 個。
-      //   ① 頂層 selector === '.page-layer'          → 桌機外框（本規則守 border + radius）
-      //   ② 頂層 '[data-theme="dim"] .page-layer'    → tint 覆寫（只有 background/border-color，不守）
-      //   ③ @media (max-width: 1023.98px) 內 .page-layer → 手機歸零（本規則守 radius:0 / border:none）
-      const desktop = ctx.blocks.filter((b) => b.selector.trim() === '.page-layer');
-      if (desktop.length === 0) {
-        ctx.fail('CG-FLU-17: 找不到頂層 .page-layer 規則（Rule 49 桌機外框）');
-      } else if (desktop.length > 1) {
-        ctx.fail(
-          `CG-FLU-17: 找到 ${desktop.length} 個頂層 .page-layer block，cascade 無法機械驗證；`
-          + 'Rule 49 應是唯一一份（CD-146b-4），若確實需要第二個 block，請先更新這條守衛的對帳方式',
-        );
-      } else {
-        const decls = desktop[0].declarations;
-        if (!/(?<![-\w])border\s*:/.test(decls)) {
-          ctx.fail('CG-FLU-17: 頂層 .page-layer 缺 border:（spec §2.1 細邊）');
-        }
-        if (!/border-radius\s*:\s*var\(\s*--fluent-radius-xl\s*\)/.test(decls)) {
-          ctx.fail('CG-FLU-17: 頂層 .page-layer 缺 border-radius: var(--fluent-radius-xl)');
-        }
-      }
-
-      const mobileBodies = extractMediaBodies(ctx.text, MW1024);
-      if (!mobileBodies.length) {
-        ctx.fail('CG-FLU-17: 找不到 @media (max-width: 1023.98px) block');
-        return;
-      }
-      const mobileLayer = [];
-      for (const body of mobileBodies) {
-        for (const b of parseRuleBlocks(body)) {
-          if (b.selector.trim() === '.page-layer') mobileLayer.push(b);
+      // 146b-T3b：owner 真機驗收撤銷了 Rule 49 的材質（雙圈圓角/雙 hairline 疊在恢復的
+      // chrome 上）。不變式反轉——今天要守的是「.page-layer 不得再畫任何東西」。
+      // 用 flattenRuleBlocks 掃全檔（含 [data-theme="dim"] 與任何 @media 巢狀），對
+      // 「每一個」命中的 block 都檢查，不挑第一個/最後一個（FE-GUARD-14：挑一個 = fail-open，
+      // 這裡改成「逐一檢查、任何一個違規就 fail」，天生不會漏看第二個 block）。
+      const FORBIDDEN = [
+        ['background', /(?<![-\w])background(-color|-image)?\s*:/i],
+        ['border', /(?<![-\w])border(-radius|-color|-width|-style|-top|-bottom|-left|-right)?\s*:/i],
+        ['overflow', /(?<![-\w])overflow(-x|-y)?\s*:/i],
+        ['backdrop-filter', /(-webkit-)?backdrop-filter\s*:/i],
+        ['filter', /(?<![-\w])filter\s*:/i],
+        ['transform', /(?<![-\w])transform\s*:/i],
+        ['contain', /(?<![-\w])contain\s*:/i],
+      ];
+      for (const { selector, declarations } of flattenRuleBlocks(ctx.blocks)) {
+        if (!selector.includes('.page-layer')) continue;
+        for (const [name, re] of FORBIDDEN) {
+          if (re.test(declarations)) {
+            ctx.fail(
+              `CG-FLU-17: ${selector} 宣告了 ${name} — .page-layer 已降為純契約`
+              + '（CD-146b-16 §1），不得再畫材質；.page-layer 只是四頁共用的掛載點與'
+              + 'padding-inline:0/no-containing-block 契約，視覺一律交給各自的 chrome',
+            );
+          }
         }
       }
-      if (mobileLayer.length === 0) {
-        ctx.fail('CG-FLU-17: @media (max-width: 1023.98px) 內找不到 .page-layer（手機滿版歸零）');
-        return;
-      }
-      if (mobileLayer.length > 1) {
-        ctx.fail(
-          `CG-FLU-17: 找到 ${mobileLayer.length} 個 @media (max-width: 1023.98px) 內 .page-layer block，`
-          + 'cascade 無法機械驗證；Rule 49 應是唯一一份（CD-146b-4），若確實需要第二個 block，請先更新這條守衛的對帳方式',
-        );
-        return;
-      }
-      const mdecls = mobileLayer[0].declarations;
-      if (!/border-radius\s*:\s*0/.test(mdecls)) {
-        ctx.fail('CG-FLU-17: <1024 .page-layer 缺 border-radius: 0');
-      }
-      if (!/(?<![-\w])border\s*:\s*none/.test(mdecls)) {
-        ctx.fail('CG-FLU-17: <1024 .page-layer 缺 border: none');
-      }
+      // 掃描結果 0 筆命中是本卡完成後的合法終態（.page-layer 目前沒有任何 CSS 規則，只剩
+      // Rule 49 的契約註解）——這不是錯誤，這條守衛守的是「不存在材質宣告」，規則整個
+      // 不存在時這個不變式自動成立，不需要另外判斷「規則存不存在」。
     },
   },
 

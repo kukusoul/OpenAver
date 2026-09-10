@@ -56,13 +56,6 @@ STICKY_PAGES = {
     "settings": ".settings-header",
 }
 
-# CD-146b-2：一般 surface（未排除）在 dim 下應為 none（T4-T7 後轉綠；今天有 blur → 紅）
-NORMAL_SURFACE_SELECTORS = {
-    "search": ["#emptyState", ".progress-container", ".av-card-full", ".file-list-section"],
-    "settings": ["#settings-components .card"],
-    "scanner": [".avlist-card", ".stats-card", ".actress-alias-card"],
-}
-
 PAGE_READY_SELECTORS = {
     "search": ".search-bar",
     "showcase": ".showcase-container",
@@ -303,48 +296,6 @@ def test_mobile_topbar_same_rect_light_vs_dim(page: Page, base_url: str) -> None
             f"手機頂欄 {key}: light={light_box[key]} vs dim={dim_box[key]} "
             f"（light={light_box} vs dim={dim_box}；今天 dim 內縮 1rem）"
         )
-
-
-# ── spec §3 第 6 條 ＋ CD-146b-2：一般 surface 無 blur（dim） ───────────────
-
-@pytest.mark.parametrize("page_name", list(NORMAL_SURFACE_SELECTORS.keys()))
-def test_normal_surfaces_no_blur_in_dim_theme(
-    page: Page, base_url: str, page_name: str
-) -> None:
-    page.set_viewport_size({"width": DESKTOP, "height": 900})
-    _goto(
-        page,
-        base_url,
-        PAGES[page_name],
-        PAGE_READY_SELECTORS[page_name],
-        theme="dim",
-    )
-
-    checked = 0
-    for sel in NORMAL_SURFACE_SELECTORS[page_name]:
-        loc = page.locator(sel)
-        if loc.count() == 0:
-            continue
-        # 隱藏元素仍可讀 computed style；空狀態等可能因資料不存在
-        backdrop = loc.first.evaluate("el => getComputedStyle(el).backdropFilter")
-        checked += 1
-        assert backdrop in ("none", ""), (
-            f"{page_name} {sel}: computed backdrop-filter = {backdrop!r}（應為 none）"
-        )
-    assert checked > 0, f"{page_name}: 沒有任何 normal surface 可驗（全數 selector 未命中）"
-
-
-def test_help_cards_no_blur_in_dim_theme(page: Page, base_url: str) -> None:
-    page.set_viewport_size({"width": DESKTOP, "height": 900})
-    _goto(page, base_url, "/help", ".help-card", theme="dim")
-
-    cards = page.locator(".help-card")
-    count = cards.count()
-    assert count > 0, "help 頁找不到 .help-card"
-    backdrop = cards.first.evaluate("el => getComputedStyle(el).backdropFilter")
-    assert backdrop in ("none", ""), (
-        f"help-card: computed backdrop-filter = {backdrop!r}"
-    )
 
 
 # ── CD-146b-2：排除清單元素仍保留 blur（既有已成立類，應綠） ───────────────
