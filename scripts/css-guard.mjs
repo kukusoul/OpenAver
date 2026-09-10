@@ -476,53 +476,43 @@ const RULES = [
     },
   },
 
-  // CG-FLU-10 ← test_77d_headers_float_theme_agnostic（11a all-widths padding + 11b @media float）
+  // CG-FLU-10 ← test_77d_headers_float_theme_agnostic（11a all-widths padding；11b 已於 146b-T3 移除）
   {
     id: 'CG-FLU-10',
     file: 'components/fluent-materials.css',
     kind: 'fn',
     check(ctx) {
-      // 11a: all-widths padding rule（用 ctx.text/blocks，鏡射 css_no_comments）
-      let paddingFound = false;
+      // 11a: all-widths padding（146b-T3 收窄：只守 .settings-header。
+      // .avlist-header 依 CD-146b-7 不再吃水平 padding，不再列入對帳。
+      // Rule 10 同選擇器也有 padding: 1rem 0；cascade 以最後一條為準（FE-GUARD-14），
+      // 期望值維持 1rem 1.5rem（改吃 --layer-inset 是 T5 的事，不預先放寬）。）
+      let lastPadding = null;
       for (const { selector, declarations } of ctx.blocks) {
         if (
           selector.includes('.settings-header')
-          && selector.includes('.avlist-header')
           && !selector.includes('@media')
+          && /padding\s*:/.test(declarations)
         ) {
-          if (/padding\s*:/.test(declarations)) {
-            paddingFound = true;
-            if (selector.includes('[data-theme="dim"]')) {
-              ctx.fail(`CG-FLU-10: :is(.settings-header, .avlist-header) padding rule must be theme-agnostic — ${selector}`);
-            }
-            if (!/padding\s*:\s*1rem\s+1\.5rem/.test(declarations)) {
-              ctx.fail('CG-FLU-10: :is(.settings-header, .avlist-header) padding should be 1rem 1.5rem (flush-left fix)');
-            }
-          }
+          lastPadding = { selector, declarations };
         }
       }
-      if (!paddingFound) ctx.fail('CG-FLU-10: :is(.settings-header, .avlist-header) all-widths padding rule not found (Rule 46)');
-
-      // 11b: desktop-gated floating rule（用 ctx.raw @media≥1024px）
-      const desktopHeaderBlocks = [];
-      for (const mb of extractDesktopMediaBodies(ctx.raw)) {
-        for (const { selector, declarations } of parseRuleBlocks(mb)) {
-          if (selector.includes('.settings-header') && selector.includes('.avlist-header')) {
-            desktopHeaderBlocks.push({ selector, declarations });
-          }
-        }
-      }
-      if (desktopHeaderBlocks.length === 0) {
-        ctx.fail('CG-FLU-10: no :is(.settings-header, .avlist-header) rule inside @media (min-width:1024px) — Rule 47 missing');
+      if (!lastPadding) {
+        ctx.fail('CG-FLU-10: .settings-header all-widths padding rule not found (Rule 46)');
         return;
       }
-      for (const { selector, declarations } of desktopHeaderBlocks) {
-        if (selector.includes('[data-theme="dim"]')) {
-          ctx.fail(`CG-FLU-10: :is(.settings-header, .avlist-header) @media float rule must be theme-agnostic — ${selector}`);
-        }
-        if (!/border-radius\s*:/.test(declarations)) ctx.fail('CG-FLU-10: :is(.settings-header, .avlist-header) @media 1024px block missing border-radius');
-        if (!/\bborder\s*:/.test(declarations)) ctx.fail('CG-FLU-10: :is(.settings-header, .avlist-header) @media 1024px block missing border');
+      if (lastPadding.selector.includes('[data-theme="dim"]')) {
+        ctx.fail(`CG-FLU-10: .settings-header padding rule must be theme-agnostic — ${lastPadding.selector}`);
       }
+      if (!/padding\s*:\s*1rem\s+1\.5rem/.test(lastPadding.declarations)) {
+        ctx.fail('CG-FLU-10: .settings-header padding should be 1rem 1.5rem (flush-left fix)');
+      }
+
+      // 11b（`:is(.settings-header, .avlist-header)` 的桌機浮動規則 / Rule 47）已於 146b-T3 移除：
+      // spec-146b 用「一頁一個 Layer」取代 A/B chrome，B 浮動處理本身不再存在。
+      // 它守的兩個視覺屬性去向不同：border 由 .page-layer（Rule 49）接手；
+      // border-radius 同樣由 Rule 49 接手（var(--fluent-radius-xl)，與被刪的
+      // Rule 13b/45/47 同值）。兩者目前都沒有等價的 css-guard 對帳——Layer
+      // 外框的視覺由 CD-146b-3 的 owner 真機批次驗收把關，不是機械守衛。
     },
   },
 

@@ -761,3 +761,71 @@ def test_no_overlap_at_1024_boundary(page: Page, base_url: str) -> None:
         f"否則 iPad 橫向（1024×768）開啟搜尋頁時，手機化的 .file-list-section.organize-tray "
         f"fixed 定位會被同時可見的側欄蓋住左緣"
     )
+
+
+# ── CD-146b-7 T7 oracle：內容側水平內距必須吃 --layer-inset（T3 先紅）──
+
+def test_content_inset_equals_layer_inset_token(page: Page, base_url: str) -> None:
+    """四頁內容側錨點的 padding-inline 必須等於 :root --layer-inset 的像素值。
+
+    相對左緣對齊（test_toolbar_content_left_edge_aligned）在掃描頁已因 Rule 46
+    拆解而綠；T7 把 .avlist-container 的 padding: 1rem 改成 padding-inline:
+    var(--layer-inset) 會讓兩側同步位移，那條相對斷言抓不到漏做。本斷言量絕對
+    內距對 token。只在桌機 1280 量（<1024 滿版內距是 T4-T7 各自的事）。
+    """
+    page.set_viewport_size({"width": DESKTOP, "height": 900})
+    assert page.evaluate("window.innerWidth") == DESKTOP
+
+    _skip_if_empty_library(page, base_url)
+
+    token: dict | None = None
+    measured: dict[str, dict] = {}
+    mismatches: list[str] = []
+
+    for name, path in PAGES.items():
+        _goto(page, base_url, path, PAGE_READY_SELECTORS[name])
+        content_sel = ALIGN_ANCHORS[name][1]
+        page.wait_for_selector(content_sel, state="visible", timeout=15_000)
+
+        if token is None:
+            token = page.evaluate(
+                """() => {
+                    const raw = getComputedStyle(document.documentElement)
+                        .getPropertyValue('--layer-inset').trim();
+                    const probe = document.createElement('div');
+                    probe.style.width = raw || '0px';
+                    document.documentElement.appendChild(probe);
+                    const px = parseFloat(getComputedStyle(probe).width);
+                    probe.remove();
+                    return { raw, px };
+                }"""
+            )
+
+        pads = page.evaluate(
+            """(sel) => {
+                const el = document.querySelector(sel);
+                if (!el) return null;
+                const cs = getComputedStyle(el);
+                return {
+                    paddingLeft: parseFloat(cs.paddingLeft) || 0,
+                    paddingRight: parseFloat(cs.paddingRight) || 0,
+                };
+            }""",
+            content_sel,
+        )
+        assert pads is not None, f"{name}: 找不到內容錨點 {content_sel}"
+        measured[name] = {"sel": content_sel, **pads}
+
+        expected = float(token["px"])
+        for side in ("paddingLeft", "paddingRight"):
+            val = float(pads[side])
+            if abs(val - expected) > 1.0:
+                mismatches.append(
+                    f"{name} {content_sel} {side}={val} "
+                    f"vs --layer-inset {token['raw']!r}={expected}px"
+                )
+
+    assert not mismatches, (
+        f"內容側水平內距尚未吃 --layer-inset（T4-T7 才轉綠）：{mismatches}；"
+        f"量測={measured}；token={token}"
+    )
