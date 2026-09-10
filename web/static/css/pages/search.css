@@ -659,9 +659,9 @@
 /* === RWD 響應式 === */
 
 /* Tablet & Mobile: 調整容器高度 */
-@media (max-width: 991.98px) {
+@media (max-width: 1023.98px) {
     .search-container {
-        height: calc(100vh - 56px);
+        height: calc(100vh - var(--mobile-topbar-height));
         /* 扣除頂部導航列 */
     }
 }
@@ -669,7 +669,7 @@
 /* === RWD: Search Card 響應式 === */
 
 /* <= 1024px：垂直排列（封面上方 + info 下方） */
-@media (max-width: 1024px) {
+@media (max-width: 1023.98px) {
     .search-container .av-card-full {
         flex-direction: column;
         overflow-y: auto;
@@ -730,26 +730,6 @@
        讓大卡尾段能捲出 tray 遮擋；search mode 不加（section 仍在常規流、無 tray）。 */
     #resultCard:has(.file-list-section.organize-tray) {
         padding-bottom: 220px;
-    }
-}
-
-/* 92a-T5 fix (Codex P2): 992–1024px sidebar 仍可見（base.html @min-width:992px .sidebar display:flex，
-   main-content margin-left:var(--sidebar-width)），而 tray fixed left:0 會被 fixed sidebar（200px/collapsed 60px,
-   z-1000）蓋住左緣、與 main-content 不對齊（窄桌面視窗版位回歸）。此區間把 tray 左緣對齊 main-content（sidebar 寬）；
-   ≤991.98px sidebar 隱藏、此 min-width:992px 區間不 match → 回上方 base 的 left:0 全寬（source order 後者勝，
-   collapsed 規則 specificity 更高恆勝）。 */
-@media (min-width: 992px) and (max-width: 1024px) {
-    .file-list-section.organize-tray {
-        left: var(--sidebar-width);
-        /* 解除 over-constraint（Codex PR P2）：base .file-list-section width:100% + tray
-           right:0 + 此處 left 三者皆非 auto → CSS 2.1 §10.3.7 忽略 right、寬撐 100vw 從
-           sidebar 起算溢出右緣。width:auto 讓 right:0 生效 → 寬=viewport-left，對齊
-           main-content。低 specificity 亦覆 collapsed 變體（其僅覆寫 left）。 */
-        width: auto;
-    }
-
-    body.sidebar-collapsed .file-list-section.organize-tray {
-        left: var(--sidebar-collapsed-width);
     }
 }
 

@@ -210,7 +210,7 @@ function extractStyleBlocks(html) {
 const MW480 = /^\s*\(\s*max-width\s*:\s*480px\s*\)\s*$/;
 const MW899 = /^\s*\(\s*max-width\s*:\s*899px\s*\)\s*$/;
 const MW899_COARSE = /^\s*\(\s*max-width\s*:\s*899px\s*\)\s+and\s+\(\s*pointer\s*:\s*coarse\s*\)\s*$/;
-const MW1024 = /^\s*\(\s*max-width\s*:\s*1024px\s*\)\s*$/;
+const MW1024 = /^\s*\(\s*max-width\s*:\s*1023\.98px\s*\)\s*$/;
 const MIN481_MAX899 = /^\s*\(\s*min-width\s*:\s*481px\s*\)\s+and\s+\(\s*max-width\s*:\s*899px\s*\)\s*$/;
 const IS_SCOPE = ':is(#ds-gallery-components, .ds-gallery-composition)';
 
@@ -1040,12 +1040,26 @@ const RULES = [
       const pair = ruleBody(css, '\\.search-container \\.av-card-full-body \\.info-grid-pair');
       if (pair === null) ctx.fail('CG-PC-06: 找不到 .info-grid-pair 桌面規則');
       else if (!pair.includes('grid-template-columns: 1fr 1fr')) ctx.fail('CG-PC-06: 桌面 .info-grid-pair 應 1fr 1fr');
+      // FE-GUARD-14：同條件可能有多個 @media body（T2 把 991.98 與 1024 都收成 1023.98
+      // 後出現兩個）；不可寫死 [0]。遍歷全部 matching bodies，找含 .info-grid-pair 的那些。
+      // 語意：至少一個 body 必須含 .info-grid-pair（fail-closed）；若有多個，**全部**都要
+      // collapse 成 1fr（比「任一個即可」更強——避免後寫的錯誤宣告靠 cascade 蓋掉正確的）。
       const b1024 = extractMediaBodies(ctx.text, MW1024);
-      if (!b1024.length) ctx.fail('CG-PC-06: 找不到 @media (max-width: 1024px) block');
+      if (!b1024.length) ctx.fail('CG-PC-06: 找不到 @media (max-width: 1023.98px) block');
       else {
-        const collapse = ruleBody(b1024[0], '\\.info-grid-pair');
-        if (collapse === null) ctx.fail('CG-PC-06: ≤1024px 內找不到 .info-grid-pair collapse 規則');
-        else if (!collapse.includes('grid-template-columns: 1fr;')) ctx.fail('CG-PC-06: ≤1024px .info-grid-pair 應 collapse 回 grid-template-columns: 1fr;');
+        const withPair = b1024
+          .map((body) => ({ body, collapse: ruleBody(body, '\\.info-grid-pair') }))
+          .filter(({ collapse }) => collapse !== null);
+        if (!withPair.length) {
+          ctx.fail('CG-PC-06: ≤1023.98px 內找不到 .info-grid-pair collapse 規則');
+        } else {
+          for (const { collapse } of withPair) {
+            if (!collapse.includes('grid-template-columns: 1fr;')) {
+              ctx.fail('CG-PC-06: ≤1023.98px .info-grid-pair 應 collapse 回 grid-template-columns: 1fr;');
+              break;
+            }
+          }
+        }
       }
     },
   },
@@ -2077,12 +2091,14 @@ const RULES = [
       // ── 期望表（鏡射 showcase.css，108-T5fix1 定版）───────────────────────────
       // 共用區間（≤899px）：影片走直式 poster 0.71 ≈ 女優 0.75 → 同寬即同高 → **必須 co-listed**。
       const COLS = /grid-template-columns\s*:/;
-      const GUTTER = /margin-inline\s*:/;
+      // T2：.main-content 水平 padding 於 <1024 已歸零，負 margin-inline 補償已移除；
+      // 定位錨改為仍存在的 padding-inline（12px gutter）。co-listed 不變式不變。
+      const GUTTER = /padding-inline\s*:/;
       const SHARED = [
         { label: 'base grid（top-level 非-@media）', cond: null, anchor: COLS, prop: 'grid-template-columns' },
         { label: '@media (min-width: 481px) and (max-width: 899px) → 4 欄（共用）', cond: MIN481_MAX899, anchor: COLS, prop: 'grid-template-columns' },
         { label: '@media (max-width: 480px) → 3 欄（共用）', cond: MW480, anchor: COLS, prop: 'grid-template-columns' },
-        { label: 'T1 行動 gutter @media (max-width: 899px)', cond: MW899, anchor: GUTTER, prop: 'margin-inline' },
+        { label: 'T1 行動 gutter @media (max-width: 899px)', cond: MW899, anchor: GUTTER, prop: 'padding-inline' },
       ];
       // ≥900px：影片切橫式 fanart（~3:2）、女優恆為直式 0.75 → 同寬會讓女優列高 1.77 倍。
       // 故女優改走**專屬 5 段階梯**（列高/密度對齊），影片維持自己的三段（showcase-only）。

@@ -31,13 +31,16 @@ PAGES = {
     "scanner": "/scanner",
 }
 
-# 每頁「工具列/頁首第一個元素」與「內容第一個元素」
-# 掃描頁：比 .avlist-header h4 vs 第一張 .avlist-card（CD-146b-14 第 4 點）
-FIRST_ITEM_SELECTORS = {
+# 每頁「工具列 / 內容」對齊錨點：兩側都是 CD-146b-7 ownership 表上的元素，
+# oracle 用 content-box 左緣（rect.left + paddingLeft）。理由見 _content_box_left。
+# settings 內容側 = #settingsForm（#settings-components 的直接子、四張卡外層容器；
+# 不是 #settings-components 本身——那是 .page-layer，padding-inline 永遠 0）。
+# scanner 工具列側 = .avlist-header（ownership 表刻意不吃 inset，繼承 .avlist-container）。
+ALIGN_ANCHORS = {
     "search": (".search-bar", ".result-area"),
     "showcase": (".showcase-toolbar", ".showcase-grid"),
-    "settings": (".settings-header", "#settings-components .card"),
-    "scanner": (".avlist-header h4", ".avlist-card"),
+    "settings": (".settings-header", "#settingsForm"),
+    "scanner": (".avlist-header", ".avlist-container"),
 }
 
 # 每頁的 Layer 外框 selector（CD-146b-7）；T3 才掛 .page-layer，T1 預期找不到
@@ -114,6 +117,30 @@ def _left_edge(page: Page, selector: str) -> float:
     return box["x"]
 
 
+def _content_box_left(page: Page, sel: str) -> float:
+    """容器 content-box 左緣 = rect.left + paddingLeft。
+
+    C/D（DOM 第一個 / 視覺最左可見子）在三頁各壞一種——showcase 撞到置中的
+    `.toolbar-search`（1280 時 x=365）、scanner 撞到 `#dragOverlay`（恆 0）、
+    settings@1280 撞到 `dialog.modal`（恆 0）；A（容器邊）在 T3 掛上 `.page-layer`
+    之後會恆等於 0 差而變成永遠綠的假斷言。只有 content-box 左緣正好就是
+    CD-146b-7 的 inset ownership 決定的那條線（每個元素自己吃一次
+    `--layer-inset`），而且四頁十七格全部落在可解釋的範圍內。
+    """
+    left = page.evaluate(
+        """(sel) => {
+            const el = document.querySelector(sel);
+            if (!el) return null;
+            const r = el.getBoundingClientRect();
+            const padL = parseFloat(getComputedStyle(el).paddingLeft) || 0;
+            return r.left + padL;
+        }""",
+        sel,
+    )
+    assert left is not None, f"selector 找不到: {sel}"
+    return float(left)
+
+
 def _backdrop_filter(page: Page, selector: str) -> str:
     loc = page.locator(selector).first
     assert loc.count() > 0, f"selector 找不到: {selector}"
@@ -173,13 +200,13 @@ def test_toolbar_content_left_edge_aligned(
     page.set_viewport_size({"width": width, "height": 900})
     assert page.evaluate("window.innerWidth") == width
 
-    toolbar_sel, content_sel = FIRST_ITEM_SELECTORS[page_name]
+    toolbar_sel, content_sel = ALIGN_ANCHORS[page_name]
     _goto(page, base_url, PAGES[page_name], PAGE_READY_SELECTORS[page_name])
     page.wait_for_selector(toolbar_sel, state="visible", timeout=15_000)
     page.wait_for_selector(content_sel, state="visible", timeout=15_000)
 
-    toolbar_left = _left_edge(page, toolbar_sel)
-    content_left = _left_edge(page, content_sel)
+    toolbar_left = _content_box_left(page, toolbar_sel)
+    content_left = _content_box_left(page, content_sel)
 
     assert abs(toolbar_left - content_left) == pytest.approx(0, abs=1.0), (
         f"{page_name}@{width}: 工具列左緣 {toolbar_left} vs 內容左緣 {content_left}，"
@@ -245,8 +272,9 @@ def test_showcase_cover_aligned_with_toolbar_at_800(page: Page, base_url: str) -
     _goto(page, base_url, PAGES["showcase"], ".showcase-toolbar")
     page.wait_for_selector(".showcase-grid", state="visible", timeout=15_000)
 
-    toolbar_left = _left_edge(page, ".showcase-toolbar")
-    grid_left = _left_edge(page, ".showcase-grid")
+    # 與 test_toolbar_content_left_edge_aligned 同一 oracle：content-box 左緣
+    toolbar_left = _content_box_left(page, ".showcase-toolbar")
+    grid_left = _content_box_left(page, ".showcase-grid")
 
     assert abs(toolbar_left - grid_left) == pytest.approx(0, abs=1.0), (
         f"瀏覽頁 800 寬：工具列左緣 {toolbar_left} vs 封面格左緣 {grid_left}，"
@@ -657,4 +685,79 @@ def test_showcase_footer_pinned_to_viewport_bottom(
     inner_h = page.evaluate("window.innerHeight")
     assert box["y"] + box["height"] == pytest.approx(inner_h, abs=1.0), (
         f".showcase-footer bottom={box['y'] + box['height']} vs innerHeight={inner_h}"
+    )
+
+
+# ── CD-146b-9 斷點收斂協同：992-1023 區間無版位縫隙（T2） ─────────────────
+
+def test_no_layout_gap_in_992_1023_band(page: Page, base_url: str) -> None:
+    """CD-146b-9 斷點收斂的協同規則驗證：992-1023 這個側欄剛消失的區間，
+    footer / 檔案托盤 / 內容起始點都不該殘留舊斷點（991.98/992）留下的縫隙。"""
+    page.set_viewport_size({"width": TABLET_STUCK, "height": 900})
+    assert page.evaluate("window.innerWidth") == TABLET_STUCK
+
+    # 1) 瀏覽頁 footer 左緣應為 0（不論 sidebar 展開/收合，showcase.css:2776-2782 兩個 selector 都要覆蓋）
+    _skip_if_empty_library(page, base_url)
+    _goto(page, base_url, PAGES["showcase"], ".showcase-footer")
+    footer_box = page.locator(".showcase-footer").first.bounding_box()
+    assert footer_box is not None
+    assert footer_box["x"] == pytest.approx(0, abs=1.0), (
+        f"992-1023 區間瀏覽頁 footer 左緣={footer_box['x']}（應為 0；"
+        f"側欄已在 1024 才可見，992-1023 側欄應已隱藏，footer 不該再留側欄寬度的補償）"
+    )
+
+    # 2) 搜尋頁檔案托盤左緣應為 0（強制進入 file mode，不依賴真實拖放流程）
+    _goto(page, base_url, PAGES["search"], PAGE_READY_SELECTORS["search"])
+    page.evaluate("""
+        () => {
+            const el = document.querySelector('.search-container');
+            const data = Alpine.$data(el);
+            data.pageState = 'result';
+            data.listMode = 'file';
+            data.fileList = [{ path: '/tmp/e2e-fixture.mp4', number: 'E2E-001' }];
+        }
+    """)
+    tray = page.locator(".file-list-section.organize-tray")
+    tray.first.wait_for(state="visible", timeout=10_000)
+    tray_box = tray.first.bounding_box()
+    assert tray_box is not None
+    assert tray_box["x"] == pytest.approx(0, abs=1.0), (
+        f"992-1023 區間搜尋頁檔案托盤左緣={tray_box['x']}（應為 0；"
+        f"92a-T5 補償規則已刪除，側欄隱藏後不該再有殘留偏移）"
+    )
+
+    # 3) 內容起始點不應被固定頂欄蓋住（.search-bar 頂緣 >= 頂欄底緣，含 --mobile-topbar-height 修正案）
+    topbar_box = page.locator(".top-navbar").first.bounding_box()
+    searchbar_box = page.locator(".search-bar").first.bounding_box()
+    assert topbar_box is not None and searchbar_box is not None
+    assert searchbar_box["y"] >= topbar_box["y"] + topbar_box["height"] - 1.0, (
+        f"992-1023 區間搜尋頁內容起始 y={searchbar_box['y']} vs 頂欄底緣="
+        f"{topbar_box['y'] + topbar_box['height']}（內容不該被固定頂欄蓋住）"
+    )
+
+
+# ── CD-146b-5 斷點邊界對齊：正好 1024 寬側欄與手機化規則互斥（T2） ─────────
+
+def test_no_overlap_at_1024_boundary(page: Page, base_url: str) -> None:
+    """CD-146b-5 斷點收斂的邊界對齊驗證：正好 1024px 寬時，側欄可見（桌機模式）
+    就不該讓 .search-container 還留在 search.css:672 的手機化規則群裡
+    （決策 B 第 1 步：max-width 1024→1023.98，讓兩個「含 1024」的區間不再互撞）。"""
+    page.set_viewport_size({"width": 1024, "height": 900})
+    assert page.evaluate("window.innerWidth") == 1024
+    _goto(page, base_url, PAGES["search"], PAGE_READY_SELECTORS["search"])
+
+    sidebar_visible = page.locator(".sidebar").first.evaluate(
+        "el => getComputedStyle(el).display"
+    ) != "none"
+    search_container_mobile_mode = page.locator(".search-container").first.evaluate(
+        "el => getComputedStyle(el).overflowY"
+    ) == "auto"
+
+    assert not (sidebar_visible and search_container_mobile_mode), (
+        f"1024 寬邊界：sidebar visible={sidebar_visible}、"
+        f".search-container 仍在 search.css:672 手機化規則群（overflow-y=auto）"
+        f"={search_container_mobile_mode}——"
+        f"兩者不該同時成立，"
+        f"否則 iPad 橫向（1024×768）開啟搜尋頁時，手機化的 .file-list-section.organize-tray "
+        f"fixed 定位會被同時可見的側欄蓋住左緣"
     )
