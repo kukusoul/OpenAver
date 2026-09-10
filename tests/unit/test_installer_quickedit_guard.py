@@ -49,7 +49,15 @@ def test_newmode_line_sets_both_flags():
 
 
 def test_quickedit_between_trap_end_and_title_banner():
-    """(3) QuickEdit 區塊行號 > trap 結尾行號，且 < 第一個標題框 Write-Host。"""
+    """(3) QuickEdit 區塊行號 > trap 結尾行號，且 < 第一個標題框 Write-Host。
+
+    `trap_end` 取的是「整行恰好等於 `}`」＝零縮排的收尾行；trap 內部的收尾
+    （`        }`、`    } catch {}`）都有縮排，不會被誤取。這條靠的是排版慣例
+    而非 brace depth，所以下面第二段補一條反向鎖：QuickEdit 的 `try {` 必須
+    零縮排（＝ depth 0）。兩條合起來，把區塊搬進 trap 的兩種寫法都會紅：
+    縮排搬進去被 trap_end 擋，零縮排搬進去被 trap 真正的收尾行擋。
+    brace-depth 解析留在 test_installer_script_guard.py，不在這支重造。
+    """
     lines = _ps1_lines()
     trap_start = next(i for i, l in enumerate(lines) if re.match(r"^trap\s*\{", l))
     trap_end = next(i for i in range(trap_start + 1, len(lines)) if lines[i] == "}")
@@ -58,6 +66,15 @@ def test_quickedit_between_trap_end_and_title_banner():
     assert trap_end < quickedit_idx < banner_idx, (
         f"QuickEdit 區塊（第 {quickedit_idx + 1} 行）必須在 trap 結尾（第 {trap_end + 1} 行）之後、"
         f"標題框（第 {banner_idx + 1} 行）之前"
+    )
+
+    # QuickEdit 區塊的 try 必須在最外層：往上找離 quickedit_idx 最近的 try，
+    # 它得是零縮排的 `try {`。包進 trap／if／函式都會讓它有縮排。
+    try_idx = max(i for i in range(trap_end + 1, quickedit_idx) if lines[i].lstrip().startswith("try"))
+    assert lines[try_idx] == "try {", (
+        f"QuickEdit 區塊的 try（第 {try_idx + 1} 行）必須是最外層零縮排的 `try {{`，"
+        f"實際為 {lines[try_idx]!r}——有縮排代表它被包進了 trap／if／函式，"
+        "只有在那個分支成立時才會執行，使用者點一下視窗照樣被凍住"
     )
 
 
