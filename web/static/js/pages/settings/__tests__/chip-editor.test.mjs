@@ -74,4 +74,3 @@ test('〔f〕{actor} 與 {actors} 各自正確成 chip（無子字串誤併）',
   // 相鄰：{actor} 後接 s} 字面
   assert.equal(roundtrip('{actor}s and {actors}'), '{actor}s and {actors}');
 });
-
