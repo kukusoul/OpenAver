@@ -7,8 +7,15 @@ INSTALL_DIR="$HOME/OpenAver"
 # ============ 語言判定與訊息表（CD-145b-8b／CD-145b-17）============
 detect_installer_lang() {
     # CD-145b-8b：環境變數覆寫優先於系統語言，值不合法就忽略、退回系統判定。
-    case "${OPENAVER_INSTALL_LANG:-}" in
-        zh-TW|zh-CN|ja|en) echo "$OPENAVER_INSTALL_LANG"; return ;;
+    # 先用 tr 正規化成小寫再比對（bash 3.2 相容，禁用 bash 4 大小寫展開），
+    # 讓 EN／Zh-TW 等與 PowerShell -in（大小寫不敏感）行為一致；回傳訊息表用的正規大小寫。
+    local _override
+    _override=$(printf '%s' "${OPENAVER_INSTALL_LANG:-}" | tr '[:upper:]' '[:lower:]')
+    case "$_override" in
+        zh-tw) echo "zh-TW"; return ;;
+        zh-cn) echo "zh-CN"; return ;;
+        ja)    echo "ja"; return ;;
+        en)    echo "en"; return ;;
     esac
 
     local _lc="${LC_ALL:-$LANG}"

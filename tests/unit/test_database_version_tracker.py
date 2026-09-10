@@ -186,6 +186,56 @@ def test_repeated_commit_without_new_writes_does_not_double_bump(tmp_path):
     conn.close()
 
 
+def test_with_block_write_bumps_revision_and_persists(tmp_path):
+    """with get_connection(...) 內 INSERT、無顯式 commit → 離開 with 後 revision +1，
+    且資料真的寫進 DB（證明走的是 Python 層 commit，不是 C 層靜默 commit）。
+    """
+    db_path = tmp_path / "test.db"
+    init_db(db_path)
+    start = get_showcase_revision()
+
+    with get_connection(db_path) as conn:
+        conn.execute(
+            "INSERT INTO videos (path, number) VALUES (?, ?)",
+            ("/fake/with-block.mp4", "with-block"),
+        )
+
+    assert get_showcase_revision() == start + 1
+
+    conn = get_connection(db_path)
+    row = conn.execute(
+        "SELECT number FROM videos WHERE number = ?",
+        ("with-block",),
+    ).fetchone()
+    conn.close()
+    assert row == ("with-block",)
+
+
+def test_with_block_exception_rolls_back_and_does_not_bump(tmp_path):
+    """with 區塊內拋例外 → 資料未寫入、例外傳出、revision 不變。"""
+    db_path = tmp_path / "test.db"
+    init_db(db_path)
+    start = get_showcase_revision()
+
+    with pytest.raises(RuntimeError, match="boom"):
+        with get_connection(db_path) as conn:
+            conn.execute(
+                "INSERT INTO videos (path, number) VALUES (?, ?)",
+                ("/fake/with-rollback.mp4", "with-rollback"),
+            )
+            raise RuntimeError("boom")
+
+    assert get_showcase_revision() == start
+
+    conn = get_connection(db_path)
+    row = conn.execute(
+        "SELECT number FROM videos WHERE number = ?",
+        ("with-rollback",),
+    ).fetchone()
+    conn.close()
+    assert row is None
+
+
 def test_compute_db_fingerprint_existing_files(tmp_path):
     """存在的檔案 → 回傳含五個真實值的 tuple（主檔／-wal 各一組）。"""
     db_path = tmp_path / "test.db"

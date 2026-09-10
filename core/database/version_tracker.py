@@ -19,6 +19,10 @@ _BOOT_SECRET = secrets.token_bytes(32)
 class _RevisionTrackingConnection(sqlite3.Connection):
     """sqlite3.Connection 子類：commit() 成功後，若該連線的 total_changes
     相對上次 commit 有增加（＝真的寫入了東西），process-global revision 計數器 +1。
+
+    必須覆寫 __exit__：CPython 的 sqlite3.Connection.__exit__ 在 C 層直接
+    commit，不走 Python 屬性查找，因此 with 區塊結束時不會呼叫上面的
+    commit()，revision 就不會累加。
     """
 
     def __init__(self, *args, **kwargs):
@@ -31,6 +35,14 @@ class _RevisionTrackingConnection(sqlite3.Connection):
         if current > self._last_committed_total_changes:
             _bump_showcase_revision()
         self._last_committed_total_changes = current
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """C 層 __exit__ 不 dispatch 到 Python commit()；改走這裡以維持 revision 不變式。"""
+        if exc_type is None:
+            self.commit()
+        else:
+            self.rollback()
+        return False
 
 
 def _bump_showcase_revision() -> None:
