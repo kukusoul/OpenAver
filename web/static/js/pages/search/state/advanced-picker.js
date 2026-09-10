@@ -55,6 +55,7 @@ export function searchStateAdvancedPicker() {
                 } else {
                     this._searchSnapshot = null;
                     this.errorText = data.error || window.t('search.error.hint');
+                    this.errorKind = 'advanced_search_failed';
                     this.pageState = 'error';
                     // OQ-3 軟提示 scaffold：metatube source + 非番號 query + 空結果（B1 無 metatube source 故不觸發）
                     this._advancedMaybeMetatubeHint(source, query);
@@ -65,6 +66,7 @@ export function searchStateAdvancedPicker() {
                 this._searchSnapshot = null;
                 console.error('[AdvancedSearch]', err);
                 this.errorText = window.t('search.error.hint');
+                this.errorKind = 'advanced_search_failed';
                 this.pageState = 'error';
             }
         },

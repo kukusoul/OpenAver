@@ -517,6 +517,7 @@ export function searchStateFileList() {
             if (capturedRequestId !== this.requestId) return;   // 期間使用者已手動搜尋，這輪 stale，不覆蓋
             if (!r?.number) {
                 this.errorText = window.t('search.error.number_not_recognized');  // T6c: 沿用既有 key
+                this.errorKind = 'recognition_failed';
                 this.pageState = 'error';
                 // 139b-T10（CD-b4 ＋ review 第 2 輪）：兩個欄位一起清。
                 // currentQuery：#errorState 那顆膠囊（search.html:383）讀它。
@@ -534,6 +535,7 @@ export function searchStateFileList() {
             if (signal.aborted) return;   // 同上（對稱）：非 AbortError 失敗但期間已被 file-list 替換取代
             if (capturedRequestId !== this.requestId) return;   // 同上：手動搜尋期間發生的失敗不覆蓋新搜尋狀態
             this.errorText = window.t('search.error.number_parse_unavailable');   // 新 key
+            this.errorKind = 'recognition_failed';
             this.pageState = 'error';
             this.currentQuery = '';   // 139b-T10（CD-b4 ＋ review 第 2 輪）：同上，兩個欄位一起清
             this.searchQuery = '';

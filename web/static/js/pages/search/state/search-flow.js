@@ -100,6 +100,7 @@ export function searchStateSearchFlow() {
         this.listMode = null;
         this.pageState = 'empty';
         this.errorText = '';  // T6c: 清空錯誤訊息
+        this.errorKind = '';
         this._heroCardImageError = false;   // A6-1: 清空 Hero Card 圖片錯誤
         this._heroLightboxImageError = false; // A6-1: 清空 Lightbox 圖片錯誤
         this._heroSlotReserved = false;      // A7-Prod: 清空 Hero Slot 預留
@@ -150,7 +151,8 @@ export function searchStateSearchFlow() {
             actressProfile: this.actressProfile,
             displayMode: this.displayMode,      // T3 fix: 還原 Grid 狀態
             currentMode: this.currentMode,      // T3 fix: 還原搜尋模式（toggle 顯示依賴）
-            errorText: this.errorText            // T6c fix: 還原錯誤訊息
+            errorText: this.errorText,           // T6c fix: 還原錯誤訊息
+            errorKind: this.errorKind,
         };
 
         // 5. 初始化狀態（修正 1: 使用 showState）
@@ -176,6 +178,7 @@ export function searchStateSearchFlow() {
         this._heroLightboxImageError = false; // A6-1: 清空 Lightbox 圖片錯誤
         this._heroSlotReserved = false;      // A7-Prod: 重置 Hero Slot 預留
         this.errorText = '';  // T6c: 清空上次的錯誤訊息
+        this.errorKind = '';
         // T4: 重置 stream state（防競態 + 新搜尋乾淨起始）
         this.isStreaming = false;
         this.streamComplete = false;
@@ -383,6 +386,7 @@ export function searchStateSearchFlow() {
                             // A7-Prod: 清理 _heroSlotReserved（頁面將切到 error state）
                             this._heroSlotReserved = false;
                             this.errorText = window.t('search.error.no_data');
+                            this.errorKind = 'no_data';
                             this.pageState = 'error';
                         } else {
                             // 正常 stream 完成：只補充 metadata
@@ -452,6 +456,7 @@ export function searchStateSearchFlow() {
                     } else {
                         this._searchSnapshot = null; // Fix 2: 清空 snapshot（搜尋失敗）
                         this.errorText = window.t('search.error.no_data');  // T6c: Alpine state
+                        this.errorKind = 'no_data';
                         this.pageState = 'error';
                     }
                 }
@@ -461,6 +466,7 @@ export function searchStateSearchFlow() {
                     this.activeEventSource = null;
                     this._searchSnapshot = null; // Fix 2: 清空 snapshot（搜尋錯誤）
                     this.errorText = data.message || window.t('search.error.search_failed');  // T6c: Alpine state
+                    this.errorKind = 'server_error';
                     this.pageState = 'error';
                 }
             } catch (err) {
@@ -523,10 +529,10 @@ export function searchStateSearchFlow() {
             // Fix 3: 檢查是否已被新搜尋取代
             if (savedRequestId !== this.requestId) return;
 
-            if (response.ok && data.success && data.data && data.data.length > 0) {
-                // 更新 currentMode 從 response
-                this.currentMode = data.mode || this.currentMode;
+            // 更新 currentMode 從 response
+            this.currentMode = data.mode || this.currentMode;
 
+            if (response.ok && data.success && data.data && data.data.length > 0) {
                 // 修正 2: 更新 Alpine state
                 this.searchResults = data.data;
                 this.currentIndex = 0;
@@ -577,6 +583,7 @@ export function searchStateSearchFlow() {
                     this._heroSlotReserved = false;
                 }
                 this.errorText = data.error || window.t('search.error.no_data');  // T6c: Alpine state
+                this.errorKind = 'no_data';
                 this.pageState = 'error';
             }
         } catch (err) {
@@ -587,6 +594,7 @@ export function searchStateSearchFlow() {
             this._searchSnapshot = null;
             console.error('[Search]', err);
             this.errorText = window.t('search.error.network_error');  // T6c: Alpine state
+            this.errorKind = 'network_error';
             this.pageState = 'error';
         }
     },
@@ -674,6 +682,7 @@ export function searchStateSearchFlow() {
             this.displayMode = snap.displayMode || 'detail';
             this.currentMode = snap.currentMode || '';
             this.errorText = snap.errorText || '';
+            this.errorKind = snap.errorKind || '';
 
             // 還原顯示
             this.pageState = snap.pageState;

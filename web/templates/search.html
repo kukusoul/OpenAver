@@ -601,6 +601,9 @@
                 extra_classes='state-page-action',
                 attrs='@click="openRescrape(null, \'search\'); rescrapeNumber = (currentQuery || \'\').trim()"'
             ) }}
+            <p class="empty-explainer-line"
+               x-show="pageState === 'error' && errorKind === 'no_data' && (currentMode === 'exact' || currentMode === 'prefix')"
+               x-cloak>{{ t('search.empty.explainer_partial') }}</p>
             <!-- 多檔案模式導航 -->
             <div class="error-nav" x-show="fileList.length > 1" id="errorNav">
                 <button class="btn btn-sm btn-outline btn-neutral"

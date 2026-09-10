@@ -111,6 +111,7 @@ export function searchStateBase() {
         duplicateTarget: '',  // duplicate modal 顯示的目標檔名
         duplicateModalOpen: false,  // Alpine state for duplicate modal
         errorText: '',  // T6c: Error message state
+        errorKind: '',  // CD-146a-20: error classification for conditional UI
 
         _timers: {},  // Timer registry：{ [key: string]: number }（setTimeout ID）
         _batchCheckInterval: null,      // T1(40b): batch searchAll 暫停等待 interval ref

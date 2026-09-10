@@ -4914,6 +4914,13 @@ const RULES = [
   },
 
   { file: 'web/templates/search.html', kind: 'required-string', pattern: 'favoriteScannerLinked === false', note: '[TestSearchEmptyFavoriteLinkedStrict] CD-146a-16／FE-JS-01：三態嚴格比較不得精簡成 !favoriteScannerLinked' },
+
+  // ---- [TASK-146a-T5] errorKind snapshot/restore pairing ----
+  {
+    file: 'web/static/js/pages/search/state/search-flow.js', kind: 'paired-string',
+    ifPresent: 'errorKind: this.errorKind', thenRequire: 'this.errorKind = snap.errorKind',
+    note: 'errorKind pairing: _searchSnapshot 有 errorKind 但 cancelSearch() 未還原',
+  },
 ];
 
 // ---- helpers ----
