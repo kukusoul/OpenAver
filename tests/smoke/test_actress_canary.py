@@ -34,6 +34,7 @@ from core.scrapers.actress.wiki_ja import scrape_wiki_ja
 from core.scrapers.actress.graphis import scrape_graphis_photo
 from core.scrapers.actress.gfriends import lookup_gfriends
 from core.scrapers.actress.orchestrator import _has_meaningful_text
+from core.actress_photo import validate_photo_url
 
 pytestmark = pytest.mark.smoke
 
@@ -166,13 +167,26 @@ def test_minnano_av_canary():
     )
 
 
+def _wiki_ja_usable(result) -> bool:
+    """可用 = 文字欄位有東西 且 photo_url 過得了我們自己的白名單（CD-145b-14）。
+
+    對齊 BE-GUARD-01：canary 的判準要跟 sink（core/actress_photo.py 的
+    validate_photo_url，換圖端點下載前的真正閘門）逐字相同，不是自己在這裡
+    寫一份近似判斷（例如斷言 host 字串），那樣站方換一次 CDN 又要跟著改。
+    """
+    return bool(
+        _has_meaningful_text(result)
+        and validate_photo_url((result or {}).get("photo_url", ""), "wiki")
+    )
+
+
 def test_wiki_ja_canary():
     _run_actress_canary(
         "wiki_ja",
         probe_fn=_probe_wiki_ja,
         probe_desc="https://ja.wikipedia.org/",
         fetch_fn=scrape_wiki_ja,
-        usable_fn=_has_meaningful_text,
+        usable_fn=_wiki_ja_usable,
     )
 
 

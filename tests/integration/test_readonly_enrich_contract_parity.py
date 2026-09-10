@@ -160,15 +160,30 @@ def _scraper_meta(cover=COVER_URL, sample_images=None):
 
 def _run_nonreadonly_enrich(*, search_result, os_exists, row_cover_path="",
                             download_image_ret=True, mode="refresh_full",
-                            write_cover=True, overwrite_existing=False):
+                            write_cover=True, overwrite_existing=False,
+                            row_title="Existing Real Title"):
     """A：core.enricher.enrich_single 直呼。patch 落 core.enricher.* 使用端 binding +
     全域 os.path.exists（同時覆蓋 top-level 檔案檢查 / _write_cover / cover_uri_is_servable
     磁碟複驗，三者共享 module singleton）。刻意不 mock 契約 helper（enrich_success /
     compute_has_servable_cover / cover_uri_is_servable / apply_cover_preserve），只 mock
-    其輸入依賴（DB row via VideoRepository / os.path.exists / download_image / search_jav）。"""
+    其輸入依賴（DB row via VideoRepository / os.path.exists / download_image / search_jav）。
+
+    row_title：CD-145a-9 的佔位判定（core/enricher.py:577-579）只在 mode 非
+    refresh_full/db_to_sidecar 時才會跑到，且需要一個真字串（`_strip_num_prefixes` 對
+    MagicMock 會 TypeError）。預設值刻意選一個「剝掉番號前綴後不等於檔名 stem」的
+    真標題，讓 fill_missing 情境（scenario 4）測的仍是「既有封面保留」而不是意外
+    測到佔位判定本身；refresh_full 情境的 meta 來自 scraper_data、不讀這欄，故此
+    預設值不影響其餘 scenario。
+
+    get_by_numbers（非 get_by_path！）：fill_missing/quick_missing 分支實際呼叫的是
+    `repo.get_by_numbers([number])` 取 `_video_to_meta`，`get_by_path` 在該分支未被
+    使用。原本只 stub `get_by_path` 對這條分支是死配置——`get_by_numbers` 落回
+    autospec MagicMock 鏈，`videos[0].title` 因而也是 MagicMock（同一顆雷，只是
+    `_pick_row_for_path` 那層才炸）。這裡把 `get_by_numbers` 接到同一顆 `row`，讓
+    scenario 4 真的測到我們控制的 title/cover_path。"""
     from core.enricher import enrich_single
-    row = MagicMock(cover_path=row_cover_path, user_tags=[], original_title="",
-                    size_bytes=1000, mtime=1.0)
+    row = MagicMock(cover_path=row_cover_path, title=row_title, user_tags=[],
+                    original_title="", size_bytes=1000, mtime=1.0)
     with ExitStack() as es:
         if callable(os_exists):
             es.enter_context(patch("os.path.exists", side_effect=os_exists))
@@ -176,6 +191,7 @@ def _run_nonreadonly_enrich(*, search_result, os_exists, row_cover_path="",
             es.enter_context(patch("os.path.exists", return_value=os_exists))
         mock_repo_cls = es.enter_context(patch("core.enricher.VideoRepository"))
         mock_repo_cls.return_value.get_by_path.return_value = row
+        mock_repo_cls.return_value.get_by_numbers.return_value = {NUMBER: [row]}
         es.enter_context(patch("core.enricher.search_jav", return_value=search_result))
         es.enter_context(patch("core.enricher.generate_nfo", return_value=True))
         es.enter_context(patch("core.enricher.download_image", return_value=download_image_ret))

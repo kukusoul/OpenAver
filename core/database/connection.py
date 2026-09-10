@@ -8,6 +8,7 @@ import time
 from pathlib import Path
 
 from core.logger import get_logger
+from core.database.version_tracker import _RevisionTrackingConnection
 
 logger = get_logger(__name__)
 
@@ -27,7 +28,7 @@ def get_connection(db_path: Path = None) -> sqlite3.Connection:
     if db_path is None:
         db_path = get_db_path()
 
-    conn = sqlite3.connect(str(db_path))
+    conn = sqlite3.connect(str(db_path), factory=_RevisionTrackingConnection)
     # 啟用 WAL 模式以提升並發效能
     conn.execute("PRAGMA journal_mode=WAL")
     return conn

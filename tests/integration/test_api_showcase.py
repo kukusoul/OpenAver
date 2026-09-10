@@ -9,6 +9,8 @@ import pytest
 from urllib.parse import quote
 from core.database import init_db, VideoRepository, Video
 from core.path_utils import to_file_uri, uri_to_fs_path
+from core.database.version_tracker import get_showcase_revision
+import web.routers.showcase as showcase_router
 
 
 # ============ Fixtures ============
@@ -801,3 +803,296 @@ class TestAC18EnrichOnlyTouchesPart1:
         assert not part2_nfo.exists(), "part-2 不應該生出 NFO"
         assert part2_fs.stat().st_mtime == part2_mtime_before
         assert part2_fs.read_bytes() == part2_content_before
+
+
+# ============ ETag / 304 (TASK-145-T3, CD-145a-8/11/12) ============
+
+class TestShowcaseVideosETag:
+    """GET /api/showcase/videos 的 ETag / 304 行為。
+
+    ETag 涵蓋 DB 內部寫入 revision、DB/-wal 檔案指紋（涵蓋外部抽換或還原備份）、
+    無機密設定投影（來源資料夾／path_mappings／縮圖開關）三項；命中 If-None-Match
+    時要在序列化之前短路回 304。
+    """
+
+    def _get(self, client, mocker, setup, if_none_match=None):
+        mocker.patch("web.routers.showcase.get_db_path", return_value=setup["db_path"])
+        mocker.patch("web.routers.showcase.load_config", return_value=setup["config"])
+        headers = {"If-None-Match": if_none_match} if if_none_match else {}
+        return client.get("/api/showcase/videos", headers=headers)
+
+    def test_route_passes_revision_into_compute_etag(self, client, showcase_setup, mocker):
+        """route 層獨立驗證：`get_videos()` 真的把 `get_showcase_revision()` 的值接進
+        `compute_etag()` 呼叫——不是只驗 `compute_etag()` 這個函式本身吃 revision 當參數
+        （那件事 unit 測試已經驗過）。
+
+        把 `compute_db_fingerprint` monkeypatch 成固定回傳同一個常數，讓 db_fingerprint
+        這個訊號完全不會變動、不會「頂替」revision 的訊號（真實寫入必然也改變 -wal 檔案
+        stat，這正是 mutation 點 1 一度在 integration 層 SURVIVED 的根因——這支測試就是
+        為了在 route 呼叫點堵住那個縫：先把 db_fingerprint 按死，才能單獨看 revision 有沒有
+        真的被傳進去）。
+        """
+        mocker.patch("web.routers.showcase.compute_db_fingerprint", return_value="frozen-fingerprint")
+
+        first = self._get(client, mocker, showcase_setup)
+        etag = first.headers["etag"]
+        revision_before = get_showcase_revision()
+
+        repo = VideoRepository(showcase_setup["db_path"])
+        repo.set_user_rating(showcase_setup["vid2_uri"], 5)
+
+        assert get_showcase_revision() != revision_before, (
+            "自我把關：這支測試的前提是這筆寫入真的 bump 了 revision，否則後面的 200 斷言" \
+            "測不出任何東西（假綠）"
+        )
+
+        second = self._get(client, mocker, showcase_setup, if_none_match=etag)
+        assert second.status_code == 200, (
+            "db_fingerprint 被凍結不動，若 route 沒有把 revision 傳進 compute_etag()，"
+            "這裡會誤回 304——使用者剛操作完（精選/標籤/焦點/掃描新片）切回瀏覽頁，"
+            "看到的還是操作前的舊清單"
+        )
+
+    def test_second_request_no_writes_returns_304_and_skips_serialization(self, client, showcase_setup, mocker):
+        """驗收 1／DoD ①：兩次無寫入的請求，第二次回 304，且 _serialize_group 完全沒被呼叫
+        （方案 B 的判別點——不是只驗傳輸變小，要驗序列化真的沒發生）。"""
+        spy = mocker.spy(showcase_router, "_serialize_group")
+        first = self._get(client, mocker, showcase_setup)
+        assert first.status_code == 200
+        etag = first.headers["etag"]
+        spy.reset_mock()
+
+        second = self._get(client, mocker, showcase_setup, if_none_match=etag)
+        assert second.status_code == 304
+        assert second.headers["etag"] == etag
+        spy.assert_not_called()
+        assert second.content == b""
+
+    def test_consecutive_gets_without_writes_return_304(self, client, showcase_setup, mocker):
+        """DoD ②：init_db() 每次請求都跑，其 no-op commit 不可反覆 bump revision——
+        route 層級端到端驗證：連續兩次 GET（中間無真實寫入）第二次必回 304。"""
+        first = self._get(client, mocker, showcase_setup)
+        etag = first.headers["etag"]
+        second = self._get(client, mocker, showcase_setup, if_none_match=etag)
+        assert second.status_code == 304
+
+    def test_user_rating_write_then_stale_etag_returns_200_with_new_value(self, client, showcase_setup, mocker):
+        """DoD ③（user_rating）：set_user_rating() 成功 commit 後，帶舊 ETag 再請求必回 200，
+        且新值反映在回應。"""
+        first = self._get(client, mocker, showcase_setup)
+        etag = first.headers["etag"]
+
+        repo = VideoRepository(showcase_setup["db_path"])
+        repo.set_user_rating(showcase_setup["vid2_uri"], 5)
+
+        second = self._get(client, mocker, showcase_setup, if_none_match=etag)
+        assert second.status_code == 200
+        assert second.headers["etag"] != etag
+        video = next(v for v in second.json()["videos"] if v["path"] == showcase_setup["vid2_uri"])
+        assert video["user_rating"] == 5
+
+    def test_user_tags_write_then_stale_etag_returns_200_with_new_value(self, client, showcase_setup, mocker):
+        """DoD ③（user_tags）：update_user_tags() 成功 commit 後，帶舊 ETag 再請求必回 200。"""
+        first = self._get(client, mocker, showcase_setup)
+        etag = first.headers["etag"]
+
+        repo = VideoRepository(showcase_setup["db_path"])
+        repo.update_user_tags(showcase_setup["vid2_uri"], ["新標籤"])
+
+        second = self._get(client, mocker, showcase_setup, if_none_match=etag)
+        assert second.status_code == 200
+        video = next(v for v in second.json()["videos"] if v["path"] == showcase_setup["vid2_uri"])
+        assert video["user_tags"] == ["新標籤"]
+
+    def test_manual_focal_write_then_stale_etag_returns_200_with_new_value(self, client, showcase_setup, mocker):
+        """DoD ③（auto_focal / crop_mode）：update_manual_focal() 單一 UPDATE 同時寫兩欄，
+        成功 commit 後帶舊 ETag 再請求必回 200，兩欄新值都反映在回應。"""
+        first = self._get(client, mocker, showcase_setup)
+        etag = first.headers["etag"]
+
+        repo = VideoRepository(showcase_setup["db_path"])
+        row = repo.get_by_path(showcase_setup["vid1_uri"])
+        written = repo.update_manual_focal(showcase_setup["vid1_uri"], "0.5000,0.5000", row.cover_path or "")
+        assert written is True
+
+        second = self._get(client, mocker, showcase_setup, if_none_match=etag)
+        assert second.status_code == 200
+        video = next(v for v in second.json()["videos"] if v["path"] == showcase_setup["vid1_uri"])
+        assert video["auto_focal"] == "0.5000,0.5000"
+        assert video["crop_mode"] == "manual"
+
+    def test_new_video_after_scan_is_visible_via_304_then_200(self, client, showcase_setup, mocker):
+        """DoD ①②（硬條件）＋ mutation 點 1：少算 revision 一項會讓這支紅——
+        先確認無變動時回 304，掃描新片 INSERT+commit 後帶舊 ETag 再請求必回 200，
+        新片出現在回應裡。"""
+        first = self._get(client, mocker, showcase_setup)
+        etag = first.headers["etag"]
+
+        unchanged = self._get(client, mocker, showcase_setup, if_none_match=etag)
+        assert unchanged.status_code == 304
+
+        video_dir = showcase_setup["db_path"].parent / "videos"
+        new_uri = to_file_uri(str(video_dir / "video3.mp4"), {})
+        repo = VideoRepository(showcase_setup["db_path"])
+        repo.upsert_batch([Video(path=new_uri, number="SONE-003", title="New Scanned Video")])
+
+        second = self._get(client, mocker, showcase_setup, if_none_match=etag)
+        assert second.status_code == 200
+        paths = {v["path"] for v in second.json()["videos"]}
+        assert new_uri in paths
+
+    def test_external_db_file_replacement_forces_200(self, client, showcase_setup, mocker):
+        """DoD ④（硬條件）＋ mutation 點 2：少算 db_fingerprint 一項會讓這支紅——外部整份
+        抽換／還原 DB 檔（沒有任何 commit 經過我們的連線工廠），帶舊 ETag 再請求必回 200，
+        新內容可見。
+
+        建替換內容刻意走 `shutil.copy` + 一條 raw `sqlite3.connect()`（不透過
+        `core.database.connection.get_connection()` 那個掛了 `_RevisionTrackingConnection`
+        的工廠），確保這支測試量到的是 db_fingerprint 本身的效果，不是連帶 bump 到
+        process-global revision 的副作用（revision 是進程全域計數器，若改用
+        `init_db()`/`VideoRepository` 建替換檔，即使寫的是另一個檔案，也會誤讓這支測試
+        在 db_fingerprint 被拿掉時仍意外通過）。
+        """
+        import shutil
+        import sqlite3
+
+        first = self._get(client, mocker, showcase_setup)
+        etag = first.headers["etag"]
+        revision_before = get_showcase_revision()
+
+        db_path = showcase_setup["db_path"]
+        video_dir = db_path.parent / "videos"
+        replaced_uri = to_file_uri(str(video_dir / "video1.mp4"), {})
+
+        replacement_path = db_path.parent / "replacement.db"
+        shutil.copy(db_path, replacement_path)
+        conn = sqlite3.connect(str(replacement_path))
+        conn.execute("UPDATE videos SET title = ? WHERE path = ?", ("Replaced DB Content", replaced_uri))
+        conn.commit()
+        conn.close()
+
+        replacement_path.replace(db_path)  # 原子整份覆蓋，模擬還原備份／外部抽換
+
+        assert get_showcase_revision() == revision_before, (
+            "建替換內容的過程不該動到 process-global revision，否則量不到 db_fingerprint 單獨的效果"
+        )
+
+        second = self._get(client, mocker, showcase_setup, if_none_match=etag)
+        assert second.status_code == 200
+        titles = {v["path"]: v["title"] for v in second.json()["videos"]}
+        assert titles.get(replaced_uri) == "Replaced DB Content"
+
+    def test_external_connection_write_not_through_factory_forces_200(self, client, showcase_setup, mocker):
+        """DoD ④ 另一半：外部連線（不經過 `core.database.connection.get_connection()`
+        那個掛了 `_RevisionTrackingConnection` 的工廠——模擬別的行程/工具直接開 DB 檔）
+        做一筆真實寫入＋commit，process-global revision 不會跟著動，但 `compute_db_fingerprint()`
+        仍能從檔案 stat（commit 觸發的 checkpoint 落盤）量到差異，帶舊 ETag 再請求必回 200。
+
+        直接對 -wal 檔案寫入任意位元組不是這個情境的忠實模擬——init_db() 每次請求都會先
+        跑，開新連線時 SQLite 會判斷 -wal header 無效並整份丟棄重置（已用腳本實測：寫入
+        垃圾位元組後，下一次 init_db() 會讓 -wal 變回「不存在」，指紋跟外部寫入前逐位元組
+        相同），反而會製造假陰性，所以改用一條真實的 sqlite3 連線做合法寫入。
+        """
+        import sqlite3
+
+        first = self._get(client, mocker, showcase_setup)
+        etag = first.headers["etag"]
+        revision_before = get_showcase_revision()
+
+        conn = sqlite3.connect(str(showcase_setup["db_path"]))
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute(
+            "INSERT INTO videos (path, number) VALUES (?, ?)",
+            ("file:///ext/external-write.mp4", "EXT-001"),
+        )
+        conn.commit()
+        conn.close()
+
+        assert get_showcase_revision() == revision_before, (
+            "外部連線不走我們的連線工廠，process-global revision 本就不該被它動到"
+        )
+
+        second = self._get(client, mocker, showcase_setup, if_none_match=etag)
+        assert second.status_code == 200
+
+    def test_config_change_reflected_immediately(self, client, showcase_setup, mocker):
+        """驗收 3 ＋ mutation 點 3：少算設定投影一項會讓這支紅——來源資料夾集合改變後，
+        帶舊 ETag 請求必回 200，新設定生效（新來源夾的片可見）。
+
+        額外一支片的 DB row 刻意在 `first` 請求**之前**就寫好（擺在當前設定的資料夾
+        範圍外，`first` 天然看不到它），兩次請求之間**不**再對 DB 做任何真實寫入——
+        只改 config。這樣才能確定是「設定投影」本身讓 ETag 改變，不是夾帶一次真實
+        commit（會連動 bump process-global revision，讓這支測試在設定投影被拿掉時
+        仍意外通過）。
+        """
+        video_dir = showcase_setup["db_path"].parent / "videos"
+        extra_dir = showcase_setup["db_path"].parent / "extra_videos"
+        extra_dir.mkdir()
+        extra_uri = to_file_uri(str(extra_dir / "extra.mp4"), {})
+        VideoRepository(showcase_setup["db_path"]).upsert_batch(
+            [Video(path=extra_uri, number="EXTRA-001", title="Extra Dir Video")]
+        )
+
+        first = self._get(client, mocker, showcase_setup)
+        assert extra_uri not in {v["path"] for v in first.json()["videos"]}, (
+            "額外片此時應仍在設定資料夾範圍外，first 不該看到它"
+        )
+        etag = first.headers["etag"]
+        revision_before = get_showcase_revision()
+
+        new_config = dict(showcase_setup["config"])
+        new_config["gallery"] = dict(new_config["gallery"])
+        new_config["gallery"]["directories"] = [str(video_dir), str(extra_dir)]
+        setup_with_new_config = {**showcase_setup, "config": new_config}
+
+        second = self._get(client, mocker, setup_with_new_config, if_none_match=etag)
+        assert get_showcase_revision() == revision_before, (
+            "兩次請求之間不該有任何真實 DB 寫入，否則量不到設定投影單獨的效果"
+        )
+        assert second.status_code == 200
+        paths = {v["path"] for v in second.json()["videos"]}
+        assert extra_uri in paths
+
+    def test_thumbnail_cache_flag_change_reflected_immediately(self, client, showcase_setup, mocker):
+        """驗收 3：設定投影第三項（thumbnail_cache_enabled）改變同樣要讓舊 ETag 失效。"""
+        first = self._get(client, mocker, showcase_setup)
+        etag = first.headers["etag"]
+
+        new_config = dict(showcase_setup["config"])
+        new_config["thumbnail_cache_enabled"] = True
+        setup_with_new_config = {**showcase_setup, "config": new_config}
+
+        second = self._get(client, mocker, setup_with_new_config, if_none_match=etag)
+        assert second.status_code == 200
+        assert second.headers["etag"] != etag
+
+    def test_empty_db_response_has_no_etag_header(self, client, showcase_setup, mocker, tmp_path):
+        """驗收 5：DB 檔案不存在時的空庫早退分支，回應逐位元組與改動前相同，
+        且完全沒有 ETag header（沒有走到本次改動加入的計算路徑）。"""
+        missing_db = tmp_path / "does_not_exist.db"
+        setup = {**showcase_setup, "db_path": missing_db}
+        response = self._get(client, mocker, setup)
+        assert response.status_code == 200
+        assert response.json() == {"success": True, "videos": [], "total": 0}
+        assert "etag" not in response.headers
+
+    def test_if_none_match_multi_value_or_weak_prefix_still_matches(self, client, showcase_setup, mocker):
+        """mutation 點 4：破壞逗號拆分／`W/` 弱驗證前綴比對語意會讓這支紅——瀏覽器真實
+        送出的多值或帶弱驗證前綴的 If-None-Match，資料沒變時仍必須回 304。"""
+        first = self._get(client, mocker, showcase_setup)
+        etag = first.headers["etag"]
+
+        weak = self._get(client, mocker, showcase_setup, if_none_match=f'W/{etag}')
+        assert weak.status_code == 304
+
+        multi = self._get(client, mocker, showcase_setup, if_none_match=f'"bogus-etag-value", {etag}')
+        assert multi.status_code == 304
+
+    def test_response_shape_unchanged_besides_new_headers(self, client, showcase_setup, mocker):
+        """既有回應形狀不因加了 ETag 而改變（success/videos/total 三鍵仍在，200 分支
+        額外多 ETag／Cache-Control 兩個 header）。"""
+        response = self._get(client, mocker, showcase_setup)
+        data = response.json()
+        assert data["success"] is True
+        assert data["total"] == len(data["videos"])
+        assert response.headers["cache-control"] == "no-cache"

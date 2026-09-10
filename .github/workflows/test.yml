@@ -86,3 +86,6 @@ jobs:
 
       - name: Run function-size lint
         run: python scripts/py_function_size_lint.py
+
+      - name: Run no-raw-sqlite-connect lint
+        run: python scripts/no_raw_sqlite_connect_lint.py
