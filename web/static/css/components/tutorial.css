@@ -154,6 +154,17 @@
     font-size: 13px;
 }
 
+/* 第 3 步模擬卡（不可點／不亮 hover；窄 tooltip 允許換行） */
+.tutorial-mock-card {
+    pointer-events: none;
+    margin-top: 12px;
+}
+
+.tutorial-mock-card .nfo-update-row {
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
 /* 響應式 */
 @media (max-width: 768px) {
     .tutorial-card {
