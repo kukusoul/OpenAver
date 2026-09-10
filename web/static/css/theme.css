@@ -65,6 +65,7 @@
     /* ===== Page Layer 幾何（CD-146b-6）===== */
     --page-gutter: 1.5rem;              /* .main-content 水平留白 */
     --layer-inset: 1.5rem;              /* Layer 直接子區塊左右內距 */
+    --layer-inset-mobile: 0.75rem;      /* ≤899 手機 gutter（108-T1 12px；CD-146b-17） */
     --mobile-topbar-height: 4rem;       /* 手機頂欄真實高度（DaisyUI .navbar min-height） */
 
     /* ===== 動畫 - Fluent Design tokens 橋接 ===== */

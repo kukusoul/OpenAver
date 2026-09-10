@@ -735,6 +735,71 @@ const RULES = [
     },
   },
 
+  // CG-LAYER-01 ← 146b-T4：.showcase-grid/.actress-grid 水平內距必須真吃 var(--layer-inset)
+  // 樣板：CG-FLU-17 的「0/1/≥2 三岔拒絕歧義」＋頂層 block 掃描（FE-GUARD-14）。
+  // getComputedStyle 分不出字面 1.5rem 與 --layer-inset（同為 24px）——e2e 對此無鑑別力。
+  {
+    id: 'CG-LAYER-01',
+    file: 'pages/showcase.css',
+    kind: 'fn',
+    check(ctx) {
+      const SEL = '.showcase-grid, .actress-grid';
+      // 檔案寫成 `.showcase-grid,\n.actress-grid`（換行 co-list）；正規化空白後再比對，
+      // 避免字面 === 因換行假紅（CG-PC-07 註解已記錄同一寫法）。
+      const norm = (s) => s.replace(/\s+/g, ' ').trim();
+      const hits = ctx.blocks.filter((b) => norm(b.selector) === SEL);
+      if (hits.length === 0) {
+        ctx.fail(`CG-LAYER-01: 找不到頂層 \`${SEL}\` block（水平內距契約消失）`);
+        return;
+      }
+      if (hits.length > 1) {
+        ctx.fail(
+          `CG-LAYER-01: 找到 ${hits.length} 個頂層 \`${SEL}\` block，cascade 無法機械驗證——`
+          + `命中：${hits.map((b) => JSON.stringify(b.declarations.trim().slice(0, 60))).join(' | ')}`,
+        );
+        return;
+      }
+      const { declarations } = hits[0];
+      // 只盯 padding / padding-inline 開頭的宣告，避免誤傷 gap: 1.5rem
+      const padDecls = [...declarations.matchAll(/(?<![-\w])(padding(?:-inline)?)\s*:\s*([^;]+)/gi)];
+      if (padDecls.length === 0) {
+        ctx.fail(`CG-LAYER-01: \`${SEL}\` 缺少 padding / padding-inline 宣告`);
+        return;
+      }
+      for (const m of padDecls) {
+        const prop = m[1];
+        const val = m[2].trim();
+        // 水平分量不得殘留字面 1.5rem / 24px（padding: V H 取第二個；padding-inline 整值；
+        // padding: X 單值會同時作用於水平——同樣禁止字面）
+        if (prop.toLowerCase() === 'padding-inline') {
+          if (/^(?:1\.5rem|24px)\b/.test(val) || /\b(?:1\.5rem|24px)\b/.test(val)) {
+            if (!/var\(\s*--layer-inset\s*\)/.test(val)) {
+              ctx.fail(
+                `CG-LAYER-01: \`${SEL}\` 的 ${prop} 殘留字面水平內距 \`${val}\`——`
+                + '必須吃 var(--layer-inset)',
+              );
+            }
+          }
+        } else {
+          // padding: 可能是 1 值、2 值、3/4 值；水平 = 單值本身，或 2/3/4 值的第 2 個
+          const parts = val.trim().split(/\s+/);
+          const horizontal = parts.length === 1 ? parts[0] : parts[1];
+          if (/^(?:1\.5rem|24px)$/.test(horizontal)) {
+            ctx.fail(
+              `CG-LAYER-01: \`${SEL}\` 的 ${prop} 水平分量是字面 \`${horizontal}\`——`
+              + '必須改吃 var(--layer-inset)（不能靠與 token 數值巧合相等）',
+            );
+          }
+        }
+      }
+      if (!/var\(\s*--layer-inset\s*\)/.test(declarations)) {
+        ctx.fail(
+          `CG-LAYER-01: \`${SEL}\` 的 declarations 未出現 var(--layer-inset)`,
+        );
+      }
+    },
+  },
+
   // CG-FLU-15 ← test_rescrape_preview_mobile_stack（rescrape-modal.css @media(max-width:480px)）
   {
     id: 'CG-FLU-15',

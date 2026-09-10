@@ -31,16 +31,19 @@ PAGES = {
     "scanner": "/scanner",
 }
 
-# 每頁「工具列 / 內容」對齊錨點：兩側都是 CD-146b-7 ownership 表上的元素，
-# oracle 用 content-box 左緣（rect.left + paddingLeft）。理由見 _content_box_left。
+# 每頁「工具列 / 內容」對齊錨點：兩側都是 CD-146b-7 ownership 表上的元素。
+# 每個錨點各自的量法寫死不動態判斷（CD-146b-8-OVERRIDE / CD-146b-15 §6）：
+#   "content-box"              → 任何寬度都用 rect.left + paddingLeft（透明貼齊區塊）。
+#   "border-box-desktop-only"  → ≥1024 用 rect.left（border-box，圓角矩形的邊——浮動元素）；
+#                                 <1024 退回 content-box（浮動只在 ≥1024 成立，Rule 13b）。
 # settings 內容側 = #settingsForm（#settings-components 的直接子、四張卡外層容器；
 # 不是 #settings-components 本身——那是 .page-layer，padding-inline 永遠 0）。
 # scanner 工具列側 = .avlist-header（ownership 表刻意不吃 inset，繼承 .avlist-container）。
 ALIGN_ANCHORS = {
-    "search": (".search-bar", ".result-area"),
-    "showcase": (".showcase-toolbar", ".showcase-grid"),
-    "settings": (".settings-header", "#settingsForm"),
-    "scanner": (".avlist-header", ".avlist-container"),
+    "search": ((".search-bar", "content-box"), (".result-area", "content-box")),
+    "showcase": ((".showcase-toolbar", "border-box-desktop-only"), (".showcase-grid", "content-box")),
+    "settings": ((".settings-header", "content-box"), ("#settingsForm", "content-box")),
+    "scanner": ((".avlist-header", "content-box"), (".avlist-container", "content-box")),
 }
 
 # 每頁的 Layer 外框 selector（CD-146b-7）；T3 才掛 .page-layer，T1 預期找不到
@@ -134,6 +137,13 @@ def _content_box_left(page: Page, sel: str) -> float:
     return float(left)
 
 
+def _anchor_left(page: Page, selector: str, mode: str, width: int) -> float:
+    """依 ALIGN_ANCHORS 寫死的 mode 取左緣；width 是已知靜態斷點門檻，不是 DOM introspection。"""
+    if mode == "border-box-desktop-only" and width >= 1024:
+        return _left_edge(page, selector)
+    return _content_box_left(page, selector)
+
+
 def _backdrop_filter(page: Page, selector: str) -> str:
     loc = page.locator(selector).first
     assert loc.count() > 0, f"selector 找不到: {selector}"
@@ -193,13 +203,13 @@ def test_toolbar_content_left_edge_aligned(
     page.set_viewport_size({"width": width, "height": 900})
     assert page.evaluate("window.innerWidth") == width
 
-    toolbar_sel, content_sel = ALIGN_ANCHORS[page_name]
+    (toolbar_sel, toolbar_mode), (content_sel, content_mode) = ALIGN_ANCHORS[page_name]
     _goto(page, base_url, PAGES[page_name], PAGE_READY_SELECTORS[page_name])
     page.wait_for_selector(toolbar_sel, state="visible", timeout=15_000)
     page.wait_for_selector(content_sel, state="visible", timeout=15_000)
 
-    toolbar_left = _content_box_left(page, toolbar_sel)
-    content_left = _content_box_left(page, content_sel)
+    toolbar_left = _anchor_left(page, toolbar_sel, toolbar_mode, width)
+    content_left = _anchor_left(page, content_sel, content_mode, width)
 
     assert abs(toolbar_left - content_left) == pytest.approx(0, abs=1.0), (
         f"{page_name}@{width}: 工具列左緣 {toolbar_left} vs 內容左緣 {content_left}，"
@@ -619,6 +629,36 @@ def test_mobile_toolbar_slideout_covers_viewport_when_open(
         f"(innerWidth={page.evaluate('window.innerWidth')})"
     )
 
+    # 146b-T4 AC-6：≤480 滑出 overlay 的 z-index 必須高於 .mobile-toolbar-backdrop，
+    # 否則新 <1024 top/z-index 覆寫若未排除 ≤480，會把 toolbar 壓到 40（低於 backdrop 85），
+    # 使用者點開搜尋 icon 後點不到裡面的輸入框。
+    page.wait_for_selector(".mobile-toolbar-backdrop", state="visible", timeout=5_000)
+    stacking = page.evaluate(
+        """() => {
+            const tb = document.querySelector('.showcase-toolbar');
+            const bd = document.querySelector('.mobile-toolbar-backdrop');
+            if (!tb || !bd) return null;
+            const zTb = parseInt(getComputedStyle(tb).zIndex, 10);
+            const zBd = parseInt(getComputedStyle(bd).zIndex, 10);
+            const r = tb.getBoundingClientRect();
+            const el = document.elementFromPoint(
+                r.left + r.width / 2,
+                r.top + Math.min(24, r.height / 2),
+            );
+            return {
+                zToolbar: zTb, zBackdrop: zBd,
+                hitToolbar: !!(el && el.closest('.showcase-toolbar')),
+                hitBackdrop: !!(el && el.closest('.mobile-toolbar-backdrop')),
+            };
+        }"""
+    )
+    assert stacking is not None, "找不到 .showcase-toolbar 或 .mobile-toolbar-backdrop"
+    assert stacking["zToolbar"] > stacking["zBackdrop"], (
+        f"≤480 滑出疊層：toolbar z-index={stacking['zToolbar']} 應高於 "
+        f"backdrop z-index={stacking['zBackdrop']}（新 <1024 覆寫不得波及 ≤480）"
+    )
+    assert stacking["hitToolbar"] and not stacking["hitBackdrop"]
+
 
 # ── CD-146b-2 T8 抽驗：.showcase-footer 貼視窗底（既有已成立；不需空庫 skip） ─
 
@@ -735,7 +775,7 @@ def test_content_inset_equals_layer_inset_token(page: Page, base_url: str) -> No
 
     for name, path in PAGES.items():
         _goto(page, base_url, path, PAGE_READY_SELECTORS[name])
-        content_sel = ALIGN_ANCHORS[name][1]
+        content_sel, _mode = ALIGN_ANCHORS[name][1]
         page.wait_for_selector(content_sel, state="visible", timeout=15_000)
 
         if token is None:

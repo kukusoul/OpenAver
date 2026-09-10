@@ -258,11 +258,12 @@
         var(--fluent-shadow-16);
 }
 
-/* Rule 8 — Mobile top-navbar: glass shell + CSS-only inset (dim; CD-A8 / E1)
+/* Rule 8 — Mobile top-navbar: glass shell (dim; CD-A8 / E1；146b-T4 內縮已移除)
  * Tailwind left-0/right-0 are (0,0,0); DaisyUI .navbar width:100% is (0,1,0).
- * Our (0,2,0) dim-scoped rule overrides both via source-order.
- * left/right: 1rem + width: auto → navbar insets 1rem from viewport edges.
- * body padding-top: 3.5rem (base.html:259) is height-based, unaffected by inset.
+ * Our (0,2,0) dim-scoped rule overrides material via source-order.
+ * 146b-T4 / CD-146b-9-2：left/right:1rem + width:auto 內縮已刪——頂欄貼邊，
+ *   深淺主題 boundingRect 一致；材質（gradient/fill/border/edge/shadow）一律保留
+ *   （CD-146b-8 第 4 點：Rule 8 不在退場範圍內）。
  * Mobile shell uses mobile tokens (145deg, 0.52 fill). */
 [data-theme="dim"] .top-navbar {
     background: var(--glass-shell-mobile-gradient), var(--glass-shell-mobile-fill);
@@ -273,9 +274,6 @@
         inset 0 1px 0 var(--glass-shell-mobile-edge-top),
         inset 0 -1px 0 var(--glass-shell-mobile-edge-bottom),
         var(--fluent-shadow-8);
-    left: 1rem;
-    right: 1rem;
-    width: auto;
 }
 
 /* Rule 9 — Showcase footer: horizontal glass shell (dim)
@@ -376,6 +374,17 @@
  * not just "background/border/border-radius absent" but the full forbidden list,
  * since after this change there is no positive material check left to anchor on. */
 
+/* Rule 50 — <1024 釘頂 offset/z-index（CD-146b-8 第 5 點；下界 481px 排除 ≤480 既有滑出 overlay，
+ * showcase.css z-index:90 > backdrop:85；若寫成裸 max-width:1023.98px，本檔 source-order
+ * 會把 ≤480 的 z-index 壓到 40，見 FE-CSS-02） */
+@media (min-width: 481px) and (max-width: 1023.98px) {
+    .showcase-toolbar,
+    .settings-header {
+        top: var(--mobile-topbar-height);
+        z-index: 40;
+    }
+}
+
 /* ─────────────────────────────────────────────────────────────────────────────
  * A-T4: showcase toolbar — B floating glass bar (dim; CD-A6)
  * showcase.css:21 .showcase-toolbar (0,1,0) — source-order override via (0,2,0).
@@ -415,7 +424,7 @@
  *   grid-template-columns kept (central-column layout, theme-agnostic). */
 @media (min-width: 1024px) {
     .showcase-toolbar {
-        margin: 0 1rem;
+        margin-inline: var(--layer-inset);
         border-radius: var(--fluent-radius-xl);
         border: 1px solid var(--glass-shell-border);
         grid-template-columns: 1fr min(var(--spotlight-width), 100% - 30rem) 1fr;
