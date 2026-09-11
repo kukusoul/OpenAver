@@ -5,7 +5,7 @@
 
 /* ==================== Page Container ==================== */
 .showcase-container {
-    min-height: calc(100vh - 56px); /* 扣除 header */
+    min-height: calc(100vh - var(--mobile-topbar-height)); /* 扣除 header */
     display: flex;
     flex-direction: column;
     padding-bottom: 48px; /* 防止底部 .showcase-footer 遮擋最後一行卡片 (49a-T4 三段式 footer，高度約 40-44px) */

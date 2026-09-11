@@ -301,6 +301,55 @@ function checkLayerInsetHorizontalPadding(ctx, { id, selector }) {
   }
 }
 
+// checkContainerMinHeightUsesMobileTopbar — 146b-T8：CG-LAYER-04/05 共用檢查。
+// 為什麼抽 helper 而不是直接寫兩條：兩規則只差 id／selector／file，檢查的是同一個
+// min-height 契約（必須吃 var(--mobile-topbar-height)、不得殘留任何字面 px/rem）。
+// checkLayerInsetHorizontalPadding 管的是 padding，套不上；再抽一層把 min-height
+// 的 0/1/≥2 三岔＋字面偵測寫一次，比近逐字複製兩份清楚，也避免日後第三頁複製時
+// 又多出一份 drift。樣板＝ CG-FLU-16 的 0/1/≥2（FE-GUARD-14：單檔單 selector，
+// 不用 .find()/[0]/last/join() 聚合挑「其中一個」）。
+function checkContainerMinHeightUsesMobileTopbar(ctx, { id, selector }) {
+  const hits = ctx.blocks.filter((b) => b.selector.trim() === selector);
+  if (hits.length === 0) {
+    ctx.fail(`${id}: 找不到頂層 \`${selector}\` block（min-height 契約消失）`);
+    return;
+  }
+  if (hits.length > 1) {
+    ctx.fail(
+      `${id}: 找到 ${hits.length} 個頂層 \`${selector}\` block，cascade 無法機械驗證——`
+      + `命中：${hits.map((b) => JSON.stringify(b.declarations.trim().slice(0, 60))).join(' | ')}`,
+    );
+    return;
+  }
+  const { declarations } = hits[0];
+  const mhDecls = [...declarations.matchAll(/(?<![-\w])min-height\s*:\s*([^;]+)/gi)];
+  if (mhDecls.length === 0) {
+    ctx.fail(`${id}: \`${selector}\` 缺少 min-height 宣告`);
+    return;
+  }
+  if (mhDecls.length > 1) {
+    ctx.fail(
+      `${id}: \`${selector}\` 的 min-height 宣告出現 ${mhDecls.length} 次 — cascade 歧義`,
+    );
+    return;
+  }
+  const val = mhDecls[0][1].trim();
+  if (!/var\(\s*--mobile-topbar-height\s*\)/.test(val)) {
+    ctx.fail(
+      `${id}: \`${selector}\` 的 min-height 未吃 var(--mobile-topbar-height)，實際為 \`${val}\`——`
+      + '必須與 .main-content 手機 padding-top 共用同一個 token（146b-T8 / T2 配對）',
+    );
+  }
+  // 擋任何字面 px/rem（不限 56px）——防「手改成另一個巧合數字」；與 CG-LAYER-01
+  // 對 1.5rem/24px 巧合值的態度一致。
+  if (/\d+(?:\.\d+)?(?:px|rem)\b/.test(val)) {
+    ctx.fail(
+      `${id}: \`${selector}\` 的 min-height 殘留字面單位 \`${val}\`——`
+      + '必須改吃 var(--mobile-topbar-height)（不能靠與 token 數值巧合相等）',
+    );
+  }
+}
+
 // ── 表驅動 rule-set（fluent 家族 14 條，忠實 port test_fluent_materials_guards.py，CD-96c-2）──
 const RULES = [
   // CG-FLU-01 ← test_non_shell_backdrop_filter_dim_scoped
@@ -945,6 +994,35 @@ const RULES = [
     },
   },
 
+  // CG-LAYER-04 ← 146b-T8：.search-container 的 min-height 必須吃 var(--mobile-topbar-height)
+  // （與 T2 改成 token 的 .main-content padding-top 配對；字面 56px 是本 branch 引入的幻影捲動回歸）。
+  // 樣板：checkContainerMinHeightUsesMobileTopbar（CG-FLU-16 的 0/1/≥2；FE-GUARD-14 單檔單 selector）。
+  {
+    id: 'CG-LAYER-04',
+    file: 'pages/search.css',
+    kind: 'fn',
+    check(ctx) {
+      checkContainerMinHeightUsesMobileTopbar(ctx, {
+        id: 'CG-LAYER-04',
+        selector: '.search-container',
+      });
+    },
+  },
+
+  // CG-LAYER-05 ← 146b-T8：.showcase-container 同上（瀏覽頁那一半）。
+  // 樣板同 CG-LAYER-04；各自獨立、不跨檔聚合（刻意不抄 CG-PC-02 的 join 形狀）。
+  {
+    id: 'CG-LAYER-05',
+    file: 'pages/showcase.css',
+    kind: 'fn',
+    check(ctx) {
+      checkContainerMinHeightUsesMobileTopbar(ctx, {
+        id: 'CG-LAYER-05',
+        selector: '.showcase-container',
+      });
+    },
+  },
+
   // CG-FLU-15 ← test_rescrape_preview_mobile_stack（rescrape-modal.css @media(max-width:480px)）
   {
     id: 'CG-FLU-15',
@@ -1030,6 +1108,26 @@ const RULES = [
   },
 
   // CG-PC-02 ← TestPosterCropExtended（showcase ↔ search 雙檔 parity，_media_blocks 放鬆比對）
+  // ── 146b-T8（2026-09-11；第 2 輪訂正事實主張）重判註記：維持現狀，不改本 rule 邏輯 ──
+  // 掃描機制：extractMediaBodies(css, condRegex)（本檔 :159-176）用條件 regex 掃**全檔**
+  // 所有符合的 @media block，再 .join('\n') 成一段做 .test()——屬 FE-GUARD-14 聚合形狀。
+  // 「掃描範圍」不是單一區間，而是全檔所有命中該條件 regex 的 block。
+  // 今天 showcase.css 命中 /max-width:\s*899px/ 的 @media 完整清單（grep -n 核對）：
+  //   :366-372  (min-width: 481px) and (max-width: 899px)   ← 481–899 四欄
+  //   :387-448  (max-width: 899px)                          ← poster-crop 擴 ≤899
+  //   :595-606  (max-width: 899px)                          ← 工具列/網格手機 gutter
+  //   :1632-1640 (max-width: 899px) and (pointer: coarse)   ← touch footer 反轉
+  // 事實訂正：146b-T4（f0b53db9 / CD-146b-17）**確實改過**其中一個命中 block
+  // （:596-599 `.showcase-toolbar/.showcase-grid/.actress-grid { padding-inline:
+  // var(--layer-inset-mobile) }`）。search.css 那半（:860-935 附近的斷點段）經查無此問題。
+  // 為什麼今天沒有假綠：本 rule 對聚合字串做的都是「必須包含 X」的正向存在性斷言——
+  // 混進無關 block 不會讓它變綠、也不會變紅；T4 那次改動也沒有觸發假綠。
+  // 維持現狀：依「守衛的退場」，答案仍是「我們得再收斂一次」（工程成本，非使用者損失），
+  // 且它既沒擋住我們、也沒有要跟著改——不修。
+  // 下次重判的真正觸發條件（語意，不用行號——行號會漂移）：
+  //   (a) 本 rule 的任何一個斷言從正向存在性改成需要判斷最終 cascade 勝出者；或
+  //   (b) 有人回報它該紅卻沒紅。
+  // 那時才是重判的當下；不要只因「改到某個行號附近」就自動重寫本 rule。
   {
     id: 'CG-PC-02',
     file: 'pages/showcase.css',

@@ -3,7 +3,7 @@
 
 /* 主要容器 */
 .search-container {
-    min-height: calc(100vh - 56px);
+    min-height: calc(100vh - var(--mobile-topbar-height));
     display: flex;
     flex-direction: column;
 }
