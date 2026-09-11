@@ -4915,6 +4915,14 @@ const RULES = [
 
   { file: 'web/templates/search.html', kind: 'required-string', pattern: 'favoriteScannerLinked === false', note: '[TestSearchEmptyFavoriteLinkedStrict] CD-146a-16／FE-JS-01：三態嚴格比較不得精簡成 !favoriteScannerLinked' },
 
+  // ---- [pre-merge / grok-4.6 branch review P3 第 2 條] 空狀態的設定相依列必須等 appConfig 載入 ----
+  // appConfig 初值是 null，而 Alpine 不 await async init()：第一幀 favoriteConfigured() 回 false、
+  // buildNamingPreview() 退回預設格式 ⇒ 已設最愛的人先被叫去「指定一個資料夾」、改過檔名格式的人
+  // 先看到別人的範例。實測本機 4/4 冷載 /api/config 都在 FCP 前 10–41ms 到（看不到），
+  // 但那是本機餘裕；靜態資源已快取而 API 慢時先後會反過來。
+  { file: 'web/templates/search.html', kind: 'required-string', pattern: 'appConfig !== null && !favoriteConfigured()', note: '[pre-merge] 空狀態「未設定最愛」那一列必須等 appConfig 載入（否則已設定的人先看到叫他去設定）' },
+  { file: 'web/templates/search.html', kind: 'required-string', pattern: 'x-show="appConfig !== null"', note: '[pre-merge] 空狀態命名範例那一列必須等 appConfig 載入（否則先秀預設格式，不是使用者自己的）' },
+
   // ---- [TASK-146a-T5] errorKind snapshot/restore pairing ----
   {
     file: 'web/static/js/pages/search/state/search-flow.js', kind: 'paired-string',

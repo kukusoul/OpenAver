@@ -668,7 +668,7 @@
 
 /* === RWD: Search Card 響應式 === */
 
-/* <= 1024px：垂直排列（封面上方 + info 下方） */
+/* < 1024px：垂直排列（封面上方 + info 下方）。146b-T2 起字面為 1023.98px，與側欄 min-width:1024 互斥 */
 @media (max-width: 1023.98px) {
     .search-container .av-card-full {
         flex-direction: column;
@@ -704,12 +704,12 @@
     #resultCard > .av-card-full { overflow: visible; }
     .search-container   { height: auto; overflow-y: auto; }
 
-    /* US1-75b：≤1024px 全寬單欄時，雙欄 metadata 回單欄（spec §US1 L97/L113 驗收強制，CD-75b-2） */
+    /* US1-75b：<1024px 全寬單欄時，雙欄 metadata 回單欄（spec §US1 L97/L113 驗收強制，CD-75b-2） */
     .search-container .av-card-full-body .info-grid-pair {
         grid-template-columns: 1fr;
     }
 
-    /* 92a-T5: ≤1024px 整頁捲動下大卡撐開自然高、把批次整理鈕（file mode）推到 fold 下（真缺口）。
+    /* 92a-T5: <1024px 整頁捲動下大卡撐開自然高、把批次整理鈕（file mode）推到 fold 下（真缺口）。
        把同一顆 #btnScrapeAll 的宿主 .file-list-section 於 file mode 錨定 viewport 底（position:fixed 底部 tray）。
        CDP 核實：position:sticky 無法把 below-fold 元素拉上 viewport（sticky 只在捲過時 pin，不上拉），
        故用 fixed 才真滿足 G-B1「不需捲過大卡即可見」（plan CD-92a-4 已授權 position:fixed/貼底）。

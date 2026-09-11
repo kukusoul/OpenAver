@@ -833,8 +833,29 @@ const RULES = [
         ['transform', /(?<![-\w])transform\s*:/i],
         ['contain', /(?<![-\w])contain\s*:/i],
       ];
+      // pre-merge（grok-4.6 branch review P3 第 3 條）：契約的另一半是「padding-inline 恆 0」，
+      // 而**沒有任何機械閘守得到它**——對齊 e2e 比的是兩個「子元素」的左緣，父層 .page-layer
+      // 被加上 padding-inline 時兩個子元素一起內縮，相對差仍是 0（FE-CSS-21 形狀 2 的鏡像）；
+      // test_layer_itself_no_blur 只讀 backdrop-filter。這裡補上：水平 padding 只准是 0。
+      const HORIZ_PAD = /(?<![-\w])padding(?:-inline(?:-start|-end)?|-left|-right)?\s*:\s*([^;]+)/gi;
+      const isZero = (v) => /^0(?:px|rem|em|%)?$/i.test(v.trim());
       for (const { selector, declarations } of flattenRuleBlocks(ctx.blocks)) {
         if (!selector.includes('.page-layer')) continue;
+        for (const m of [...declarations.matchAll(HORIZ_PAD)]) {
+          const parts = m[1].trim().split(/\s+/);
+          // padding: A            → 水平 = A
+          // padding: A B [C [D]]  → 水平 = B
+          // padding-inline/-left/-right: A → 水平 = A
+          const horizontal = /(?<![-\w])padding\s*:/i.test(m[0]) && parts.length > 1 ? parts[1] : parts[0];
+          if (!isZero(horizontal)) {
+            ctx.fail(
+              `CG-FLU-17: ${selector} 的水平內距是 \`${horizontal}\` — .page-layer 的契約是 `
+              + 'padding-inline 恆 0，--layer-inset 只出現在**直接子區塊**（CD-146b-7）。'
+              + '把內距加在 Layer 自己身上，四頁內容會一起再內縮，而工具列與內容仍然對齊'
+              + '⇒ 對齊 e2e 與其餘守衛全綠，切頁看起來「整體變窄」卻查不到是哪條規則。',
+            );
+          }
+        }
         for (const [name, re] of FORBIDDEN) {
           if (re.test(declarations)) {
             ctx.fail(
@@ -991,6 +1012,40 @@ const RULES = [
         id: 'CG-LAYER-03',
         selector: ':is(.settings-header, .avlist-header)',
       });
+    },
+  },
+
+  // CG-LAYER-06/07/08 ← pre-merge（grok-4.6 branch review P3 第 1 條）：
+  // 對齊測試比的是「chrome 左緣 vs 內容左緣」的**差**。只要兩側的字面都恰好等於 token 值，
+  // 即使兩側都沒有真的吃 var()，差仍然是 0 ⇒ e2e 照樣綠（FE-CSS-21 形狀 1）。
+  // T4-T7 只補了 chrome 側（CG-LAYER-02 .search-bar、CG-LAYER-03 兩個 header）與瀏覽頁的
+  // 內容側（CG-LAYER-01 .showcase-grid），**其餘三頁的內容側沒有守衛**——本輪補齊。
+  // 樣板一律 checkLayerInsetHorizontalPadding（0/1/≥2 三岔＝ CG-FLU-16，FE-GUARD-14）。
+  // ⚠️ 說明頁 .help-cards 刻意不在此列：它的水平內距在 base 是 1rem、只有 @media ≥1024
+  // 才是 var(--layer-inset)（CD-146b-20 手機內距不強制統一），而本 helper 只掃頂層 block。
+  // 那一格是已接受的 residual，不是遺漏。
+  {
+    id: 'CG-LAYER-06',
+    file: 'pages/search.css',
+    kind: 'fn',
+    check(ctx) {
+      checkLayerInsetHorizontalPadding(ctx, { id: 'CG-LAYER-06', selector: '.result-area' });
+    },
+  },
+  {
+    id: 'CG-LAYER-07',
+    file: 'pages/settings.css',
+    kind: 'fn',
+    check(ctx) {
+      checkLayerInsetHorizontalPadding(ctx, { id: 'CG-LAYER-07', selector: '#settingsForm' });
+    },
+  },
+  {
+    id: 'CG-LAYER-08',
+    file: 'pages/scanner.css',
+    kind: 'fn',
+    check(ctx) {
+      checkLayerInsetHorizontalPadding(ctx, { id: 'CG-LAYER-08', selector: '.avlist-container' });
     },
   },
 

@@ -544,7 +544,13 @@
             <div class="empty-explainer">
                 <p class="empty-explainer-line">{{ t('search.empty.explain_add') }}</p>
 
-                <p class="empty-explainer-line" x-show="!favoriteConfigured()">
+                {# appConfig 尚未載入時（第一幀，`appConfig === null`）兩個最愛列都不顯示：
+                   favoriteConfigured() 對 null 回 false，若不加這個條件，**已經設過最愛資料夾**的人
+                   會先看到「指定一個資料夾」再跳成真實路徑——畫面叫他去做一件他已經做完的事。
+                   本機 4/4 冷載實測 /api/config 都在 first-contentful-paint 之前 10–41ms 到達
+                   （＝這一幀通常不會被畫出來），但那是本機的餘裕；NAS ＋ 靜態資源已快取時
+                   兩者的先後會反過來。代價只是慢載時那一列晚一幀出現，不會顯示錯的指示。 #}
+                <p class="empty-explainer-line" x-show="appConfig !== null && !favoriteConfigured()">
                     <i class="bi bi-star-fill explainer-icon explainer-icon-favorite" aria-hidden="true"></i>
                     {{ t('search.empty.explain_favorite_unset') }}
                 </p>
@@ -559,7 +565,11 @@
                     {{ t('search.empty.explain_auto_organize') }}
                 </p>
 
-                <p class="empty-explainer-line">
+                {# 同上：appConfig 尚未載入時整列不顯示。這一列的 <code> 是「用你當下的命名設定算出來的
+                   範例」，appConfig 為 null 時 buildNamingPreview() 會退回**預設格式**（實測第一幀是
+                   `番號 標題.mp4`，載入後才變成使用者真正的 `女優/[番號][片商] 女優-標題後綴.mp4`）——
+                   秀一個不是他設定的範例，比晚一幀出現更糟，因為這一列的存在理由就是「秀出你的規則」。 #}
+                <p class="empty-explainer-line" x-show="appConfig !== null">
                     {{ t('search.empty.explain_naming_prefix') }}<code x-text="namingPreviewExample()"></code>
                     <span x-show="appConfig?.translate?.enabled">{{ t('search.empty.explain_naming_translate_suffix') }}</span>
                     <a href="/settings#filenameFormat">{{ t('search.empty.explain_naming_link') }}</a>
