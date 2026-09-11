@@ -926,14 +926,22 @@
  *   tying Rule 10/11 — appended later → source order wins.
  * ───────────────────────────────────────────────────────────────────────────── */
 
-/* Rule 46 — CD-C2 / 77d-T1: flush-left padding fix (all widths)
+/* Rule 46 — CD-C2 / 77d-T1 / 146b-T7（CD-146b-18）：flush-left padding fix (all widths)
  * padding shorthand fully overrides Rule 10/11 `padding: 1rem 0` (horizontal 0).
  * 77d-T1: theme-agnostic (was [data-theme="dim"]). Padding carries no theme value diff
  *   → unscoped so light headers also get flush-left padding. (0,2,0)→(0,1,0), tying
  *   settings.css:211 / scanner.css:13 (0,1,0) → source order wins. */
 :is(.settings-header, .avlist-header) {
-    padding: 1rem 1.5rem;
+    padding: 1rem var(--layer-inset);
 }
+/* ⚠️ Rule 46 這個 24px 對兩個選擇器是兩種不同語意，只是數值恰好相同、耦合在同一個 token 上：
+ *   - .settings-header：24px 就是 Layer 內距——它是 .page-layer 的直接子層（CD-146b-7
+ *     ownership 表），這個 padding 直接對應「內容左緣要落在哪條線」。
+ *   - .avlist-header：它是 .avlist-container 的孫層，對齊基準由 .avlist-container 自己
+ *     的 padding-inline 決定（見 scanner.css）；這裡的 24px 只是頁首方塊自己的
+ *     內部文字留白，不構成任何跨頁對齊契約，數值相同純屬巧合（TASK-146b-T7.md 現況分析
+ *     第 3 節）。兩者耦合在同一個 token 值今天無害（一起變也不影響對齊），但不要把它們
+ *     讀成有語意關聯——改 .avlist-header 這半不會動到掃描頁的對齊線。 */
 
 /* Rule 47 — CD-C2 / 77d-T1: B floating treatment (desktop ≥1024px)
  * 4-side border overrides Rule 10/11 border-bottom-color via source order. NO margin

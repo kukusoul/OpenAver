@@ -253,6 +253,54 @@ const NON_SHELL_ROLE_MARKERS = {
   'media-frame': '.similar-slot',
 };
 
+// checkLayerInsetHorizontalPadding — 146b-T7：抽出 CG-LAYER-01/02 的共用檢查邏輯，
+// 只給新規則用（CG-LAYER-01/02 本身不retrofit，理由見 TASK-146b-T7.md 現況分析第 6 節）。
+// 樣板＝ CG-LAYER-01/02 原始邏輯逐字保留，只把 id/selector 抽成參數。
+// 0/1/≥2 三岔樣板＝ CG-FLU-16（FE-GUARD-14）。
+function checkLayerInsetHorizontalPadding(ctx, { id, selector }) {
+  const norm = (s) => s.replace(/\s+/g, ' ').trim();
+  const hits = ctx.blocks.filter((b) => norm(b.selector) === selector);
+  if (hits.length === 0) {
+    ctx.fail(`${id}: 找不到頂層 \`${selector}\` block（水平內距契約消失）`);
+    return;
+  }
+  if (hits.length > 1) {
+    ctx.fail(
+      `${id}: 找到 ${hits.length} 個頂層 \`${selector}\` block，cascade 無法機械驗證——`
+      + `命中：${hits.map((b) => JSON.stringify(b.declarations.trim().slice(0, 60))).join(' | ')}`,
+    );
+    return;
+  }
+  const { declarations } = hits[0];
+  const padDecls = [...declarations.matchAll(/(?<![-\w])(padding(?:-inline)?)\s*:\s*([^;]+)/gi)];
+  if (padDecls.length === 0) {
+    ctx.fail(`${id}: \`${selector}\` 缺少 padding / padding-inline 宣告`);
+    return;
+  }
+  for (const m of padDecls) {
+    const prop = m[1];
+    const val = m[2].trim();
+    if (prop.toLowerCase() === 'padding-inline') {
+      if ((/^(?:1\.5rem|24px)\b/.test(val) || /\b(?:1\.5rem|24px)\b/.test(val))
+          && !/var\(\s*--layer-inset\s*\)/.test(val)) {
+        ctx.fail(`${id}: \`${selector}\` 的 ${prop} 殘留字面水平內距 \`${val}\`——必須吃 var(--layer-inset)`);
+      }
+    } else {
+      const parts = val.trim().split(/\s+/);
+      const horizontal = parts.length === 1 ? parts[0] : parts[1];
+      if (/^(?:1\.5rem|24px)$/.test(horizontal)) {
+        ctx.fail(
+          `${id}: \`${selector}\` 的 ${prop} 水平分量是字面 \`${horizontal}\`——`
+          + '必須改吃 var(--layer-inset)（不能靠與 token 數值巧合相等）',
+        );
+      }
+    }
+  }
+  if (!/var\(\s*--layer-inset\s*\)/.test(declarations)) {
+    ctx.fail(`${id}: \`${selector}\` 的 declarations 未出現 var(--layer-inset)`);
+  }
+}
+
 // ── 表驅動 rule-set（fluent 家族 14 條，忠實 port test_fluent_materials_guards.py，CD-96c-2）──
 const RULES = [
   // CG-FLU-01 ← test_non_shell_backdrop_filter_dim_scoped
@@ -490,6 +538,12 @@ const RULES = [
   },
 
   // CG-FLU-10 ← 146b-T3b：Rule 46/47 回復（CD-146b-15/16），11a/11b 改 exact-selector 0/1/≥2
+  // 146b-T7：11a 對帳從字面 `1rem 1.5rem` 改成 `1rem var(--layer-inset)`（不變式沒變，
+  // 表達方式變了——水平內距仍是 24px，只是改由 token 表達）。這是刻意收緊，不是放寬：
+  // 舊字面 `1rem 1.5rem` 在本條與 CG-LAYER-03 會同時轉紅（兩條訊息都會出現），那是刻意的
+  // 雙重保險，不是重複告警的 bug——「字面值巧合等於 token」正是這支 branch 要擋的事。
+  // 維護耦合：本條現在寫死了 `--layer-inset` 這個 token 名字；日後若重新命名，CG-FLU-10
+  // 與 CG-LAYER-03 兩處都要跟著改，否則會變成「改名後守衛靜默通過」。
   {
     id: 'CG-FLU-10',
     file: 'components/fluent-materials.css',
@@ -512,8 +566,8 @@ const RULES = [
         if (selector.includes('[data-theme="dim"]')) {
           ctx.fail(`CG-FLU-10: padding rule must be theme-agnostic — ${selector}`);
         }
-        if (!/padding\s*:\s*1rem\s+1\.5rem/.test(declarations)) {
-          ctx.fail('CG-FLU-10: padding should be 1rem 1.5rem (flush-left fix)');
+        if (!/padding\s*:\s*1rem\s+var\(\s*--layer-inset\s*\)/.test(declarations)) {
+          ctx.fail('CG-FLU-10: padding should be 1rem var(--layer-inset) (flush-left fix)');
         }
       }
 
@@ -873,6 +927,21 @@ const RULES = [
           `CG-LAYER-02: \`${SEL}\` 的 declarations 未出現 var(--layer-inset)`,
         );
       }
+    },
+  },
+
+  // CG-LAYER-03 ← 146b-T7：Rule 46（.settings-header/.avlist-header）水平內距必須真吃
+  // var(--layer-inset)。樣板：checkLayerInsetHorizontalPadding（CG-LAYER-01/02 抽出；
+  // 0/1/≥2 三岔＝ CG-FLU-16）。
+  {
+    id: 'CG-LAYER-03',
+    file: 'components/fluent-materials.css',
+    kind: 'fn',
+    check(ctx) {
+      checkLayerInsetHorizontalPadding(ctx, {
+        id: 'CG-LAYER-03',
+        selector: ':is(.settings-header, .avlist-header)',
+      });
     },
   },
 

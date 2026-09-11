@@ -38,13 +38,24 @@ PAGES = {
 #                                 <1024 退回 content-box（浮動只在 ≥1024 成立，Rule 13b）。
 # settings 內容側 = #settingsForm（#settings-components 的直接子、四張卡外層容器；
 # 不是 #settings-components 本身——那是 .page-layer，padding-inline 永遠 0）。
-# scanner 工具列側 = .avlist-header（ownership 表刻意不吃 inset，繼承 .avlist-container）。
+# scanner 工具列側 = .avlist-header，量法 "border-box"（CD-146b-21；鑑別力邊界見下方）。
 ALIGN_ANCHORS = {
     "search": ((".search-bar", "border-box-desktop-only"), (".result-area", "content-box")),
     "showcase": ((".showcase-toolbar", "border-box-desktop-only"), (".showcase-grid", "content-box")),
     "settings": ((".settings-header", "content-box"), ("#settingsForm", "content-box")),
-    "scanner": ((".avlist-header", "content-box"), (".avlist-container", "content-box")),
+    "scanner": ((".avlist-header", "border-box"), (".avlist-container", "content-box")),
 }
+# "border-box" → 任何寬度都用 rect.left（無條件 border-box；CD-146b-21）。
+# Rule 47 的設計註解自己就寫著「NO margin (C-夾4: column-width alignment for centered
+# 900/800px columns)」——頁首從設計上就沒有 margin，這不是巧合，是 77d 當初刻意的
+# 「置中欄寬度對齊」決策：頁首與卡片都是 .avlist-container 的直接子層、零自身水平 margin，
+# 所以 border-box 左緣天生重合。
+# ⚠️ 這條斷言的鑑別力邊界：.avlist-header 是 block 子元素且無 margin，它的 border-box
+# 左緣在 block layout 下本來就等於父容器（.avlist-container）的內容邊——所以這條斷言
+# 只擋得住「有人給頁首加了水平 margin」，擋不住「Rule 46 的 padding 是不是真的吃
+# var(--layer-inset)」（那件事字面值與 token 值恰好都是 24px，e2e 對此無鑑別力，見
+# CG-LAYER-03）。掃描頁真正吃 token 的不變式由 test_content_inset_equals_layer_inset_token
+# （驗 .avlist-container 吃 --layer-inset）負責，兩條合起來才是完整覆蓋，缺一不可。
 
 # 每頁的 Layer 外框 selector（CD-146b-7）；T3 才掛 .page-layer，T1 預期找不到
 LAYER_SELECTORS = {
@@ -140,6 +151,8 @@ def _content_box_left(page: Page, sel: str) -> float:
 def _anchor_left(page: Page, selector: str, mode: str, width: int) -> float:
     """依 ALIGN_ANCHORS 寫死的 mode 取左緣；width 是已知靜態斷點門檻，不是 DOM introspection。"""
     if mode == "border-box-desktop-only" and width >= 1024:
+        return _left_edge(page, selector)
+    if mode == "border-box":
         return _left_edge(page, selector)
     return _content_box_left(page, selector)
 
