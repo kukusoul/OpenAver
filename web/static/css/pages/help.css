@@ -27,6 +27,12 @@
     }
 }
 
+/* 說明文字行長上限（owner：說明文字要適合閱讀；材質／容器寬不動） */
+.help-card p,
+.help-card li {
+    max-width: 75ch;
+}
+
 /* ========== AI 整合入口 — Terminal box（固定深色，不隨 theme 切換）========== */
 
 .hero-terminal {

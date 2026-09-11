@@ -442,6 +442,52 @@ def test_sticky_toolbar_stops_below_mobile_topbar(
     )
 
 
+def test_settings_sticky_header_stops_below_mobile_topbar_at_390(
+    page: Page, base_url: str
+) -> None:
+    """CD-146b-22：設定頁 ≤480 也必須讓位給手機頂欄。
+
+    不得塞進 test_sticky_toolbar_stops_below_mobile_topbar 的 parametrize：
+    瀏覽頁在 ≤480 走滑出 overlay（預設收合、非 sticky），共用 oracle 會對 showcase 失效。
+    """
+    width = MOBILE
+    selector = STICKY_PAGES["settings"]
+
+    page.set_viewport_size({"width": width, "height": 900})
+    assert page.evaluate("window.innerWidth") == width
+    _goto(page, base_url, PAGES["settings"], selector)
+    page.wait_for_selector(".top-navbar", state="visible", timeout=15_000)
+
+    _scroll_window(page, 500)
+
+    topbar_box = page.locator(".top-navbar").first.bounding_box()
+    toolbar_box = page.locator(selector).first.bounding_box()
+    assert topbar_box is not None and toolbar_box is not None
+
+    expected_top = topbar_box["y"] + topbar_box["height"]
+    assert toolbar_box["y"] == pytest.approx(expected_top, abs=1.0), (
+        f"settings@{width} 捲動後 {selector}.top={toolbar_box['y']} vs "
+        f"頂欄 bottom={expected_top}"
+    )
+
+    menu_btn = page.locator(".top-navbar .btn-square").first
+    btn_box = menu_btn.bounding_box()
+    assert btn_box is not None
+    cx = btn_box["x"] + btn_box["width"] / 2
+    cy = btn_box["y"] + btn_box["height"] / 2
+    hit_is_btn = page.evaluate(
+        """([x, y]) => {
+            const el = document.elementFromPoint(x, y);
+            const btn = document.querySelector('.top-navbar .btn-square');
+            return el === btn || (btn && btn.contains(el));
+        }""",
+        [cx, cy],
+    )
+    assert hit_is_btn, (
+        f"settings@{width}: 選單鈕座標被頁首攔截（elementFromPoint 沒命中選單鈕）"
+    )
+
+
 # ── spec §3 第 10 條：掃描頁閱讀欄 800px 不變、設定頁滿版 ─────────────────
 
 def test_scanner_reading_column_width_unchanged(page: Page, base_url: str) -> None:

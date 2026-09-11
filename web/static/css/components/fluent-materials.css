@@ -374,11 +374,20 @@
  * not just "background/border/border-radius absent" but the full forbidden list,
  * since after this change there is no positive material check left to anchor on. */
 
-/* Rule 50 — <1024 釘頂 offset/z-index（CD-146b-8 第 5 點；下界 481px 排除 ≤480 既有滑出 overlay，
+/* Rule 50 — 瀏覽頁 <1024 釘頂 offset/z-index（CD-146b-8 第 5 點；下界 481px 排除 ≤480 既有滑出 overlay，
  * showcase.css z-index:90 > backdrop:85；若寫成裸 max-width:1023.98px，本檔 source-order
- * 會把 ≤480 的 z-index 壓到 40，見 FE-CSS-02） */
+ * 會把 ≤480 的 z-index 壓到 40，見 FE-CSS-02）
+ * CD-146b-22：.settings-header 拆到 Rule 51（設定頁無 ≤480 滑出，481 下界對它無意義） */
 @media (min-width: 481px) and (max-width: 1023.98px) {
-    .showcase-toolbar,
+    .showcase-toolbar {
+        top: var(--mobile-topbar-height);
+        z-index: 40;
+    }
+}
+
+/* Rule 51 — 設定頁首 <1024 釘頂 offset/z-index（CD-146b-22）
+ * 設定頁沒有 ≤480 滑出 overlay，全段 <1024 一律讓位給手機頂欄。 */
+@media (max-width: 1023.98px) {
     .settings-header {
         top: var(--mobile-topbar-height);
         z-index: 40;
