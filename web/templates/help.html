@@ -7,9 +7,10 @@
 {% endblock %}
 
 {% block content %}
-<div class="help-container container mx-auto px-4 max-w-screen-2xl" x-data="helpPage"
+<div class="help-container container mx-auto max-w-screen-2xl page-layer" x-data="helpPage"
      data-is-desktop="{{ 'true' if is_desktop else 'false' }}"
      data-auto-check-update="{{ 'true' if config.get('general', {}).get('auto_check_update', True) else 'false' }}">
+    <div class="help-cards">
     <!-- Hero Card — 置頂區 -->
     <div class="card help-card fluent-rounded-xl mb-4">
         <div class="card-body flex flex-col lg:flex-row">
@@ -769,6 +770,7 @@
                 <li>{{ t('help.troubleshooting.translate_openai') | safe }}</li>
             </ul>
         </div>
+    </div>
     </div>
     {% if is_desktop %}
     <dialog class="modal fluent-modal"

@@ -811,6 +811,35 @@ def test_content_inset_equals_layer_inset_token(page: Page, base_url: str) -> No
                     f"vs --layer-inset {token['raw']!r}={expected}px"
                 )
 
+    # 146b-T9：說明頁不在 PAGES（沒有工具列，ALIGN_ANCHORS 的兩錨點結構不適用）——
+    # 併入同一組 mismatches／measured／token，內容錨點是 .help-cards（CD-146b-7
+    # ownership 的說明頁等價：.page-layer 直接子區塊，自己吃一次 --layer-inset）。
+    _goto(page, base_url, "/help", ".help-container")
+    assert page.locator(".help-container.page-layer").count() == 1, (
+        "help: 找不到 .help-container.page-layer（CD-146b-12 要求的 class 未掛上）"
+    )
+    help_pads = page.evaluate(
+        """(sel) => {
+            const el = document.querySelector(sel);
+            if (!el) return null;
+            const cs = getComputedStyle(el);
+            return {
+                paddingLeft: parseFloat(cs.paddingLeft) || 0,
+                paddingRight: parseFloat(cs.paddingRight) || 0,
+            };
+        }""",
+        ".help-cards",
+    )
+    assert help_pads is not None, "help: 找不到 .help-cards"
+    measured["help"] = {"sel": ".help-cards", **help_pads}
+    for side in ("paddingLeft", "paddingRight"):
+        val = float(help_pads[side])
+        if abs(val - expected) > 1.0:
+            mismatches.append(
+                f"help .help-cards {side}={val} "
+                f"vs --layer-inset {token['raw']!r}={expected}px"
+            )
+
     assert not mismatches, (
         f"內容側水平內距尚未吃 --layer-inset（T4-T7 才轉綠）：{mismatches}；"
         f"量測={measured}；token={token}"
