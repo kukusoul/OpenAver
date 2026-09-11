@@ -7,7 +7,7 @@
 {% endblock %}
 
 {% block content %}
-<div id="settings-components" x-data="settings" data-lan-ip="{{ lan_ip or '' }}">
+<div id="settings-components" class="page-layer" x-data="settings" data-lan-ip="{{ lan_ip or '' }}">
     <div class="settings-header">
         <!-- 81b-T1: 左 cluster 包標題 + 膠囊 + 連線 inline 區塊；flex 樣式由 T2 補 -->
         <div class="settings-header-left">

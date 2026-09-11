@@ -11,6 +11,7 @@ import { rescrapeState }           from '@/shared/state-rescrape.js';
 import { browseDirState }          from '@/shared/state-browse-dir.js';
 import { toastState }              from '@/shared/state-toast.js';
 import { searchStateWishlist }    from '@/search/state/wishlist.js';
+import { searchStateEmptyExplainer } from '@/search/state/empty-explainer.js';
 import { mergeState }              from '@/shared/merge-state.js';
 
 let _dragTimeoutHandle = null;
@@ -35,6 +36,7 @@ export function searchPage() {
         browseDirState(),
         toastState(),
         searchStateWishlist(),
+        searchStateEmptyExplainer(),
         {
             // ===== 頁面組裝層 lifecycle（從 state/index.js 搬移）=====
             _armDragHeartbeat(e) {

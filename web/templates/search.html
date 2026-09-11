@@ -9,7 +9,7 @@
 {% endblock %}
 
 {% block content %}
-<div class="search-container ds-page" x-data="searchPage" @keydown.window="handleKeydown($event)" @wheel="handleWheel($event)">
+<div class="search-container ds-page page-layer" x-data="searchPage" @keydown.window="handleKeydown($event)" @wheel="handleWheel($event)">
     <!-- 拖拽覆蓋層（必須在 x-data scope 內） -->
     <div class="drag-overlay" id="dragOverlay" :class="{ active: dragActive }">
         <div class="drag-overlay-content">
@@ -542,18 +542,39 @@
             </div>
             <small class="state-page-hint">{{ t('search.empty.drag_hint') }}</small>
             <div class="empty-explainer">
-                <p class="empty-explainer-line">{{ t('search.empty.explainer_lookup') }}</p>
-                {# 92a-T4: explainer_organize 兩整理標籤旁內嵌對應 icon（單片 file-earmark-plus / 批次 folder-plus，success 綠）。
-                   用 scrape_nfo/scrape_all 當 replace needle → 語言無關、四語系文字全保留、不新增 i18n key。內容全來自受控 i18n（|safe 安全，比照 :957）。 #}
-                {% set _single_label = t('search.filelist.scrape_nfo') %}
-                {% set _batch_label = t('search.filelist.scrape_all') %}
-                <p class="empty-explainer-line">{{
-                    t('search.empty.explainer_organize')
-                    | replace(_single_label, _single_label ~ ' <i class="bi bi-file-earmark-plus explainer-icon" aria-hidden="true"></i>')
-                    | replace(_batch_label, _batch_label ~ ' <i class="bi bi-folder-plus explainer-icon" aria-hidden="true"></i>')
-                    | safe
-                }}</p>
-                <p class="empty-explainer-line">{{ t('search.empty.explainer_partial') }}</p>
+                <p class="empty-explainer-line">{{ t('search.empty.explain_add') }}</p>
+
+                {# appConfig 尚未載入時（第一幀，`appConfig === null`）兩個最愛列都不顯示：
+                   favoriteConfigured() 對 null 回 false，若不加這個條件，**已經設過最愛資料夾**的人
+                   會先看到「指定一個資料夾」再跳成真實路徑——畫面叫他去做一件他已經做完的事。
+                   本機 4/4 冷載實測 /api/config 都在 first-contentful-paint 之前 10–41ms 到達
+                   （＝這一幀通常不會被畫出來），但那是本機的餘裕；NAS ＋ 靜態資源已快取時
+                   兩者的先後會反過來。代價只是慢載時那一列晚一幀出現，不會顯示錯的指示。 #}
+                <p class="empty-explainer-line" x-show="appConfig !== null && !favoriteConfigured()">
+                    <i class="bi bi-star-fill explainer-icon explainer-icon-favorite" aria-hidden="true"></i>
+                    {{ t('search.empty.explain_favorite_unset') }}
+                </p>
+                <p class="empty-explainer-line" x-show="favoriteConfigured()">
+                    <i class="bi bi-star-fill explainer-icon explainer-icon-favorite" aria-hidden="true"></i>
+                    {{ t('search.empty.explain_favorite_set_prefix') }}<code x-text="favoritePathDisplay()"></code>{{ t('search.empty.explain_favorite_set_suffix') }}
+                    <span class="text-warning" x-show="favoriteScannerLinked === false">{{ t('search.empty.explain_favorite_untracked') }}</span>
+                </p>
+
+                <p class="empty-explainer-line">
+                    <i class="bi bi-clock-history explainer-icon" aria-hidden="true"></i>
+                    {{ t('search.empty.explain_auto_organize') }}
+                </p>
+
+                {# 這一列吃**兩個各自獨立載入**的輸入（appConfig ＋ formatVariables，CD-146a-17 失敗隔離），
+                   所以「準備好了沒」問 empty-explainer.js 的 namingPreviewReady()，不要在這裡列舉輸入——
+                   樣板列舉過一次就漏過一次（`fc9667bc` 只擋了 appConfig，CodeRabbit 抓到 formatVariables）。
+                   未 ready 時**整列隱藏**：前綴是「整理成：」，後面接空白或大括號都像在說
+                   「你的檔案會被改成這樣」，比晚一幀出現糟得多。 #}
+                <p class="empty-explainer-line" x-show="namingPreviewReady()">
+                    {{ t('search.empty.explain_naming_prefix') }}<code x-text="namingPreviewExample()"></code>
+                    <span x-show="appConfig?.translate?.enabled">{{ t('search.empty.explain_naming_translate_suffix') }}</span>
+                    <a href="/settings#filenameFormat">{{ t('search.empty.explain_naming_link') }}</a>
+                </p>
             </div>
         </div>
 
@@ -591,6 +612,9 @@
                 extra_classes='state-page-action',
                 attrs='@click="openRescrape(null, \'search\'); rescrapeNumber = (currentQuery || \'\').trim()"'
             ) }}
+            <p class="empty-explainer-line"
+               x-show="pageState === 'error' && errorKind === 'no_data' && (currentMode === 'exact' || currentMode === 'prefix')"
+               x-cloak>{{ t('search.empty.explainer_partial') }}</p>
             <!-- 多檔案模式導航 -->
             <div class="error-nav" x-show="fileList.length > 1" id="errorNav">
                 <button class="btn btn-sm btn-outline btn-neutral"

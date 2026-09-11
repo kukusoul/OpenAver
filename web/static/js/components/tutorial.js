@@ -1,6 +1,8 @@
 /**
  * Spotlight Tutorial - 新手引導系統
  */
+import { buildStep3MockCard } from './tutorial-step3-card.js';
+
 class SpotlightTutorial {
     constructor() {
         this.currentStep = 0;
@@ -21,10 +23,10 @@ class SpotlightTutorial {
             },
             {
                 id: 'scanner',
-                target: '#sidebar a[href="/scanner"]',
+                target: '#btnGenerate',
                 title: window.t('tutorial.step3_title'),
-                content: window.t('tutorial.step3_content'),
-                position: 'right'
+                content: window.t('tutorial.step3_content') + buildStep3MockCard(window.t),
+                position: 'bottom'
             },
             {
                 id: 'showcase',

@@ -1,4 +1,5 @@
-import { ChipEditor, normalizeFolderLayers } from '@/settings/chip-editor.js';
+import { ChipEditor } from '@/settings/chip-editor.js';
+import { normalizeFolderLayers, buildNamingPreview } from '@/shared/naming-preview.js';
 
 // 同時啟用來源數上限（前端鏡像；後端真理來源 core/source_config.py:MAX_ENABLED_SOURCES）
 const MAX_ENABLED_SOURCES = 10;
@@ -188,29 +189,15 @@ export function stateConfig() {
         // 命名預覽（依 data 套範例值）。誠實反映後端空值行為（U-A2）：空變數 → 空字串，
         // 殘留分隔符照實呈現、不美化（folderPreviewTextEmpty 用空 actor/suffix 展示）。
         _previewWith(data) {
-            const applyTokens = (str) => {
-                let out = str;
-                for (const [key, val] of Object.entries(data)) {
-                    out = out.replace(new RegExp(`\\{${key}\\}`, 'g'), val);
-                }
-                return out;
-            };
-            const filenamePreview = applyTokens(this.form.filenameFormat || '{num} {title}');
-            if (!this.form.createFolder) return filenamePreview + '.mp4';
-            // 剝除資料夾排除 token（{suffix}）後再預覽，與 save 端（saveConfig normalizeFolderLayers）
-            // 及 organizer 實際落地一致——否則使用者手打 {suffix} 進資料夾層時，preview 會顯示一層
-            // 存檔後其實不會建的 suffix 資料夾（Codex PR #99 P2 連帶：preview 須與 save 同誠實）。
-            const folderExcluded = new Set(
-                this.formatVariables.filter(v => v.folder_ok === false).map(v => v.name)
-            );
-            const folderPreview = normalizeFolderLayers(
-                this.form.folderLayerList.map(l => l.value.trim()),
-                folderExcluded
-            )
-                .map(applyTokens)
-                .join('/');
-            const folder = folderPreview ? folderPreview + '/' : '';
-            return folder + filenamePreview + '.mp4';
+            return buildNamingPreview({
+                filenameFormat: this.form.filenameFormat,
+                createFolder: this.form.createFolder,
+                folderLayerList: this.form.createFolder
+                    ? this.form.folderLayerList.map(l => l.value.trim())
+                    : [],
+                formatVariables: this.formatVariables,
+                tokens: data,
+            });
         },
 
         get folderPreviewText() {

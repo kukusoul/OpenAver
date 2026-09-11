@@ -210,7 +210,7 @@ function extractStyleBlocks(html) {
 const MW480 = /^\s*\(\s*max-width\s*:\s*480px\s*\)\s*$/;
 const MW899 = /^\s*\(\s*max-width\s*:\s*899px\s*\)\s*$/;
 const MW899_COARSE = /^\s*\(\s*max-width\s*:\s*899px\s*\)\s+and\s+\(\s*pointer\s*:\s*coarse\s*\)\s*$/;
-const MW1024 = /^\s*\(\s*max-width\s*:\s*1024px\s*\)\s*$/;
+const MW1024 = /^\s*\(\s*max-width\s*:\s*1023\.98px\s*\)\s*$/;
 const MIN481_MAX899 = /^\s*\(\s*min-width\s*:\s*481px\s*\)\s+and\s+\(\s*max-width\s*:\s*899px\s*\)\s*$/;
 const IS_SCOPE = ':is(#ds-gallery-components, .ds-gallery-composition)';
 
@@ -252,6 +252,103 @@ const NON_SHELL_ROLE_MARKERS = {
   overlay: '.lightbox-content',
   'media-frame': '.similar-slot',
 };
+
+// checkLayerInsetHorizontalPadding — 146b-T7：抽出 CG-LAYER-01/02 的共用檢查邏輯，
+// 只給新規則用（CG-LAYER-01/02 本身不retrofit，理由見 TASK-146b-T7.md 現況分析第 6 節）。
+// 樣板＝ CG-LAYER-01/02 原始邏輯逐字保留，只把 id/selector 抽成參數。
+// 0/1/≥2 三岔樣板＝ CG-FLU-16（FE-GUARD-14）。
+function checkLayerInsetHorizontalPadding(ctx, { id, selector }) {
+  const norm = (s) => s.replace(/\s+/g, ' ').trim();
+  const hits = ctx.blocks.filter((b) => norm(b.selector) === selector);
+  if (hits.length === 0) {
+    ctx.fail(`${id}: 找不到頂層 \`${selector}\` block（水平內距契約消失）`);
+    return;
+  }
+  if (hits.length > 1) {
+    ctx.fail(
+      `${id}: 找到 ${hits.length} 個頂層 \`${selector}\` block，cascade 無法機械驗證——`
+      + `命中：${hits.map((b) => JSON.stringify(b.declarations.trim().slice(0, 60))).join(' | ')}`,
+    );
+    return;
+  }
+  const { declarations } = hits[0];
+  const padDecls = [...declarations.matchAll(/(?<![-\w])(padding(?:-inline)?)\s*:\s*([^;]+)/gi)];
+  if (padDecls.length === 0) {
+    ctx.fail(`${id}: \`${selector}\` 缺少 padding / padding-inline 宣告`);
+    return;
+  }
+  for (const m of padDecls) {
+    const prop = m[1];
+    const val = m[2].trim();
+    if (prop.toLowerCase() === 'padding-inline') {
+      if ((/^(?:1\.5rem|24px)\b/.test(val) || /\b(?:1\.5rem|24px)\b/.test(val))
+          && !/var\(\s*--layer-inset\s*\)/.test(val)) {
+        ctx.fail(`${id}: \`${selector}\` 的 ${prop} 殘留字面水平內距 \`${val}\`——必須吃 var(--layer-inset)`);
+      }
+    } else {
+      const parts = val.trim().split(/\s+/);
+      const horizontal = parts.length === 1 ? parts[0] : parts[1];
+      if (/^(?:1\.5rem|24px)$/.test(horizontal)) {
+        ctx.fail(
+          `${id}: \`${selector}\` 的 ${prop} 水平分量是字面 \`${horizontal}\`——`
+          + '必須改吃 var(--layer-inset)（不能靠與 token 數值巧合相等）',
+        );
+      }
+    }
+  }
+  if (!/var\(\s*--layer-inset\s*\)/.test(declarations)) {
+    ctx.fail(`${id}: \`${selector}\` 的 declarations 未出現 var(--layer-inset)`);
+  }
+}
+
+// checkContainerMinHeightUsesMobileTopbar — 146b-T8：CG-LAYER-04/05 共用檢查。
+// 為什麼抽 helper 而不是直接寫兩條：兩規則只差 id／selector／file，檢查的是同一個
+// min-height 契約（必須吃 var(--mobile-topbar-height)、不得殘留任何字面 px/rem）。
+// checkLayerInsetHorizontalPadding 管的是 padding，套不上；再抽一層把 min-height
+// 的 0/1/≥2 三岔＋字面偵測寫一次，比近逐字複製兩份清楚，也避免日後第三頁複製時
+// 又多出一份 drift。樣板＝ CG-FLU-16 的 0/1/≥2（FE-GUARD-14：單檔單 selector，
+// 不用 .find()/[0]/last/join() 聚合挑「其中一個」）。
+function checkContainerMinHeightUsesMobileTopbar(ctx, { id, selector }) {
+  const hits = ctx.blocks.filter((b) => b.selector.trim() === selector);
+  if (hits.length === 0) {
+    ctx.fail(`${id}: 找不到頂層 \`${selector}\` block（min-height 契約消失）`);
+    return;
+  }
+  if (hits.length > 1) {
+    ctx.fail(
+      `${id}: 找到 ${hits.length} 個頂層 \`${selector}\` block，cascade 無法機械驗證——`
+      + `命中：${hits.map((b) => JSON.stringify(b.declarations.trim().slice(0, 60))).join(' | ')}`,
+    );
+    return;
+  }
+  const { declarations } = hits[0];
+  const mhDecls = [...declarations.matchAll(/(?<![-\w])min-height\s*:\s*([^;]+)/gi)];
+  if (mhDecls.length === 0) {
+    ctx.fail(`${id}: \`${selector}\` 缺少 min-height 宣告`);
+    return;
+  }
+  if (mhDecls.length > 1) {
+    ctx.fail(
+      `${id}: \`${selector}\` 的 min-height 宣告出現 ${mhDecls.length} 次 — cascade 歧義`,
+    );
+    return;
+  }
+  const val = mhDecls[0][1].trim();
+  if (!/var\(\s*--mobile-topbar-height\s*\)/.test(val)) {
+    ctx.fail(
+      `${id}: \`${selector}\` 的 min-height 未吃 var(--mobile-topbar-height)，實際為 \`${val}\`——`
+      + '必須與 .main-content 手機 padding-top 共用同一個 token（146b-T8 / T2 配對）',
+    );
+  }
+  // 擋任何字面 px/rem（不限 56px）——防「手改成另一個巧合數字」；與 CG-LAYER-01
+  // 對 1.5rem/24px 巧合值的態度一致。
+  if (/\d+(?:\.\d+)?(?:px|rem)\b/.test(val)) {
+    ctx.fail(
+      `${id}: \`${selector}\` 的 min-height 殘留字面單位 \`${val}\`——`
+      + '必須改吃 var(--mobile-topbar-height)（不能靠與 token 數值巧合相等）',
+    );
+  }
+}
 
 // ── 表驅動 rule-set（fluent 家族 14 條，忠實 port test_fluent_materials_guards.py，CD-96c-2）──
 const RULES = [
@@ -464,7 +561,20 @@ const RULES = [
       for (const [name, re] of [
         ['border-radius', /border-radius\s*:/g],
         ['border', /(?<![-\w])border\s*:/g],      // 不吃 border-radius / border-color …
-        ['margin', /(?<![-\w])margin\s*:/g],      // 不吃 margin-inline / margin-top …
+        // 146b-T6：margin 那格從「只認 `margin` 簡寫」擴成「任何設定水平 margin 的宣告」
+        // （`margin` / `margin-inline` / `margin-left` / `margin-right`；仍不吃 `margin-top` /
+        // `margin-bottom`——垂直不屬 Rule 45 浮動幾何不變式）。原因：Rule 45 的內縮改吃
+        // `var(--layer-inset)` 走 `margin-inline`，與 Rule 13b `.showcase-toolbar` 同一寫法；
+        // 不變式沒變（浮動幾何存在），變的只是表達方式 ⇒ **對帳，不是放寬**。
+        // 等價性已用雙向矩陣驗過（11 格：6 破壞必紅 ＋ 5 合法改寫必綠），關鍵一格是
+        // 「改回舊寫法 `margin: 0 1rem` 仍然綠」＝新版沒擋得比舊版少。
+        // 已知的過嚴邊界：`margin-left` + `margin-right` 分開寫會被算 2 次而轉紅——兩者設的
+        // 是不同的邊、不是 cascade 覆蓋，但錯誤訊息仍會說「後面那次會在 cascade 上蓋掉
+        // Rule 45」（在這個情況下是假的）。**刻意維持 fail-closed**：撞到的人改用
+        // `margin-inline` 即可；把計數器改成「左右各一次算同一個邏輯單位」換來的使用者
+        // 價值是零，而本 repo 兩條平行浮動規則本來就統一走 `margin-inline`。
+        ['水平 margin（margin / margin-inline / margin-left|right）',
+          /(?<![-\w])margin(?:-inline|-left|-right)?\s*:/g],
       ]) {
         const n = (allDecls.match(re) || []).length;
         if (n === 0) {
@@ -476,52 +586,59 @@ const RULES = [
     },
   },
 
-  // CG-FLU-10 ← test_77d_headers_float_theme_agnostic（11a all-widths padding + 11b @media float）
+  // CG-FLU-10 ← 146b-T3b：Rule 46/47 回復（CD-146b-15/16），11a/11b 改 exact-selector 0/1/≥2
+  // 146b-T7：11a 對帳從字面 `1rem 1.5rem` 改成 `1rem var(--layer-inset)`（不變式沒變，
+  // 表達方式變了——水平內距仍是 24px，只是改由 token 表達）。這是刻意收緊，不是放寬：
+  // 舊字面 `1rem 1.5rem` 在本條與 CG-LAYER-03 會同時轉紅（兩條訊息都會出現），那是刻意的
+  // 雙重保險，不是重複告警的 bug——「字面值巧合等於 token」正是這支 branch 要擋的事。
+  // 維護耦合：本條現在寫死了 `--layer-inset` 這個 token 名字；日後若重新命名，CG-FLU-10
+  // 與 CG-LAYER-03 兩處都要跟著改，否則會變成「改名後守衛靜默通過」。
   {
     id: 'CG-FLU-10',
     file: 'components/fluent-materials.css',
     kind: 'fn',
     check(ctx) {
-      // 11a: all-widths padding rule（用 ctx.text/blocks，鏡射 css_no_comments）
-      let paddingFound = false;
-      for (const { selector, declarations } of ctx.blocks) {
-        if (
-          selector.includes('.settings-header')
-          && selector.includes('.avlist-header')
-          && !selector.includes('@media')
-        ) {
-          if (/padding\s*:/.test(declarations)) {
-            paddingFound = true;
-            if (selector.includes('[data-theme="dim"]')) {
-              ctx.fail(`CG-FLU-10: :is(.settings-header, .avlist-header) padding rule must be theme-agnostic — ${selector}`);
-            }
-            if (!/padding\s*:\s*1rem\s+1\.5rem/.test(declarations)) {
-              ctx.fail('CG-FLU-10: :is(.settings-header, .avlist-header) padding should be 1rem 1.5rem (flush-left fix)');
-            }
-          }
-        }
-      }
-      if (!paddingFound) ctx.fail('CG-FLU-10: :is(.settings-header, .avlist-header) all-widths padding rule not found (Rule 46)');
-
-      // 11b: desktop-gated floating rule（用 ctx.raw @media≥1024px）
-      const desktopHeaderBlocks = [];
-      for (const mb of extractDesktopMediaBodies(ctx.raw)) {
-        for (const { selector, declarations } of parseRuleBlocks(mb)) {
-          if (selector.includes('.settings-header') && selector.includes('.avlist-header')) {
-            desktopHeaderBlocks.push({ selector, declarations });
-          }
-        }
-      }
-      if (desktopHeaderBlocks.length === 0) {
-        ctx.fail('CG-FLU-10: no :is(.settings-header, .avlist-header) rule inside @media (min-width:1024px) — Rule 47 missing');
-        return;
-      }
-      for (const { selector, declarations } of desktopHeaderBlocks) {
+      const SEL = ':is(.settings-header, .avlist-header)';
+      // 11a: all-widths padding fix（Rule 46，146b-T3b 從 `.settings-header` 復原回
+      // `:is(.settings-header, .avlist-header)`）。原本用 `.includes('.settings-header')`
+      // 只認子字串——`.avlist-header` 忘了放回去也會照樣通過（子字串仍含 .settings-header），
+      // 這條不變式其實沒真的被守到。改成整段選擇器逐字比對 + 0/1/≥2 三岔拒絕歧義。
+      const paddingBlocks = ctx.blocks.filter(
+        (b) => b.selector.trim() === SEL && /padding\s*:/.test(b.declarations),
+      );
+      if (paddingBlocks.length === 0) {
+        ctx.fail(`CG-FLU-10: ${SEL} all-widths padding rule not found (Rule 46)`);
+      } else if (paddingBlocks.length > 1) {
+        ctx.fail(`CG-FLU-10: 找到 ${paddingBlocks.length} 個 ${SEL} padding block，cascade 無法機械驗證`);
+      } else {
+        const { selector, declarations } = paddingBlocks[0];
         if (selector.includes('[data-theme="dim"]')) {
-          ctx.fail(`CG-FLU-10: :is(.settings-header, .avlist-header) @media float rule must be theme-agnostic — ${selector}`);
+          ctx.fail(`CG-FLU-10: padding rule must be theme-agnostic — ${selector}`);
         }
-        if (!/border-radius\s*:/.test(declarations)) ctx.fail('CG-FLU-10: :is(.settings-header, .avlist-header) @media 1024px block missing border-radius');
-        if (!/\bborder\s*:/.test(declarations)) ctx.fail('CG-FLU-10: :is(.settings-header, .avlist-header) @media 1024px block missing border');
+        if (!/padding\s*:\s*1rem\s+var\(\s*--layer-inset\s*\)/.test(declarations)) {
+          ctx.fail('CG-FLU-10: padding should be 1rem var(--layer-inset) (flush-left fix)');
+        }
+      }
+
+      // 11b: desktop B-floating geometry（Rule 47，146b-T3b 從整條刪除復原）。巢狀在
+      // @media (min-width: 1024px) 內，ctx.blocks 只在頂層收 block（FE-GUARD-14 同型坑：
+      // @media wrapper 被當成一個不透明 block），改用 flattenRuleBlocks 展平後再比對。
+      const floatBlocks = flattenRuleBlocks(ctx.blocks).filter(
+        (b) => b.selector.trim() === SEL
+          && (/border-radius\s*:/.test(b.declarations) || /(?<![-\w])border\s*:/.test(b.declarations)),
+      );
+      if (floatBlocks.length === 0) {
+        ctx.fail(`CG-FLU-10: ${SEL} desktop B-floating rule not found (Rule 47)`);
+      } else if (floatBlocks.length > 1) {
+        ctx.fail(`CG-FLU-10: 找到 ${floatBlocks.length} 個 desktop B-floating block，cascade 無法機械驗證`);
+      } else {
+        const { declarations } = floatBlocks[0];
+        if (!/border-radius\s*:\s*var\(\s*--fluent-radius-xl\s*\)/.test(declarations)) {
+          ctx.fail('CG-FLU-10: Rule 47 缺 border-radius: var(--fluent-radius-xl)');
+        }
+        if (!/(?<![-\w])border\s*:\s*1px\s+solid\s+var\(\s*--glass-shell-border\s*\)/.test(declarations)) {
+          ctx.fail('CG-FLU-10: Rule 47 缺 border: 1px solid var(--glass-shell-border)');
+        }
       }
     },
   },
@@ -696,6 +813,271 @@ const RULES = [
     },
   },
 
+  // CG-FLU-17 ← 146b-T3b CD-146b-16 §1：.page-layer 降為純契約，全檔材質宣告一律禁止
+  {
+    id: 'CG-FLU-17',
+    file: 'components/fluent-materials.css',
+    kind: 'fn',
+    check(ctx) {
+      // 146b-T3b：owner 真機驗收撤銷了 Rule 49 的材質（雙圈圓角/雙 hairline 疊在恢復的
+      // chrome 上）。不變式反轉——今天要守的是「.page-layer 不得再畫任何東西」。
+      // 用 flattenRuleBlocks 掃全檔（含 [data-theme="dim"] 與任何 @media 巢狀），對
+      // 「每一個」命中的 block 都檢查，不挑第一個/最後一個（FE-GUARD-14：挑一個 = fail-open，
+      // 這裡改成「逐一檢查、任何一個違規就 fail」，天生不會漏看第二個 block）。
+      const FORBIDDEN = [
+        ['background', /(?<![-\w])background(-color|-image)?\s*:/i],
+        ['border', /(?<![-\w])border(-radius|-color|-width|-style|-top|-bottom|-left|-right)?\s*:/i],
+        ['overflow', /(?<![-\w])overflow(-x|-y)?\s*:/i],
+        ['backdrop-filter', /(-webkit-)?backdrop-filter\s*:/i],
+        ['filter', /(?<![-\w])filter\s*:/i],
+        ['transform', /(?<![-\w])transform\s*:/i],
+        ['contain', /(?<![-\w])contain\s*:/i],
+      ];
+      // pre-merge（grok-4.6 branch review P3 第 3 條）：契約的另一半是「padding-inline 恆 0」，
+      // 而**沒有任何機械閘守得到它**——對齊 e2e 比的是兩個「子元素」的左緣，父層 .page-layer
+      // 被加上 padding-inline 時兩個子元素一起內縮，相對差仍是 0（FE-CSS-21 形狀 2 的鏡像）；
+      // test_layer_itself_no_blur 只讀 backdrop-filter。這裡補上：水平 padding 只准是 0。
+      const HORIZ_PAD = /(?<![-\w])padding(?:-inline(?:-start|-end)?|-left|-right)?\s*:\s*([^;]+)/gi;
+      const isZero = (v) => /^0(?:px|rem|em|%)?$/i.test(v.trim());
+      for (const { selector, declarations } of flattenRuleBlocks(ctx.blocks)) {
+        if (!selector.includes('.page-layer')) continue;
+        for (const m of [...declarations.matchAll(HORIZ_PAD)]) {
+          const parts = m[1].trim().split(/\s+/);
+          // padding: A            → 水平 = A
+          // padding: A B [C [D]]  → 水平 = B
+          // padding-inline/-left/-right: A → 水平 = A
+          const horizontal = /(?<![-\w])padding\s*:/i.test(m[0]) && parts.length > 1 ? parts[1] : parts[0];
+          if (!isZero(horizontal)) {
+            ctx.fail(
+              `CG-FLU-17: ${selector} 的水平內距是 \`${horizontal}\` — .page-layer 的契約是 `
+              + 'padding-inline 恆 0，--layer-inset 只出現在**直接子區塊**（CD-146b-7）。'
+              + '把內距加在 Layer 自己身上，四頁內容會一起再內縮，而工具列與內容仍然對齊'
+              + '⇒ 對齊 e2e 與其餘守衛全綠，切頁看起來「整體變窄」卻查不到是哪條規則。',
+            );
+          }
+        }
+        for (const [name, re] of FORBIDDEN) {
+          if (re.test(declarations)) {
+            ctx.fail(
+              `CG-FLU-17: ${selector} 宣告了 ${name} — .page-layer 已降為純契約`
+              + '（CD-146b-16 §1），不得再畫材質；.page-layer 只是四頁共用的掛載點與'
+              + 'padding-inline:0/no-containing-block 契約，視覺一律交給各自的 chrome',
+            );
+          }
+        }
+      }
+      // 掃描結果 0 筆命中是本卡完成後的合法終態（.page-layer 目前沒有任何 CSS 規則，只剩
+      // Rule 49 的契約註解）——這不是錯誤，這條守衛守的是「不存在材質宣告」，規則整個
+      // 不存在時這個不變式自動成立，不需要另外判斷「規則存不存在」。
+    },
+  },
+
+  // CG-LAYER-01 ← 146b-T4：.showcase-grid/.actress-grid 水平內距必須真吃 var(--layer-inset)
+  // 樣板：CG-FLU-17 的「0/1/≥2 三岔拒絕歧義」＋頂層 block 掃描（FE-GUARD-14）。
+  // getComputedStyle 分不出字面 1.5rem 與 --layer-inset（同為 24px）——e2e 對此無鑑別力。
+  {
+    id: 'CG-LAYER-01',
+    file: 'pages/showcase.css',
+    kind: 'fn',
+    check(ctx) {
+      const SEL = '.showcase-grid, .actress-grid';
+      // 檔案寫成 `.showcase-grid,\n.actress-grid`（換行 co-list）；正規化空白後再比對，
+      // 避免字面 === 因換行假紅（CG-PC-07 註解已記錄同一寫法）。
+      const norm = (s) => s.replace(/\s+/g, ' ').trim();
+      const hits = ctx.blocks.filter((b) => norm(b.selector) === SEL);
+      if (hits.length === 0) {
+        ctx.fail(`CG-LAYER-01: 找不到頂層 \`${SEL}\` block（水平內距契約消失）`);
+        return;
+      }
+      if (hits.length > 1) {
+        ctx.fail(
+          `CG-LAYER-01: 找到 ${hits.length} 個頂層 \`${SEL}\` block，cascade 無法機械驗證——`
+          + `命中：${hits.map((b) => JSON.stringify(b.declarations.trim().slice(0, 60))).join(' | ')}`,
+        );
+        return;
+      }
+      const { declarations } = hits[0];
+      // 只盯 padding / padding-inline 開頭的宣告，避免誤傷 gap: 1.5rem
+      const padDecls = [...declarations.matchAll(/(?<![-\w])(padding(?:-inline)?)\s*:\s*([^;]+)/gi)];
+      if (padDecls.length === 0) {
+        ctx.fail(`CG-LAYER-01: \`${SEL}\` 缺少 padding / padding-inline 宣告`);
+        return;
+      }
+      for (const m of padDecls) {
+        const prop = m[1];
+        const val = m[2].trim();
+        // 水平分量不得殘留字面 1.5rem / 24px（padding: V H 取第二個；padding-inline 整值；
+        // padding: X 單值會同時作用於水平——同樣禁止字面）
+        if (prop.toLowerCase() === 'padding-inline') {
+          if (/^(?:1\.5rem|24px)\b/.test(val) || /\b(?:1\.5rem|24px)\b/.test(val)) {
+            if (!/var\(\s*--layer-inset\s*\)/.test(val)) {
+              ctx.fail(
+                `CG-LAYER-01: \`${SEL}\` 的 ${prop} 殘留字面水平內距 \`${val}\`——`
+                + '必須吃 var(--layer-inset)',
+              );
+            }
+          }
+        } else {
+          // padding: 可能是 1 值、2 值、3/4 值；水平 = 單值本身，或 2/3/4 值的第 2 個
+          const parts = val.trim().split(/\s+/);
+          const horizontal = parts.length === 1 ? parts[0] : parts[1];
+          if (/^(?:1\.5rem|24px)$/.test(horizontal)) {
+            ctx.fail(
+              `CG-LAYER-01: \`${SEL}\` 的 ${prop} 水平分量是字面 \`${horizontal}\`——`
+              + '必須改吃 var(--layer-inset)（不能靠與 token 數值巧合相等）',
+            );
+          }
+        }
+      }
+      if (!/var\(\s*--layer-inset\s*\)/.test(declarations)) {
+        ctx.fail(
+          `CG-LAYER-01: \`${SEL}\` 的 declarations 未出現 var(--layer-inset)`,
+        );
+      }
+    },
+  },
+
+  // CG-LAYER-02 ← 146b-T6：.search-bar 水平內距必須真吃 var(--layer-inset)
+  // 樣板：CG-FLU-16 的「0/1/≥2 三岔拒絕歧義」＋頂層 block 掃描（FE-GUARD-14）。
+  // getComputedStyle 分不出字面 1.5rem 與 --layer-inset（同為 24px）——e2e 對此無鑑別力。
+  {
+    id: 'CG-LAYER-02',
+    file: 'pages/search.css',
+    kind: 'fn',
+    check(ctx) {
+      const SEL = '.search-bar';
+      // 單一 selector，無換行 co-list；trim 即可（對照 CG-LAYER-01 的 norm）。
+      const hits = ctx.blocks.filter((b) => b.selector.trim() === SEL);
+      if (hits.length === 0) {
+        ctx.fail(`CG-LAYER-02: 找不到頂層 \`${SEL}\` block（水平內距契約消失）`);
+        return;
+      }
+      if (hits.length > 1) {
+        ctx.fail(
+          `CG-LAYER-02: 找到 ${hits.length} 個頂層 \`${SEL}\` block，cascade 無法機械驗證——`
+          + `命中：${hits.map((b) => JSON.stringify(b.declarations.trim().slice(0, 60))).join(' | ')}`,
+        );
+        return;
+      }
+      const { declarations } = hits[0];
+      // 只盯 padding / padding-inline 開頭的宣告，避免誤傷 gap: 1.5rem
+      const padDecls = [...declarations.matchAll(/(?<![-\w])(padding(?:-inline)?)\s*:\s*([^;]+)/gi)];
+      if (padDecls.length === 0) {
+        ctx.fail(`CG-LAYER-02: \`${SEL}\` 缺少 padding / padding-inline 宣告`);
+        return;
+      }
+      for (const m of padDecls) {
+        const prop = m[1];
+        const val = m[2].trim();
+        // 水平分量不得殘留字面 1.5rem / 24px（padding: V H 取第二個；padding-inline 整值；
+        // padding: X 單值會同時作用於水平——同樣禁止字面）
+        if (prop.toLowerCase() === 'padding-inline') {
+          if (/^(?:1\.5rem|24px)\b/.test(val) || /\b(?:1\.5rem|24px)\b/.test(val)) {
+            if (!/var\(\s*--layer-inset\s*\)/.test(val)) {
+              ctx.fail(
+                `CG-LAYER-02: \`${SEL}\` 的 ${prop} 殘留字面水平內距 \`${val}\`——`
+                + '必須吃 var(--layer-inset)',
+              );
+            }
+          }
+        } else {
+          // padding: 可能是 1 值、2 值、3/4 值；水平 = 單值本身，或 2/3/4 值的第 2 個
+          const parts = val.trim().split(/\s+/);
+          const horizontal = parts.length === 1 ? parts[0] : parts[1];
+          if (/^(?:1\.5rem|24px)$/.test(horizontal)) {
+            ctx.fail(
+              `CG-LAYER-02: \`${SEL}\` 的 ${prop} 水平分量是字面 \`${horizontal}\`——`
+              + '必須改吃 var(--layer-inset)（不能靠與 token 數值巧合相等）',
+            );
+          }
+        }
+      }
+      if (!/var\(\s*--layer-inset\s*\)/.test(declarations)) {
+        ctx.fail(
+          `CG-LAYER-02: \`${SEL}\` 的 declarations 未出現 var(--layer-inset)`,
+        );
+      }
+    },
+  },
+
+  // CG-LAYER-03 ← 146b-T7：Rule 46（.settings-header/.avlist-header）水平內距必須真吃
+  // var(--layer-inset)。樣板：checkLayerInsetHorizontalPadding（CG-LAYER-01/02 抽出；
+  // 0/1/≥2 三岔＝ CG-FLU-16）。
+  {
+    id: 'CG-LAYER-03',
+    file: 'components/fluent-materials.css',
+    kind: 'fn',
+    check(ctx) {
+      checkLayerInsetHorizontalPadding(ctx, {
+        id: 'CG-LAYER-03',
+        selector: ':is(.settings-header, .avlist-header)',
+      });
+    },
+  },
+
+  // CG-LAYER-06/07/08 ← pre-merge（grok-4.6 branch review P3 第 1 條）：
+  // 對齊測試比的是「chrome 左緣 vs 內容左緣」的**差**。只要兩側的字面都恰好等於 token 值，
+  // 即使兩側都沒有真的吃 var()，差仍然是 0 ⇒ e2e 照樣綠（FE-CSS-21 形狀 1）。
+  // T4-T7 只補了 chrome 側（CG-LAYER-02 .search-bar、CG-LAYER-03 兩個 header）與瀏覽頁的
+  // 內容側（CG-LAYER-01 .showcase-grid），**其餘三頁的內容側沒有守衛**——本輪補齊。
+  // 樣板一律 checkLayerInsetHorizontalPadding（0/1/≥2 三岔＝ CG-FLU-16，FE-GUARD-14）。
+  // ⚠️ 說明頁 .help-cards 刻意不在此列：它的水平內距在 base 是 1rem、只有 @media ≥1024
+  // 才是 var(--layer-inset)（CD-146b-20 手機內距不強制統一），而本 helper 只掃頂層 block。
+  // 那一格是已接受的 residual，不是遺漏。
+  {
+    id: 'CG-LAYER-06',
+    file: 'pages/search.css',
+    kind: 'fn',
+    check(ctx) {
+      checkLayerInsetHorizontalPadding(ctx, { id: 'CG-LAYER-06', selector: '.result-area' });
+    },
+  },
+  {
+    id: 'CG-LAYER-07',
+    file: 'pages/settings.css',
+    kind: 'fn',
+    check(ctx) {
+      checkLayerInsetHorizontalPadding(ctx, { id: 'CG-LAYER-07', selector: '#settingsForm' });
+    },
+  },
+  {
+    id: 'CG-LAYER-08',
+    file: 'pages/scanner.css',
+    kind: 'fn',
+    check(ctx) {
+      checkLayerInsetHorizontalPadding(ctx, { id: 'CG-LAYER-08', selector: '.avlist-container' });
+    },
+  },
+
+  // CG-LAYER-04 ← 146b-T8：.search-container 的 min-height 必須吃 var(--mobile-topbar-height)
+  // （與 T2 改成 token 的 .main-content padding-top 配對；字面 56px 是本 branch 引入的幻影捲動回歸）。
+  // 樣板：checkContainerMinHeightUsesMobileTopbar（CG-FLU-16 的 0/1/≥2；FE-GUARD-14 單檔單 selector）。
+  {
+    id: 'CG-LAYER-04',
+    file: 'pages/search.css',
+    kind: 'fn',
+    check(ctx) {
+      checkContainerMinHeightUsesMobileTopbar(ctx, {
+        id: 'CG-LAYER-04',
+        selector: '.search-container',
+      });
+    },
+  },
+
+  // CG-LAYER-05 ← 146b-T8：.showcase-container 同上（瀏覽頁那一半）。
+  // 樣板同 CG-LAYER-04；各自獨立、不跨檔聚合（刻意不抄 CG-PC-02 的 join 形狀）。
+  {
+    id: 'CG-LAYER-05',
+    file: 'pages/showcase.css',
+    kind: 'fn',
+    check(ctx) {
+      checkContainerMinHeightUsesMobileTopbar(ctx, {
+        id: 'CG-LAYER-05',
+        selector: '.showcase-container',
+      });
+    },
+  },
+
   // CG-FLU-15 ← test_rescrape_preview_mobile_stack（rescrape-modal.css @media(max-width:480px)）
   {
     id: 'CG-FLU-15',
@@ -781,6 +1163,26 @@ const RULES = [
   },
 
   // CG-PC-02 ← TestPosterCropExtended（showcase ↔ search 雙檔 parity，_media_blocks 放鬆比對）
+  // ── 146b-T8（2026-09-11；第 2 輪訂正事實主張）重判註記：維持現狀，不改本 rule 邏輯 ──
+  // 掃描機制：extractMediaBodies(css, condRegex)（本檔 :159-176）用條件 regex 掃**全檔**
+  // 所有符合的 @media block，再 .join('\n') 成一段做 .test()——屬 FE-GUARD-14 聚合形狀。
+  // 「掃描範圍」不是單一區間，而是全檔所有命中該條件 regex 的 block。
+  // 今天 showcase.css 命中 /max-width:\s*899px/ 的 @media 完整清單（grep -n 核對）：
+  //   :366-372  (min-width: 481px) and (max-width: 899px)   ← 481–899 四欄
+  //   :387-448  (max-width: 899px)                          ← poster-crop 擴 ≤899
+  //   :595-606  (max-width: 899px)                          ← 工具列/網格手機 gutter
+  //   :1632-1640 (max-width: 899px) and (pointer: coarse)   ← touch footer 反轉
+  // 事實訂正：146b-T4（f0b53db9 / CD-146b-17）**確實改過**其中一個命中 block
+  // （:596-599 `.showcase-toolbar/.showcase-grid/.actress-grid { padding-inline:
+  // var(--layer-inset-mobile) }`）。search.css 那半（:860-935 附近的斷點段）經查無此問題。
+  // 為什麼今天沒有假綠：本 rule 對聚合字串做的都是「必須包含 X」的正向存在性斷言——
+  // 混進無關 block 不會讓它變綠、也不會變紅；T4 那次改動也沒有觸發假綠。
+  // 維持現狀：依「守衛的退場」，答案仍是「我們得再收斂一次」（工程成本，非使用者損失），
+  // 且它既沒擋住我們、也沒有要跟著改——不修。
+  // 下次重判的真正觸發條件（語意，不用行號——行號會漂移）：
+  //   (a) 本 rule 的任何一個斷言從正向存在性改成需要判斷最終 cascade 勝出者；或
+  //   (b) 有人回報它該紅卻沒紅。
+  // 那時才是重判的當下；不要只因「改到某個行號附近」就自動重寫本 rule。
   {
     id: 'CG-PC-02',
     file: 'pages/showcase.css',
@@ -1040,12 +1442,26 @@ const RULES = [
       const pair = ruleBody(css, '\\.search-container \\.av-card-full-body \\.info-grid-pair');
       if (pair === null) ctx.fail('CG-PC-06: 找不到 .info-grid-pair 桌面規則');
       else if (!pair.includes('grid-template-columns: 1fr 1fr')) ctx.fail('CG-PC-06: 桌面 .info-grid-pair 應 1fr 1fr');
+      // FE-GUARD-14：同條件可能有多個 @media body（T2 把 991.98 與 1024 都收成 1023.98
+      // 後出現兩個）；不可寫死 [0]。遍歷全部 matching bodies，找含 .info-grid-pair 的那些。
+      // 語意：至少一個 body 必須含 .info-grid-pair（fail-closed）；若有多個，**全部**都要
+      // collapse 成 1fr（比「任一個即可」更強——避免後寫的錯誤宣告靠 cascade 蓋掉正確的）。
       const b1024 = extractMediaBodies(ctx.text, MW1024);
-      if (!b1024.length) ctx.fail('CG-PC-06: 找不到 @media (max-width: 1024px) block');
+      if (!b1024.length) ctx.fail('CG-PC-06: 找不到 @media (max-width: 1023.98px) block');
       else {
-        const collapse = ruleBody(b1024[0], '\\.info-grid-pair');
-        if (collapse === null) ctx.fail('CG-PC-06: ≤1024px 內找不到 .info-grid-pair collapse 規則');
-        else if (!collapse.includes('grid-template-columns: 1fr;')) ctx.fail('CG-PC-06: ≤1024px .info-grid-pair 應 collapse 回 grid-template-columns: 1fr;');
+        const withPair = b1024
+          .map((body) => ({ body, collapse: ruleBody(body, '\\.info-grid-pair') }))
+          .filter(({ collapse }) => collapse !== null);
+        if (!withPair.length) {
+          ctx.fail('CG-PC-06: ≤1023.98px 內找不到 .info-grid-pair collapse 規則');
+        } else {
+          for (const { collapse } of withPair) {
+            if (!collapse.includes('grid-template-columns: 1fr;')) {
+              ctx.fail('CG-PC-06: ≤1023.98px .info-grid-pair 應 collapse 回 grid-template-columns: 1fr;');
+              break;
+            }
+          }
+        }
       }
     },
   },
@@ -2077,12 +2493,14 @@ const RULES = [
       // ── 期望表（鏡射 showcase.css，108-T5fix1 定版）───────────────────────────
       // 共用區間（≤899px）：影片走直式 poster 0.71 ≈ 女優 0.75 → 同寬即同高 → **必須 co-listed**。
       const COLS = /grid-template-columns\s*:/;
-      const GUTTER = /margin-inline\s*:/;
+      // T2：.main-content 水平 padding 於 <1024 已歸零，負 margin-inline 補償已移除；
+      // 定位錨改為仍存在的 padding-inline（12px gutter）。co-listed 不變式不變。
+      const GUTTER = /padding-inline\s*:/;
       const SHARED = [
         { label: 'base grid（top-level 非-@media）', cond: null, anchor: COLS, prop: 'grid-template-columns' },
         { label: '@media (min-width: 481px) and (max-width: 899px) → 4 欄（共用）', cond: MIN481_MAX899, anchor: COLS, prop: 'grid-template-columns' },
         { label: '@media (max-width: 480px) → 3 欄（共用）', cond: MW480, anchor: COLS, prop: 'grid-template-columns' },
-        { label: 'T1 行動 gutter @media (max-width: 899px)', cond: MW899, anchor: GUTTER, prop: 'margin-inline' },
+        { label: 'T1 行動 gutter @media (max-width: 899px)', cond: MW899, anchor: GUTTER, prop: 'padding-inline' },
       ];
       // ≥900px：影片切橫式 fanart（~3:2）、女優恆為直式 0.75 → 同寬會讓女優列高 1.77 倍。
       // 故女優改走**專屬 5 段階梯**（列高/密度對齊），影片維持自己的三段（showcase-only）。

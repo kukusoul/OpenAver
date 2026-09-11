@@ -5,7 +5,7 @@
 
 /* ==================== Page Container ==================== */
 .showcase-container {
-    min-height: calc(100vh - 56px); /* 扣除 header */
+    min-height: calc(100vh - var(--mobile-topbar-height)); /* 扣除 header */
     display: flex;
     flex-direction: column;
     padding-bottom: 48px; /* 防止底部 .showcase-footer 遮擋最後一行卡片 (49a-T4 三段式 footer，高度約 40-44px) */
@@ -32,8 +32,9 @@
     /* Border */
     border-bottom: 1px solid var(--border-light);
 
-    /* Spacing */
-    padding: 0.75rem 1.5rem;
+    /* Spacing — 水平內距吃 Layer token（CD-146b-17：≥900 = --layer-inset；≤899 見下方覆寫） */
+    padding-block: 0.75rem;
+    padding-inline: var(--layer-inset);
 
     /* Layout — 3-column grid: [balance] [search] [controls] (44c-T8) */
     display: grid;
@@ -332,7 +333,7 @@
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
     gap: 1.5rem;
-    padding: 1.5rem;
+    padding: 1.5rem var(--layer-inset);
 
     /* 防止卡片過寬 */
     max-width: 100%;
@@ -376,7 +377,7 @@
     .actress-grid {
         grid-template-columns: repeat(3, 1fr); /* US5-75b：1fr → 3-col（CD-75b-7） */
         gap: 0.5rem;
-        padding: 0.75rem;
+        padding-block: 0.75rem; /* 水平由 ≤899 --layer-inset-mobile 接管（CD-146b-17） */
     }
 }
 
@@ -531,7 +532,7 @@
    女優恆為直式 0.75，同寬 ⇒ 女優列高是影片的 1.77 倍（實測 1907px 5 欄：影片列距 284px vs
    女優 502px，一屏只剩 1.7 列）。故 ≥900 的對齊標的由「卡寬相同」改為「列高/密度相當」：
 
-     斷點        女優欄   無側欄(900-991)  收合(≥992)       展開(≥992)        同寬度影片欄
+     斷點        女優欄   無側欄(900-1023) 收合(≥1024)      展開(≥1024)       同寬度影片欄
      900-1099      3       252 → 282        263 → 298        216 → 252         3（同欄同寬）
      1100-1349     4       —                218 → 280        183 → 245         4（同欄同寬）
      1350-1599     5       —                220 → 269        192 → 241         4 / 5
@@ -539,7 +540,7 @@
      1850+         7       —                221 →(1920: 231) 201 →(1920: 211)  5
 
    卡寬 =（視窗 − 側欄 − 96 − 24×(欄數−1)）/ 欄數（96 = .main-content padding 48 + grid padding 48；
-   **側欄 = 0（<992px 無側欄）/ 60（收合）/ 200（展開）**，三種幾何皆 CDP 實測校準；gap 24 與 padding
+   **側欄 = 0（<1024px 無側欄）/ 60（收合）/ 200（展開）**，三種幾何皆 CDP 實測校準；gap 24 與 padding
    由 co-listed base 提供 → 本段**只宣告 grid-template-columns**，不得在此宣告 gap/padding/max-width，
    否則算式與影片脫鉤）。全域最小卡寬 = 183px（1100px 視窗 + 側欄展開），該點影片卡同為 183px（同欄）。
    ⚠️ 斷點刻意 **sidebar-state agnostic**（owner 2026-07-25 拍板，回應 Codex T5fix1 P1）：側欄展開時
@@ -585,17 +586,20 @@
     }
 }
 
-/* 108-T1 (功能A): 行動裝置 grid 邊到邊、~12px gutter。
-   負 margin-inline 抵消 .main-content 的 1.5rem 水平 padding（container 本身無水平 padding）；
-   padding-inline 留 12px gutter；box-sizing 顯式 border-box 防負 margin 拉滿寬後 padding 溢出成水平捲動；
-   max-width:none 解除 base max-width:100%（=CB 上限），否則負右 margin 被吃、右側殘 gap（CDP 實測）。
-   .showcase-grid, .actress-grid 併列單一規則（不可拆兩條——T6 G5 鎖此不變式）。
-   置於兩 grid base 定義之後 → 同 specificity 靠 source order 勝 base 的 max-width:100%（影片/女優皆然）。 */
+/* 108-T1 (功能A) + CD-146b-17：≤899 水平內距統一吃 --layer-inset-mobile（12px）。
+   補償對象（.main-content 1.5rem 水平 padding）已於 T2 歸零，負 margin 已移除；
+   工具列與封面牆共用同一斷點／同一 token，避免 768 vs 899 縫隙。
+   box-sizing / max-width 仍只套 grid（工具列不需要）。
+   .showcase-grid, .actress-grid 併列不變式（T6 G5）保留在第二條規則。
+   置於兩 grid base 定義之後 → 同 specificity 靠 source order 勝 base。 */
 @media (max-width: 899px) {
+    .showcase-toolbar,
     .showcase-grid,
     .actress-grid {
-        margin-inline: -1.5rem;
-        padding-inline: 0.75rem;
+        padding-inline: var(--layer-inset-mobile);
+    }
+    .showcase-grid,
+    .actress-grid {
         box-sizing: border-box;
         max-width: none;
     }
@@ -2155,7 +2159,8 @@ body.similar-mobile-active [data-picker-ghost] {
            （實測 360px 下把工具列撐到 458px，右緣連同圓角被螢幕直接切掉）。 */
         grid-template-columns: minmax(0, 1fr);
         gap: 0.75rem;
-        padding: 1rem;
+        /* CD-146b-17：只留垂直分量；水平由 ≤899 的 --layer-inset-mobile 接管 */
+        padding-block: 1rem;
     }
 
     .toolbar-search {
@@ -2185,7 +2190,8 @@ body.similar-mobile-active [data-picker-ghost] {
     .showcase-toolbar {
         grid-template-columns: auto 1fr auto;   /* col1 空佔位(0) | 搜尋框填滿 | 控制區靠右 */
         gap: 0.75rem;
-        padding: 0.75rem 1rem;
+        /* CD-146b-17：只留垂直分量；水平 ≥900 吃 base --layer-inset、≤899 吃 --layer-inset-mobile */
+        padding-block: 0.75rem;
     }
     .toolbar-search {
         grid-column: 2;
@@ -2205,7 +2211,7 @@ body.similar-mobile-active [data-picker-ghost] {
 @media (max-width: 480px) {
     .showcase-toolbar {
         position: fixed;
-        top: 56px;
+        top: var(--mobile-topbar-height);
         left: 0;
         right: 0;
         z-index: 90;
@@ -2225,7 +2231,7 @@ body.similar-mobile-active [data-picker-ghost] {
     /* 透明全屏 backdrop（x-show 控制顯隱，點擊收合）：從 navbar 下緣起，不蓋 navbar icon */
     .mobile-toolbar-backdrop {
         position: fixed;
-        inset: 56px 0 0 0;
+        inset: var(--mobile-topbar-height) 0 0 0;
         z-index: 85;
         background: transparent;
     }
@@ -2773,8 +2779,8 @@ body.sidebar-collapsed .showcase-footer {
     font-weight: 600;
 }
 
-/* 響應式：≤991.98px sidebar 隱藏，footer 也要回到 left:0（對齊 .main-content margin-left:0）*/
-@media (max-width: 991.98px) {
+/* 響應式：≤1023.98px sidebar 隱藏，footer 也要回到 left:0（對齊 .main-content margin-left:0）*/
+@media (max-width: 1023.98px) {
     .showcase-footer,
     body.sidebar-collapsed .showcase-footer {
         left: 0;

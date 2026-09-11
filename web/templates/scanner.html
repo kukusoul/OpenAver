@@ -11,6 +11,7 @@
 {% endblock %}
 
 {% block content %}
+<div class="page-layer">
 <div class="avlist-container ds-gallery-composition" x-data="scanner"
      @dragover.document.prevent="handleDragOver($event)"
      @drop.document.prevent="handleDrop($event)"
@@ -769,6 +770,7 @@
         </div>
     </div>
     {% include '_browse_dir_modal.html' %}
+</div>
 </div>
 {% endblock %}
 

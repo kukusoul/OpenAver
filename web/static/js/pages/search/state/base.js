@@ -65,6 +65,8 @@ export function searchStateBase() {
 
         // ===== App Config =====
         appConfig: null,
+        formatVariables: [],          // SSOT: /api/config/format-variables（CD-146a-17）
+        favoriteScannerLinked: null,  // null=尚未查或未設定最愛資料夾／true/false=既有端點回的 linked（CD-146a-14）
 
         // ===== Translation State =====
         isTranslating: false,
@@ -109,6 +111,7 @@ export function searchStateBase() {
         duplicateTarget: '',  // duplicate modal 顯示的目標檔名
         duplicateModalOpen: false,  // Alpine state for duplicate modal
         errorText: '',  // T6c: Error message state
+        errorKind: '',  // CD-146a-20: error classification for conditional UI
 
         _timers: {},  // Timer registry：{ [key: string]: number }（setTimeout ID）
         _batchCheckInterval: null,      // T1(40b): batch searchAll 暫停等待 interval ref

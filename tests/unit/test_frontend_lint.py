@@ -4801,29 +4801,48 @@ class TestSearchDetailCoverFixContract:
         )
 
     def test_d5_mobile_cover_overflow_visible(self):
-        """#D5 @media ≤1024px .search-container .av-card-full-cover 含 overflow:visible"""
+        """#D5 平板／手機斷點內 .search-container .av-card-full-cover 含 overflow:visible
+
+        146b-T2 把這個 media 的字面從 `1024px` 收斂成 `1023.98px`（與側欄 min-width:1024
+        互斥），本守衛原本寫死 `1024px` 因而找不到區塊而紅——但**不變式沒有變**：
+        平板／手機的直向堆疊佈局下，cover 必須是 overflow:visible。
+
+        定位方式用 FE-GUARD-14 的 0/1/≥2 三岔：`max-width: 1023.98px` 在 search.css 有
+        **兩個**同字面區塊（:662 只含 .search-container height、:672 才是直向堆疊那段），
+        寫死取第一個會抓到錯的那個。
+        """
         css = self._css()
-        # 擷取 @media (max-width:1024px) { ... } 整段（巢狀 brace，用平衡掃描）
-        start = re.search(r'@media\s*\(\s*max-width\s*:\s*1024px\s*\)\s*\{', css)
-        assert start is not None, "search.css 找不到 @media (max-width:1024px) 區塊"
-        i = start.end()
-        depth = 1
-        while i < len(css) and depth > 0:
-            if css[i] == '{':
-                depth += 1
-            elif css[i] == '}':
-                depth -= 1
-            i += 1
-        media_body = css[start.end():i - 1]
-        block = self._block(
-            media_body,
-            r'\.search-container\s+\.av-card-full-cover(?![-\w])'
+        # 平板／手機斷點（146b-T2 起為 1023.98px；舊樹是 1024px，兩者都接受以免誤判歷史樹）
+        candidates = []
+        for start in re.finditer(
+            r'@media\s*\(\s*max-width\s*:\s*(?:1024|1023\.98)px\s*\)\s*\{', css
+        ):
+            i = start.end()
+            depth = 1
+            while i < len(css) and depth > 0:
+                if css[i] == '{':
+                    depth += 1
+                elif css[i] == '}':
+                    depth -= 1
+                i += 1
+            media_body = css[start.end():i - 1]
+            block = self._block(
+                media_body,
+                r'\.search-container\s+\.av-card-full-cover(?![-\w])'
+            )
+            if block is not None:
+                candidates.append(block)
+
+        assert candidates, (
+            "search.css 的平板／手機斷點（max-width:1023.98px 或 1024px）內"
+            "找不到 .search-container .av-card-full-cover 規則"
         )
-        assert block is not None, (
-            "≤1024px media 內找不到 .search-container .av-card-full-cover 規則"
+        assert len(candidates) == 1, (
+            f"平板／手機斷點內有 {len(candidates)} 條 .search-container .av-card-full-cover 規則，"
+            "無法判定最終生效的是哪一條——請先收斂成一條（FE-GUARD-14：拒絕歧義而非取第一個）"
         )
-        assert re.search(r'overflow\s*:\s*visible', block), (
-            "≤1024px .search-container .av-card-full-cover 缺少 overflow:visible"
+        assert re.search(r'overflow\s*:\s*visible', candidates[0]), (
+            "平板／手機斷點的 .search-container .av-card-full-cover 缺少 overflow:visible"
             "（Bug A mobile：max-height:50vh+overflow:hidden 截 sample-strip 會回歸）"
         )
 

@@ -3,7 +3,7 @@
 
 /* 主要容器 */
 .search-container {
-    min-height: calc(100vh - 56px);
+    min-height: calc(100vh - var(--mobile-topbar-height));
     display: flex;
     flex-direction: column;
 }
@@ -11,7 +11,7 @@
 /* 搜尋框區域 - 緊湊 */
 .search-bar {
     flex-shrink: 0;
-    padding: 0.75rem 1.5rem;   /* 129-T4 / CD-129-4：與 .showcase-toolbar 對齊（showcase.css:36）*/
+    padding: 0.75rem var(--layer-inset);   /* 129-T4 / CD-129-4：與 .showcase-toolbar 對齊（showcase.css:36）*/
     background: var(--bg-header);
     border-bottom: 1px solid var(--border-light);
     backdrop-filter: blur(var(--fluent-blur)) saturate(var(--fluent-saturate));
@@ -93,7 +93,7 @@
     flex: 1;
     display: flex;
     overflow: hidden;
-    padding: 0.5rem;
+    padding: 0.5rem var(--layer-inset);
     gap: 0.5rem;
     min-height: 0;
 }
@@ -434,7 +434,7 @@
     margin: 0.75rem auto 0;
     padding-top: 0.75rem;
     border-top: 1px solid var(--stroke-subtle);
-    text-align: center;
+    text-align: left;
 }
 
 .empty-explainer-line {
@@ -450,10 +450,44 @@
     margin-top: 0.3em;
 }
 
-/* 92a-T4: explainer 內嵌整理 icon — success 綠對齊實際整理鈕（U-B2）。token 不硬編。 */
+/* 146a-T4: 說明區的路徑／命名範例膠囊與設定連結 —— 沿用掃描頁輸出列
+   （theme.css .output-info .path code / .settings-link）的視覺語彙，零新增設計語言。
+   那組規則在 :is(#ds-gallery-components, .ds-gallery-composition) 作用域內，
+   本區不在該作用域，故在此重述同值，不掛那個 class（避免帶進整組無關的後代規則）。 */
+.empty-explainer-line code {
+    font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+    font-size: 0.95em;
+    background: var(--border-light);
+    padding: 0.15rem 0.4rem;
+    border-radius: var(--radius-xs);
+    color: var(--text-primary);
+    /* inline-block ＝ 原子行內盒，永遠不會被拆到兩行：放不下就整顆移到下一行。
+       max-width + overflow-wrap 只服務「膠囊本身比容器還寬」的極端長路徑，
+       那時才允許在內部斷，避免撐破 34em 容器。 */
+    display: inline-block;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+}
+
+.empty-explainer-line a {
+    color: var(--accent);
+    text-decoration: none;
+}
+
+.empty-explainer-line a:hover {
+    text-decoration: underline;
+}
+
+/* 146a-T4: explainer 行首 icon —— 與上方對應按鈕的圖示同一個 glyph（spec §6.4）。
+   星＝btnFavorite（btn-warning，恆為琥珀）故用 warning；
+   時鐘＝btnAutoOrganize，該鈕預設狀態是 btn-outline（中性），
+   故不覆寫顏色、沿用說明行本身的 muted 色，維持整區克制。 */
 .empty-explainer-line .explainer-icon {
-    color: var(--color-success);
-    margin-left: 0.2em;
+    margin-right: 0.35em;
+}
+
+.empty-explainer-line .explainer-icon-favorite {
+    color: var(--color-warning);
 }
 
 @media (max-width: 480px) {
@@ -625,17 +659,17 @@
 /* === RWD 響應式 === */
 
 /* Tablet & Mobile: 調整容器高度 */
-@media (max-width: 991.98px) {
+@media (max-width: 1023.98px) {
     .search-container {
-        height: calc(100vh - 56px);
+        height: calc(100vh - var(--mobile-topbar-height));
         /* 扣除頂部導航列 */
     }
 }
 
 /* === RWD: Search Card 響應式 === */
 
-/* <= 1024px：垂直排列（封面上方 + info 下方） */
-@media (max-width: 1024px) {
+/* < 1024px：垂直排列（封面上方 + info 下方）。146b-T2 起字面為 1023.98px，與側欄 min-width:1024 互斥 */
+@media (max-width: 1023.98px) {
     .search-container .av-card-full {
         flex-direction: column;
         overflow-y: auto;
@@ -670,12 +704,12 @@
     #resultCard > .av-card-full { overflow: visible; }
     .search-container   { height: auto; overflow-y: auto; }
 
-    /* US1-75b：≤1024px 全寬單欄時，雙欄 metadata 回單欄（spec §US1 L97/L113 驗收強制，CD-75b-2） */
+    /* US1-75b：<1024px 全寬單欄時，雙欄 metadata 回單欄（spec §US1 L97/L113 驗收強制，CD-75b-2） */
     .search-container .av-card-full-body .info-grid-pair {
         grid-template-columns: 1fr;
     }
 
-    /* 92a-T5: ≤1024px 整頁捲動下大卡撐開自然高、把批次整理鈕（file mode）推到 fold 下（真缺口）。
+    /* 92a-T5: <1024px 整頁捲動下大卡撐開自然高、把批次整理鈕（file mode）推到 fold 下（真缺口）。
        把同一顆 #btnScrapeAll 的宿主 .file-list-section 於 file mode 錨定 viewport 底（position:fixed 底部 tray）。
        CDP 核實：position:sticky 無法把 below-fold 元素拉上 viewport（sticky 只在捲過時 pin，不上拉），
        故用 fixed 才真滿足 G-B1「不需捲過大卡即可見」（plan CD-92a-4 已授權 position:fixed/貼底）。
@@ -699,26 +733,6 @@
     }
 }
 
-/* 92a-T5 fix (Codex P2): 992–1024px sidebar 仍可見（base.html @min-width:992px .sidebar display:flex，
-   main-content margin-left:var(--sidebar-width)），而 tray fixed left:0 會被 fixed sidebar（200px/collapsed 60px,
-   z-1000）蓋住左緣、與 main-content 不對齊（窄桌面視窗版位回歸）。此區間把 tray 左緣對齊 main-content（sidebar 寬）；
-   ≤991.98px sidebar 隱藏、此 min-width:992px 區間不 match → 回上方 base 的 left:0 全寬（source order 後者勝，
-   collapsed 規則 specificity 更高恆勝）。 */
-@media (min-width: 992px) and (max-width: 1024px) {
-    .file-list-section.organize-tray {
-        left: var(--sidebar-width);
-        /* 解除 over-constraint（Codex PR P2）：base .file-list-section width:100% + tray
-           right:0 + 此處 left 三者皆非 auto → CSS 2.1 §10.3.7 忽略 right、寬撐 100vw 從
-           sidebar 起算溢出右緣。width:auto 讓 right:0 生效 → 寬=viewport-left，對齊
-           main-content。低 specificity 亦覆 collapsed 變體（其僅覆寫 left）。 */
-        width: auto;
-    }
-
-    body.sidebar-collapsed .file-list-section.organize-tray {
-        left: var(--sidebar-collapsed-width);
-    }
-}
-
 /* Mobile 額外調整 */
 @media (max-width: 767.98px) {
     .av-card-full-cover-wrapper .nav-btn {
@@ -730,7 +744,7 @@
     .av-card-full-cover-wrapper .nav-btn.prev { left: 5px; }
     .av-card-full-cover-wrapper .nav-btn.next { right: 5px; }
 
-    .search-bar {
+    .search-bar, .result-area {
         padding: 0.5rem;
     }
 }

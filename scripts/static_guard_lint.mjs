@@ -4912,6 +4912,29 @@ const RULES = [
     pattern: '!enabled',
     note: '[TASK-144 Codex 四審] search.html 自動整理開關的 :disabled 綁定必須含 !enabled（只看 !folderIsSet 會讓清空最愛資料夾後這顆開關關不掉）',
   },
+
+  { file: 'web/templates/search.html', kind: 'required-string', pattern: 'favoriteScannerLinked === false', note: '[TestSearchEmptyFavoriteLinkedStrict] CD-146a-16／FE-JS-01：三態嚴格比較不得精簡成 !favoriteScannerLinked' },
+
+  // ---- [pre-merge / grok-4.6 branch review P3 第 2 條] 空狀態的設定相依列必須等 appConfig 載入 ----
+  // appConfig 初值是 null，而 Alpine 不 await async init()：第一幀 favoriteConfigured() 回 false、
+  // buildNamingPreview() 退回預設格式 ⇒ 已設最愛的人先被叫去「指定一個資料夾」、改過檔名格式的人
+  // 先看到別人的範例。實測本機 4/4 冷載 /api/config 都在 FCP 前 10–41ms 到（看不到），
+  // 但那是本機餘裕；靜態資源已快取而 API 慢時先後會反過來。
+  { file: 'web/templates/search.html', kind: 'required-string', pattern: 'appConfig !== null && !favoriteConfigured()', note: '[pre-merge] 空狀態「未設定最愛」那一列必須等 appConfig 載入（否則已設定的人先看到叫他去設定）' },
+  // 命名範例列改由 empty-explainer.js 的 namingPreviewReady() 回答「準備好了沒」
+  // （CodeRabbit PR#187：樣板只鎖 appConfig，漏了平行載入的 formatVariables）。
+  // 樣板這條只鎖「有沒有問那個函式」，**不再鎖它問了哪幾個輸入**——輸入清單歸下面兩條，
+  // 與消費端同檔，下次多一個輸入時改的人看得到。
+  { file: 'web/templates/search.html', kind: 'required-string', pattern: 'x-show="namingPreviewReady()"', note: '[CodeRabbit PR#187] 空狀態命名範例那一列的 gating 必須走 namingPreviewReady()，不要在樣板列舉輸入' },
+  { file: 'web/static/js/pages/search/state/empty-explainer.js', kind: 'required-string', pattern: 'this.appConfig !== null', note: '[CodeRabbit PR#187] namingPreviewReady() 必須把 appConfig 算進去' },
+  { file: 'web/static/js/pages/search/state/empty-explainer.js', kind: 'required-string', pattern: '(this.formatVariables || []).length > 0', note: '[CodeRabbit PR#187] namingPreviewReady() 必須把 formatVariables 算進去（length>0 而非 !==null：回應缺 variables 時會寫成 []）' },
+
+  // ---- [TASK-146a-T5] errorKind snapshot/restore pairing ----
+  {
+    file: 'web/static/js/pages/search/state/search-flow.js', kind: 'paired-string',
+    ifPresent: 'errorKind: this.errorKind', thenRequire: 'this.errorKind = snap.errorKind',
+    note: 'errorKind pairing: _searchSnapshot 有 errorKind 但 cancelSearch() 未還原',
+  },
 ];
 
 // ---- helpers ----

@@ -13,7 +13,7 @@
 <link href="/static/css/pages/showcase.css" rel="stylesheet">
 <!-- settings.css note: the file header marks it "非共用，不納入 Design System".
      Loaded to support Source Badge + Font Size demos in #settings-components scope.
-     Some selectors (.settings-container, .settings-header) are NOT scoped to
+     Some selectors (.settings-header) are NOT scoped to
      #settings-components — acceptable today because DS markup has no matching
      elements. Avoid introducing those unscoped classes in future DS demos. -->
 <link href="/static/css/pages/settings.css" rel="stylesheet">
@@ -608,6 +608,27 @@
                     <div class="ds-acrylic-overlay fluent-acrylic">
                         <span>.fluent-acrylic</span>
                         <code>blur: 30px, saturate: 140%</code>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Page Layer（146b-T3b，CD-146b-16：去材質化後的純契約） -->
+            <div class="ds-subsection">
+                <h3>Page Layer</h3>
+                <p class="ds-desc">
+                    四頁共用的最外層掛載點（<code>.page-layer</code>）：本身<strong>不再畫任何材質</strong>（CD-146b-16）——使用者看不到它，只感覺得到切頁時左緣不跳。契約兩半：
+                    (1) <code>padding-inline</code> 恆 0，<code>--layer-inset</code> 只由各頁直接子區塊吃（CD-146b-7 ownership）；
+                    (2) 永遠不得有 <code>overflow</code>／<code>backdrop-filter</code>／<code>filter</code>／<code>transform</code>／<code>contain</code>
+                    （否則會替 <code>position:fixed</code> 後代建立 containing block，CD-146b-2）。
+                    可見玻璃質感全部交給各頁工具列／頁首（Rule 11/12/13a/13b/45/46/47；見下方 Shell (A)／B 浮動）。
+                </p>
+                <!-- demo-only：.page-layer 產品態完全透明；外框 dashed outline 與內縮示意線都是
+                     demo-only inline style，不是產品材質（與 Sample Gallery Overlay
+                     「原本是 position: fixed; inset: 0，demo 中以相對定位容器模擬」同口吻）。 -->
+                <div class="page-layer" style="outline: 1px dashed var(--color-base-300); outline-offset: -1px; padding-block: 0.75rem;">
+                    <div style="/* demo-only inset sketch */ margin-inline: var(--layer-inset); padding: 0.75rem 0; outline: 1px dashed var(--color-base-400); outline-offset: -1px;">
+                        <strong>直接子區塊</strong>（吃一個 <code>--layer-inset</code>）
+                        <code style="display: block; margin-top: 0.25rem; color: var(--text-secondary);">Layer 內容左緣 ＋ var(--layer-inset) → 子區塊左緣</code>
                     </div>
                 </div>
             </div>

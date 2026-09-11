@@ -16,19 +16,39 @@ export function searchStateSearchFlow() {
     return {
     // ===== Methods =====
     async loadAppConfig() {
-        // T4: inline 直接 fetch，消除 SearchCore.loadAppConfig 委派
+        // config／format-variables 平行發起、各自獨立失敗隔離（CD-146a-17 不變式）。
+        const configPromise = fetch('/api/config').then(r => r.json());
+        const varsPromise = fetch('/api/config/format-variables').then(r => r.json());
+        // 先掛一個 no-op rejection handler，避免 varsPromise 在「configPromise 還沒 await 完」
+        // 的窗口裡被瀏覽器誤記成 Uncaught (in promise)。這不吞掉錯誤——下面 await varsPromise
+        // 時它仍會 reject 並由該段的 try/catch 處理，只是提前把它標記為「已有人接手」。
+        varsPromise.catch(() => {});
+
         try {
-            const resp = await fetch('/api/config');
-            const data = await resp.json();
-            if (data.success) {
-                this.appConfig = data.data;
-                // nexttick-hydrate T4.1：移除 $nextTick imperative title 寫入死碼——
-                // #btnFavorite 是 id、非 x-ref，this.$refs.btnFavorite 恆 undefined，此 tick
-                // 從未生效（tooltip 一直是 template 靜態 title=favorite_note 的釐清說明）。
-                // 若要改動態「載入：{folder}」tooltip 屬 UX 變更、非 cleanup，留待 owner 定奪。
-            }
+            const data = await configPromise;
+            if (data.success) this.appConfig = data.data;
         } catch (e) {
             console.error('載入設定失敗:', e);
+        }
+        try {
+            const data = await varsPromise;
+            this.formatVariables = Array.isArray(data.variables) ? data.variables : [];
+        } catch (e) {
+            console.error('載入命名變數失敗:', e);
+        }
+
+        // favorite-scanner-link 需要 favorite 參數，依賴上面 appConfig 已處理完成（CD-146a-14）；
+        // 未設定最愛資料夾時不必打（該端點本身對空 favorite 也是直接回 linked:false，但前端
+        // 不顯示未設定情境下的追蹤警示，打了也白打，見 CD-146a-16 的 favoriteConfigured() 分支）。
+        const favoriteFolder = ((this.appConfig && this.appConfig.search && this.appConfig.search.favorite_folder) || '').trim();
+        if (favoriteFolder) {
+            try {
+                const resp = await fetch('/api/settings/favorite-scanner-link?favorite=' + encodeURIComponent(favoriteFolder));
+                const data = await resp.json();
+                this.favoriteScannerLinked = !!data.linked;
+            } catch (e) {
+                console.error('載入我的最愛連動狀態失敗:', e);
+            }
         }
     },
 
@@ -80,6 +100,7 @@ export function searchStateSearchFlow() {
         this.listMode = null;
         this.pageState = 'empty';
         this.errorText = '';  // T6c: 清空錯誤訊息
+        this.errorKind = '';
         this._heroCardImageError = false;   // A6-1: 清空 Hero Card 圖片錯誤
         this._heroLightboxImageError = false; // A6-1: 清空 Lightbox 圖片錯誤
         this._heroSlotReserved = false;      // A7-Prod: 清空 Hero Slot 預留
@@ -130,7 +151,8 @@ export function searchStateSearchFlow() {
             actressProfile: this.actressProfile,
             displayMode: this.displayMode,      // T3 fix: 還原 Grid 狀態
             currentMode: this.currentMode,      // T3 fix: 還原搜尋模式（toggle 顯示依賴）
-            errorText: this.errorText            // T6c fix: 還原錯誤訊息
+            errorText: this.errorText,           // T6c fix: 還原錯誤訊息
+            errorKind: this.errorKind,
         };
 
         // 5. 初始化狀態（修正 1: 使用 showState）
@@ -156,6 +178,7 @@ export function searchStateSearchFlow() {
         this._heroLightboxImageError = false; // A6-1: 清空 Lightbox 圖片錯誤
         this._heroSlotReserved = false;      // A7-Prod: 重置 Hero Slot 預留
         this.errorText = '';  // T6c: 清空上次的錯誤訊息
+        this.errorKind = '';
         // T4: 重置 stream state（防競態 + 新搜尋乾淨起始）
         this.isStreaming = false;
         this.streamComplete = false;
@@ -363,6 +386,7 @@ export function searchStateSearchFlow() {
                             // A7-Prod: 清理 _heroSlotReserved（頁面將切到 error state）
                             this._heroSlotReserved = false;
                             this.errorText = window.t('search.error.no_data');
+                            this.errorKind = 'no_data';
                             this.pageState = 'error';
                         } else {
                             // 正常 stream 完成：只補充 metadata
@@ -432,6 +456,7 @@ export function searchStateSearchFlow() {
                     } else {
                         this._searchSnapshot = null; // Fix 2: 清空 snapshot（搜尋失敗）
                         this.errorText = window.t('search.error.no_data');  // T6c: Alpine state
+                        this.errorKind = 'no_data';
                         this.pageState = 'error';
                     }
                 }
@@ -441,6 +466,7 @@ export function searchStateSearchFlow() {
                     this.activeEventSource = null;
                     this._searchSnapshot = null; // Fix 2: 清空 snapshot（搜尋錯誤）
                     this.errorText = data.message || window.t('search.error.search_failed');  // T6c: Alpine state
+                    this.errorKind = 'server_error';
                     this.pageState = 'error';
                 }
             } catch (err) {
@@ -503,10 +529,10 @@ export function searchStateSearchFlow() {
             // Fix 3: 檢查是否已被新搜尋取代
             if (savedRequestId !== this.requestId) return;
 
-            if (response.ok && data.success && data.data && data.data.length > 0) {
-                // 更新 currentMode 從 response
-                this.currentMode = data.mode || this.currentMode;
+            // 更新 currentMode 從 response
+            this.currentMode = data.mode || this.currentMode;
 
+            if (response.ok && data.success && data.data && data.data.length > 0) {
                 // 修正 2: 更新 Alpine state
                 this.searchResults = data.data;
                 this.currentIndex = 0;
@@ -557,6 +583,7 @@ export function searchStateSearchFlow() {
                     this._heroSlotReserved = false;
                 }
                 this.errorText = data.error || window.t('search.error.no_data');  // T6c: Alpine state
+                this.errorKind = 'no_data';
                 this.pageState = 'error';
             }
         } catch (err) {
@@ -567,6 +594,7 @@ export function searchStateSearchFlow() {
             this._searchSnapshot = null;
             console.error('[Search]', err);
             this.errorText = window.t('search.error.network_error');  // T6c: Alpine state
+            this.errorKind = 'network_error';
             this.pageState = 'error';
         }
     },
@@ -654,6 +682,7 @@ export function searchStateSearchFlow() {
             this.displayMode = snap.displayMode || 'detail';
             this.currentMode = snap.currentMode || '';
             this.errorText = snap.errorText || '';
+            this.errorKind = snap.errorKind || '';
 
             // 還原顯示
             this.pageState = snap.pageState;

@@ -258,11 +258,12 @@
         var(--fluent-shadow-16);
 }
 
-/* Rule 8 — Mobile top-navbar: glass shell + CSS-only inset (dim; CD-A8 / E1)
+/* Rule 8 — Mobile top-navbar: glass shell (dim; CD-A8 / E1；146b-T4 內縮已移除)
  * Tailwind left-0/right-0 are (0,0,0); DaisyUI .navbar width:100% is (0,1,0).
- * Our (0,2,0) dim-scoped rule overrides both via source-order.
- * left/right: 1rem + width: auto → navbar insets 1rem from viewport edges.
- * body padding-top: 3.5rem (base.html:259) is height-based, unaffected by inset.
+ * Our (0,2,0) dim-scoped rule overrides material via source-order.
+ * 146b-T4 / CD-146b-9-2：left/right:1rem + width:auto 內縮已刪——頂欄貼邊，
+ *   深淺主題 boundingRect 一致；材質（gradient/fill/border/edge/shadow）一律保留
+ *   （CD-146b-8 第 4 點：Rule 8 不在退場範圍內）。
  * Mobile shell uses mobile tokens (145deg, 0.52 fill). */
 [data-theme="dim"] .top-navbar {
     background: var(--glass-shell-mobile-gradient), var(--glass-shell-mobile-fill);
@@ -273,9 +274,6 @@
         inset 0 1px 0 var(--glass-shell-mobile-edge-top),
         inset 0 -1px 0 var(--glass-shell-mobile-edge-bottom),
         var(--fluent-shadow-8);
-    left: 1rem;
-    right: 1rem;
-    width: auto;
 }
 
 /* Rule 9 — Showcase footer: horizontal glass shell (dim)
@@ -354,6 +352,48 @@
         var(--fluent-shadow-8);
 }
 
+/* Rule 49 — 146b-T3b: .page-layer downgraded to a pure layout contract (CD-146b-16 §1).
+ * 146b-T3 gave `.page-layer` visible material (background/border/border-radius) to
+ * replace the retired Rule 11/12/45/47 chrome. Owner real-device review (2026-09-11)
+ * rejected that: with the chrome restored (see Rule 11/12/46/47 below), the class's
+ * own border-radius/border double up on the SAME var(--fluent-radius-xl) token and
+ * the same hairline the chrome now draws — two concentric rounded rects, one
+ * `--layer-inset` apart, the toolbar's corner sitting on the Layer's top edge like an
+ * unaligned tab (CD-146b-16 §1). Decision: `.page-layer` no longer paints anything.
+ * No selector block follows — there is nothing left to declare. The class itself is
+ * KEPT (CD-146b-7's mount point on all four pages' outer containers; test_page_layer.py
+ * keys its `.page-layer`-suffixed selectors off it) as a pure layout contract:
+ *   - padding-inline is always 0 (each page's own direct child eats one
+ *     `--layer-inset`, not this class — CD-146b-7 ownership table);
+ *   - MUST NOT declare overflow / backdrop-filter / filter / transform / contain —
+ *     any of those makes this element a new containing block for its
+ *     position:fixed descendants (lightbox, drag overlay, mobile file tray, ...),
+ *     silently changing what they're positioned against (CD-146b-2).
+ * CG-FLU-17 (scripts/css-guard.mjs) machine-checks both halves of the contract
+ * across the whole file (any selector containing `.page-layer`, at any nesting) —
+ * not just "background/border/border-radius absent" but the full forbidden list,
+ * since after this change there is no positive material check left to anchor on. */
+
+/* Rule 50 — 瀏覽頁 <1024 釘頂 offset/z-index（CD-146b-8 第 5 點；下界 481px 排除 ≤480 既有滑出 overlay，
+ * showcase.css z-index:90 > backdrop:85；若寫成裸 max-width:1023.98px，本檔 source-order
+ * 會把 ≤480 的 z-index 壓到 40，見 FE-CSS-02）
+ * CD-146b-22：.settings-header 拆到 Rule 51（設定頁無 ≤480 滑出，481 下界對它無意義） */
+@media (min-width: 481px) and (max-width: 1023.98px) {
+    .showcase-toolbar {
+        top: var(--mobile-topbar-height);
+        z-index: 40;
+    }
+}
+
+/* Rule 51 — 設定頁首 <1024 釘頂 offset/z-index（CD-146b-22）
+ * 設定頁沒有 ≤480 滑出 overlay，全段 <1024 一律讓位給手機頂欄。 */
+@media (max-width: 1023.98px) {
+    .settings-header {
+        top: var(--mobile-topbar-height);
+        z-index: 40;
+    }
+}
+
 /* ─────────────────────────────────────────────────────────────────────────────
  * A-T4: showcase toolbar — B floating glass bar (dim; CD-A6)
  * showcase.css:21 .showcase-toolbar (0,1,0) — source-order override via (0,2,0).
@@ -393,7 +433,7 @@
  *   grid-template-columns kept (central-column layout, theme-agnostic). */
 @media (min-width: 1024px) {
     .showcase-toolbar {
-        margin: 0 1rem;
+        margin-inline: var(--layer-inset);
         border-radius: var(--fluent-radius-xl);
         border: 1px solid var(--glass-shell-border);
         grid-template-columns: 1fr min(var(--spotlight-width), 100% - 30rem) 1fr;
@@ -813,7 +853,7 @@
         position: fixed !important;
         left: 0 !important;
         right: 0 !important;
-        top: 3.5rem !important;     /* navbar height (.top-navbar / .main-content inset) */
+        top: var(--mobile-topbar-height) !important;     /* navbar height (.top-navbar / .main-content inset) */
         width: 100% !important;     /* override Tailwind w-80 (20rem) */
         border-radius: 0 !important;    /* full-bleed sheet edge-to-edge */
         background: var(--surface-2) !important;    /* solid dropdown/modal token; beats dim glass */
@@ -868,7 +908,7 @@
  *   in 77d-T2; until then the light border color is IACVT (T1+T2 ship together). */
 @media (min-width: 1024px) {
     .search-bar {
-        margin: 0 1rem;
+        margin-inline: var(--layer-inset);
         border-radius: var(--fluent-radius-xl);
         border: 1px solid var(--glass-shell-border);
     }
@@ -895,14 +935,22 @@
  *   tying Rule 10/11 — appended later → source order wins.
  * ───────────────────────────────────────────────────────────────────────────── */
 
-/* Rule 46 — CD-C2 / 77d-T1: flush-left padding fix (all widths)
+/* Rule 46 — CD-C2 / 77d-T1 / 146b-T7（CD-146b-18）：flush-left padding fix (all widths)
  * padding shorthand fully overrides Rule 10/11 `padding: 1rem 0` (horizontal 0).
  * 77d-T1: theme-agnostic (was [data-theme="dim"]). Padding carries no theme value diff
  *   → unscoped so light headers also get flush-left padding. (0,2,0)→(0,1,0), tying
  *   settings.css:211 / scanner.css:13 (0,1,0) → source order wins. */
 :is(.settings-header, .avlist-header) {
-    padding: 1rem 1.5rem;
+    padding: 1rem var(--layer-inset);
 }
+/* ⚠️ Rule 46 這個 24px 對兩個選擇器是兩種不同語意，只是數值恰好相同、耦合在同一個 token 上：
+ *   - .settings-header：24px 就是 Layer 內距——它是 .page-layer 的直接子層（CD-146b-7
+ *     ownership 表），這個 padding 直接對應「內容左緣要落在哪條線」。
+ *   - .avlist-header：它是 .avlist-container 的孫層，對齊基準由 .avlist-container 自己
+ *     的 padding-inline 決定（見 scanner.css）；這裡的 24px 只是頁首方塊自己的
+ *     內部文字留白，不構成任何跨頁對齊契約，數值相同純屬巧合（TASK-146b-T7.md 現況分析
+ *     第 3 節）。兩者耦合在同一個 token 值今天無害（一起變也不影響對齊），但不要把它們
+ *     讀成有語意關聯——改 .avlist-header 這半不會動到掃描頁的對齊線。 */
 
 /* Rule 47 — CD-C2 / 77d-T1: B floating treatment (desktop ≥1024px)
  * 4-side border overrides Rule 10/11 border-bottom-color via source order. NO margin
