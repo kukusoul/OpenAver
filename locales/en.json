@@ -84,6 +84,7 @@
       "favorite": "Favorites",
       "load_favorite": "Load Favorite Folder",
       "load_favorite_folder": "Load: {folder}",
+      "auto_organize": "Scheduled Organize",
       "add_tag": "Add Tag",
       "edit_title": "Edit Title",
       "translate_ai": "AI Translate",
@@ -92,17 +93,44 @@
       "switch_source": "Switch Version",
       "open_source_url": "Open Source Page",
       "open_folder": "Open Folder",
-      "back_to_detail": "Back to Detail"
+      "play": "Play",
+      "add_wishlist": "Add to Wishlist",
+      "remove_wishlist": "Remove from Wishlist",
+      "back_to_detail": "Back to Detail",
+      "view_search_results": "View Search Results",
+      "view_wishlist": "View Wishlist"
+    },
+    "auto_organize": {
+      "enable_label": "Organize every 12 hours",
+      "run_now": "Run Now",
+      "run_now_started": "Started — you'll get a notification in the sidebar when it's done",
+      "run_now_busy": "A run is already in progress",
+      "use_resolved_folder": "Use This Folder",
+      "folder_warning": "Point this to your downloader's completed folder, not the one it downloads into",
+      "running": "Currently running",
+      "config_failed": "Action failed, please try again later"
     },
     "empty": {
       "hint": "Enter an ID to search, or add video files",
       "drag_hint": "You can also drag and drop files or folders",
+      "explain_add": "Add / drag in: lists titles and fetches metadata first — nothing is touched until you press \"Organize.\"",
+      "explain_favorite_unset": "Favorites: Point it at a folder (usually your downloader's completed folder) to list the videos inside with one click.",
+      "explain_favorite_set_prefix": "Favorites: Lists videos in ",
+      "explain_favorite_set_suffix": "; unorganized ones get their metadata fetched automatically.",
+      "explain_favorite_untracked": "Not tracked by Scanner — organizing it won't add titles to the Showcase page.",
+      "explain_auto_organize": "Scheduled Organize: automatically fetches metadata and organizes that folder every 12 hours.",
+      "explain_naming_prefix": "Pressing \"Organize\" renames the file, creates the folder, downloads the cover, and writes the NFO — for example: ",
+      "explain_naming_translate_suffix": "(using the Chinese-translated title)",
+      "explain_naming_link": "Change rules → Settings",
       "favorite_note": "\"Favorites\" is your frequently-used video folder path, not favorite actresses.",
       "explainer_partial": "Enter a partial ID such as IPZZ-03 to search the whole 030–039 range at once."
     },
     "error": {
       "hint": "Please check the ID format or try again later",
+      "hint_retry": "Please try again later",
+      "advanced_search_cta": "Advanced Search by ID",
       "tag_api_failed": "Failed to save tag, please try again later",
+      "tag_nfo_not_written": "Tag saved, but the NFO your media server reads wasn't updated",
       "no_data": "No data found",
       "search_failed": "Search failed",
       "network_error": "Network error, please retry",
@@ -179,6 +207,7 @@
       "has_local_count": "{count} local versions available (click to open folder)"
     },
     "wishlist": {
+      "empty": "No wishlist items yet",
       "aged_days": "Added {days} days ago"
     },
     "button": {
@@ -222,6 +251,7 @@
       "result_count": "Results ({count})",
       "unrecognized": "Cannot identify ID: {filename}",
       "not_found": "No data found for {number}",
+      "duplicate_detail": "{number}: A file with the same name already exists at the destination (duplicate)",
       "search_failed": "Search Failed",
       "connection_error": "Connection error, please try again later",
       "already_organized": "Organized",
@@ -247,7 +277,9 @@
       "no_translatable_titles": "No titles need translation",
       "translate_batch_done": "Translation done: {success} succeeded, {failed} failed",
       "fields_defaulted": "⚠️ {fields} not available; default values used",
-      "from_source": "From {name}"
+      "from_source": "From {name}",
+      "wishlist_already_owned": "This title is already in your library",
+      "wishlist_added_offscreen": "Added to Wishlist"
     },
     "duplicate": {
       "title": "Duplicate File",
@@ -489,6 +521,9 @@
       "cover_badges_note": "Show badges such as Subtitled / Uncensored / 4K in the top-left corner of covers (display only — your tags are not changed)",
       "cover_badges_legend": "* AI: AI-decensored, LEAK: leaked uncensored master",
       "cover_badges_help_aria": "About cover attribute badges",
+      "show_table_list_label": "Table & list views",
+      "show_table_list_note": "When enabled, the Showcase page's top-right corner gains table and list views in addition to the defaults (cover and poster only).",
+      "show_table_list_help_aria": "About table & list views",
       "cover_badge": {
         "subtitle": "Subtitled",
         "cracked": "AI-decensored",
@@ -953,7 +988,9 @@
       "pill_suffix": "videos",
       "pill_actresses_prefix": "Matching",
       "pill_actresses_middle": "filters —",
-      "pill_actresses_suffix": "actresses"
+      "pill_actresses_suffix": "actresses",
+      "source_unreachable_list": "Unreachable: {list}",
+      "source_unreachable_count": "{n} location(s) unreachable"
     },
     "nav": {
       "prev_page": "Previous",
@@ -971,7 +1008,9 @@
       "series": "Series",
       "duration": "Duration",
       "director": "Director",
-      "label": "Label"
+      "label": "Label",
+      "hometown": "Hometown",
+      "agency": "Agency"
     },
     "table": {
       "col_number": "ID",
@@ -992,6 +1031,7 @@
       "add_tag": "Add Tag",
       "tag_placeholder": "Tag name",
       "tag_api_failed": "Failed to save tag, please try again",
+      "tag_nfo_not_written": "Tag saved, but the NFO your media server reads wasn't updated",
       "user_tags_label": "Custom Tags",
       "alias_label": "Aliases",
       "alias_source_hint": "Synced from Scanner",
@@ -1534,6 +1574,14 @@
     "thumb_prewarm_start": "Starting cover thumbnail cache generation",
     "thumb_prewarm_done": "Cover thumbnail cache complete",
     "update_available": "A new version of OpenAver is available",
+    "auto_organize_summary": "Scheduled Organize",
+    "auto_organize_aborted": "Scheduled organize aborted",
+    "auto_organize_folder_not_set": "Scheduled organize: favorite folder not set yet",
+    "auto_organize_folder_unreachable": "Scheduled organize: favorite folder unreachable",
+    "auto_organize_readonly": "Scheduled organize: favorite folder is a read-only source",
+    "auto_organize_failed": "Scheduled organize failed, check the logs",
+    "wishlist_auto_removed": "Wishlist auto-updated",
+    "wishlist_reconcile_failed": "Wishlist reconciliation failed, check the logs",
     "scanner_cancelled": "Scan cancelled"
   },
   "similar_mode": {

@@ -84,6 +84,7 @@
       "favorite": "お気に入り",
       "load_favorite": "お気に入りフォルダを読み込む",
       "load_favorite_folder": "読み込む：{folder}",
+      "auto_organize": "定期整理",
       "add_tag": "タグを追加",
       "edit_title": "タイトルを編集",
       "translate_ai": "AI 翻訳",
@@ -92,17 +93,44 @@
       "switch_source": "バージョン切替",
       "open_source_url": "ソースページを開く",
       "open_folder": "フォルダを開く",
-      "back_to_detail": "詳細に戻る"
+      "play": "再生",
+      "add_wishlist": "ブックマークに追加",
+      "remove_wishlist": "ブックマークから削除",
+      "back_to_detail": "詳細に戻る",
+      "view_search_results": "検索結果を表示",
+      "view_wishlist": "ブックマークを表示"
+    },
+    "auto_organize": {
+      "enable_label": "12時間ごとに整理",
+      "run_now": "今すぐ実行",
+      "run_now_started": "開始しました。完了するとサイドバーに通知が届きます",
+      "run_now_busy": "すでに実行中です",
+      "use_resolved_folder": "このフォルダを使う",
+      "folder_warning": "ダウンローダーの完了フォルダを指定してください。ダウンロード中のフォルダを指定しないでください",
+      "running": "現在実行中です",
+      "config_failed": "操作に失敗しました。しばらくしてからもう一度お試しください"
     },
     "empty": {
       "hint": "番号を入力して検索、またはファイルを追加",
       "drag_hint": "ファイルやフォルダを直接ドロップすることもできます",
+      "explain_add": "追加／ドロップ：まず一覧に表示して情報を取得します。「整理」を押すまでファイルは変更されません。",
+      "explain_favorite_unset": "お気に入り：フォルダ（通常はダウンロード完了フォルダ）を指定すると、中の動画をワンクリックで一覧表示できます。",
+      "explain_favorite_set_prefix": "お気に入り：",
+      "explain_favorite_set_suffix": " 内の動画を一覧表示。未整理のものは自動で情報を取得します。",
+      "explain_favorite_untracked": "Scanner に追跡されていないため、整理してもブラウズページには表示されません。",
+      "explain_auto_organize": "定期整理：そのフォルダを12時間ごとに自動で情報取得・整理します。",
+      "explain_naming_prefix": "「整理」を押すと、リネーム・フォルダ作成・表紙ダウンロード・NFO 書き込みが行われます。例：",
+      "explain_naming_translate_suffix": "（タイトルは中国語訳を使用）",
+      "explain_naming_link": "ルールを変更 → 設定",
       "favorite_note": "「お気に入り」はよく使う動画フォルダのパスで、女優のお気に入りではありません",
       "explainer_partial": "「IPZZ-03」のように途中まで入力すると、030〜039 をまとめて検索できます。"
     },
     "error": {
       "hint": "番号の形式を確認するか、しばらくしてから再試行してください",
+      "hint_retry": "しばらくしてからもう一度お試しください",
+      "advanced_search_cta": "番号で高度な検索",
       "tag_api_failed": "タグの保存に失敗しました。しばらくしてから再試行してください",
+      "tag_nfo_not_written": "タグは保存されましたが、メディアサーバーが読み込む NFO は更新されていません",
       "no_data": "データが見つかりません",
       "search_failed": "検索に失敗しました",
       "network_error": "ネットワークエラーです。再試行してください",
@@ -179,6 +207,7 @@
       "has_local_count": "ローカルに {count} バージョン存在（クリックしてフォルダを開く）"
     },
     "wishlist": {
+      "empty": "まだブックマークがありません",
       "aged_days": "{days}日前に追加"
     },
     "button": {
@@ -222,6 +251,7 @@
       "result_count": "検索結果 ({count})",
       "unrecognized": "品番を識別できません: {filename}",
       "not_found": "{number} のデータが見つかりません",
+      "duplicate_detail": "{number}：移動先に同名のファイルが既にあります（重複）",
       "search_failed": "検索失敗",
       "connection_error": "接続エラー、後でもう一度お試しください",
       "already_organized": "整理済み",
@@ -247,7 +277,9 @@
       "no_translatable_titles": "翻訳が必要なタイトルはありません",
       "translate_batch_done": "翻訳完了：成功 {success}、失敗 {failed}",
       "fields_defaulted": "⚠️ {fields} の情報を取得できず、デフォルト値を使用しました",
-      "from_source": "{name} より"
+      "from_source": "{name} より",
+      "wishlist_already_owned": "この作品はすでにあなたのライブラリにあります",
+      "wishlist_added_offscreen": "ブックマークに追加しました"
     },
     "duplicate": {
       "title": "ファイルが重複しています",
@@ -489,6 +521,9 @@
       "cover_badges_note": "カバーの左上に「字幕」「無修正」「4K」などのバッジを表示します（表示のみ。タグ自体は変更しません）",
       "cover_badges_legend": "＊AI：AI による無修正化、LEAK：無修正マスターの流出",
       "cover_badges_help_aria": "カバー属性バッジの説明",
+      "show_table_list_label": "表とリスト表示",
+      "show_table_list_note": "オンにすると、ブラウズページ右上に表とリストの2つの表示形式が追加されます。デフォルトでは表紙とポスターのみです。",
+      "show_table_list_help_aria": "表とリスト表示の説明",
       "cover_badge": {
         "subtitle": "中国語字幕",
         "cracked": "AI 無修正化",
@@ -953,7 +988,9 @@
       "pill_suffix": "本",
       "pill_actresses_prefix": "条件",
       "pill_actresses_middle": "件に一致：",
-      "pill_actresses_suffix": "人"
+      "pill_actresses_suffix": "人",
+      "source_unreachable_list": "アクセスできません：{list}",
+      "source_unreachable_count": "{n} 件の場所にアクセスできません"
     },
     "nav": {
       "prev_page": "前のページ",
@@ -971,7 +1008,9 @@
       "series": "シリーズ",
       "duration": "収録時間",
       "director": "監督",
-      "label": "レーベル"
+      "label": "レーベル",
+      "hometown": "出身地",
+      "agency": "事務所"
     },
     "table": {
       "col_number": "番号",
@@ -992,6 +1031,7 @@
       "add_tag": "タグを追加",
       "tag_placeholder": "タグ名",
       "tag_api_failed": "タグの保存に失敗しました",
+      "tag_nfo_not_written": "タグは保存されましたが、メディアサーバーが読み込む NFO は更新されていません",
       "user_tags_label": "カスタムタグ",
       "alias_label": "別名",
       "alias_source_hint": "Scanner から同期",
@@ -1534,6 +1574,14 @@
     "thumb_prewarm_start": "カバーサムネイルキャッシュの生成を開始しました",
     "thumb_prewarm_done": "カバーサムネイルキャッシュが完了しました",
     "update_available": "OpenAver の新しいバージョンがあります",
+    "auto_organize_summary": "定期整理",
+    "auto_organize_aborted": "定期整理を中止しました",
+    "auto_organize_folder_not_set": "定期整理：お気に入りフォルダが未設定です",
+    "auto_organize_folder_unreachable": "定期整理：お気に入りフォルダにアクセスできません",
+    "auto_organize_readonly": "定期整理：お気に入りフォルダは読み取り専用ソースです",
+    "auto_organize_failed": "定期整理に失敗しました。ログを確認してください",
+    "wishlist_auto_removed": "ブックマークを自動更新しました",
+    "wishlist_reconcile_failed": "ブックマークの照合に失敗しました。ログを確認してください",
     "scanner_cancelled": "スキャンをキャンセルしました"
   },
   "similar_mode": {

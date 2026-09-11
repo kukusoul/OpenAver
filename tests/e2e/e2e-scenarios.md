@@ -67,7 +67,11 @@ source venv/bin/activate && uvicorn web.app:app --host 127.0.0.1 --port 8000
    - `#tutorialProgress` 文字含 `1 / 7`
 4. `browser_click` → `#tutorialNext`；`browser_wait_for` `#tutorialProgress` text contains `2 / 7`
 5. `browser_snapshot` 驗 `#btnGenerate` 在 viewport 內（step 2 spotlight 命中產生網頁按鈕）
-6. `browser_click` → `#tutorialNext`；驗進度 `3 / 7`、sidebar `a[href="/scanner"]` 取得 outline（sidebar mode）
+6. `browser_click` → `#tutorialNext`；驗進度 `3 / 7`（**v0.15.15 起 step 3 改指向 `#btnGenerate` 本身**，不再指 sidebar Scanner 連結）：
+   - `browser_snapshot` 驗 `#btnGenerate` 仍在 spotlight 命中範圍（與 step 2 同一顆按鈕）
+   - **驗**：提示卡內含 `.tutorial-mock-card`，其中 `.nfo-badge` 文字同時含 `13` 與 `11`（固定假數字，見 `tutorial-step3-card.js` CD-146a-3：不讀真實片庫）
+   - **驗**：`.tutorial-mock-card .btn-nfo-update` 存在且帶 `disabled` — `browser_click` 該鈕**不應**觸發任何網路請求（`browser_network_requests` 比對點擊前後無新增 `/api/enrich` 類請求），純示意圖不可點
+   - **驗**：提示文字（`tutorial.step3_content`）講明「已經用其他工具整理過的片會直接匯入，不重刮」
 7. `browser_click` → `#tutorialNext`；驗進度 `4 / 7`、sidebar `a[href="/showcase"]` outline
 8. `browser_click` → `#tutorialNext` × 3 → 依序驗 step 5/6/7：
    - step 5：sidebar `a[href="/search"]` outline、進度 `5 / 7`
@@ -98,7 +102,7 @@ source venv/bin/activate && uvicorn web.app:app --host 127.0.0.1 --port 8000
 
 ### PyWebView 例外
 
-N/A — tutorial flow 是 browser-only，無需 PyWebView picker。Step 6 sidebar 模式指回 `/scanner` 自身（CD-59-2：避開 `#btnUpdate` 首載隱藏導致 silent skip）。
+N/A — tutorial flow 是 browser-only，無需 PyWebView picker。Step 4（showcase，原文檔標「step 6」為舊版編號，已隨 v0.15.15 step 3 改動訂正）起才是 sidebar 模式指向對應頁面連結（CD-59-2：避開 `#btnUpdate` 首載隱藏導致 silent skip）。
 
 ### Regression 偵測點
 
@@ -107,6 +111,8 @@ N/A — tutorial flow 是 browser-only，無需 PyWebView picker。Step 6 sideba
 - locale 切換後文案沒抓對 step → i18n raw key 顯示（如 `tutorial.step1_title` 字串出現在 overlay）
 - `tutorial_completed` 沒持久化到後端 → 重整後 tutorial 再次自動觸發（步驟「重整後不自動觸發驗證」失敗）
 - `?tutorial=restart` 不從 step 1 起算 → 進度顯示非 `1 / 7`
+- step 3 的模擬卡數字（13／11）與真卡片共用的 i18n key（`scanner.stats.missing_nfo_prefix` 等）沒有同步變動 → 導覽卡片文字與真實補完列的措辭不一致，使用者事後認不出「就是導覽裡那個」
+- 點 `.tutorial-mock-card .btn-nfo-update` 發出了真實請求 → `pointer-events:none` 或 `disabled` 守衛被移除，示意圖變成會誤觸的假按鈕
 
 ---
 
@@ -862,6 +868,217 @@ N/A — locale 切換、Dark/Light mode、tutorial 文案驗收均為 browser-on
 - 失敗文案又回到寫死的「端口 8000」→ 使用者照著查永遠查不到東西
 - `debug.log` 是空的 → 探活失敗的原因沒有落地，那句「請查看 debug.log」又變成空頭支票
 - 少數情況（OpenAver 選好的端口在啟動前一刻被搶走）`debug.log` 只有探活失敗紀錄、查不到真因——**這是已接受的 residual，不是 regression**（uvicorn 綁定失敗走 `sys.exit(1)` ＋ 它自己的 logger 不 propagate，見 plan-130a 殘留段）
+
+---
+
+## US14: 書籤（Wishlist）牆與燈箱（v0.15.8 ~ v0.15.10 新增）
+
+**故事**：主人在搜尋頁查到一部還沒入手的片，先按書籤收起來 → 切到「書籤」分頁看牆 → 點卡開燈箱看大圖、往左右滑看下一部 → 片放久了卡片上會多一行「放了幾天」→ 從書籤清單移除一筆，或者片已經入庫了讓系統自己把它收掉。
+
+> **為什麼合成一個 US**：140/141 兩支 branch（牆＋燈箱基本功能、後續動效與 aging 標籤）改的是同一面牆與同一個燈箱狀態機，分開跑會漏掉「牆上卡片與燈箱內容對不上同一筆資料」這類串接問題。
+
+### Setup
+
+- Dev server 已啟動，書籤清單非空（`GET /api/wishlist` 回傳陣列長度 `>= 1`；本機 dev DB 目前有 10 筆，足夠測）。
+- **全程唯讀**：只看牆、開關燈箱、往返切換分頁；**不按移除鈕**（`removeFromWishlist` / `removeFromWishlistInLightbox` 會真的刪掉那筆書籤資料，dev DB 是共用測試資料不做這個）。
+- 若 `GET /api/wishlist` 回傳空陣列 → **skip 全部書籤相關 step 並記錄原因**（沒有資料可看）。
+
+### Steps
+
+1. **[MCP] 切到書籤分頁**：`/search` → 點搜尋列左側切換鈕（`#wishlistToggleBtn`，書籤圖示，非 `#searchQuery` 旁那顆放大鏡）
+   - **驗**：`.wishlist-panel` 顯示、`.wishlist-grid` 內卡片數與 `GET /api/wishlist` 的筆數一致
+   - **驗**：搜尋框、空狀態、結果卡（`#emptyState` / `#resultCard` / `#loadingState`）都**不顯示**（`listMode === 'wishlist'` 互斥閘）
+   - **驗**：`#wishlistToggleBtn` 上的角標數字（`.mode-toggle-badge`）與清單筆數一致
+2. **[MCP] 卡片內容與「放了幾天」**：`browser_snapshot` 看牆上任一張卡
+   - **驗**：卡片露番號（`.av-num`）與女優（`.av-actress`）、hover 區塊有標題
+   - **驗**：若該筆 `created_at` 夠久（依 `classifyWishlistAging()` 判，14 天／30 天兩道門檻），卡片右上有 `.wishlist-aging` 標籤讀「N 天前加入」；未達 14 天不顯示（**驗**至少一個 stage1、一個 stage2 各出現一次，或記錄「本次資料全落在同一 stage」）
+   - **已知例外**（`wishlist-aging.js`）：`release_date` 在未來（預售片）時無論放了多久都強制 stage 0（不顯示 aging 標籤）——實測本機資料裡放了 68 天的一筆因為是預售片而**不**顯示標籤，這是設計行為，不是 regression，別誤判
+3. **[MCP] 開燈箱＋左右導航**：點任一張卡
+   - **驗**：`.wishlist-lightbox` 取得 `.show` class、大圖 `<img>` 顯示（或 `.cover-error-placeholder` 破圖占位，兩者擇一，不可雙秀或雙無）
+   - **驗**：燈箱有「開原站」（`source_url` 非空時才出現）與「移除書籤」兩顆下游動作鈕（**只看存在，不按移除那顆**）
+   - ⚠️ **選 nav 按鈕陷阱（實測踩過）**：一般搜尋結果燈箱與書籤燈箱**共用同一組 class**（`.lightbox-nav-prev`／`.lightbox-nav-next`），`document.querySelector('.lightbox-nav-next')` 在兩個燈箱都存在的 DOM 裡會抓到**第一個**（通常是關著的那個），click 沒有任何效果也不報錯。務必先 `document.querySelector('.wishlist-lightbox').querySelector('.lightbox-nav-next')` 縮限範圍
+   - `browser_click` 右箭頭（`wishlistLightboxIndex < length-1` 時可見）→ **驗**大圖換成下一筆、番號跟著換（實測：`.wishlist-lightbox img` 的 `alt` 從 `SNOS-365` 變 `MIDV-960`，index 0→1；讀值前留一個 evaluate tick，click 與讀值同一次 `browser_evaluate` 呼叫內可能搶在 Alpine reactive 更新之前）
+   - `browser_click` 左箭頭回到上一筆 → **驗**回到 step 3 開的那張卡的番號（往返一致，不錯位）
+4. **[MCP] 關閉燈箱三條路**：分別測試 `.lightbox-close` 按鈕、點遮罩空白處（`@click="closeWishlistLightbox()"`）、`Escape` 鍵（若有綁）
+   - **驗**：三種都能關閉，關閉後 `.wishlist-lightbox` 失去 `.show`，牆與搜尋列狀態未被清空
+5. **[MCP] 切回搜尋結果分頁**：點放大鏡那顆 `.mode-toggle-btn`
+   - **驗**：回到 `listMode !== 'wishlist'` 的一般搜尋畫面，之前的搜尋框內容／狀態未被書籤分頁污染
+
+### 完成後 state
+
+- `listMode` 回到非 wishlist、`.wishlist-lightbox` 已關閉
+- `GET /api/wishlist` 筆數與跑之前相同（全程未觸發移除）
+
+### PyWebView 例外
+
+N/A — 書籤牆／燈箱純瀏覽器互動，不依賴原生 picker。「加入書籤」（搜尋結果卡上的 ★／🔖 按鈕）與「移除書籤」因為會真的寫 DB，本 US 不觸發，留給 [人工] 或 disposable fixture 環境驗證。
+
+### Regression 偵測點
+
+- 切到書籤分頁後空狀態／結果卡任一個還留在畫面上 → `listMode` 互斥閘漏了一處
+- 牆上卡片數與角標數字兜不起來 → `wishlistCount` 與 `wishlistItems.length` 兩個來源沒同步
+- 剛加入的書籤在牆上永遠灰底「無圖」、切走切回也不會好 → `:src` 的 `item.created_at` 閘被拿掉（見 search.html branch review P2-1 註解），樂觀 unshift 在封面真的寫檔前就發出請求
+- 燈箱左右導航後大圖番號沒換、只有外框動畫換了 → `wishlistLightboxIndex` 更新了但 `currentWishlistLightboxItem()` 讀到舊 index
+- 點遮罩關閉時連牆上捲動位置或搜尋框內容一起被清掉 → 燈箱關閉與 `clearAll()` 誤共用了同一個 handler
+- `.wishlist-aging` 在剛加入（`created_at` 很新）的卡片上也顯示 → aging stage 的門檻算反了
+
+---
+
+## US15: 瀏覽頁封面／海報切換 ＋ 設定頁「顯示表格與清單」（v0.15.2 新增）
+
+**故事**：主人在瀏覽頁想看直式海報而不是完整封面 → 右上角只有一顆圖示按鈕，點一下整面牆原地變形，不再跳出下拉選單問「表格／清單」——那兩種呈現預設藏起來，想要的話去設定頁開一顆開關才會回到下拉選單。
+
+### Setup
+
+- Dev server 已啟動，`/showcase` 片庫非空。
+- **不要按到設定頁的「儲存」**：只驗 checkbox 本身可以勾/取消勾（`x-model`，純前端狀態），**不觸發整包 config 的 POST**——那會真的把 `show_table_list` 寫回 `config.json`，不是「切換再還原」這種可逆動作。
+- `innerWidth = 1280`（桌面寬度，避開 `_isNarrow` 分流）。
+
+### Steps
+
+1. **[MCP] 預設只有一顆封面／海報切換鈕**：`/showcase` → `browser_snapshot` 工具列
+   - **驗**：`show_table_list` 預設關（`config.json` 目前 `gallery.show_table_list` 未設或 `false`）時，`.showcase-toolbar` 只出現**一顆**不帶下拉的圖示鈕（無 `.toolbar-dropdown-wrap` 包住的模式鈕），沒有「表格／清單」選項
+2. **[MCP] 點一下原地切封面／海報**：`browser_click` 該鈕
+   - **驗**：`.showcase-grid` 加上 `shape-poster` class、卡片變直式（與 US9 step 6 的直式海報**同一份**卡型，`A` 鍵循環行為在 US9 已涵蓋，這裡只驗**唯一按鈕**觸發同一效果）
+   - **驗**：按鈕 icon 與 `title` 同步切換（`bi-person-badge` ↔ `bi-person-vcard`，`title` 讀出目前模式）
+   - **驗**：切換是原地變形不是整面淡出淡入（`.av-card-preview` 在切換期間 `opacity` 全程 ≥ 0.95，複用 US9 的驗法）
+   - 再點一次切回完整封面，**驗**牆面與按鈕 icon 都還原
+3. **[MCP] 設定頁開關（不儲存）**：`/settings` → 捲到「列表生成」卡片 → 找到「顯示表格與清單」那一列的 checkbox（`x-model="form.showTableList"`）
+   - **驗**：checkbox 目前狀態與 `GET /api/config` 的 `gallery.show_table_list` 一致（預設應為未勾）
+   - `browser_click` 勾選 → **驗**：checkbox 變勾選（純前端 `x-model`，此時尚未送出）
+   - 旁邊 `?` 說明鈕（`.help-popover-btn`）點開 → **驗**：`.help-popover` 顯示說明文字
+   - **不按儲存**，直接 `browser_navigate` 離開設定頁（狀態捨棄，`config.json` 不變）
+4. **[人工，需要能保存設定]** 實際按下設定頁儲存、開啟「顯示表格與清單」→ 回 `/showcase` 驗工具列的模式鈕變回下拉選單（四條：完整封面／直式海報／表格／清單，對照 US9 step 6 選單），確認完再切回關閉並儲存還原——因為這一步會真的動 `config.json`，本輪 MCP 執行跳過，留給人工或下一輪有 disposable config 的環境驗證。
+
+### 完成後 state
+
+- `/showcase` 卡型已切回預設「完整封面」
+- `config.json` 的 `gallery.show_table_list` 未被本輪任何 MCP 動作改動（step 3 全程未送出表單）
+
+### Regression 偵測點
+
+- 預設狀態下工具列冒出下拉選單（四條選項）而不是單一切換鈕 → `showTableList` 的預設值或條件判斷反了，新使用者一裝好就看到「多一層選單」的舊行為
+- 點切換鈕整面淡出再淡入 → Flip capture 時序退化（同 US9 已知坑）
+- 設定頁 checkbox 的視覺狀態與 `GET /api/config` 不一致 → 表單初始化沒讀到後端值，使用者以為設定生效其實沒有
+- 未按儲存就離開設定頁，`config.json` 卻被改了 → 表單存在自動送出的副作用（例如 `x-model` 綁到了一個會觸發 watcher 自動 PATCH 的欄位）
+
+---
+
+## US16: 搜尋頁空狀態命名範例 ＋ 定時整理面板 ＋ 最愛未追蹤提醒（v0.15.13 / v0.15.15 新增）
+
+**故事**：主人第一次看到搜尋頁空狀態，四顆按鈕各自被一行文字解釋：加檔案／加資料夾先查資料不動檔案；★ 我的最愛告訴你它指哪個資料夾、會列出裡面全部影片；🕘 定時整理每 12 小時自動處理那個資料夾；最後一行用**主人自己當下的命名設定**算出一個範例，告訴他按下「整理」之後檔案會變成什麼樣子。點開「定時整理」面板可以看目前有沒有開、上次執行結果，還能立刻手動跑一次。如果主人的最愛資料夾根本沒被 Scanner 追蹤，這裡會先用琥珀色小字提醒，而不是等整理完才發現瀏覽頁找不到那些片。
+
+### Setup
+
+- Dev server 已啟動；`/search` 清空搜尋狀態回到 `#emptyState`（`browser_click` `#btnClear` 或 `clearAll()`）。
+- **定時整理開關屬於「切換再還原」允許範圍**（面板的 enable checkbox 點擊即時 POST `/api/search/auto-organize/config`，非經「儲存」按鈕）：可以開了再關回去，**但絕不按「立即執行」**（`runNow()` 會真的觸發掃描整理，搬動 dev DB 對應資料夾裡的檔案）。
+- 目前 dev 環境 `general.favorite_folder` 為空字串（未設定）——步驟 3 的「已設定」分支與「未被追蹤」警示在本環境**驗不到**，用 [人工] 標注，需要換一個「已設定最愛資料夾但該資料夾不在 Scanner tracked directories」的環境才能重現。
+
+### Steps
+
+1. **[MCP] 空狀態四行說明**：`browser_snapshot` `#emptyState .empty-explainer`
+   - **驗**：第一行讀 `search.empty.explain_add`（加入／拖入先查資料）
+   - **驗**：`favoriteConfigured()` 為 false 時（本環境現況）顯示「★ 我的最愛」未設定那一行（`search.empty.explain_favorite_unset`），**不**顯示已設定那一行
+   - **驗**：🕘 定時整理那一行（`search.empty.explain_auto_organize`）恆顯示，不看設定狀態
+   - **驗**：`namingPreviewReady()` 為 true 時，最後一行 `<code>` 內容是**真實算出來的檔名範例**（非空字串、非原樣未替換的 `{}` token），並帶「改規則 → 設定」連結（`href="/settings#filenameFormat"`）
+2. **[MCP] 命名範例與設定頁「同一份算法」**：記錄 step 1 的 `<code>` 文字 → `browser_navigate` `/settings#filenameFormat` → 找 `.folder-preview.naming-preview .preview-text`（設定頁「預覽」列）
+   - ⚠️ **實測訂正**：兩處呼叫的是同一個 `buildNamingPreview()` 純函式（`shared/naming-preview.js`），但**代入的 token 值不同**——搜尋頁空狀態代入的是**變數名稱本身**（`window.t('settings.var.'+name)`，例如「女優」「番號」「片商」，實測輸出 `女優/[番號][片商] 女優-標題後綴.mp4`），設定頁代入的是**固定範例資料**（`SSNI-618`／`三上悠亞`／`SOD` 等，實測輸出 `三上悠亞/[SSNI-618][SOD] 三上悠亞-絕對領域-4k.mp4`）。**不是逐字相同**，「同一份程式碼」指的是算法／token 替換邏輯共用，不是輸出字串共用——原始草稿假設「兩邊文字逐字相同」是錯的，已依實測訂正。
+   - **驗**：兩處的**結構**一致——資料夾層（`createFolder` 開時才有）＋ `[num][maker]` ＋ `actor-title` ＋ `suffix` ＋ `.mp4`，token 出現的相對順序與括號包法相同，只有代入值不同
+   - **驗**：在設定頁把「建立資料夾」關掉 → 設定頁預覽的資料夾層消失；回搜尋頁空狀態（不重整，`appConfig` 需重新載入或觀察下次進頁）→ 命名範例前綴的資料夾層也應消失（同一份 `scraper.create_folder` 設定值）
+3. **[MCP] 定時整理面板開合**：回 `/search` 空狀態 → `browser_click` `#btnAutoOrganize`
+   - **驗**：`.auto-organize-panel` 展開，欄位：啟用開關（checkbox）、「立即執行」按鈕（`:disabled` 在 `!folderIsSet`）、目前解析路徑（`.auto-organize-panel__path`）、警語（`.auto-organize-panel__warning`）
+   - **驗**：面板開啟只發一個 `/api/search/auto-organize/status` 請求（`browser_network_requests` 確認未重複打）
+4. **[MCP][切換再還原，需先設好最愛資料夾] 啟用開關**：⚠️ **實測訂正**——checkbox 的 `:disabled` 綁的是 `loading || (!folderIsSet && !enabled)`：本機 dev 環境 `search.favorite_folder` 是空字串（`folderIsSet === false`）且目前 `enabled === false`，兩個條件同時成立 ⇒ checkbox **一開始就是 disabled**，點擊沒有任何反應、也不會發任何 `POST` 請求（實測 `browser_network_requests` 在點擊前後完全相同，只有 step 3 那筆 `status`）。這一步**只有在已經設定最愛資料夾（`folderIsSet === true`）的環境才能做**：
+   - 記錄目前 `enabled` 狀態 → `browser_click` 勾選 checkbox
+   - **驗**：checkbox 變勾選、按鈕 `:class` 從 `btn-outline` 變 `btn-accent`（`#btnAutoOrganize` 本身）
+   - `browser_network_requests` 驗有一筆 `POST /api/search/auto-organize/config` body `{"enabled":true}` 且回應 `success`
+   - **還原**：再點一次 checkbox 關閉，驗證恢復 `btn-outline` 且再打一次 POST `{"enabled":false}` 成功；`GET /api/config` 確認 `auto_organize.enabled` 回到 `false`
+   - 本輪 dev 環境無最愛資料夾 → **SKIPPED**（checkbox disabled，無法點擊；不是 bug，是設計行為：沒有資料夾就不該能開定時整理）
+5. **[人工]** 最愛資料夾**已設定但不在 Scanner 追蹤清單**時的琥珀色提醒：需要先把 `general.favorite_folder` 設成一個不在 `scanner.directories` 內的路徑（真的寫 config，本輪不做）→ 驗空狀態「★ 我的最愛」那行後面多一句 `search.empty.explain_favorite_untracked`（琥珀色）；再把該路徑加進 Scanner 追蹤清單 → 驗那句提醒消失
+6. **[人工][寫檔]** 「立即執行」定時整理：按 `.auto-organize-panel` 的「立即執行」鈕會真的觸發掃描與搬檔，需要 disposable fixture 目錄才能安全驗證，本輪不做
+
+### 完成後 state
+
+- `.auto-organize-panel` 已關閉、`auto_organize.enabled` 已還原為跑之前的值（本輪為 `false`）
+- `/search` 回到清空狀態
+
+### Regression 偵測點
+
+- 空狀態說明列回到「查資料 vs 動檔案」的三行抽象敘述 → 146a 的四行對應按鈕的改版被回退
+- 命名範例列在 `appConfig` 或 `formatVariables` 任一個還沒 ready 時就顯示（半截字串或 raw token）→ `namingPreviewReady()` 只擋了其中一個輸入（CodeRabbit 曾抓到只擋 `appConfig` 漏了 `formatVariables`）
+- 空狀態範例與設定頁預覽兩邊文字不一致 → 共用函式被其中一邊繞過、各自維護了一份邏輯
+- 定時整理開關按下去畫面顯示「開著」、但 `GET /api/config` 讀回仍是 `false` → 失敗時只回滾了 `this.enabled` 沒有連 DOM `checked` 一起還原（component 註解裡明講的那個坑）
+- 連點兩下開關，最終落地的值不是使用者最後一次點的那個 → `loading` 早退沒有把 checkbox DOM 狀態拉回
+
+---
+
+## US17: 唯讀來源卡片 ＋ 來源不可連狀態 ＋ javdb 資料路徑（[人工] 為主，v0.15.1 / v0.15.11 / v0.15.12 新增）
+
+**故事**：主人把一顆隨身碟／NAS 掛成唯讀來源 → 瀏覽頁那些影片檔也各自長出卡片，可以搜尋、可以看，但改不了自訂標籤、補不了 NFO；碟拔掉之後，瀏覽頁底部直接寫出「這個來源連不到」而不是讓整面牆空著讓人猜；搜尋番號時，走 javdb 的那條資料路徑換了取得資料的方式，過去查不到的（路徑含中日韓文字、被 javdb 擋下來）現在大多查得到。
+
+> **為什麼整段以 [人工] 為主**：三者都需要**真實的環境狀態**——唯讀來源需要另一個真的掛載點與檔案；來源不可連需要一個曾經連過、現在真的斷線的來源（`GET /api/showcase/source-status` 在本機 dev 環境目前回空陣列，沒有可觀察的不可連來源）；javdb 資料路徑是外部站台行為與封裝格式判斷，屬於資料正確性而非 UI 互動，不是瀏覽器能驗的東西。
+
+### Steps
+
+1. **[人工]** 設定一個 `readonly: true` 的掃描來源（`scanner.directories[].readonly = true`），資料夾內放幾部沒有 NFO 的影片檔 → 掃描
+   - **驗**：`/showcase` 牆上每一個影片檔都各自長出一張卡片（過去唯讀來源會漏掉部分檔案，0.15.12 起逐檔都留卡）
+   - **驗**：同一個檔名，唯讀來源與一般掃描解出**同一個番號**（片商對照表對唯讀來源一體適用）
+   - **驗**：對唯讀來源的片開燈箱改自訂標籤 → 標籤寫進 DB，**不會**寫回來源資料夾本身的任何檔案
+   - **驗**：掃描頁「補完 NFO 欄位」對唯讀來源的片**不出現**或點了不動作（唯讀來源不能被寫入）
+   - **驗**：對唯讀來源的片重刮之後，先前設的自訂標籤**還在**（不會被清空）
+2. **[人工]** 拔掉／斷開一個曾經連上的來源（USB 拔線、NAS 斷網）→ 回 `/showcase`
+   - **驗**：畫面下方 footer 有一行講「連不到」的提示（`showcase.status.source_unreachable_list` 或 `_count`，取決於斷線來源數 ≤2 或 >2），不是整面空白或無聲失敗
+   - **驗**：碟沒插的情況下，封面牆仍然**一次畫完**（不會因為輪詢不可連來源卡住渲染）
+3. **[人工]** 搜一顆 javdb 路徑相關的番號（路徑含中日韓文字的安裝環境、或過去會被 javdb 擋下來的番號）
+   - **驗**：查得到資料、封面**沒有**中央浮水印，片長／導演／發行商／系列／劇照五個欄位有補齊
+   - **驗**：片商欄位不再誤植發行商的值；標題沒有混入「顯示原標題」字樣
+
+### Regression 偵測點
+
+- 唯讀來源的片被漏掉沒卡片、或番號與一般掃描解出不同值 → 0.15.12 那批唯讀來源修復其中一項退版
+- 唯讀來源的自訂標籤寫回了來源資料夾（而不是只進 DB）→ 唯讀承諾被破壞，真的動了使用者的來源檔案
+- 來源斷線時瀏覽頁整面空白、看不出原因 → `unreachableSources` 沒被畫出來或 fetch 失敗整個吞掉
+- javdb 查詢又開始出現封面中央浮水印，或片商／發行商欄位互換 → v0.15.1 的資料通道退回舊的網頁解析路徑
+
+---
+
+## US18: 五個頁面的左邊緣對齊（v0.15.15 新增，材質零改動）
+
+**故事**：主人從搜尋頁切到瀏覽頁再切到說明頁，過去內容會左右各跳幾個像素——因為每一頁的內縮值各寫各的（16／24／32px 三種都有）。這一版收斂到同一個來源，讓五個頁面的工具列／頁首外框左緣與底下內容左緣**對在同一條垂直線上**，**外觀材質（浮動工具列的玻璃、卡片模糊底、空狀態外框）一個都沒有動**。
+
+### Setup
+
+- Dev server 已啟動，`innerWidth = 1280`（桌面寬度，避開手機/平板的 `--mobile-topbar-height` 分流）。
+- 純量測、零互動，不寫任何資料。
+
+### Steps
+
+1. **[MCP] 逐頁量測 `.main-content` 左邊界**：對 `/search`、`/showcase`、`/settings`、`/scanner`、`/help` 五頁依序 `browser_navigate` → `browser_evaluate`：
+   ```js
+   () => document.querySelector('.main-content')?.getBoundingClientRect().left
+   ```
+   - **驗**：五個頁面回傳值**逐值相同**（同一個 `--page-gutter` token，`theme.css:66`；實測 sidebar 展開寬度下五頁皆為 `60`，`padding-left` 皆 `24px` ⇒ 內容實際起點 `84px` 逐頁相同，**PASS**）
+2. **[MCP] 內容起點對齊**：對 `/showcase`、`/settings`、`/scanner`、`/help` 四頁量測第一個內容區塊（`.showcase-grid` / 第一個 `.settings-section .card` / `.page-layer` 第一個子元素）的 `getBoundingClientRect().left`
+   - **驗**：與 step 1 的 `.main-content` 內容起點（`left + padding-left`，實測 `84`）**相等**（或差在 1px 內）——四頁**實測皆為 `84`，PASS**
+   - ⚠️ **`/search` 不用這個方法測**：`.spotlight-search` 是**置中**的搜尋框（實測 `left ≈ 373`，視窗置中，非貼左），不是貼左的工具列，跟其他四頁的比較基準不同源，勉強比較會誤判成錯位；`#emptyState` 內容區本身仍走 `.main-content` 同一個 padding token（實測 `108` = `84 + 24`，那多出的 24 是 `#emptyState` 自己的置中/内距設計，不是本 US 要驗的目標）
+   - ⚠️ **`.showcase-toolbar` 不能直接拿來跟 `.showcase-grid` 比**：桌面（≥1024px）下 `.showcase-toolbar` 走**既有的**「B floating」浮動玻璃卡設計（`fluent-materials.css` Rule 13b，`margin-inline: var(--layer-inset)`，兩側都內縮，實測 `left = 108 = 84 + 24`），這是**先於 0.15.15、獨立的既有設計**（浮動工具列離頁面邊緣有意留白），**不是**本版左邊緣對齊修復的目標、也不是 regression——別把這個 24px 誤判成沒對齊
+3. **[MCP] 平板寬度只出現一種導覽**：`browser_resize` 到 `992` 與 `1023` 兩個寬度分別檢查
+   - **驗**：側欄（`#sidebar`）與手機頂欄（`.mobile-topbar` 或等效 class）**不同時出現**——過去 992~1023 這段兩者會同時出現
+4. **[MCP] 平板／手機上瀏覽頁工具列與設定頁頁首不被頂欄蓋住**：`browser_resize` 到 `390`（手機）與 `1023`（平板上緣）分別測 `/showcase` 與 `/settings`
+   - **驗**：`/settings` 在 390px 下 `.settings-header` 的 `getBoundingClientRect().top === 64`（`--mobile-topbar-height` 4rem，`position:sticky`）——**實測 PASS**，頁首緊貼頂欄下緣，沒有被蓋住
+   - ⚠️ **`.showcase-toolbar` 在 ≤480px 預設是收合的**（`showcase.css` 註解「sticky→fixed 移出文件流」），390px 下 `top` 實測是負值（`-73`，捲出畫面外），**這不是 bug**——手機頂欄的搜尋圖示鈕（`.navbar-search-btn`）點開後才會展開，展開後（`.showcase-toolbar.mobile-toolbar-open`）實測 `top === 64`，同樣緊貼頂欄下緣，**PASS**。別在收合狀態下直接斷言 `top >= 64` 會誤判成蓋住
+   - 1023px（平板上緣）下兩頁皆 `top === 64`，**PASS**
+
+### 完成後 state
+
+- 純量測，viewport 可留在最後一次 resize（不影響其他 US，執行順序上建議放在其他 US 之後或各 US 自行在 Setup 重設 viewport）
+
+### Regression 偵測點
+
+- 五頁 `.main-content` 左邊界或 padding-left 不相等 → 某一頁還在用舊的內縮值（16／24／32px 三選一沒收斂）
+- `/showcase`／`/settings`／`/scanner`／`/help` 任一頁的內容起點與 `.main-content` 內容起點（`left+padding-left`）錯位 1px 以上 → 該頁沒有改吃同一個 `--page-gutter` token
+- 992~1023 寬度側欄與手機頂欄同時出現 → 平板寬度的斷點判斷沒收斂成互斥
+- 手機/平板上 `.showcase-toolbar` 或 `.settings-header` 的 `top` 小於頂欄高度 → 捲動後工具列/頁首被頂欄蓋住，點不到
 
 ---
 

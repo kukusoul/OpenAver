@@ -84,6 +84,7 @@
       "favorite": "我的最爱",
       "load_favorite": "载入我的最爱文件夹",
       "load_favorite_folder": "载入：{folder}",
+      "auto_organize": "定时整理",
       "add_tag": "新增标签",
       "edit_title": "编辑标题",
       "translate_ai": "AI 翻译",
@@ -92,17 +93,44 @@
       "switch_source": "切换版本",
       "open_source_url": "打开来源页面",
       "open_folder": "打开文件夹",
-      "back_to_detail": "返回详情"
+      "play": "播放",
+      "add_wishlist": "加入书签",
+      "remove_wishlist": "从书签移除",
+      "back_to_detail": "返回详情",
+      "view_search_results": "查看搜索结果",
+      "view_wishlist": "查看书签"
+    },
+    "auto_organize": {
+      "enable_label": "每 12 小时整理一次",
+      "run_now": "立刻执行一次",
+      "run_now_started": "已开始，完成后侧栏会有通知",
+      "run_now_busy": "已经有一轮在进行中",
+      "use_resolved_folder": "就用这个文件夹",
+      "folder_warning": "请指向下载器的完成文件夹，不要指到下载中的文件夹",
+      "running": "目前正在执行一轮",
+      "config_failed": "操作失败，请稍后再试"
     },
     "empty": {
       "hint": "输入番号搜索，或加入视频文件",
       "drag_hint": "也可直接拖入文件或文件夹",
+      "explain_add": "加入／拖入：先列出来查资料，按「整理」前不动任何文件。",
+      "explain_favorite_unset": "我的最爱：指定一个文件夹（通常是下载完成夹），一键列出里面的视频。",
+      "explain_favorite_set_prefix": "我的最爱：列出 ",
+      "explain_favorite_set_suffix": " 里的视频，还没整理的会自动查资料。",
+      "explain_favorite_untracked": "未被 Scanner 追踪，整理后不会进浏览页。",
+      "explain_auto_organize": "定时整理：每 12 小时自动对那个文件夹查资料并整理。",
+      "explain_naming_prefix": "按「整理」才会改名、建文件夹、下载封面、写入 NFO，整理成：",
+      "explain_naming_translate_suffix": "（标题使用翻译后的中文）",
+      "explain_naming_link": "改规则 → 设置",
       "favorite_note": "「我的最爱」是你常用的视频文件夹路径，不是女优最爱",
       "explainer_partial": "输入局部番号如 IPZZ-03，可以一次搜索 030~039 整段。"
     },
     "error": {
       "hint": "请检查番号格式或稍后再试",
+      "hint_retry": "请稍后再试",
+      "advanced_search_cta": "使用番号高级搜索",
       "tag_api_failed": "标签保存失败，请稍后再试",
+      "tag_nfo_not_written": "标签已保存，但媒体服务器读取的那份 NFO 没有更新",
       "no_data": "找不到数据",
       "search_failed": "搜索失败",
       "network_error": "网络错误，请重试",
@@ -179,6 +207,7 @@
       "has_local_count": "本地已有 {count} 个版本（点击打开文件夹）"
     },
     "wishlist": {
+      "empty": "还没有任何书签",
       "aged_days": "{days} 天前加入"
     },
     "button": {
@@ -222,6 +251,7 @@
       "result_count": "搜索结果 ({count})",
       "unrecognized": "无法识别番号: {filename}",
       "not_found": "找不到 {number} 的资料",
+      "duplicate_detail": "{number}：目标位置已有同名文件（重复）",
       "search_failed": "搜索失败",
       "connection_error": "连接错误，请稍后再试",
       "already_organized": "已整理",
@@ -247,7 +277,9 @@
       "no_translatable_titles": "没有需要翻译的标题",
       "translate_batch_done": "翻译完成：成功 {success}，失败 {failed}",
       "fields_defaulted": "⚠️ {fields} 信息未取得，已使用默认值",
-      "from_source": "来自 {name}"
+      "from_source": "来自 {name}",
+      "wishlist_already_owned": "这部片已经在你的片库里",
+      "wishlist_added_offscreen": "已加入书签"
     },
     "duplicate": {
       "title": "文件重复",
@@ -489,6 +521,9 @@
       "cover_badges_note": "在封面左上角显示中文字幕／无码／4K 等标签（只影响显示，不改标签本身）",
       "cover_badges_legend": "＊AI：无码破解（AI 算法去码），LEAK：无码流出（母带外流）",
       "cover_badges_help_aria": "封面属性标签说明",
+      "show_table_list_label": "显示表格与清单",
+      "show_table_list_note": "开启后，浏览页右上角会多出表格与清单两种呈现。默认只有封面与海报。",
+      "show_table_list_help_aria": "显示表格与清单说明",
       "cover_badge": {
         "subtitle": "中文字幕",
         "cracked": "无码破解（AI 算法去码）",
@@ -953,7 +988,9 @@
       "pill_suffix": "部",
       "pill_actresses_prefix": "符合",
       "pill_actresses_middle": "个条件的",
-      "pill_actresses_suffix": "位"
+      "pill_actresses_suffix": "位",
+      "source_unreachable_list": "无法访问：{list}",
+      "source_unreachable_count": "{n} 个位置无法访问"
     },
     "nav": {
       "prev_page": "上一页",
@@ -971,7 +1008,9 @@
       "series": "系列",
       "duration": "片长",
       "director": "导演",
-      "label": "发行"
+      "label": "发行",
+      "hometown": "出生地",
+      "agency": "事务所"
     },
     "table": {
       "col_number": "番号",
@@ -992,6 +1031,7 @@
       "add_tag": "新增标签",
       "tag_placeholder": "标签名称",
       "tag_api_failed": "标签保存失败，请稍后再试",
+      "tag_nfo_not_written": "标签已保存，但媒体服务器读取的那份 NFO 没有更新",
       "user_tags_label": "自定义标签",
       "alias_label": "别名",
       "alias_source_hint": "由 Scanner 同步",
@@ -1534,6 +1574,14 @@
     "thumb_prewarm_start": "开始建立封面缩略图缓存",
     "thumb_prewarm_done": "封面缩略图缓存已完成",
     "update_available": "OpenAver 有新版本",
+    "auto_organize_summary": "定时整理",
+    "auto_organize_aborted": "定时整理已中止",
+    "auto_organize_folder_not_set": "定时整理：还没设置最爱文件夹",
+    "auto_organize_folder_unreachable": "定时整理：无法访问最爱文件夹",
+    "auto_organize_readonly": "定时整理：最爱文件夹是只读来源",
+    "auto_organize_failed": "定时整理失败，请查阅日志",
+    "wishlist_auto_removed": "书签自动更新",
+    "wishlist_reconcile_failed": "书签对账失败，请查阅日志",
     "scanner_cancelled": "扫描已取消"
   },
   "similar_mode": {
