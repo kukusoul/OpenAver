@@ -565,11 +565,12 @@
                     {{ t('search.empty.explain_auto_organize') }}
                 </p>
 
-                {# 同上：appConfig 尚未載入時整列不顯示。這一列的 <code> 是「用你當下的命名設定算出來的
-                   範例」，appConfig 為 null 時 buildNamingPreview() 會退回**預設格式**（實測第一幀是
-                   `番號 標題.mp4`，載入後才變成使用者真正的 `女優/[番號][片商] 女優-標題後綴.mp4`）——
-                   秀一個不是他設定的範例，比晚一幀出現更糟，因為這一列的存在理由就是「秀出你的規則」。 #}
-                <p class="empty-explainer-line" x-show="appConfig !== null">
+                {# 這一列吃**兩個各自獨立載入**的輸入（appConfig ＋ formatVariables，CD-146a-17 失敗隔離），
+                   所以「準備好了沒」問 empty-explainer.js 的 namingPreviewReady()，不要在這裡列舉輸入——
+                   樣板列舉過一次就漏過一次（`fc9667bc` 只擋了 appConfig，CodeRabbit 抓到 formatVariables）。
+                   未 ready 時**整列隱藏**：前綴是「整理成：」，後面接空白或大括號都像在說
+                   「你的檔案會被改成這樣」，比晚一幀出現糟得多。 #}
+                <p class="empty-explainer-line" x-show="namingPreviewReady()">
                     {{ t('search.empty.explain_naming_prefix') }}<code x-text="namingPreviewExample()"></code>
                     <span x-show="appConfig?.translate?.enabled">{{ t('search.empty.explain_naming_translate_suffix') }}</span>
                     <a href="/settings#filenameFormat">{{ t('search.empty.explain_naming_link') }}</a>

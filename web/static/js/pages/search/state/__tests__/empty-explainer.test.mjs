@@ -109,6 +109,52 @@ test('favoritePathDisplay: window.pathToDisplay 不存在時回原字串', () =>
     }
 });
 
+// ─── namingPreviewReady() ─────────────────────────────────────────────────
+// CodeRabbit PR#187：這一列吃兩個各自獨立載入的輸入（CD-146a-17 失敗隔離），
+// 四種組合在本次之前**零測試覆蓋**——`fc9667bc` 只擋了 appConfig 就是從這個縫掉出來的。
+// 兩個輸入各自「未載入」時都必須 false，否則畫面會把沒替換的 `{num}`／`{actor}`
+// 當成「你的檔案會被改成這樣」秀出來。
+
+test('namingPreviewReady: 兩個輸入都沒載入 → false', () => {
+    const state = makeExplainerThis({ appConfig: null, formatVariables: [] });
+    assert.equal(state.namingPreviewReady.call(state), false);
+});
+
+test('namingPreviewReady: 只有 appConfig 到（format-variables 失敗）→ false', () => {
+    const state = makeExplainerThis({
+        appConfig: { scraper: { filename_format: '{num} {title}', create_folder: false } },
+        formatVariables: [],
+    });
+    assert.equal(
+        state.namingPreviewReady.call(state), false,
+        'formatVariables 空時若判成 ready，畫面會秀出未替換的 token 當作使用者的命名結果',
+    );
+});
+
+test('namingPreviewReady: 只有 format-variables 到（config 失敗）→ false', () => {
+    const state = makeExplainerThis({
+        appConfig: null,
+        formatVariables: [{ name: '{num}' }, { name: '{title}' }],
+    });
+    assert.equal(state.namingPreviewReady.call(state), false);
+});
+
+test('namingPreviewReady: 兩個輸入都到 → true', () => {
+    const state = makeExplainerThis({
+        appConfig: { scraper: { filename_format: '{num} {title}', create_folder: false } },
+        formatVariables: [{ name: '{num}' }, { name: '{title}' }],
+    });
+    assert.equal(state.namingPreviewReady.call(state), true);
+});
+
+test('namingPreviewReady: formatVariables 是 undefined（防禦）→ false 且不丟例外', () => {
+    const state = makeExplainerThis({
+        appConfig: { scraper: {} },
+        formatVariables: undefined,
+    });
+    assert.equal(state.namingPreviewReady.call(state), false);
+});
+
 // ─── namingPreviewExample() ───────────────────────────────────────────────
 
 test('namingPreviewExample: createFolder 關、formatVariables 空 → 檔名＋.mp4（token 殘留）', () => {

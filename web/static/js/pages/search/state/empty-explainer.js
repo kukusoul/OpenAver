@@ -25,6 +25,24 @@ export function searchStateEmptyExplainer() {
             return window.pathToDisplay ? window.pathToDisplay(folder) : folder;
         },
 
+        // 這一列消費**兩個各自獨立載入**的輸入（CD-146a-17：/api/config 與
+        // /api/config/format-variables 平行發起、失敗隔離，其中一個掛掉不影響另一個）。
+        // 「準備好了沒」由**消費端自己回答**，不要寫在樣板上——
+        // 本 PR 已經漏過一次：`fc9667bc` 為了擋「第一幀用未載入的設定畫」只在樣板加了
+        // `appConfig !== null`，而 `formatVariables` 是另一個輸入，沒人看 ⇒ config 到、
+        // vars 沒到時，`namingPreviewExample()` 會把使用者的格式原樣吐出來、一個 token 都沒替換
+        // （實測 `{actor}/[{num}][{maker}] {actor}-{title}{suffix}.mp4`），
+        // 而前綴寫著「整理成：」⇒ 看起來像檔案真的會被改成一串大括號。
+        // 以後這一列再多吃一個輸入，改的人就在隔壁幾行看得到這個函式。
+        //
+        // ⚠️ 用 `length > 0` 而不是 `!== null`：`search-flow.js` 在回應缺 `variables` 陣列時
+        // 會寫成 `[]`，所以 `!== null` 會誤判成 ready。這條端點是寫死的 10 筆靜態清單
+        // （`web/routers/config.py`，`test_format_variables_contract.py` 鎖 `len == 10`），
+        // 不存在「合法回空」⇒ `length > 0` 是 fail-closed 的載入成功代理，不是資料量判斷。
+        namingPreviewReady() {
+            return this.appConfig !== null && (this.formatVariables || []).length > 0;
+        },
+
         namingPreviewExample() {
             const scraper = (this.appConfig && this.appConfig.scraper) || {};
             const tokens = {};
