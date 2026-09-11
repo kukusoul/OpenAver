@@ -11,7 +11,7 @@
 /* 搜尋框區域 - 緊湊 */
 .search-bar {
     flex-shrink: 0;
-    padding: 0.75rem 1.5rem;   /* 129-T4 / CD-129-4：與 .showcase-toolbar 對齊（showcase.css:36）*/
+    padding: 0.75rem var(--layer-inset);   /* 129-T4 / CD-129-4：與 .showcase-toolbar 對齊（showcase.css:36）*/
     background: var(--bg-header);
     border-bottom: 1px solid var(--border-light);
     backdrop-filter: blur(var(--fluent-blur)) saturate(var(--fluent-saturate));
@@ -93,7 +93,7 @@
     flex: 1;
     display: flex;
     overflow: hidden;
-    padding: 0.5rem;
+    padding: 0.5rem var(--layer-inset);
     gap: 0.5rem;
     min-height: 0;
 }
@@ -744,7 +744,7 @@
     .av-card-full-cover-wrapper .nav-btn.prev { left: 5px; }
     .av-card-full-cover-wrapper .nav-btn.next { right: 5px; }
 
-    .search-bar {
+    .search-bar, .result-area {
         padding: 0.5rem;
     }
 }

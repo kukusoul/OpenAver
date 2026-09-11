@@ -899,7 +899,7 @@
  *   in 77d-T2; until then the light border color is IACVT (T1+T2 ship together). */
 @media (min-width: 1024px) {
     .search-bar {
-        margin: 0 1rem;
+        margin-inline: var(--layer-inset);
         border-radius: var(--fluent-radius-xl);
         border: 1px solid var(--glass-shell-border);
     }

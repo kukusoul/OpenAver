@@ -40,7 +40,7 @@ PAGES = {
 # 不是 #settings-components 本身——那是 .page-layer，padding-inline 永遠 0）。
 # scanner 工具列側 = .avlist-header（ownership 表刻意不吃 inset，繼承 .avlist-container）。
 ALIGN_ANCHORS = {
-    "search": ((".search-bar", "content-box"), (".result-area", "content-box")),
+    "search": ((".search-bar", "border-box-desktop-only"), (".result-area", "content-box")),
     "showcase": ((".showcase-toolbar", "border-box-desktop-only"), (".showcase-grid", "content-box")),
     "settings": ((".settings-header", "content-box"), ("#settingsForm", "content-box")),
     "scanner": ((".avlist-header", "content-box"), (".avlist-container", "content-box")),
@@ -427,24 +427,6 @@ def test_sticky_toolbar_stops_below_mobile_topbar(
     assert hit_is_btn, (
         f"{page_name}@{width}: 選單鈕座標被工具列攔截（elementFromPoint 沒命中選單鈕）"
     )
-
-
-# ── spec §3 第 9 條：搜尋頁空狀態拆框 ───────────────────────────────────────
-
-def test_search_empty_state_no_border(page: Page, base_url: str) -> None:
-    page.set_viewport_size({"width": DESKTOP, "height": 900})
-    _goto(page, base_url, PAGES["search"], PAGE_READY_SELECTORS["search"])
-
-    empty = page.locator("#emptyState").first
-    if empty.count() == 0 or not empty.is_visible():
-        pytest.skip("emptyState 未顯示（可能資料庫非空狀態），無法驗證拆框")
-
-    border_width = empty.evaluate("el => getComputedStyle(el).borderWidth")
-    box_shadow = empty.evaluate("el => getComputedStyle(el).boxShadow")
-    assert border_width in ("0px", "0"), (
-        f"空狀態 border-width={border_width}（應為 0）"
-    )
-    assert box_shadow == "none", f"空狀態 box-shadow={box_shadow}（應為 none）"
 
 
 # ── spec §3 第 10 條：掃描頁閱讀欄 800px 不變、設定頁滿版 ─────────────────

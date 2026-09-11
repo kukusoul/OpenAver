@@ -464,7 +464,20 @@ const RULES = [
       for (const [name, re] of [
         ['border-radius', /border-radius\s*:/g],
         ['border', /(?<![-\w])border\s*:/g],      // 不吃 border-radius / border-color …
-        ['margin', /(?<![-\w])margin\s*:/g],      // 不吃 margin-inline / margin-top …
+        // 146b-T6：margin 那格從「只認 `margin` 簡寫」擴成「任何設定水平 margin 的宣告」
+        // （`margin` / `margin-inline` / `margin-left` / `margin-right`；仍不吃 `margin-top` /
+        // `margin-bottom`——垂直不屬 Rule 45 浮動幾何不變式）。原因：Rule 45 的內縮改吃
+        // `var(--layer-inset)` 走 `margin-inline`，與 Rule 13b `.showcase-toolbar` 同一寫法；
+        // 不變式沒變（浮動幾何存在），變的只是表達方式 ⇒ **對帳，不是放寬**。
+        // 等價性已用雙向矩陣驗過（11 格：6 破壞必紅 ＋ 5 合法改寫必綠），關鍵一格是
+        // 「改回舊寫法 `margin: 0 1rem` 仍然綠」＝新版沒擋得比舊版少。
+        // 已知的過嚴邊界：`margin-left` + `margin-right` 分開寫會被算 2 次而轉紅——兩者設的
+        // 是不同的邊、不是 cascade 覆蓋，但錯誤訊息仍會說「後面那次會在 cascade 上蓋掉
+        // Rule 45」（在這個情況下是假的）。**刻意維持 fail-closed**：撞到的人改用
+        // `margin-inline` 即可；把計數器改成「左右各一次算同一個邏輯單位」換來的使用者
+        // 價值是零，而本 repo 兩條平行浮動規則本來就統一走 `margin-inline`。
+        ['水平 margin（margin / margin-inline / margin-left|right）',
+          /(?<![-\w])margin(?:-inline|-left|-right)?\s*:/g],
       ]) {
         const n = (allDecls.match(re) || []).length;
         if (n === 0) {
@@ -795,6 +808,69 @@ const RULES = [
       if (!/var\(\s*--layer-inset\s*\)/.test(declarations)) {
         ctx.fail(
           `CG-LAYER-01: \`${SEL}\` 的 declarations 未出現 var(--layer-inset)`,
+        );
+      }
+    },
+  },
+
+  // CG-LAYER-02 ← 146b-T6：.search-bar 水平內距必須真吃 var(--layer-inset)
+  // 樣板：CG-FLU-16 的「0/1/≥2 三岔拒絕歧義」＋頂層 block 掃描（FE-GUARD-14）。
+  // getComputedStyle 分不出字面 1.5rem 與 --layer-inset（同為 24px）——e2e 對此無鑑別力。
+  {
+    id: 'CG-LAYER-02',
+    file: 'pages/search.css',
+    kind: 'fn',
+    check(ctx) {
+      const SEL = '.search-bar';
+      // 單一 selector，無換行 co-list；trim 即可（對照 CG-LAYER-01 的 norm）。
+      const hits = ctx.blocks.filter((b) => b.selector.trim() === SEL);
+      if (hits.length === 0) {
+        ctx.fail(`CG-LAYER-02: 找不到頂層 \`${SEL}\` block（水平內距契約消失）`);
+        return;
+      }
+      if (hits.length > 1) {
+        ctx.fail(
+          `CG-LAYER-02: 找到 ${hits.length} 個頂層 \`${SEL}\` block，cascade 無法機械驗證——`
+          + `命中：${hits.map((b) => JSON.stringify(b.declarations.trim().slice(0, 60))).join(' | ')}`,
+        );
+        return;
+      }
+      const { declarations } = hits[0];
+      // 只盯 padding / padding-inline 開頭的宣告，避免誤傷 gap: 1.5rem
+      const padDecls = [...declarations.matchAll(/(?<![-\w])(padding(?:-inline)?)\s*:\s*([^;]+)/gi)];
+      if (padDecls.length === 0) {
+        ctx.fail(`CG-LAYER-02: \`${SEL}\` 缺少 padding / padding-inline 宣告`);
+        return;
+      }
+      for (const m of padDecls) {
+        const prop = m[1];
+        const val = m[2].trim();
+        // 水平分量不得殘留字面 1.5rem / 24px（padding: V H 取第二個；padding-inline 整值；
+        // padding: X 單值會同時作用於水平——同樣禁止字面）
+        if (prop.toLowerCase() === 'padding-inline') {
+          if (/^(?:1\.5rem|24px)\b/.test(val) || /\b(?:1\.5rem|24px)\b/.test(val)) {
+            if (!/var\(\s*--layer-inset\s*\)/.test(val)) {
+              ctx.fail(
+                `CG-LAYER-02: \`${SEL}\` 的 ${prop} 殘留字面水平內距 \`${val}\`——`
+                + '必須吃 var(--layer-inset)',
+              );
+            }
+          }
+        } else {
+          // padding: 可能是 1 值、2 值、3/4 值；水平 = 單值本身，或 2/3/4 值的第 2 個
+          const parts = val.trim().split(/\s+/);
+          const horizontal = parts.length === 1 ? parts[0] : parts[1];
+          if (/^(?:1\.5rem|24px)$/.test(horizontal)) {
+            ctx.fail(
+              `CG-LAYER-02: \`${SEL}\` 的 ${prop} 水平分量是字面 \`${horizontal}\`——`
+              + '必須改吃 var(--layer-inset)（不能靠與 token 數值巧合相等）',
+            );
+          }
+        }
+      }
+      if (!/var\(\s*--layer-inset\s*\)/.test(declarations)) {
+        ctx.fail(
+          `CG-LAYER-02: \`${SEL}\` 的 declarations 未出現 var(--layer-inset)`,
         );
       }
     },
