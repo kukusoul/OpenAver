@@ -9,6 +9,7 @@ pytest==9.0.3
 pytest-asyncio==1.3.0
 pytest-mock==3.15.1
 pytest-cov==7.1.0  # US4 cov-floor (scripts/run_cov.sh)
+pytest-xdist==3.8.0  # 平行測試（pytest.ini 的 addopts 預設帶 -n auto，缺這支 pytest 會因未知參數直接啟動失敗）
 pytest-playwright==0.7.2  # e2e testing
 PyYAML==6.0.3  # CI workflow guard (test_ci_workflow_guard.py uses yaml.safe_load)
 ruff==0.15.17  # pinned exact: ruff gates PRs in CI; upstream auto-upgrade can silently change rule verdicts
