@@ -665,6 +665,19 @@
                             <i class="bi bi-exclamation-triangle text-5xl text-warning"></i>
                             <p x-text="coverError" class="mt-2"></p>
                             <small>{{ t('search.error.hint') }}</small>
+                            {# 加檔／加資料夾查無結果的換來源出口。#errorState 那顆（139-T7）罩不到這裡：
+                               拖檔查無結果走 pageState='result' 不是 'error'。
+                               x-show 的 searchResults.length：此 placeholder 另一個用途是「有結果但封面
+                               載入失敗」，那時換來源無意義。預填讀 fileList[currentFileIndex]，不讀
+                               currentQuery／searchQuery——兩者在 file 模式切檔都不同步。 #}
+                            {{ source_pill(
+                                name="t('search.error.advanced_search_cta')",
+                                censored=true,
+                                variant='action',
+                                icon='bi-sliders',
+                                extra_classes='cover-error-action',
+                                attrs='x-show="listMode === \'file\' && searchResults.length === 0" x-cloak @click.stop="openRescrape(null, \'search\'); rescrapeNumber = (fileList[currentFileIndex]?.number || \'\').trim()"'
+                            ) }}
                         </div>
                         <!-- 無封面 -->
                         <div x-show="!coverError && !current().cover" class="cover-error-placeholder">

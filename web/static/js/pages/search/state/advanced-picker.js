@@ -25,10 +25,24 @@ export function searchStateAdvancedPicker() {
          * 以指定來源覆寫搜尋（單一來源整包贏）。
          * 走非 stream GET /api/search?q=...&mode=exact&source=<id>（stream 端點無 source param）。
          * @param {string} source - 來源 id（builtin id 或 metatube:<id>）
+         * @returns {boolean} true = 呼叫端可關窗（成功，或已被新搜尋取代、無事可報）；
+         *   false = 查不到／出錯，呼叫端留在 pick 顯示 inline error 讓使用者換下一個來源。
          */
         async advancedSearch(source) {
             const query = this.searchQuery?.trim();
-            if (!query || !source) return;
+            if (!query || !source) return true;
+
+            // 查不到時背景一格都不該動，所以快照必須在 cancelSearch() **之前** 取。
+            // cancelSearch() 沒有 _searchSnapshot 時會把 pageState 設成 'empty'（首頁，
+            // search-flow.js 的 else 分支），而 file 模式永遠沒有 snapshot——在它之後才
+            // 快照，存下的就是已經被打壞的 'empty'，還原等於跳回首頁。
+            // errorKind 全專案無讀取點，一併還原不影響任何人。
+            const restore = {
+                pageState: this.pageState,
+                currentQuery: this.currentQuery,
+                errorText: this.errorText,
+                errorKind: this.errorKind,
+            };
 
             // 取消現有搜尋（同 doSearch 前置）
             this.cancelSearch();
@@ -47,27 +61,25 @@ export function searchStateAdvancedPicker() {
                 const data = await response.json();
 
                 // 防競態：被新搜尋取代則丟棄
-                if (currentRequestId !== this.requestId) return;
+                if (currentRequestId !== this.requestId) return true;
 
                 if (response.ok && data.success && data.data && data.data.length > 0) {
                     this._commitSearchResults(data);
-                    return;
+                    return true;
                 } else {
                     this._searchSnapshot = null;
-                    this.errorText = data.error || window.t('search.error.hint');
-                    this.errorKind = 'advanced_search_failed';
-                    this.pageState = 'error';
+                    Object.assign(this, restore);
                     // OQ-3 軟提示 scaffold：metatube source + 非番號 query + 空結果（B1 無 metatube source 故不觸發）
                     this._advancedMaybeMetatubeHint(source, query);
+                    return false;
                 }
             } catch (err) {
-                if (err.name === 'AbortError') return;
-                if (currentRequestId !== this.requestId) return;
+                if (err.name === 'AbortError') return true;
+                if (currentRequestId !== this.requestId) return true;
                 this._searchSnapshot = null;
                 console.error('[AdvancedSearch]', err);
-                this.errorText = window.t('search.error.hint');
-                this.errorKind = 'advanced_search_failed';
-                this.pageState = 'error';
+                Object.assign(this, restore);
+                return false;
             }
         },
 
@@ -83,7 +95,22 @@ export function searchStateAdvancedPicker() {
             this.hasMoreResults = payload.has_more || false;
             this.actressProfile = payload.actress_profile || null;
             if (this.actressProfile) this._heroCardImageError = false;
-            this.listMode = 'search';
+            // file 模式（卡片上的「使用番號進階搜尋」）：結果寫回當前檔，不切走 listMode。
+            // 切成 'search' 的話檔案清單（search.html x-show="listMode === 'file'"）整份消失，
+            // 而沒有任何 UI 能切回去——加了一整夾只想修一檔，其餘檔案就這樣不見了。
+            // 寫回 file.searchResults 另一個作用：那一列的 ✗ 轉 ✓、「產生 NFO」才會亮
+            // （canScrapeFile / scrapeSingle 讀的都是 file.searchResults，不是共享的那份）。
+            // 番號比對是 race 防線：關窗到結果回來這段期間使用者可以點別的檔，
+            // 不比對就會把這一筆寫進錯的檔。不符就落回原本的 'search' 行為（fail-safe）。
+            const _file = this.listMode === 'file' ? this.fileList?.[this.currentFileIndex] : null;
+            if (_file && _file.number === this.currentQuery) {
+                _file.searchResults = payload.data;
+                _file.hasMoreResults = payload.has_more || false;
+                _file.searched = true;
+                _file.selectedCandidateIndex = 0;
+            } else {
+                this.listMode = 'search';
+            }
             this.checkLocalStatus(this.searchResults);
             this.pageState = 'result';
             this.preloadImages(1, 5);

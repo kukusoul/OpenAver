@@ -228,9 +228,24 @@ export function rescrapeState() {
                 const s = this.rescrapeSources.find(x => x.id === sourceId);
                 if (!(s && s.manual_only)) {
                     // 其他 source / 查不到：維持原路（advancedSearch 整包贏）
+                    // 先搜再決定關不關窗（不再 await 前就關）：查不到時留在 pick + inline error
+                    // （_rescrape_modal.html:108），使用者可以直接點下一個來源，不用從錯誤頁重開。
+                    // rescrapeLoadingSource 讓既有的 pill spinner 與 search 專屬 footer
+                    // （同檔 :115-118「搜尋中」）真的亮起來——兩處本來就備好、只是搜尋入口
+                    // 關窗太早從來沒走到；順帶接上函式頂端的連點防護。
                     this.searchQuery = this.rescrapeNumber.trim();
-                    this.closeRescrape();
-                    await this.advancedSearch(sourceId);  // 'auto' 直接傳給 /api/search（後端 merger）
+                    this.rescrapeNotFound = false;
+                    this.rescrapeLoadingSource = sourceId;
+                    try {
+                        // 'auto' 直接傳給 /api/search（後端 merger）
+                        if (await this.advancedSearch(sourceId)) {
+                            this.closeRescrape();
+                            return;
+                        }
+                        this.rescrapeNotFound = true;
+                    } finally {
+                        this.rescrapeLoadingSource = null;
+                    }
                     return;
                 }
                 // manual_only：不早 return，繼續走 fetch preview（CD-86-8）
