@@ -2605,8 +2605,8 @@ const RULES = [
     note: '[163a-T6b-set] 使用者在重刮視窗指定 DMM、DMM 拒絕連線 → 要看到「拒絕連線」，不能只說「找不到」而讓人以為 DMM 沒這片',
   },
   {
-    file: 'web/static/js/shared/state-rescrape.js', kind: 'structure-count', pattern: 'this._clearRescrapeErrors();', count: 10,
-    note: '[163a-T6b-reset]（165-T10 搬遷）原 7 處 `rescrapeAccessError = null` 集中為 helper；呼叫點數棘輪。使用者被拒後按「換來源」／關窗再開／改番號 → 紅字要消失；開窗、番號空白、送出前、查無 fallback、網路失敗 catch、回選單、關窗各清一次，少一處上一個來源的紅字就黏在畫面上',
+    file: 'web/static/js/shared/state-rescrape.js', kind: 'structure-count', pattern: 'this._clearRescrapeErrors();', count: 11,
+    note: '[163a-T6b-reset]（165-T10 搬遷）原 7 處 `rescrapeAccessError = null` 集中為 helper；呼叫點數棘輪。使用者被拒後按「換來源」／關窗再開／改番號 → 紅字要消失；開窗、番號空白、送出前、搜尋入口送出前（彈窗留在 pick 換來源）、查無 fallback、網路失敗 catch、回選單、關窗各清一次，少一處上一個來源的紅字就黏在畫面上',
   },
   {
     file: 'web/static/js/shared/state-rescrape.js', kind: 'required-string',
@@ -2652,9 +2652,14 @@ const RULES = [
     note: '[163a-T6b-modal-reset]（165-T10 搬遷）使用者被拒後改番號 → 紅字要立刻消失，否則舊來源的錯誤蓋在新番號上',
   },
   {
-    file: 'web/static/js/pages/search/state/advanced-picker.js', kind: 'required-string', pattern: /errorText = this\._advancedAccessText\(data\)/,
+    file: 'web/static/js/pages/search/state/advanced-picker.js', kind: 'required-string', pattern: /this\._advancedFailure = data;/,
     stripLineComments: true,
-    note: '[163a-T6b-picker] 使用者在搜尋頁指定來源被拒 → 錯誤文字要走介面語言映射，不顯示後端寫死的中文',
+    note: '[163a-T6b-picker] 使用者在搜尋頁指定來源被拒 → 失敗回應要交給彈窗判斷（查不到時彈窗留在 pick、背景不動）',
+  },
+  {
+    file: 'web/static/js/shared/state-rescrape.js', kind: 'required-string', pattern: /this\._applyRescrapeFailure\(this\._advancedFailure, sourceId\)/,
+    stripLineComments: true,
+    note: '[163a-T6b-picker] 搜尋入口指定來源被拒 → 紅字區塊走介面語言映射（rescrapeAccessMessage），不顯示後端寫死的中文',
   },
   {
     file: 'web/templates/_rescrape_modal.html', kind: 'forbidden-string', pattern: 'isSourceProxyBlocked',
