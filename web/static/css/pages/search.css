@@ -191,6 +191,18 @@
     min-height: 120px;
 }
 
+/* 查無結果的「使用番號進階搜尋」膠囊。margin-top 比照 theme.css .state-page-action。
+   上面那條 120px 是照「圖示＋訊息＋提示」量的，多一顆膠囊會被裁掉——placeholder 是
+   position:absolute;inset:0（本檔 125）撐不開容器，而 .av-card-full-cover 是
+   overflow:hidden（theme.css:509）。只在膠囊真的顯示時加高，純封面 404 維持 120px。 */
+.cover-error-placeholder .cover-error-action {
+    margin-top: 0.75rem;
+}
+
+.search-container .av-card-full-cover-wrapper:has(.cover-error-action:not([style*="display: none"])) {
+    min-height: 200px;
+}
+
 .search-container .av-card-full-info {
     flex: 0 0 390px;    /* US1-75b：320px → 390px（spec NC#2，CD-75b-1） */
     overflow-y: auto;
