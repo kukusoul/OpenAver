@@ -1166,8 +1166,7 @@ def organize_file(  # noqa: C901 — 整理主流程；Phase 2（110b）會在�
     # 外部管理器模式（單一來源，早偵測層；CD-72b-T5）
     ext_mode = config.get('external_manager', 'off')
 
-    # 偵測 VR cluster（CD-68-5/6/7）：算一次，作用域涵蓋 title 剝除、組裝段與 nfo 呼叫（GA）
-    # 上移至 extract_chinese_title 之前，用於剝除 extracted_title 尾端的 VR token（Codex P2）
+    # 偵測 VR cluster（CD-68-5/6/7）：算一次，作用域涵蓋組裝段與 nfo 呼叫（GA）
     vr_cluster = _detect_vr_cluster(original_filename)
     vr_tail = f'_{vr_cluster}' if vr_cluster else ''
 
@@ -1181,34 +1180,14 @@ def organize_file(  # noqa: C901 — 整理主流程；Phase 2（110b）會在�
     # 準備格式化資料
     actors = metadata.get('actors', [])
 
-    # 標題優先順序：翻譯 > 檔名提取 > 日文原始
-    original_title = metadata.get('title', '')  # 日文原始標題
-    translated_title = metadata.get('translated_title', '')  # LLM 翻譯/優化的標題
-    extracted_title = extract_chinese_title(original_filename, number, actors)
-
-    # 剝除 extracted_title 尾端的 VR cluster（含可選 bracket/paren 包裝，Codex P2 二次修正）
-    # _detect_vr_cluster 把 []() 當分隔符 → cluster 不含 bracket，但 extracted_title 保留 bracket，
-    # 故需匹配可選的開/閉 bracket/paren 包裝；否則 _[180_LR] 不被剝 → 與尾端 vr_tail 雙寫。
-    if vr_cluster and extracted_title:
-        _vr_tail_re = re.compile(r'[\[(]?' + re.escape(vr_cluster) + r'[\])]?[\s_.\-]*$')
-        _m = _vr_tail_re.search(extracted_title)
-        if _m:
-            _trimmed = extracted_title[:_m.start()].rstrip('_-. ')
-            extracted_title = _trimmed or extracted_title
-
-    # FIX A：B2 junk-validation（CD-c5/c6）
-    # 若提取結果殘留 organize 模板 artifact（日期/maker/suffix），丟棄改用翻譯/刮削源
-    if extracted_title and _extracted_has_organize_junk(extracted_title, number, metadata, config):
-        extracted_title = None   # fall through 到翻譯/刮削源（CD-c6）
+    # 標題優先順序：翻譯 > 刮削原文（來源檔名中文提取已停用，不再當 fallback）
+    original_title = metadata.get('title', '')  # 刮削原文標題
+    translated_title = metadata.get('translated_title', '')  # LLM 翻譯/手改的標題
 
     # 決定最終使用的標題
     if translated_title:
         title = translated_title
         result['title_source'] = 'translated'
-    elif extracted_title:
-        title = extracted_title
-        result['title_source'] = 'extracted'
-        result['extracted_title'] = extracted_title
     else:
         title = original_title
         result['title_source'] = 'original'
@@ -1324,8 +1303,7 @@ def organize_file(  # noqa: C901 — 整理主流程；Phase 2（110b）會在�
         filename_base = truncate_to_chars(filename_base, max(0, max_chars - reserve))
     # VR tail 永遠最後接（CD-68-6）；vr_tail='' 時零變化（CD-68-9）
     filename_base = filename_base + vr_tail
-    # P1-A 修正（Codex）：{title} 欄位（尤其是 extracted_title）可能殘留多段 token
-    # （如 extract_chinese_title 保留 '某中文標題-part2[HD]'），導致 part_tail 雙寫。
+    # P1-A 修正（Codex）：{title} 欄位可能殘留多段 token，
     # 在接 part_tail 之前，先從 filename_base 剝除最靠後的多段 token（_strip_part_token
     # 無 token 時為 no-op → 乾淨標題案例完全不影響輸出）。
     # off 模式 part_tail='' → if 分支不進入，行為與修前 byte-identical。

@@ -185,32 +185,34 @@ class TestOrganizeFileTitleDecision:
 
     def test_case10_decisive_raw_download_survives(self, tmp_path):
         """Case 10: 決定性 (1) — ABC-123 中文標題.mp4（番號前置，無 junk）
-        → extracted_title 搶救存活，title_source == 'extracted'"""
+        → 來源檔名中文提取已停用，title_source == 'original'（用刮削原文命名）"""
         config = _make_config(tmp_path)
         metadata = _make_metadata(number="ABC-123", title="原始日文標題", maker="")
         result = _run_organize(tmp_path, "ABC-123 中文標題.mp4", metadata, config)
 
         assert result["success"] is True, f"organize 失敗: {result.get('error')}"
-        assert result.get("title_source") == "extracted", (
-            f"預期 'extracted'，實際 {result.get('title_source')!r}"
+        assert result.get("title_source") == "original", (
+            f"預期 'original'，實際 {result.get('title_source')!r}"
         )
-        # 新檔名必須含中文標題
+        # 新檔名必須含刮削原文標題，不含來源檔名中文
         new_name = Path(result["new_filename"]).name
-        assert "中文標題" in new_name, f"中文標題未出現在檔名: {new_name}"
+        assert "原始日文標題" in new_name, f"原文標題未出現在檔名: {new_name}"
+        assert "中文標題" not in new_name, f"來源檔名中文不應出現在檔名: {new_name}"
 
     def test_case11_standalone_4k_raw_download_survives(self, tmp_path):
         """Case 11: 決定性 (1b) (B-1) — ABC-123 中文標題 4K.mp4（含 standalone 4K，非 '-4k' suffix）
-        → junk-validation 不命中，title_source == 'extracted'，搶救存活"""
+        → 來源檔名中文提取已停用，title_source == 'original'（用刮削原文命名）"""
         config = _make_config(tmp_path, suffix_keywords=["-4k", "-uc"])
         metadata = _make_metadata(number="ABC-123", title="原始日文標題", maker="")
         result = _run_organize(tmp_path, "ABC-123 中文標題 4K.mp4", metadata, config)
 
         assert result["success"] is True, f"organize 失敗: {result.get('error')}"
-        assert result.get("title_source") == "extracted", (
-            f"預期 'extracted'（4K standalone 不應被誤殺），實際 {result.get('title_source')!r}"
+        assert result.get("title_source") == "original", (
+            f"預期 'original'，實際 {result.get('title_source')!r}"
         )
         new_name = Path(result["new_filename"]).name
-        assert "中文標題" in new_name, f"中文標題未出現在檔名: {new_name}"
+        assert "原始日文標題" in new_name, f"原文標題未出現在檔名: {new_name}"
+        assert "中文標題" not in new_name, f"來源檔名中文不應出現在檔名: {new_name}"
 
     def test_case12_de_stack_spec_shape(self, tmp_path):
         """Case 12: 決定性 (2) — spec 回報形狀：日期-廠商-番號-中文標題-4k.mp4

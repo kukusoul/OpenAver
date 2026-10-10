@@ -4874,12 +4874,9 @@ class TestVrEndToEnd:
     # ---- Codex P2 修正（Finding 1）：中文標題 VR token 雙寫 ----
 
     def test_chinese_title_vr_no_double_write(self, tmp_path):
-        """ABC-123 中文標題_180_LR.mp4 + create_nfo=True + extracted_title 路徑
-        → 檔名 stem 僅有單一 _180_LR（不雙寫 _180_LR_180_LR）
+        """ABC-123 中文標題_180_LR.mp4 + create_nfo=True（來源檔名中文已停用，走 original）
+        → 檔名 stem 僅有單一 _180_LR（vr_tail 只接一次，不雙寫 _180_LR_180_LR）
         且 NFO sidecar stem 也單一 tail、<tag>VR</tag> count==1。
-
-        Codex P2（Finding 1）：extract_chinese_title 保留 VR token 在 title，
-        之後 vr_tail 再接一次 → _180_LR_180_LR 雙寫。
         """
         src = tmp_path / "ABC-123 中文標題_180_LR.mp4"
         src.write_bytes(b"zh title vr content")
@@ -4893,10 +4890,10 @@ class TestVrEndToEnd:
             "max_filename_length": 80,
             "suffix_keywords": [],
         }
-        # metadata title 空字串 → 迫使走 extracted_title 路徑（title_source=='extracted'）
+        # metadata title 空字串 → 走 original 路徑（title_source=='original'），檔名中文不參命名
         metadata = {
             "number": "ABC-123",
-            "title": "",         # 空 → 不走 original 路徑
+            "title": "",         # 空 → 走 original 路徑（空標題）
             "translated_title": "",  # 空 → 不走 translated 路徑
             "actors": [],
             "tags": ["單體"],
@@ -4909,9 +4906,9 @@ class TestVrEndToEnd:
         result = organize_file(str(src), metadata, config)
         assert result["success"] is True, f"organize 失敗: {result.get('error')}"
 
-        # title_source 應為 extracted（確認走了 extract 路徑）
-        assert result.get("title_source") == "extracted", (
-            f"應走 extracted 路徑，實際 title_source={result.get('title_source')!r}"
+        # title_source 應為 original（來源檔名中文已停用，不走 extract 路徑）
+        assert result.get("title_source") == "original", (
+            f"應走 original 路徑，實際 title_source={result.get('title_source')!r}"
         )
 
         new_path = Path(result["new_filename"])
@@ -4942,14 +4939,9 @@ class TestVrEndToEnd:
     # ---- Codex P2 二次修正（Finding 1, P2）：bracket/paren 包 cluster 不雙寫 ----
 
     def test_chinese_title_bracket_vr_no_double_write(self, tmp_path):
-        """ABC-123 中文標題_[180_LR].mp4 + create_nfo=True + extracted_title 路徑
+        """ABC-123 中文標題_[180_LR].mp4 + create_nfo=True（來源檔名中文已停用，走 original）
         → 檔名 stem 僅有單一 _180_LR（不雙寫 _[180_LR]_180_LR）
         且 stem 中不含 '[180_LR]'、NFO <tag>VR</tag> count==1。
-
-        Codex P2 二次修正（Finding 1, P2）：_detect_vr_cluster 回傳 '180_LR'（不含 bracket），
-        但 extract_chinese_title 萃取的 title 保留 '[180_LR]'，舊 endswith 不命中 →
-        bracket 殘留在 title + vr_tail 再接 → 雙寫。
-        修正：regex 匹配可選 bracket 包裝。
         """
         src = tmp_path / "ABC-123 中文標題_[180_LR].mp4"
         src.write_bytes(b"zh bracket vr content")
@@ -4978,8 +4970,8 @@ class TestVrEndToEnd:
         result = organize_file(str(src), metadata, config)
         assert result["success"] is True, f"organize 失敗: {result.get('error')}"
 
-        assert result.get("title_source") == "extracted", (
-            f"應走 extracted 路徑，實際 title_source={result.get('title_source')!r}"
+        assert result.get("title_source") == "original", (
+            f"應走 original 路徑，實際 title_source={result.get('title_source')!r}"
         )
 
         stem = Path(result["new_filename"]).stem
@@ -5009,11 +5001,9 @@ class TestVrEndToEnd:
         )
 
     def test_chinese_title_paren_vr_no_double_write(self, tmp_path):
-        """ABC-123 中文標題_(180_LR).mp4 + create_nfo=True + extracted_title 路徑
+        """ABC-123 中文標題_(180_LR).mp4 + create_nfo=True（來源檔名中文已停用，走 original）
         → 檔名 stem 僅有單一 _180_LR（不雙寫 _(180_LR)_180_LR）
         且 stem 中不含 '(180_LR)'、NFO <tag>VR</tag> count==1。
-
-        Codex P2 二次修正（Finding 1, P2）：同 bracket case，paren 版本。
         """
         src = tmp_path / "ABC-123 中文標題_(180_LR).mp4"
         src.write_bytes(b"zh paren vr content")
@@ -5042,8 +5032,8 @@ class TestVrEndToEnd:
         result = organize_file(str(src), metadata, config)
         assert result["success"] is True, f"organize 失敗: {result.get('error')}"
 
-        assert result.get("title_source") == "extracted", (
-            f"應走 extracted 路徑，實際 title_source={result.get('title_source')!r}"
+        assert result.get("title_source") == "original", (
+            f"應走 original 路徑，實際 title_source={result.get('title_source')!r}"
         )
 
         stem = Path(result["new_filename"]).stem

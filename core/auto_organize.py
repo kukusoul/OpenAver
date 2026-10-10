@@ -13,7 +13,7 @@ from core.database import organize_failures
 from core.db_inflow import try_inflow_upsert
 from core.favorite_scan import detect_nfo, list_favorite_video_files, resolve_favorite_folder
 from core.logger import get_logger
-from core.organizer import extract_chinese_title, organize_file
+from core.organizer import organize_file
 from core.path_utils import coerce_to_file_uri
 from core.readonly_source import is_path_readonly, readonly_source_prefixes, writable_source_prefixes
 from core.scraper import smart_search, search_jav, is_number_format
@@ -186,8 +186,7 @@ def run_one_round(
 
         metadata = dict(results[0])  # CD-144-5：原樣，不加不減（不覆蓋 number）
 
-        chinese_title = extract_chinese_title(filename, number, metadata.get('actors'))
-        if not chinese_title and translate_service is not None and has_japanese(metadata.get('title', '')):
+        if translate_service is not None and has_japanese(metadata.get('title', '')):
             try:
                 translated = asyncio.run(translate_service.translate_single(metadata['title']))
             except Exception:

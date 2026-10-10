@@ -429,9 +429,8 @@ export function searchStateBatch() {
             file.isScraping = true;
 
             try {
-                const chineseFromFile = file.chineseTitle;
                 const appConfig = this.appConfig;
-                if (appConfig?.translate?.enabled && !chineseFromFile &&
+                if (appConfig?.translate?.enabled &&
                     metadata.title && this.hasJapanese(metadata.title)) {
                     const tr = await this.translateWithOllama(metadata.title, 'translate', metadata);
                     if (tr.success) metadata.translated_title = tr.result;
@@ -526,9 +525,8 @@ export function searchStateBatch() {
         file.scrapeStatus = null;
 
         try {
-            const chineseFromFile = file.chineseTitle;
             const appConfig = this.appConfig;
-            if (appConfig?.translate?.enabled && !chineseFromFile &&
+            if (appConfig?.translate?.enabled &&
                 metadata.title && this.hasJapanese(metadata.title)) {
                 const tr = await this.translateWithOllama(metadata.title, 'translate', metadata);
                 if (tr.success) metadata.translated_title = tr.result;
