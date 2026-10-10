@@ -278,25 +278,17 @@ class TestTranslationClauses:
         fake_service.translate_single.assert_called_once_with("日本語タイトル")
         assert "JP-001" in result["added"]
 
-    @pytest.mark.parametrize(
-        ("filename", "title"),
-        [
-            ("JP-002 我的中文標題.mp4", "日本語タイトル"),
-        ],
-        ids=["chinese_title_in_filename"],
-    )
-    def test_translate_skipped_when_chinese_title_present(
-        self, tmp_path, isolated_db, mocker, filename, title
-    ):
+    def test_translate_called_even_when_filename_has_chinese(self, tmp_path, isolated_db, mocker):
         fav_dir = tmp_path / "fav"
         fav_dir.mkdir()
         config = make_config(fav_dir, translate_enabled=True)
 
         result, fake_service, create_mock = self._run_with_translation_mock(
-            fav_dir, config, mocker, filename, title
+            fav_dir, config, mocker, "JP-002 我的中文標題.mp4", "日本語タイトル"
         )
 
-        fake_service.translate_single.assert_not_called()
+        # 來源檔名中文提取已停用：檔名中文不再抑制翻譯，有日文原標即翻
+        fake_service.translate_single.assert_called_once_with("日本語タイトル")
 
     def test_translate_skipped_when_disabled(self, tmp_path, isolated_db, mocker):
         fav_dir = tmp_path / "fav"

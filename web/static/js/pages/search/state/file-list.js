@@ -449,7 +449,8 @@ export function searchStateFileList() {
                         filename,
                         this.appConfig?.scraper?.suffix_keywords || []
                     ),
-                    chineseTitle: window.SearchFile.extractChineseTitle(filename, result.number),
+                    // 已停用：不再從來源檔名提取中文（標題只用 translated_title > 刮削原文）
+                    chineseTitle: null,
                     searchResults: [],
                     hasMoreResults: false,
                     searched: isNotFound || isDuplicate,
