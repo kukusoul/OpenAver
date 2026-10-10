@@ -908,3 +908,73 @@ class TestT10bNfoWriteBlocked:
         assert data["nfo_write_blocked"] is False
         assert data["nfo_updated"] is False
         assert data["readonly_no_output"] is True
+
+
+class TestTagNfoResolver:
+    """tag_nfo_candidates 接線：預設 nfo_format={num} 產物不再 miss，也不建空殼。"""
+
+    def test_num_nfo_found_when_stem_differs(self, client, tmp_path):
+        """影片 stem ≠ 番號、同目錄有 {number}.nfo → 寫進那份，不建同 stem 空殼。"""
+        video_path = tmp_path / "ABC-123 中文標題.mp4"
+        video_path.write_bytes(b"fake-video")
+        num_nfo = tmp_path / "ABC-123.nfo"
+        num_nfo.write_bytes(_MINIMAL_NFO)
+
+        resp = client.post("/api/user-tags", json={
+            "file_path": to_file_uri(str(video_path)), "add": ["RESOLVED"],
+        })
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["success"] is True
+        assert data["nfo_updated"] is True
+        assert "nfo_missing" not in data
+        assert "<user_tag>RESOLVED</user_tag>" in num_nfo.read_text(encoding="utf-8")
+        assert not video_path.with_suffix(".nfo").exists()
+
+    def test_db_nfo_path_preferred(self, client, tmp_db, tmp_path):
+        """DB 有 nfo_path → 寫那份（即使同 stem 另有一份也不碰）。"""
+        from core.database import Video, VideoRepository
+
+        video_path = tmp_path / "DBN-001.mp4"
+        video_path.write_bytes(b"fake-video")
+        stem_nfo = video_path.with_suffix(".nfo")
+        stem_nfo.write_bytes(_MINIMAL_NFO)
+        custom_nfo = tmp_path / "custom.nfo"
+        custom_nfo.write_bytes(_MINIMAL_NFO)
+        file_uri = to_file_uri(str(video_path))
+        VideoRepository(tmp_db).upsert(Video(
+            path=file_uri, number="DBN-001", title="DBN-001",
+            nfo_path=to_file_uri(str(custom_nfo)),
+        ))
+
+        resp = client.post("/api/user-tags", json={
+            "file_path": file_uri, "add": ["DBTAG"],
+        })
+
+        assert resp.status_code == 200
+        assert resp.json()["nfo_updated"] is True
+        assert "<user_tag>DBTAG</user_tag>" in custom_nfo.read_text(encoding="utf-8")
+        assert "<user_tag>DBTAG</user_tag>" not in stem_nfo.read_text(encoding="utf-8")
+
+    def test_no_shell_created_when_no_nfo_anywhere(self, client, tmp_db, tmp_path):
+        """哪裡都沒 NFO → success 照回、DB 有 tag、不建空殼。"""
+        from core.database import VideoRepository
+
+        video_path = tmp_path / "NONFO-001.mp4"
+        video_path.write_bytes(b"fake-video")
+        file_uri = to_file_uri(str(video_path))
+
+        resp = client.post("/api/user-tags", json={
+            "file_path": file_uri, "add": ["ORPHAN"],
+        })
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["success"] is True
+        assert data["nfo_updated"] is False
+        assert data["nfo_write_blocked"] is False
+        assert data["readonly_no_output"] is False
+        assert "nfo_missing" not in data
+        assert "ORPHAN" in VideoRepository(tmp_db).get_by_path(file_uri).user_tags
+        assert not video_path.with_suffix(".nfo").exists()

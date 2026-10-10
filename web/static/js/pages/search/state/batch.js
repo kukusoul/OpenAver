@@ -57,7 +57,16 @@ async function translateBatchHelper(titles) {
 // ⚠️ 安全面沒有變大：`cover` / `sample_images` 本來就是前端可控且未經白名單的值
 // （下載端沒有白名單，spec §1.2），preview_* 沒有新增任何攻擊面。
 export function buildOrganizeMetadata(file) {
-    return { ...file.searchResults[file.selectedCandidateIndex ?? 0] };
+    const metadata = { ...file.searchResults[file.selectedCandidateIndex ?? 0] };
+    // file-level user_tags 併入整理包裹：候選結果本身不帶 user_tags（/api/search 不附），
+    // 整理前加的 tag 只寫了 DB；併入後當次產出的 NFO 即含 <user_tag>，不再等下次異動才對齊。
+    // 全空時不設 key（既有 deepEqual 斷言依賴無 key 形狀）。
+    const merged = [...(metadata.user_tags || []), ...(file.user_tags || [])]
+        .filter((t, i, arr) => arr.indexOf(t) === i);
+    if (merged.length > 0) {
+        metadata.user_tags = merged;
+    }
+    return metadata;
 }
 
 export function searchStateBatch() {

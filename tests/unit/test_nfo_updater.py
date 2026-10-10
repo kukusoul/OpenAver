@@ -17,6 +17,7 @@ from core.nfo_updater import (
     check_cache_needs_update,
     get_nfo_path_from_video,
     needs_update,
+    tag_nfo_candidates,
     update_nfo_file,
     update_nfo_user_tags,
 )
@@ -704,6 +705,89 @@ class TestUpdateNfoUserTags:
         nfo.write_bytes(b'<movie><title>test</title><unclosed>')
         result = update_nfo_user_tags(str(nfo), ["tag"])
         assert result is False
+
+
+# ============================================================
+# tag_nfo_candidates() 測試（user-tags NFO 解析器）
+# ============================================================
+
+class TestTagNfoCandidates:
+    """tag_nfo_candidates() — 優先序：DB nfo_path → 同 stem → {number}.nfo → 同目錄唯一 NFO"""
+
+    def test_db_nfo_path_first(self, tmp_path):
+        """DB nfo_path 存在 → 排第一（最權威）。"""
+        video = tmp_path / "ABC-123 Title.mp4"
+        video.write_bytes(b"x")
+        db_nfo = tmp_path / "elsewhere.nfo"
+        db_nfo.write_text("<movie/>", encoding="utf-8")
+        (tmp_path / "ABC-123 Title.nfo").write_text("<movie/>", encoding="utf-8")
+        result = tag_nfo_candidates(
+            str(video), db_nfo_uri=db_nfo.as_uri(), number="ABC-123"
+        )
+        assert result[0] == str(db_nfo)
+
+    def test_same_stem_second(self, tmp_path):
+        """無 DB nfo_path → 同 stem .nfo 排第一（舊行為）。"""
+        video = tmp_path / "ABC-123 Title.mp4"
+        video.write_bytes(b"x")
+        stem_nfo = tmp_path / "ABC-123 Title.nfo"
+        stem_nfo.write_text("<movie/>", encoding="utf-8")
+        result = tag_nfo_candidates(str(video), number="ABC-123")
+        assert result[0] == str(stem_nfo)
+
+    def test_number_nfo_covers_default_format(self, tmp_path):
+        """off 模式預設產物 {number}.nfo（stem 不同）→ 仍被找到。"""
+        video = tmp_path / "[ABC-123][Maker] Title.mp4"
+        video.write_bytes(b"x")
+        num_nfo = tmp_path / "ABC-123.nfo"
+        num_nfo.write_text("<movie/>", encoding="utf-8")
+        result = tag_nfo_candidates(str(video), number="ABC-123")
+        assert str(num_nfo) in result
+        # 同 stem 候選恆在第二順位之前（舊行為優先），{number}.nfo 緊隨其後
+        assert result[0] == str(tmp_path / "[ABC-123][Maker] Title.nfo")
+        assert result[1] == str(num_nfo)
+
+    def test_lone_nfo_in_folder(self, tmp_path):
+        """同目錄唯一 NFO（一份 NFO 服務全資料夾擺法）→ 兜底找到。"""
+        video = tmp_path / "CD1.mp4"
+        video.write_bytes(b"x")
+        lone = tmp_path / "collection.nfo"
+        lone.write_text("<movie/>", encoding="utf-8")
+        result = tag_nfo_candidates(str(video), number="ZZZ-999")
+        assert result[-1] == str(lone)
+
+    def test_multiple_nfo_not_guessed(self, tmp_path):
+        """同目錄多份 NFO → 不猜（只剩 stem/number 候選）。"""
+        video = tmp_path / "CD1.mp4"
+        video.write_bytes(b"x")
+        (tmp_path / "a.nfo").write_text("<movie/>", encoding="utf-8")
+        (tmp_path / "b.nfo").write_text("<movie/>", encoding="utf-8")
+        result = tag_nfo_candidates(str(video), number="ZZZ-999")
+        assert str(tmp_path / "a.nfo") not in result
+        assert str(tmp_path / "b.nfo") not in result
+
+    def test_stem_number_same_name_deduped(self, tmp_path):
+        """stem 與 {number} 同名 → 去重剩一條（存在與否由呼叫端判定）。"""
+        video = tmp_path / "ABC-123.mp4"
+        video.write_bytes(b"x")
+        assert tag_nfo_candidates(str(video), number="ABC-123") == [
+            str(tmp_path / "ABC-123.nfo")
+        ]
+
+    def test_stem_candidate_always_present(self, tmp_path):
+        """同 stem 候選恆在（即使不存在——供舊相容與 mock 場景）。"""
+        sub = tmp_path / "sub"
+        sub.mkdir()
+        v2 = sub / "NOPE.mp4"
+        v2.write_bytes(b"x")
+        assert tag_nfo_candidates(str(v2), number="") == [str(sub / "NOPE.nfo")]
+
+    def test_invalid_db_nfo_uri_falls_through(self, tmp_path):
+        """DB nfo_path 壞掉 → 忽略並繼續往下找，不拋錯。"""
+        video = tmp_path / "ABC-123.mp4"
+        video.write_bytes(b"x")
+        result = tag_nfo_candidates(str(video), db_nfo_uri="::bad-uri::", number="ABC-123")
+        assert result == [str(tmp_path / "ABC-123.nfo")]
 
 
 # ============================================================

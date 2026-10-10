@@ -2569,6 +2569,7 @@ class TestGenerateNfoNoUnescapedInterpolation:
         "rating_line": (1, "預組 XML 片段，內容是數字格式化結果"),
         "external_block": (1, "預組 XML 片段，內容組裝時已 html.escape"),
         "title_record_block": (1, "預組 XML 片段，內容組裝時已 html.escape(display_title)／html.escape(_t)"),
+        "user_tag_block": (1, "預組 XML 片段，內容組裝時已逐條 html.escape(ut)"),
         "e": (1, "logger.error 的例外訊息，不進 XML"),
     }
 

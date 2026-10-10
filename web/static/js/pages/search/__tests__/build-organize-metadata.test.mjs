@@ -129,6 +129,38 @@ test('buildOrganizeMetadata: 仍然只送選中的那個候選，不混到別的
   assert.equal(result.preview_cover_url, 'http://mt:8080/p');
 });
 
+// 整理包裹帶 user_tags：整理前加的 tag 只寫了 DB，併入後當次 NFO 即含 <user_tag>。
+test('buildOrganizeMetadata: file.user_tags 併入整理包裹（候選無 user_tags）', () => {
+  const file = {
+    searchResults: [{ number: 'ABC-001' }],
+    user_tags: ['自訂A', '自訂B'],
+  };
+  assert.deepEqual(buildOrganizeMetadata(file), {
+    number: 'ABC-001',
+    user_tags: ['自訂A', '自訂B'],
+  });
+});
+
+test('buildOrganizeMetadata: 候選自帶 user_tags 時與 file.user_tags 保序去重聯集', () => {
+  const file = {
+    searchResults: [{ number: 'ABC-001', user_tags: ['自訂A', '舊的'] }],
+    user_tags: ['自訂A', '自訂B'],
+  };
+  assert.deepEqual(buildOrganizeMetadata(file), {
+    number: 'ABC-001',
+    user_tags: ['自訂A', '舊的', '自訂B'],
+  });
+});
+
+test('buildOrganizeMetadata: 雙方皆無 user_tags → 不設 key（既有形狀不回歸）', () => {
+  const file = {
+    searchResults: [{ number: 'ABC-001' }],
+    user_tags: [],
+  };
+  const result = buildOrganizeMetadata(file);
+  assert.equal('user_tags' in result, false);
+});
+
 test('loadMore: listMode="file" → 立即回傳 null、不呼叫 fetch（CD-106-5 P1-#2 順修 pre-existing bug）', async () => {
   let fetchCalls = 0;
   globalThis.fetch = async () => { fetchCalls++; return { ok: true, json: async () => ({}) }; };

@@ -994,10 +994,6 @@ def generate_nfo(
     if has_vr and not any(t.strip().lower() == 'vr' for t in tags):
         nfo_content += '  <tag>VR</tag>\n'
 
-    # 用戶自訂標籤（獨立於 scraper tags，其他平台忽略）
-    for ut in user_tags:
-        nfo_content += f'  <user_tag>{html.escape(ut)}</user_tag>\n'
-
     # Genre
     for tag in tags:
         nfo_content += f'  <genre>{html.escape(tag)}</genre>\n'
@@ -1031,12 +1027,18 @@ def generate_nfo(
             f'  </openaver_title_record>\n'
         )
 
+    # 用戶自訂標籤（獨立於 scraper tags，其他平台忽略）——放最末行，緊貼 </movie>，
+    # 與 surgical 更新（update_nfo_user_tags append 到尾）位置一致。
+    user_tag_block = ''.join(
+        f'  <user_tag>{html.escape(ut)}</user_tag>\n' for ut in user_tags
+    )
+
     nfo_content += f'''  <num>{html.escape(number)}</num>
   <release>{html.escape(date)}</release>
   <cover></cover>
   <website>{html.escape(url)}</website>
 {external_block}  <uniqueid type="home" default="true">{html.escape(number)}</uniqueid>
-{title_record_block}</movie>'''
+{title_record_block}{user_tag_block}</movie>'''
 
     try:
         with open(output_path, 'w', encoding='utf-8') as f:

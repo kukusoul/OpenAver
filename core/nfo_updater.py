@@ -45,11 +45,82 @@ def update_nfo_user_tags(nfo_path: str, user_tags: List[str]) -> bool:
             elem = ET.SubElement(root, "user_tag")
             elem.text = tag
         tree = ET.ElementTree(root)
+        # ET 不自動排版：新元素會擠在同一行、</movie> 被黏住。
+        # indent 回 2 空格（對齊 generate_nfo 手排格式），再寫回。
+        ET.indent(tree, space="  ")
         tree.write(nfo_path, encoding="utf-8", xml_declaration=True)
         return True
     except Exception as e:
         logger.warning("[update_nfo_user_tags] NFO 更新失敗: %s — %s", nfo_path, e)
         return False
+
+
+def tag_nfo_candidates(
+    local_video_path: str,
+    db_nfo_uri: str = "",
+    number: str = "",
+    path_mappings: dict = None,
+) -> List[str]:
+    """供 POST /api/user-tags 用的 NFO 候選路徑（保序去重，不檢查存在）。
+
+    背景：NFO 檔名不一定等於影片 stem——off 模式預設 `nfo_format={num}` 產出
+    `{番號}.nfo`，只猜同 stem（舊行為）會 miss 導致 tag 靜默只進 DB。
+    優先序：
+    1. DB `videos.nfo_path`（URI→local；scanner 入庫時填，最權威）
+    2. 影片同 stem `.nfo`（ext 模式命名，舊行為）
+    3. 同目錄 `{number}.nfo`（off 模式預設產物）
+    4. 同目錄唯一 `*.nfo`（exactly-one，「一份 NFO 服務全資料夾」擺法；
+       非恰好一份時不猜，避免寫錯檔案）
+
+    呼叫端依序試寫（`update_nfo_user_tags` 對不存在路徑回 False 無副作用），
+    第一個回 True 即停。
+    """
+    candidates: List[str] = []
+
+    def _push(p: str) -> None:
+        if p and p not in candidates:
+            candidates.append(p)
+
+    # 1. DB nfo_path（存在才收：DB 指向已消失的路徑時直接跳過，
+    # 避免把更新打到幽靈路徑；mock 相容由同 stem 候選保證）
+    if db_nfo_uri:
+        try:
+            local = uri_to_local_fs_path(db_nfo_uri, path_mappings)
+            if local and Path(local).is_file():
+                _push(str(local))
+        except Exception:
+            logger.warning("[tag_nfo_candidates] DB nfo_path 解析失敗: %s", db_nfo_uri)
+
+    try:
+        video_p = Path(local_video_path)
+    except Exception:
+        return candidates
+    parent = video_p.parent
+
+    # 2. 同 stem（Path 操作不包 try：video_p 已成功建構，不會失敗）
+    _push(str(video_p.with_suffix(".nfo")))
+
+    # 3. {number}.nfo
+    if number:
+        _push(str(parent / f"{number}.nfo"))
+
+    # 4. 同目錄唯一 *.nfo（大小寫兩種副檔名都掃）
+    try:
+        seen = set()
+        lone: List[str] = []
+        for pat in ("*.nfo", "*.NFO"):
+            for p in parent.glob(pat):
+                key = str(p)
+                if key not in seen:
+                    seen.add(key)
+                    if p.is_file():
+                        lone.append(key)
+        if len(lone) == 1:
+            _push(lone[0])
+    except Exception as e:
+        logger.warning("[tag_nfo_candidates] 同目錄 NFO 掃描失敗（忽略）: %s", e)
+
+    return candidates
 
 
 def needs_update(info: dict, has_nfo: bool = True) -> Tuple[bool, List[str]]:
