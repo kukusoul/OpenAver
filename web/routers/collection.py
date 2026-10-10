@@ -21,7 +21,7 @@ from core.config import load_config
 from core.database import Video, VideoRepository, get_connection, get_db_path
 from core.logger import get_logger
 from core.multipart_group import resolve_groups_bulk
-from core.nfo_updater import update_nfo_user_tags
+from core.nfo_updater import tag_nfo_candidates, update_nfo_user_tags
 from core.path_utils import CURRENT_ENV, reverse_path_mapping, to_file_uri, uri_to_fs_path, uri_to_local_fs_path
 from core.readonly_paths import resolve_owning_output_root
 from core.scraper import extract_number, is_number_format
@@ -743,8 +743,11 @@ def post_user_tags(request: UserTagsRequest) -> dict:
     2. 不存在 → 自動建立 stub 紀錄（從檔名解析 number），用於 Search 拖入但未掃描的檔案
     3. 合併 add / 移除 remove（去重，remove 優先）
     4. update_user_tags(file_path, merged) 更新 DB
-    5. 重寫 NFO（失敗不阻擋回傳）
-    6. 回傳 {success: true, user_tags: [...], nfo_updated: bool}
+    5. 重寫 NFO（失敗不阻擋回傳；非唯讀走 tag_nfo_candidates 依序試寫）
+    6. 回傳 {success: true, user_tags: [...], nfo_updated, readonly_no_output,
+       nfo_write_blocked}——後兩者互斥，同一時間至多一個為 True：
+       唯讀且輸出夾無 NFO 可寫 → readonly_no_output；找到 NFO 但寫失敗 →
+       nfo_write_blocked
     """
     db_path = get_db_path()
     repo = VideoRepository(db_path)
@@ -809,6 +812,10 @@ def post_user_tags(request: UserTagsRequest) -> dict:
         return {"success": False, "error": "DB 更新失敗"}
 
     # 4. Surgical NFO update — 唯讀來源改寫輸出夾那份，來源零寫入（CD-143-4）
+    # 非唯讀走 tag_nfo_candidates 依序試寫：DB nfo_path → 同 stem → {number}.nfo →
+    # 同目錄唯一 *.nfo（修「預設 nfo_format={num} 但只猜同 stem」的 miss 靜默失敗）。
+    # update_nfo_user_tags 對不存在路徑回 False 無副作用，第一個 True 即停；
+    # 例外（極少，exists 後權限翻轉）即停，避免把同一組 tags 寫進兩份 NFO。
     nfo_updated = False
     nfo_exists = False
     is_readonly = resolve_owning_output_root(file_path, config) is not None
@@ -825,9 +832,22 @@ def post_user_tags(request: UserTagsRequest) -> dict:
                 logger.warning("[user-tags] 唯讀輸出夾 NFO 寫入失敗（忽略）: %s", e)
     else:
         try:
-            nfo_path = str(Path(local_fs_path).with_suffix(".nfo"))
-            nfo_exists = Path(nfo_path).exists()
-            nfo_updated = update_nfo_user_tags(nfo_path, merged_tags)
+            number = video.number or extract_number(Path(local_fs_path).name) or ""
+            candidates = tag_nfo_candidates(
+                local_fs_path,
+                db_nfo_uri=video.nfo_path or "",
+                number=number,
+                path_mappings=path_mappings,
+            )
+            nfo_exists = any(Path(p).exists() for p in candidates)
+            for nfo_path in candidates:
+                try:
+                    if update_nfo_user_tags(nfo_path, merged_tags):
+                        nfo_updated = True
+                        break
+                except Exception as e:
+                    logger.warning("[user-tags] NFO 寫入失敗（忽略）: %s", e)
+                    break
         except Exception as e:
             logger.warning("[user-tags] NFO 寫入失敗（忽略）: %s", e)
 

@@ -70,4 +70,34 @@ test('buildOrganizeMetadata: preview_cover_url 必須傳給 /api/scrape-single�
   assert.equal(result.cover, 'http://example/cover.jpg', '原址必須一併保留（原址優先）');
 });
 
+// 整理包裹帶 user_tags：整理前加的 tag 只寫了 DB，併入後當次 NFO 即含 <user_tag>。
+test('buildOrganizeMetadata: file.user_tags 併入整理包裹（候選無 user_tags）', () => {
+  const file = {
+    searchResults: [{ number: 'ABC-001' }],
+    user_tags: ['自訂A', '自訂B'],
+  };
+  assert.deepEqual(buildOrganizeMetadata(file), {
+    number: 'ABC-001',
+    user_tags: ['自訂A', '自訂B'],
+  });
+});
 
+test('buildOrganizeMetadata: 候選自帶 user_tags 時與 file.user_tags 保序去重聯集', () => {
+  const file = {
+    searchResults: [{ number: 'ABC-001', user_tags: ['自訂A', '舊的'] }],
+    user_tags: ['自訂A', '自訂B'],
+  };
+  assert.deepEqual(buildOrganizeMetadata(file), {
+    number: 'ABC-001',
+    user_tags: ['自訂A', '舊的', '自訂B'],
+  });
+});
+
+test('buildOrganizeMetadata: 雙方皆無 user_tags → 不設 key（既有形狀不回歸）', () => {
+  const file = {
+    searchResults: [{ number: 'ABC-001' }],
+    user_tags: [],
+  };
+  const result = buildOrganizeMetadata(file);
+  assert.equal('user_tags' in result, false);
+});
